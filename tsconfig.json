@@ -70,11 +70,13 @@
     ".next-isolated-3063/types/**/*.ts",
     ".next-isolated-3064/types/**/*.ts",
     ".next-isolated-3065/types/**/*.ts",
+    ".next-isolated-3067/types/**/*.ts",
     ".next-isolated-3068/types/**/*.ts",
     ".next-isolated/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
     ".next-build-3064/types/**/*.ts",
+    ".next-build-3067/types/**/*.ts",
     ".next-build-3068/types/**/*.ts"
   ],
   "exclude": [

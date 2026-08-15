@@ -1,9 +1,9 @@
 'use client'
 
 import { Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
-import { Group, Matrix4, Mesh, MeshStandardMaterial, Color } from 'three'
+import { CanvasTexture, Group, Matrix4, Mesh, MeshStandardMaterial, Color, SRGBColorSpace } from 'three'
 import { getInstrument } from '../instruments'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
@@ -108,6 +108,129 @@ export function setPreviewTimeOverride(sec: number | null): void {
   previewTimeOverrideSec = sec
 }
 
+// ── Preview backdrop: the "Neon Stage" look ──────────────────────────────────
+//
+// Picked from the tint mock (2026-08-15): previews render ELECTRIC foreground
+// colors over a same-hue glow — a radial wash that lifts behind the object and
+// falls away to a dark rim, like a lit stage. Two halves:
+//   1. PREVIEW_COLOR_REMAP swaps the dustier default instrument colors for
+//      electric equivalents — preview-only; real tracks keep their defaults.
+//   2. PreviewBackdrop paints the glow as a CanvasTexture scene background
+//      (a flat <color> can't hold a gradient).
+
+// Brightness note: the Cube/Overlap Matte finish is a fixed-light poster
+// material that IGNORES scene lights, so these remap values are the only
+// brightness lever those previews have - lifted a step above the first
+// electric pass on purpose.
+const PREVIEW_COLOR_REMAP: Record<string, string> = {
+  '#5757db': '#8f80ff', // cube + basic-shapes indigo → electric violet
+  '#ff5470': '#ff6580', // overlap base pink → hotter rose
+  '#d4a843': '#ffd25c', // neon-polar gold → brighter amber
+}
+
+/** Preview-side color: the electric remap where one exists, else as stored. */
+function previewColor(hex: string): string {
+  return PREVIEW_COLOR_REMAP[hex.toLowerCase()] ?? hex
+}
+
+const _backdropColor = new Color()
+
+/** sRGB hue/saturation of a color — hand-rolled on purpose: three's
+ *  getHSL/setHSL work in the LINEAR working space, where lightness values
+ *  chosen against on-screen hexes render far lighter than intended. Color is
+ *  used only to normalize the input string. */
+function srgbHueSat(hex: string): { h: number; s: number } {
+  const n = parseInt(_backdropColor.set(hex).getHexString(), 16)
+  const r = ((n >> 16) & 255) / 255
+  const g = ((n >> 8) & 255) / 255
+  const b = (n & 255) / 255
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const d = max - min
+  const l = (max + min) / 2
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1))
+  const h = d === 0 ? 0
+    : (max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4) / 6
+  return { h, s }
+}
+
+/** The object instrument's first color param resolved the way the preview
+ *  renders it (stored value for project-accurate track rows, else the
+ *  remapped default); the electric preview-cube cyan for movers/splitters/
+ *  colorizers. Feed the result to PreviewBackdrop. */
+export function previewForegroundHex(
+  item: { id: string; kind: InstrumentItem['kind'] },
+  stringParams?: Record<string, string>,
+): string {
+  if (item.kind !== 'object') return CUBE_BASE_HEX
+  const param = getInstrument(item.id)?.params?.find((p) => p.type === 'color')
+  const base = param
+    ? stringParams?.[param.key] ?? (typeof param.default === 'string' ? previewColor(param.default) : undefined)
+    : undefined
+  return typeof base === 'string' ? base : CUBE_BASE_HEX
+}
+
+const BACKDROP_TEX_W = 320
+const BACKDROP_TEX_H = 180
+
+/** The Neon Stage glow in the foreground's key: a radial wash centered just
+ *  below mid-frame (under the object), from a lifted core through the dark
+ *  body tone to a near-black rim. Near-grey foregrounds (white lasers, film
+ *  stock) fall back to the panel's own faint blue key instead of amplifying
+ *  a meaningless hue. */
+function makeBackdropTexture(foreground: string): CanvasTexture {
+  let { h, s } = srgbHueSat(foreground)
+  if (s < 0.15) { h = 0.617; s = 0.17 } // #111318's key — neutral cards keep the panel look
+  const canvas = document.createElement('canvas')
+  canvas.width = BACKDROP_TEX_W
+  canvas.height = BACKDROP_TEX_H
+  const ctx = canvas.getContext('2d')!
+  const css = (sat: number, l: number) => `hsl(${h * 360} ${Math.min(85, sat * 100)}% ${l * 100}%)`
+  const g = ctx.createRadialGradient(
+    BACKDROP_TEX_W / 2, BACKDROP_TEX_H * 0.52, 0,
+    BACKDROP_TEX_W / 2, BACKDROP_TEX_H * 0.52, BACKDROP_TEX_W * 0.68,
+  )
+  // Hot core falling to a near-black rim: the wide swing is what makes the
+  // stage read as LIT rather than merely tinted.
+  g.addColorStop(0, css(s * 0.9, 0.32))
+  g.addColorStop(0.55, css(s * 0.9, 0.16))
+  g.addColorStop(1, css(s * 0.9, 0.065))
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, BACKDROP_TEX_W, BACKDROP_TEX_H)
+  const tex = new CanvasTexture(canvas)
+  tex.colorSpace = SRGBColorSpace
+  return tex
+}
+
+/** The Neon Stage rig, shared by the popup and the capture page: a hot key
+ *  light for bright faces, ambient pulled down so shading has contrast, and a
+ *  wrap light from behind-below in the foreground's own hue - the stage glow
+ *  reading as LIGHT on the object's far edges, not just a backdrop. */
+export function PreviewLighting({ foreground }: { foreground?: string }) {
+  return (
+    <>
+      <ambientLight intensity={0.55} />
+      <directionalLight position={[3, 4, 5]} intensity={1.7} />
+      <directionalLight position={[-3.5, -1.5, -4]} intensity={1.1} color={foreground ?? '#ffffff'} />
+    </>
+  )
+}
+
+/** Mount inside a preview Canvas to give the scene the Neon Stage backdrop;
+ *  unmounting hands the scene back to its transparent resting state. */
+export function PreviewBackdrop({ foreground }: { foreground: string }) {
+  const scene = useThree((s) => s.scene)
+  useEffect(() => {
+    const tex = makeBackdropTexture(foreground)
+    scene.background = tex
+    return () => {
+      if (scene.background === tex) scene.background = null
+      tex.dispose()
+    }
+  }, [scene, foreground])
+  return null
+}
+
 // Instruments whose real render needs context a popup can't provide (uploads,
 // live audio, the scene camera, scenes to composite) get a bespoke canvas-2D
 // vignette instead (InstrumentPreview2D) - that covers the Main essentials and
@@ -170,7 +293,9 @@ function makePreviewState(instrumentId: string): ObjectState {
   const params: Record<string, number> = {}
   const stringParams: Record<string, string> = {}
   for (const p of def?.params ?? []) {
-    if (p.type === 'color' || p.type === 'string') stringParams[p.key] = p.default
+    // Color defaults go through the electric preview remap (Neon Stage).
+    if (p.type === 'color') stringParams[p.key] = previewColor(p.default)
+    else if (p.type === 'string') stringParams[p.key] = p.default
     else if (typeof p.default === 'number') params[p.key] = p.default
   }
   Object.assign(stringParams, PREVIEW_STRING_PARAMS[instrumentId])
@@ -274,7 +399,10 @@ export function ObjectPreview({ instrumentId, trackId = PREVIEW_TRACK_ID, notes,
 const MOVER_NOTES = makeLoopNotes([60, 62, 64, 61, 63, 65, 60, 63], 2, 2)
 
 const MAX_COPIES = 24
-const CUBE_BASE_COLOR = new Color('#35a7e6')
+// The Neon Stage electric cyan (was the dustier #35a7e6 before the 2026-08-15
+// tint mock) - movers/splitters/colorizers all preview this cube.
+const CUBE_BASE_HEX = '#4fdcff'
+const CUBE_BASE_COLOR = new Color(CUBE_BASE_HEX)
 
 // Movers get an OFF-ORIGIN cube: at the origin with an identity seed, rotate
 // (transform × R) and orbit (R × transform) produce the same matrix, so they
@@ -1102,6 +1230,13 @@ export function InstrumentPreviewLayer() {
     () => (preview?.projectTrackId ? buildProjectPreview(preview.projectTrackId) : null),
     [preview],
   )
+  // The popup wears the Neon Stage glow in the instrument's own key (track
+  // rows use the object's stored color).
+  const backdropFg = preview && !draw2d
+    ? projectData
+      ? previewForegroundHex({ id: projectData.object.instrumentId, kind: 'object' }, projectData.object.stringParams)
+      : previewForegroundHex(preview.item)
+    : null
   return (
     <div
       // overflow-CLIP, not hidden: a pure clip box should never be a scroll
@@ -1113,8 +1248,8 @@ export function InstrumentPreviewLayer() {
           popup half-res, which text previews show as blur. The canvas is tiny,
           so the extra pixels cost nothing. */}
       <Canvas dpr={[1, 2]} frameloop={preview && !draw2d ? 'always' : 'never'} camera={{ position: [0, 0.9, 4.2], fov: 55 }} gl={{ antialias: true, alpha: true }}>
-        <ambientLight intensity={0.7} />
-        <directionalLight position={[3, 4, 5]} intensity={1.1} />
+        {backdropFg && <PreviewBackdrop foreground={backdropFg} />}
+        <PreviewLighting foreground={backdropFg ?? undefined} />
         {preview && !draw2d && (projectData
           ? <ProjectTrackPreview key={preview.projectTrackId} data={projectData} sync={preview.sync} />
           : preview.item.kind === 'object'

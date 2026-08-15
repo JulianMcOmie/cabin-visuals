@@ -8,6 +8,9 @@ import {
   LaserPreviewBloom,
   MoverPreview,
   ObjectPreview,
+  PreviewBackdrop,
+  PreviewLighting,
+  previewForegroundHex,
   setPreviewTimeOverride,
 } from './InstrumentHoverPreview'
 import { get2DPreview, Preview2D } from './InstrumentPreview2D'
@@ -36,7 +39,7 @@ import { videoCodec } from '../core/export/types'
 // Bump to force every clip to regenerate on the next `npm run
 // previews:instruments` (it is the manifest's staleness signal - instrument
 // code has no content hash the way template documents do).
-export const INSTRUMENT_PREVIEW_CAPTURE_VERSION = 3
+export const INSTRUMENT_PREVIEW_CAPTURE_VERSION = 4
 
 // Sized for the sidebar, not the export ladder: cards render at ~100-230 CSS px
 // (so ≤~460 device px on HiDPI), and a section expanding mounts a whole column
@@ -201,13 +204,11 @@ export function InstrumentPreviewCapture() {
                 gl={{ antialias: true, preserveDrawingBuffer: true }}
                 onCreated={(state) => { glRef.current = state.gl }}
               >
-                {/* MP4 has no alpha, so the sidebar's --bg-panel is baked in: a
-                    clip card then matches the live View cards, which render
-                    transparent over that same panel. Keep in sync with
-                    globals.css. */}
-                <color attach="background" args={['#111318']} />
-                <ambientLight intensity={0.7} />
-                <directionalLight position={[3, 4, 5]} intensity={1.1} />
+                {/* MP4 has no alpha, so the backdrop is baked in: the same
+                    Neon Stage glow the hover popup wears, so a card and its
+                    popup read as one surface. */}
+                <PreviewBackdrop foreground={previewForegroundHex(active)} />
+                <PreviewLighting foreground={previewForegroundHex(active)} />
                 {active.kind === 'object'
                   ? <ObjectPreview instrumentId={active.id} />
                   : <MoverPreview moverId={active.id} />}
