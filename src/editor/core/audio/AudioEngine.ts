@@ -38,6 +38,16 @@ class AudioEngine {
   private blocks: ScheduledBlock[] = []
   private masterGain: Tone.Gain | null = null
   private meter: Tone.Meter | null = null
+  // Fired as EACH clip's buffer finishes decoding (see loadClips). The
+  // transport listens and arms just that block, which is what lets play()
+  // start immediately and clips join mid-stream as they load, instead of
+  // holding the whole transport hostage to the slowest download.
+  private onClipLoaded: ((blockId: string) => void) | null = null
+
+  /** Register the transport's late-join listener (one listener, last wins). */
+  setOnClipLoaded(cb: ((blockId: string) => void) | null) {
+    this.onClipLoaded = cb
+  }
 
   // Modest headroom: overlapping clips sum at the destination and can clip.
   // Also the future seam for per-block gain / fades.
@@ -147,6 +157,7 @@ class AudioEngine {
           entry.player.buffer = new Tone.ToneAudioBuffer(buffer)
           entry.buffer = buffer
           entry.loaded = true
+          this.onClipLoaded?.(block.id)
         } catch (err) {
           console.error('Failed to load audio clip', block.clipRef, err)
         }
@@ -186,6 +197,14 @@ class AudioEngine {
    *  `rate` is the transport's monitoring speed (1 unless slowed). */
   armAll(atBeat: number, when: number, bpm: number, beatsPerBar: number, rate = 1) {
     for (const sb of this.blocks) this.armBlock(sb, atBeat, when, bpm, beatsPerBar, rate)
+  }
+
+  /** Arm a single block (the late-join path: a clip whose buffer landed after
+   *  armAll skipped it). Same placement math, scoped to one player so already-
+   *  sounding clips aren't stop/started per load completion. */
+  armOne(blockId: string, atBeat: number, when: number, bpm: number, beatsPerBar: number, rate = 1) {
+    const sb = this.blocks.find((b) => b.block.id === blockId)
+    if (sb) this.armBlock(sb, atBeat, when, bpm, beatsPerBar, rate)
   }
 
   /** Silence everything (pause / end of project). */

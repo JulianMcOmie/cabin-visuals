@@ -54,6 +54,13 @@ export function usePlayback() {
     // runaway gain sum, so the gesture mutes playback and re-arms once on
     // release instead (see beginBlockDrag).
     const audio = getAudioEngine()
+    // Late-join: as each clip's buffer finishes decoding, arm just that block
+    // at the live position. This is what lets play() start the transport
+    // without waiting for downloads - on a freshly hydrated project the song
+    // fades in mid-clip (correctly placed) the moment its bytes arrive, and a
+    // clip whose fetch failed joins on the retry instead of staying silent for
+    // the whole playback. No-op while paused.
+    audio.setOnClipLoaded((blockId) => engine.rearmBlock(blockId))
     let prev = gatherAudioTracks(useProjectStore.getState().tracks)
     audio.setBlocks(prev)
     const unsubAudio = useProjectStore.subscribe((s) => {
@@ -86,6 +93,7 @@ export function usePlayback() {
       if (s.playbackRate !== p.playbackRate) engine.setPlaybackRate(s.playbackRate)
     })
     return () => {
+      audio.setOnClipLoaded(null)
       unsubAudio()
       unsubBpm()
       unsubRate()
@@ -103,11 +111,16 @@ export function usePlayback() {
     const start = loopRegion?.enabled
       ? loopRegion.startBeat
       : currentBeat >= maxBeat ? minBeat() : currentBeat;
-    // Make sure every block's buffer is decoded before the transport starts
-    // (normally a no-op - clips pre-decode when their block is inserted).
+    // Kick any missing decodes but do NOT await them: the transport starts
+    // now (which also keeps Tone.start() inside the user gesture), armAll
+    // skips unloaded clips, and each one joins mid-stream via the
+    // onClipLoaded -> rearmBlock hookup the moment its buffer lands. Awaiting
+    // here made first play of a freshly hydrated project a dead button for
+    // the length of the download, and a clip that failed to decode stayed
+    // silent for the whole playback with nothing ever re-arming it.
     const audio = getAudioEngine();
     audio.setBlocks(gatherAudioTracks(tracks));
-    await audio.loadClips();
+    void audio.loadClips();
     useTimeStore.getState().setCurrentBeat(start);
     engine.play(start);
     setIsPlaying(true);

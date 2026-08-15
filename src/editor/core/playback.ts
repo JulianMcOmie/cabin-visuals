@@ -210,6 +210,22 @@ class PlaybackEngine {
     this.lastTrackedBeat = beat
   }
 
+  /** Arm ONE block at the current position - the late-join path: a clip whose
+   *  buffer finished loading after play() started (first play of a freshly
+   *  hydrated project, or a failed fetch retried). Scoped to a single player so
+   *  a burst of load completions can't stop/start clips that are already
+   *  sounding; a per-clip arm never stacks starts of the same audio, so the
+   *  drag-suppression concern doesn't apply beyond the usual blockDragging
+   *  window. */
+  rearmBlock(blockId: string) {
+    if (!this.playing || !this.callbacks || this.blockDragging) return
+    const bpm = this.callbacks.getBpm()
+    const beatsPerBar = this.callbacks.getBeatsPerBar()
+    const beat = positionToBeat(Tone.getTransport().position, beatsPerBar)
+    const when = Tone.now() + AUDIO_LOOKAHEAD
+    getAudioEngine().armOne(blockId, beat, when, bpm, beatsPerBar, this.rate())
+  }
+
   /** Re-arm audio at the current position (block edits / mute toggles while playing).
    *  Suppressed mid-drag - that gesture's own release re-arms (see beginBlockDrag). */
   rearmAudio() {

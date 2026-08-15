@@ -19,3 +19,11 @@
 - **Slow monitoring (½× / ¼×) is the one thing that changes a clip's playback speed — and it is VARISPEED, not time-stretch**: the player's `playbackRate` resamples, so the pitch drops an octave per halving (a deliberate product decision, and what the tooltips promise). It is not a tempo change: `blockPlacement` still runs at the PROJECT bpm, so a block's beat window never moves. The rate is spent in exactly two places — `delayAtRate` stretches the wall-clock delay, and the player's own rate stretches the clip — which is what keeps a clip glued to its beats at any speed (`core/playbackRate.test.ts` pins that three-way agreement). `duration` passed to `Player.start` stays in SOURCE seconds: Tone divides it by playbackRate itself. `armAll`'s `rate` defaults to 1, so export (which calls `blockPlacement` directly) is untouched.
 - An `AudioBlock`'s beat window is DERIVED at schedule time from `startBar + trim + tempo`, never stored.
 - Audio tracks are project-level (outside scenes) and pinned to the top of the timeline.
+- **Play never waits for downloads — clips LATE-JOIN.** `armAll` skips a block whose buffer
+  hasn't decoded; when the decode lands, `loadClips` fires `onClipLoaded(blockId)` and the
+  transport (`rearmBlock` in playback.ts) arms just that block at the live position via the
+  same placement math (mid-clip join, correctly aligned). Per-block on purpose: a burst of
+  load completions must not stop/start clips already sounding, and a single-clip arm can't
+  stack starts (the earrape pattern). This also keeps `Tone.start()` inside the user's
+  click. A clip whose fetch FAILED isn't retried mid-playback — the failure isn't cached
+  (waveform.ts), so the next play press re-fetches and it joins live from there.
