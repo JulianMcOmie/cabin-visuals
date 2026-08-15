@@ -35,6 +35,20 @@ pre-paint on every size change. Same cure as `VisualPanel`'s in editor/App.tsx.
 
 `AutomationUserInterface.tsx` is the second panel built to the guide (after Laser Sphere): a live window onto the lane — the easing curve, the real seeded wobble, or a grabbable ADSR — over a segmented MODE control and a knob row. Its window is drawn with the engine's own samplers (`easeFraction`, `sampleNoiseLane`, `sampleLane`) so the picture can't drift from playback, and its emission comes from three stacked strokes of the same path rather than a blur filter (a stretched viewBox smears blurs anisotropically). Its AMOUNT fader is the panel's one sanctioned slider: a lane-level gain (mode-independent, so it sits below whichever mode console is up) with its lit fill growing from a 100% center detent — the horizontal-throw sibling of LaserKnob's `bipolar` rule that neutral must never read as half-on. The curve/noise windows scale with it, using the same math resolve.ts applies, so the plot stays the real signal.
 
+The **FORCE console** is the panel's largest, and its shape was picked from an
+interactive mock rather than argued: PUSH, RESISTANCE and STANDING FORCE are
+segmented rows up front with the four knobs between them, while the two choices
+that change what a note *means* — whether its row is a target or a signed force,
+and how overlapping notes combine — sit behind a MORE disclosure. Its window is a
+PLOT and deliberately never an editor, unlike burst's and cycle's: there is no
+handle to grab on a curve that is the consequence of pushes rather than a shape
+someone drew. The plot runs the engine's own `integrateForceLane` over a demo
+phrase, and it draws the note SPANS as well as their onsets, because under a held
+thrust the note's length is the gesture. Range-limit behaviour has no control at
+all (always cushioned) — see core/visual/CLAUDE.md for why. The kit's `More` is
+shaped for a generic ParameterList, so this one borrows its chrome via a local
+`MoreRow` that takes children instead.
+
 Its curve picker holds **one swatch that is a live value rather than a fixed
 glyph**: SPLINE's shape depends on the keyframes around it, so it cannot be drawn
 as a single hop like the other seven easings. Both its swatch and its window plot

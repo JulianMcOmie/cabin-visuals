@@ -30,8 +30,8 @@
 // and boost read at a glance. The curve and noise windows scale with it, so
 // the picture above always shows the values the lane will actually emit.
 
-import { useRef, type JSX, type KeyboardEvent, type PointerEvent, type RefObject } from 'react'
-import { Dices } from 'lucide-react'
+import { useState, useRef, type JSX, type KeyboardEvent, type PointerEvent, type RefObject } from 'react'
+import { ChevronDown, ChevronRight, Dices } from 'lucide-react'
 import {
   AUTOMATION_AMOUNT_MAX,
   DEFAULT_AUTOMATION_AMOUNT,
@@ -39,6 +39,7 @@ import {
   DEFAULT_BURST_BEZIER,
   DEFAULT_BURST_SPRING,
   DEFAULT_CYCLE,
+  DEFAULT_FORCE,
   DEFAULT_NOISE,
   DEFAULT_SPLINE_TENSION,
   SPLINE_TENSION_MAX,
@@ -46,12 +47,15 @@ import {
   burstGateGain,
   cycleShapeY,
   easeFraction,
+  integrateForceLane,
+  sampleForceLane,
   sampleLane,
   sampleNoiseLane,
   type AutomationKeyframe,
   type BurstConfig,
   type BurstShape,
   type CycleConfig,
+  type ForceConfig,
   type NoiseConfig,
 } from '../core/visual/automation'
 import { LaserKnob } from './laserKnob'
@@ -643,6 +647,122 @@ const MODE_OPTIONS: { value: AutomationMode; label: string; title: string }[] = 
   { value: 'noise', label: 'NOISE', title: 'Held notes gate a seeded random wobble around their value' },
   { value: 'burst', label: 'BURST', title: 'Each note fires an ADSR envelope toward its value' },
   { value: 'cycle', label: 'CYCLE', title: 'A motion curve plays once between each pair of note onsets' },
+  { value: 'force', label: 'FORCE', title: 'Notes push a body with mass - nothing aims it anywhere' },
+]
+
+// ── Force console ────────────────────────────────────────────────────────────
+// The force lane is the one mode with no destination, so its window is a PLOT
+// and never an editor: there is no handle to grab on a curve that is the
+// consequence of pushes rather than a shape someone drew. The picture runs the
+// engine's own `integrateForceLane` over a demo phrase, so it cannot drift from
+// what plays - and it shows the NOTE SPANS, because under a held thrust the
+// note's length is the gesture.
+
+const FORCE_DEMO = [
+  { beat: 0.5, durationBeats: 0.35, value: 0.85, velocity: 1 },
+  { beat: 1.5, durationBeats: 0.25, value: 0.32, velocity: 0.6 },
+  { beat: 2.0, durationBeats: 1.1, value: 0.78, velocity: 0.9 },
+  { beat: 3.6, durationBeats: 0.2, value: 0.95, velocity: 1 },
+  { beat: 4.4, durationBeats: 1.3, value: 0.18, velocity: 0.7 },
+  { beat: 6.3, durationBeats: 0.3, value: 0.66, velocity: 0.85 },
+]
+const FORCE_DEMO_BEATS = 8
+
+/** The demo phrase run through the real integrator, in plot space. */
+function forcePath(cfg: ForceConfig, x0: number, x1: number, steps = 200, yPeak = Y_PEAK): string {
+  const table = integrateForceLane(cfg, FORCE_DEMO, 0, 1)
+  if (!table) return ''
+  let d = ''
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps
+    const value = clamp(sampleForceLane(table, t * FORCE_DEMO_BEATS), 0, 1)
+    const x = x0 + (x1 - x0) * t
+    const y = Y_BASE - value * (Y_BASE - yPeak)
+    d += `${i === 0 ? 'M' : ' L'} ${x.toFixed(2)} ${y.toFixed(2)}`
+  }
+  return d
+}
+
+/** One row of force choices. Same recessed-track language as ModeSegmented, at
+ *  the smaller type the mode's several rows need to stay inside the pane. */
+function ForceSegmented<T extends string>({ label, value, options, accent, onChange }: {
+  label: string
+  value: T
+  options: { value: T; label: string; title: string }[]
+  accent: string
+  onChange: (value: T) => void
+}) {
+  return (
+    <div>
+      <div className="mb-[5px] text-[8px] font-semibold tracking-[0.12em] text-white/40">{label}</div>
+      <div role="radiogroup" aria-label={label} className="flex gap-[2px] rounded-[7px] border border-white/[0.07] bg-black/30 p-[2px]">
+        {options.map((option) => {
+          const active = option.value === value
+          return (
+            <button
+              key={option.value}
+              role="radio"
+              aria-checked={active}
+              title={option.title}
+              onClick={() => onChange(option.value)}
+              className={`h-[22px] min-w-0 flex-1 cursor-pointer truncate rounded-[5px] px-1 text-[8.5px] font-semibold tracking-[0.06em] transition-colors ${
+                active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
+              }`}
+              style={active ? { background: withAlpha(accent, 0.22), color: towardWhite(accent, 0.6) } : undefined}
+            >
+              {option.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/** The kit's `More` is shaped for a generic ParameterList; a force lane's
+ *  disclosure holds two segmented rows instead, so it borrows the chrome only. */
+function MoreRow({ label, children }: { label: string; children: JSX.Element }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className="flex cursor-pointer items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 transition-colors hover:text-white/60"
+      >
+        {open ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
+        {label}
+      </button>
+      {open && <div className="mt-1.5 flex flex-col gap-2.5 rounded-md border border-white/[0.06] bg-black/25 p-2">{children}</div>}
+    </div>
+  )
+}
+
+const PUSH_OPTIONS = [
+  { value: 'kick' as const, label: 'KICK', title: 'An instant impulse the moment the note starts' },
+  { value: 'thrust' as const, label: 'THRUST', title: 'A steady force for as long as the note is held' },
+  { value: 'swell' as const, label: 'SWELL', title: 'A force that ramps in and out over the note' },
+]
+const DRAG_OPTIONS = [
+  { value: 'friction' as const, label: 'FRICTION', title: 'Constant deceleration to a crisp full stop' },
+  { value: 'linear' as const, label: 'LINEAR', title: 'Speed bleeds off smoothly, easing to rest' },
+  { value: 'quad' as const, label: 'AIR', title: 'Bites hard at speed, then a long float' },
+  { value: 'none' as const, label: 'NONE', title: 'Nothing slows it - it keeps whatever speed it has' },
+]
+const FIELD_OPTIONS = [
+  { value: 'none' as const, label: 'NONE', title: 'Nothing else acts on it; it stays where it lands' },
+  { value: 'gravity' as const, label: 'GRAVITY', title: 'A constant pull toward the bottom of the range' },
+  { value: 'pull' as const, label: 'PULL HOME', title: 'A constant pull back toward HOME' },
+]
+const AIM_OPTIONS = [
+  { value: 'toward' as const, label: 'ROW = TARGET', title: "The note's row is where it gets pushed" },
+  { value: 'signed' as const, label: 'ROW = FORCE', title: 'The middle row is no force; above pushes up, below pushes down' },
+]
+const FSTACK_OPTIONS = [
+  { value: 'add' as const, label: 'ADD', title: 'Forces superpose - two notes push twice as hard' },
+  { value: 'newest' as const, label: 'NEWEST', title: 'The newest note replaces whatever was pushing' },
+  { value: 'avg' as const, label: 'AVERAGE', title: 'Overlapping notes share one push between them' },
 ]
 
 /** The console's segmented control: one lit segment on a recessed track. The
@@ -967,7 +1087,7 @@ function RangeConsole({ bounds, range, accent, onRange }: {
 }
 
 export function AutomationUserInterface({
-  targetLabel, targetKey, targetOptions, onTarget, color, mode, interpolation, tension, noise, burst, cycle, amount, paramBounds, range, onMode, onInterpolation, onTension, onNoise, onBurst, onCycle, onAmount, onRange,
+  targetLabel, targetKey, targetOptions, onTarget, color, mode, interpolation, tension, noise, burst, cycle, force, amount, paramBounds, range, onMode, onInterpolation, onTension, onNoise, onBurst, onCycle, onForce, onAmount, onRange,
 }: {
   /** What the lane drives - "Size", "Kaleidoscope · Segments". */
   targetLabel: string
@@ -987,6 +1107,7 @@ export function AutomationUserInterface({
   noise: NoiseConfig | undefined
   burst: BurstConfig | undefined
   cycle: CycleConfig | undefined
+  force: ForceConfig | undefined
   /** The lane's output gain (Track.automationAmount, defaulted to 1). */
   amount: number
   onMode: (mode: AutomationMode) => void
@@ -995,6 +1116,7 @@ export function AutomationUserInterface({
   onNoise: (noise: NoiseConfig) => void
   onBurst: (burst: BurstConfig) => void
   onCycle: (cycle: CycleConfig) => void
+  onForce: (force: ForceConfig) => void
   onAmount: (amount: number) => void
   /** The target param's own bounds; null hides the row-spread console (the
    *  lane's target could not be resolved to a numeric param). */
@@ -1031,6 +1153,34 @@ export function AutomationUserInterface({
                 amount fader pulls the center down and the wobble in with it). */}
             <line x1={PX0} y1={Y_BASE - clamp(0.5 * amount, 0, 1) * Y_SPAN} x2={PX1} y2={Y_BASE - clamp(0.5 * amount, 0, 1) * Y_SPAN} stroke="rgba(255,255,255,0.12)" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
             <GlowPath d={noisePath(noise, amount)} accent={accent} />
+          </svg>
+        </LaneWindow>
+      ) : mode === 'force' && force ? (
+        <LaneWindow testId="automation-force-plot" title="Where these pushes leave the value - nothing is aiming it anywhere">
+          <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
+            <line x1={PX0} y1={Y_BASE} x2={PX1} y2={Y_BASE} stroke="rgba(255,255,255,0.14)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            {/* HOME, when a pull is what brings it back. */}
+            {force.field === 'pull' && (
+              <line
+                x1={PX0} x2={PX1}
+                y1={Y_BASE - clamp(force.home, 0, 1) * Y_SPAN} y2={Y_BASE - clamp(force.home, 0, 1) * Y_SPAN}
+                stroke="rgba(255,255,255,0.22)" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke"
+              />
+            )}
+            {/* Each note: its onset, and under a held push its SPAN - which is
+                the gesture, so it has to be visible. */}
+            {FORCE_DEMO.map((n) => {
+              const x = PX0 + ((PX1 - PX0) * n.beat) / FORCE_DEMO_BEATS
+              const w = ((PX1 - PX0) * n.durationBeats) / FORCE_DEMO_BEATS
+              return (
+                <g key={n.beat}>
+                  {force.push !== 'kick' && <rect x={x} y={Y_PEAK} width={Math.max(0.6, w)} height={Y_SPAN} fill="rgba(255,255,255,0.055)" />}
+                  <line x1={x} y1={Y_PEAK} x2={x} y2={Y_BASE} stroke="rgba(255,255,255,0.14)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                  <circle cx={x} cy={Y_BASE - clamp(n.value, 0, 1) * Y_SPAN} r={1.5} fill="rgba(255,255,255,0.42)" />
+                </g>
+              )
+            })}
+            <GlowPath d={forcePath(force, PX0, PX1, 220, yAmountPeak)} accent={accent} />
           </svg>
         </LaneWindow>
       ) : interpolation === 'spline' ? (
@@ -1277,6 +1427,60 @@ export function AutomationUserInterface({
           </div>
         )}
 
+        {/* The force console: three decisions up front, the two that change
+            what a note MEANS behind the disclosure. Limits are always cushioned
+            (a hard stop is a velocity discontinuity, the one thing this mode
+            exists to avoid), so there is no control for them. */}
+        {mode === 'force' && force && (
+          <>
+            <ForceSegmented
+              label="PUSH" value={force.push} options={PUSH_OPTIONS} accent={accent}
+              onChange={(push) => onForce({ ...force, push })}
+            />
+            <div className="flex items-start justify-center gap-1">
+              <LaserKnob value={force.mass} min={0} max={1} step={0.01} defaultValue={DEFAULT_FORCE.mass}
+                label="MASS" ariaLabel="How much the body resists being pushed" accent={accent} large
+                onChange={(mass) => onForce({ ...force, mass })} />
+              <LaserKnob value={force.force} min={0} max={1} step={0.01} defaultValue={DEFAULT_FORCE.force}
+                label="FORCE" ariaLabel="How hard each note pushes" accent={accent} large
+                onChange={(v) => onForce({ ...force, force: v })} />
+              <LaserKnob value={force.resist} min={0} max={1} step={0.01} defaultValue={DEFAULT_FORCE.resist}
+                label="RESIST" ariaLabel="How strongly the resistance acts" accent={accent} large
+                onChange={(resist) => onForce({ ...force, resist })} />
+              {force.field !== 'none' && (
+                <LaserKnob value={force.fieldStrength} min={0} max={1} step={0.01} defaultValue={DEFAULT_FORCE.fieldStrength}
+                  label={force.field === 'gravity' ? 'GRAVITY' : 'PULL'} ariaLabel="Standing force strength" accent={accent} large
+                  onChange={(fieldStrength) => onForce({ ...force, fieldStrength })} />
+              )}
+              {force.field === 'pull' && (
+                <LaserKnob value={force.home} min={0} max={1} step={0.01} defaultValue={DEFAULT_FORCE.home}
+                  label="HOME" ariaLabel="Where the pull draws it back to" accent={accent} large
+                  onChange={(home) => onForce({ ...force, home })} />
+              )}
+            </div>
+            <ForceSegmented
+              label="RESISTANCE" value={force.drag} options={DRAG_OPTIONS} accent={accent}
+              onChange={(drag) => onForce({ ...force, drag })}
+            />
+            <ForceSegmented
+              label="STANDING FORCE" value={force.field} options={FIELD_OPTIONS} accent={accent}
+              onChange={(field) => onForce({ ...force, field })}
+            />
+            <MoreRow label="MORE">
+              <>
+                <ForceSegmented
+                  label="A NOTE'S ROW" value={force.aim} options={AIM_OPTIONS} accent={accent}
+                  onChange={(aim) => onForce({ ...force, aim })}
+                />
+                <ForceSegmented
+                  label="OVERLAPPING NOTES" value={force.stack} options={FSTACK_OPTIONS} accent={accent}
+                  onChange={(stack) => onForce({ ...force, stack })}
+                />
+              </>
+            </MoreRow>
+          </>
+        )}
+
         {mode === 'curve' && (
           <>
             <CurveSegmented interpolation={interpolation} tension={tension} accent={accent} onInterpolation={onInterpolation} />
@@ -1329,6 +1533,11 @@ export function AutomationUserInterface({
                   the wave seamless.</>
               )}
             </>
+          ) : mode === 'force' && force ? (
+            <>Each note applies <em className="not-italic text-white/75">{force.push === 'kick' ? 'an instant kick' : force.push === 'thrust' ? 'a steady thrust for as long as it is held' : 'a force that swells in and out'}</em> to
+              <span className="text-white/75"> {targetLabel}</span> - {force.aim === 'signed' ? 'the row is the force, and the middle row is none' : 'the row is where it gets pushed'} - and
+              {force.drag === 'friction' ? ' friction brings it to a crisp stop.' : force.drag === 'linear' ? ' drag bleeds the speed off smoothly.' : force.drag === 'quad' ? ' air resistance bites at speed, then lets it float.' : ' nothing slows it down.'}
+              {force.field === 'gravity' ? ' Gravity is always pulling it toward the bottom.' : force.field === 'pull' ? ' A steady pull always draws it back toward HOME.' : ' Nothing else acts on it, so it stays where it lands.'}</>
           ) : mode === 'noise' ? (
             <>While a note is held, <span className="text-white/75">{targetLabel}</span> wanders around the note&apos;s
               row; between notes the lane lets go. The seed is fixed per take, so scrubbing and export replay the

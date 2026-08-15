@@ -546,6 +546,285 @@ export function sampleCycleLane(
   return Math.max(paramMin, Math.min(paramMax, value))
 }
 
+// ── Force mode ───────────────────────────────────────────────────────────────
+// The fifth lane mode, and the only one that is not TARGET-SEEKING. Every other
+// mode names a destination and travels there: a keyframe lane interpolates to
+// the next value, a burst travels from the value underneath toward the note's
+// own, a cycle rides a curve between two bounds. A spring is only the mushiest
+// member of that family - it is still a restoring force aimed at a rest point.
+//
+// A force lane has no destination at all. There is ONE body with a mass, notes
+// apply pushes to it, and where the value ends up is a CONSEQUENCE of those
+// pushes, the resistance, and whatever standing force is also acting. That is
+// the whole design; every option below is a question about forces, never about
+// targets.
+//
+// Four things follow from it that are worth knowing before touching this:
+//
+//  - **It is stateful, and that is the real cost.** The value at beat 40 depends
+//    on every note before it, so there is no closed form to evaluate at a beat
+//    the way burst and cycle have. The one rule still holds - the lane is a pure
+//    function of the beat - because the integration runs ONCE at resolve from a
+//    fixed origin into a fixed-step table, and sampling is a lookup plus a lerp.
+//    Never integrate per frame: pause/scrub/export would each pay it.
+//  - **The physics is normalized to the lane's own 0..1 range**, then mapped back
+//    to param units. So MASS and FORCE feel identical whether the lane drives a
+//    0..1 opacity or a -360..360 rotation, and a retarget doesn't silently change
+//    the feel.
+//  - **The body starts at its EQUILIBRIUM**, not at the value underneath: on the
+//    floor under gravity, at HOME under a pull, mid-range with no standing force.
+//    Keeping it independent of the param knob is what lets the table survive a
+//    knob drag without being rebuilt - and a lane with notes owns its param
+//    outright anyway, exactly as a keyframe lane does.
+//  - **The range limits are always CUSHIONED** (deceleration ramps up in the last
+//    tenth of the range) rather than a hard stop. A hard stop is a discontinuity
+//    in velocity, which is the one thing this mode exists to avoid; the cushion
+//    is also why there is no bounce option, which would put the spring back.
+
+/** What a note's ROW means. `toward` reads like every other lane - the row is
+ *  where the note pushes the value - while `signed` makes the lane a true force
+ *  lane: the middle row is no force, above pushes up, below pushes down. */
+export type ForceAim = 'toward' | 'signed'
+
+/** How a note applies its push. `kick` is an instantaneous impulse; `thrust`
+ *  applies a steady force for as long as the note is HELD (so note length is a
+ *  real gesture); `swell` ramps that force in and out over the note. */
+export type ForcePush = 'kick' | 'thrust' | 'swell'
+
+/** What resists motion. `friction` is the characteristic one: a constant
+ *  deceleration that brings the body to a CRISP full stop, where every other
+ *  model (and every spring) only approaches rest asymptotically and reads
+ *  mushy. */
+export type ForceDrag = 'friction' | 'linear' | 'quad' | 'none'
+
+/** The standing force always acting, if any - the non-springy answer to "what
+ *  brings it back". Both are CONSTANT-magnitude, never proportional to
+ *  displacement, which is precisely what keeps them from oscillating. */
+export type ForceField = 'none' | 'gravity' | 'pull'
+
+/** How overlapping notes combine. `add` is the physical answer (forces
+ *  superpose) and is the default. */
+export type ForceStack = 'add' | 'newest' | 'avg'
+
+/** Track-level force settings. The four numeric knobs are UNITLESS 0..1 - they
+ *  scale the normalized physics, so they mean the same thing on every param. */
+export interface ForceConfig {
+  aim: ForceAim
+  push: ForcePush
+  drag: ForceDrag
+  field: ForceField
+  stack: ForceStack
+  /** Heavier bodies take the same push less far. */
+  mass: number
+  /** How hard a note pushes. */
+  force: number
+  /** How strongly the chosen resistance acts. */
+  resist: number
+  /** Gravity / pull strength. Ignored when `field` is 'none'. */
+  fieldStrength: number
+  /** Where a `pull` field draws the body back to, as a FRACTION of the lane's
+   *  range (not param units, so a retarget can't strand it off-scale). */
+  home: number
+}
+
+/** What flipping a lane to force mode starts from - the "Shove" combination: a
+ *  kick against dry friction with nothing else acting, which is the one that
+ *  reads unmistakably as a struck object the first time a note is drawn. */
+export const DEFAULT_FORCE: ForceConfig = {
+  aim: 'toward',
+  push: 'kick',
+  drag: 'friction',
+  field: 'none',
+  stack: 'add',
+  mass: 0.5,
+  force: 0.5,
+  resist: 0.5,
+  fieldStrength: 0.45,
+  home: 0.3,
+}
+
+/** One note of a force lane: when it pushes, for how long, how hard. */
+export interface ForceNote {
+  beat: number
+  durationBeats: number
+  /** The note's row in PARAM units (pitch-mapped, amount-scaled). */
+  value: number
+  /** 0..1. */
+  velocity: number
+}
+
+/** The integrated lane: values in PARAM units on an even beat grid. */
+export interface ForceTable {
+  startBeat: number
+  /** Beats between stored samples. */
+  step: number
+  values: Float64Array
+}
+
+/** Table resolution, and how many integration steps each stored sample costs.
+ *  The integrator needs a finer step than the table does for dry friction to
+ *  settle cleanly, so the two are separate numbers on purpose. */
+const FORCE_TABLE_STEP = 1 / 64
+const FORCE_SUBSTEPS = 4
+/** Beats integrated past the last note so the body is allowed to come to rest
+ *  inside the table rather than being frozen mid-flight at its edge. */
+const FORCE_SETTLE_BEATS = 8
+
+/** Flatten a force-mode track's blocks into pushes (sorted by beat). */
+export function extractForceNotes(
+  blocks: Block[],
+  beatsPerBar: number,
+  paramMin: number,
+  paramMax: number,
+  totalBars?: number,
+  amount = 1,
+  range?: AutomationRange,
+): ForceNote[] {
+  const bounds = automationOutputBounds(range, paramMin, paramMax, amount)
+  return flattenBlocks(blocks, beatsPerBar, totalBars)
+    .map((note) => ({
+      beat: note.beat,
+      durationBeats: note.durationBeats,
+      value: scaleValue(pitchToValueRanged(range, note.pitch, paramMin, paramMax), amount, bounds),
+      velocity: Math.max(0, Math.min(1, (note.velocity ?? 100) / 127)),
+    }))
+    .sort((a, b) => a.beat - b.beat)
+}
+
+/**
+ * Integrate a force lane once, into a fixed-step table of PARAM-unit values.
+ * Returns undefined for a lane with no notes (nothing pushes, so there is
+ * nothing to say). Deterministic: same notes + same config = same table, which
+ * is what keeps the lane a pure function of the beat.
+ */
+export function integrateForceLane(
+  cfg: ForceConfig,
+  notes: readonly ForceNote[],
+  paramMin: number,
+  paramMax: number,
+): ForceTable | undefined {
+  if (!notes.length) return undefined
+  const span = paramMax - paramMin
+  if (!(span > 0)) return undefined
+  const norm = (v: number) => (v - paramMin) / span
+
+  // Tuned so the default knobs land a mid-distance kick about on its own row;
+  // every constant is per-BEAT, so the feel is tempo-independent.
+  const m = 0.4 + 1.6 * cfg.mass
+  const kickGain = 1 + 3 * cfg.force
+  // Thrust is geared well above kick against `mu` on purpose: dry friction has a
+  // real STALL force, and a sustained push that can't break it looks like a dead
+  // control rather than like physics. A note near the middle row still stalls
+  // under `signed` aim, which is correct - that row means no force.
+  const thrustGain = 2 + 6 * cfg.force
+  const cLinear = 0.4 + 6 * cfg.resist
+  const cQuad = 0.5 + 7 * cfg.resist
+  const mu = 0.1 + 1.8 * cfg.resist
+  const gravity = 0.08 + 1.25 * cfg.fieldStrength
+  const pull = 0.06 + 1.05 * cfg.fieldStrength
+  const home = Math.max(0, Math.min(1, cfg.home))
+
+  const startBeat = notes[0].beat
+  const endBeat = notes.reduce((e, n) => Math.max(e, n.beat + n.durationBeats), startBeat) + FORCE_SETTLE_BEATS
+  const count = Math.max(2, Math.ceil((endBeat - startBeat) / FORCE_TABLE_STEP) + 1)
+  const values = new Float64Array(count)
+  const dt = FORCE_TABLE_STEP / FORCE_SUBSTEPS
+
+  // Equilibrium start - see the header note on why this is not the knob value.
+  let x = cfg.field === 'gravity' ? 0 : cfg.field === 'pull' ? home : 0.5
+  let v = 0
+  const fired = new Array<boolean>(notes.length).fill(false)
+  const spent = new Array<boolean>(notes.length).fill(false)
+
+  for (let i = 0; i < count; i++) {
+    values[i] = paramMin + x * span
+    for (let s = 0; s < FORCE_SUBSTEPS; s++) {
+      const beat = startBeat + (i * FORCE_SUBSTEPS + s) * dt
+
+      if (cfg.push === 'kick') {
+        // Every note firing in this substep, combined per the stack law.
+        let dv = 0
+        let hits = 0
+        for (let k = 0; k < notes.length; k++) {
+          const n = notes[k]
+          if (fired[k] || beat < n.beat) continue
+          fired[k] = true
+          const mag = cfg.aim === 'signed' ? (norm(n.value) - 0.5) * 2 : norm(n.value) - x
+          const contribution = (kickGain * mag * n.velocity) / m
+          hits++
+          if (cfg.stack === 'newest') dv = contribution
+          else dv += contribution
+        }
+        if (hits > 0) {
+          if (cfg.stack === 'avg') dv /= hits
+          v = cfg.stack === 'newest' ? dv : v + dv
+        }
+      }
+
+      let net = 0
+      if (cfg.push !== 'kick') {
+        let held = 0
+        for (let k = 0; k < notes.length; k++) {
+          const n = notes[k]
+          if (spent[k] || beat < n.beat || beat >= n.beat + n.durationBeats) continue
+          let mag: number
+          if (cfg.aim === 'signed') mag = (norm(n.value) - 0.5) * 2
+          else {
+            // A thrust toward a row stops pushing once it gets there, rather
+            // than reversing - reversing is a restoring force, i.e. a spring.
+            const gap = norm(n.value) - x
+            if (Math.abs(gap) < 0.008) { spent[k] = true; continue }
+            mag = Math.sign(gap)
+          }
+          let f = thrustGain * mag * n.velocity
+          if (cfg.push === 'swell') f *= Math.sin(Math.PI * ((beat - n.beat) / Math.max(1e-6, n.durationBeats)))
+          held++
+          if (cfg.stack === 'newest') net = f
+          else net += f
+        }
+        if (held > 1 && cfg.stack === 'avg') net /= held
+      }
+
+      let a = net / m
+      if (cfg.field === 'gravity') a -= gravity
+      else if (cfg.field === 'pull' && Math.abs(x - home) > 0.005) a -= pull * Math.sign(x - home)
+
+      if (cfg.drag === 'linear') a -= cLinear * v
+      else if (cfg.drag === 'quad') a -= cQuad * v * Math.abs(v)
+      else if (cfg.drag === 'friction') {
+        // Dry friction: constant deceleration, and a genuine dead stop once the
+        // remaining speed and the applied force are both under it.
+        if (Math.abs(v) > mu * dt) a -= mu * Math.sign(v)
+        else if (Math.abs(a) < mu) { v = 0; a = 0 }
+      }
+
+      // Cushioned limits: the wall pushes back harder the deeper and faster the
+      // body is into it, so it never lands as a velocity discontinuity.
+      if (x < 0.08 && v < 0) a -= v * 12 * ((0.08 - x) / 0.08)
+      if (x > 0.92 && v > 0) a -= v * 12 * ((x - 0.92) / 0.08)
+
+      v += a * dt
+      x += v * dt
+      if (x < 0) { x = 0; if (v < 0) v = 0 }
+      if (x > 1) { x = 1; if (v > 0) v = 0 }
+    }
+  }
+  return { startBeat, step: FORCE_TABLE_STEP, values }
+}
+
+/** Sample an integrated force lane at `beat`. The endpoints HOLD rather than
+ *  going inert: a body that was pushed somewhere stays there, which is the
+ *  whole point of the mode. */
+export function sampleForceLane(table: ForceTable, beat: number): number {
+  const { startBeat, step, values } = table
+  const last = values.length - 1
+  const pos = (beat - startBeat) / step
+  if (pos <= 0) return values[0]
+  if (pos >= last) return values[last]
+  const i = Math.floor(pos)
+  return values[i] + (values[i + 1] - values[i]) * (pos - i)
+}
+
 /** Ease a normalized 0..1 fraction per the interpolation mode. Exported so the
  *  automation panel can PLOT the curve the lane will actually ride, instead of
  *  drawing its own idea of one. */
@@ -692,8 +971,12 @@ export function sampleLane(
  *  several configs (then noise, then cycle) - the same precedence resolve.ts
  *  applies, kept in one place so the editor can never disagree with the engine
  *  about what a lane is. */
-export function automationMode(track: Pick<Track, 'noise' | 'burst' | 'cycle'>): AutomationMode {
-  return track.burst ? 'burst' : track.noise ? 'noise' : track.cycle ? 'cycle' : 'curve'
+export function automationMode(track: Pick<Track, 'noise' | 'burst' | 'cycle' | 'force'>): AutomationMode {
+  return track.burst ? 'burst'
+    : track.noise ? 'noise'
+    : track.cycle ? 'cycle'
+    : track.force ? 'force'
+    : 'curve'
 }
 
 /**
@@ -712,6 +995,9 @@ export interface AutomationLane {
   bursts?: BurstGate[]
   cycle?: CycleConfig
   cycles?: CycleGate[]
+  force?: ForceConfig
+  /** The force lane's integrated table - built ONCE at resolve. */
+  forceTable?: ForceTable
   /** Curve mode on `mode: 'spline'`: the knot tangent gain. Absent = 1. */
   splineTension?: number
   /** Param range, for noise's deviation scaling and the spline's overshoot clamp. */
@@ -751,6 +1037,9 @@ export function sampleAutomationLane(lane: AutomationLane, beat: number, base: n
       ? sampleCycleLane(lane.cycle, lane.cycles, beat, lane.min ?? 0, lane.max ?? 1)
       : NaN
   }
+  // Force: a table lookup, never an integration - see the mode's header note.
+  // It does NOT go inert outside its notes; a pushed body stays where it landed.
+  if (lane.force) return lane.forceTable ? sampleForceLane(lane.forceTable, beat) : NaN
   if (!lane.keyframes.length) return NaN
   const value = sampleLane(lane.keyframes, beat, lane.mode, lane.splineTension)
   // The spline is the one keyframe mode that can leave its keyframes' own span
@@ -825,6 +1114,18 @@ export function automationLaneValueBounds(
         min = Math.min(min, clamped)
         max = Math.max(max, clamped)
       }
+    }
+    return { min, max }
+  }
+  if (lane.force) {
+    // The table IS every value the lane can emit, so its extremes are exact -
+    // no envelope reasoning needed, unlike the modes above.
+    if (!lane.forceTable) return { min: base, max: base }
+    let min = Infinity
+    let max = -Infinity
+    for (const v of lane.forceTable.values) {
+      if (v < min) min = v
+      if (v > max) max = v
     }
     return { min, max }
   }

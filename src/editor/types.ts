@@ -241,7 +241,7 @@ export type InterpolationMode = 'step' | 'linear' | 'ease-in' | 'ease-out' | 'ea
  *  (`Track.noise` / `Track.burst` / `Track.cycle`); read it through
  *  `automationMode()` in core/visual/automation.ts so the precedence stays in one
  *  place. */
-export type AutomationMode = 'curve' | 'noise' | 'burst' | 'cycle'
+export type AutomationMode = 'curve' | 'noise' | 'burst' | 'cycle' | 'force'
 
 /**
  * A targeting route for a top-level mover: `scope` picks a single track, a whole
@@ -342,6 +342,27 @@ export interface Track {
     ceiling?: number
     /** Cycles span each note's own LENGTH instead of the gap to the next onset. */
     noteSpan?: boolean
+  }
+  /** Automation tracks only: flips the lane into force mode - the one mode that
+   *  is NOT target-seeking. There is one body with a mass; notes apply pushes to
+   *  it, and the value is wherever those pushes, the resistance and any standing
+   *  force leave it. Loses to burst/noise/cycle if a document somehow carries
+   *  several. (See core/visual/automation.ts ForceConfig, whose header explains
+   *  why this mode is integrated once at resolve rather than sampled.) */
+  force?: {
+    aim: 'toward' | 'signed'
+    push: 'kick' | 'thrust' | 'swell'
+    drag: 'friction' | 'linear' | 'quad' | 'none'
+    field: 'none' | 'gravity' | 'pull'
+    stack: 'add' | 'newest' | 'avg'
+    /** All unitless 0..1: the physics is normalized to the lane's own range, so
+     *  these mean the same thing whatever the lane drives. */
+    mass: number
+    force: number
+    resist: number
+    fieldStrength: number
+    /** A `pull` field's rest point, as a FRACTION of the lane's range. */
+    home: number
   }
   /** Automation tracks only: how the pitch rows spread onto the value range -
    *  a value sub-range, a row count, integer snapping, and the spread's curve.

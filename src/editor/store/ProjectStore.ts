@@ -12,7 +12,7 @@ import { SWITCHER_MODE_PARAM } from '../core/visualCopies/switcher'
 import { canBeSceneTrackChild, dematerializeSceneTrack, isSceneTrackId, sceneTrackId, sceneTrackView } from '../core/sceneTrack'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
-import { AUTOMATION_AMOUNT_MAX, DEFAULT_BURST, DEFAULT_CYCLE, DEFAULT_NOISE, DEFAULT_SPLINE_TENSION, SPLINE_TENSION_MAX } from '../core/visual/automation'
+import { AUTOMATION_AMOUNT_MAX, DEFAULT_BURST, DEFAULT_CYCLE, DEFAULT_FORCE, DEFAULT_NOISE, DEFAULT_SPLINE_TENSION, SPLINE_TENSION_MAX } from '../core/visual/automation'
 import type { ImportedMidiTrack } from '../core/midiImport'
 import type { AspectRatioId } from '../core/aspectRatios'
 import { placeTranscription, invertStrobeSpans, groupTimingIntoLines, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
@@ -530,6 +530,9 @@ export interface ProjectState {
   /** Set (or clear, with undefined) an automation track's cycle mode (the motion
    *  curve stretched between note onsets). Same exclusivity as noise/burst. */
   setTrackCycle: (trackId: string, cycle: Track['cycle'] | undefined) => void
+  /** Set (or clear, with undefined) an automation track's force mode - notes
+   *  push a body rather than aiming it anywhere. Same exclusivity as the rest. */
+  setTrackForce: (trackId: string, force: Track['force'] | undefined) => void
   /** Set (or clear) an automation lane's row-spread config (value sub-range,
    *  row count, integer snap, spread curve). An empty object clears. */
   setTrackAutomationRange: (trackId: string, range: Track['automationRange'] | undefined) => void
@@ -2063,7 +2066,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     set((s) => {
       const track = s.tracks[trackId]
       if (!track) return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, noise, burst: noise ? undefined : track.burst, cycle: noise ? undefined : track.cycle } } }
+      return { tracks: { ...s.tracks, [trackId]: { ...track, noise, burst: noise ? undefined : track.burst, cycle: noise ? undefined : track.cycle, force: noise ? undefined : track.force } } }
     }),
 
   setTrackAutomationRange: (trackId, range) =>
@@ -2077,14 +2080,21 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     set((s) => {
       const track = s.tracks[trackId]
       if (!track) return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, burst, noise: burst ? undefined : track.noise, cycle: burst ? undefined : track.cycle } } }
+      return { tracks: { ...s.tracks, [trackId]: { ...track, burst, noise: burst ? undefined : track.noise, cycle: burst ? undefined : track.cycle, force: burst ? undefined : track.force } } }
     }),
 
   setTrackCycle: (trackId, cycle) =>
     set((s) => {
       const track = s.tracks[trackId]
       if (!track) return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, cycle, noise: cycle ? undefined : track.noise, burst: cycle ? undefined : track.burst } } }
+      return { tracks: { ...s.tracks, [trackId]: { ...track, cycle, noise: cycle ? undefined : track.noise, burst: cycle ? undefined : track.burst, force: cycle ? undefined : track.force } } }
+    }),
+
+  setTrackForce: (trackId, force) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, force, noise: force ? undefined : track.noise, burst: force ? undefined : track.burst, cycle: force ? undefined : track.cycle } } }
     }),
 
   setAutomationMode: (trackId, mode) =>
@@ -2100,6 +2110,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
           : undefined,
         burst: mode === 'burst' ? track.burst ?? { ...DEFAULT_BURST } : undefined,
         cycle: mode === 'cycle' ? track.cycle ?? { ...DEFAULT_CYCLE } : undefined,
+        force: mode === 'force' ? track.force ?? { ...DEFAULT_FORCE } : undefined,
       }
       return { tracks: { ...s.tracks, [trackId]: next } }
     }),

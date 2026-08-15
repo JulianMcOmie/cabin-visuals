@@ -12,9 +12,14 @@ import {
   extractNoiseGates,
   DEFAULT_CYCLE,
   extractCycleGates,
+  DEFAULT_FORCE,
+  automationMode,
+  extractForceNotes,
+  integrateForceLane,
   sampleAutomationLane,
   sampleBurstLane,
   sampleCycleLane,
+  sampleForceLane,
   sampleLane,
   type AutomationKeyframe,
   type AutomationLane,
@@ -22,6 +27,7 @@ import {
   type BurstGate,
   type CycleConfig,
   type CycleGate,
+  type ForceConfig,
 } from './automation'
 import type { Block } from '../../types'
 
@@ -663,4 +669,138 @@ test('spline leaves every other interpolation bit-identical', () => {
       near(sampleAutomationLane({ mode, keyframes: keys, min: 0, max: 4, splineTension: 2 }, beat, 0), sampleLane(keys, beat, mode), 0)
     }
   }
+})
+
+// ── Force mode ───────────────────────────────────────────────────────────────
+// The mode's defining claim is that it is NOT target-seeking: notes apply
+// pushes and the value is wherever they leave it. Most of these tests are
+// therefore about what does NOT happen - the value must not converge on a
+// note's row, because that is exactly what every other mode does.
+
+const FN = (beat: number, value: number, durationBeats = 0.25, velocity = 1) =>
+  ({ beat, durationBeats, value, velocity })
+
+/** Integrate over 0..10 so a normalization slip shows up as a wrong scale. */
+const forceTable = (cfg: Partial<ForceConfig>, notes: ReturnType<typeof FN>[]) =>
+  integrateForceLane({ ...DEFAULT_FORCE, ...cfg }, notes, 0, 10)
+
+const settled = (t: { values: Float64Array }) => t.values[t.values.length - 1]
+const extremes = (t: { values: Float64Array }) => {
+  let lo = Infinity, hi = -Infinity
+  for (const v of t.values) { if (v < lo) lo = v; if (v > hi) hi = v }
+  return { lo, hi }
+}
+
+test('force: a lane with no notes has nothing to integrate', () => {
+  assert.equal(integrateForceLane(DEFAULT_FORCE, [], 0, 10), undefined)
+  assert.ok(Number.isNaN(sampleAutomationLane({ mode: 'linear', keyframes: [], force: DEFAULT_FORCE }, 4, 3)))
+})
+
+test('force: a kick moves the body and dry friction brings it to a DEAD stop', () => {
+  const t = forceTable({}, [FN(0, 8)])!
+  assert.ok(settled(t) > 5.2, `expected the kick to carry it up from mid, got ${settled(t)}`)
+  // The last stretch of the table must be bit-identical - an asymptotic decay
+  // (any drag model, any spring) would still be creeping here.
+  const tail = t.values.slice(-200)
+  for (const v of tail) assert.equal(v, tail[0])
+})
+
+test('force: it is NOT target-seeking - a second identical push goes FURTHER', () => {
+  const one = forceTable({ aim: 'signed' }, [FN(0, 6.5)])!
+  const two = forceTable({ aim: 'signed' }, [FN(0, 6.5), FN(2, 6.5)])!
+  // A mode that aims at the note's row would land on the same value twice.
+  assert.ok(settled(two) > settled(one) + 0.2,
+    `two pushes (${settled(two)}) should outrun one (${settled(one)})`)
+})
+
+test('force: mass resists - the same push moves a heavier body less', () => {
+  const light = settled(forceTable({ mass: 0.1 }, [FN(0, 9)])!)
+  const heavy = settled(forceTable({ mass: 0.95 }, [FN(0, 9)])!)
+  assert.ok(light > heavy, `light ${light} should outrun heavy ${heavy}`)
+})
+
+test('force: a held thrust pushes for as long as the note lasts', () => {
+  const short = settled(forceTable({ push: 'thrust', aim: 'signed' }, [FN(0, 8, 0.25)])!)
+  const long = settled(forceTable({ push: 'thrust', aim: 'signed' }, [FN(0, 8, 3)])!)
+  assert.ok(long > short + 0.3, `a 3-beat thrust (${long}) should beat a 0.25-beat one (${short})`)
+})
+
+test('force: stack laws differ - added pushes outrun a replaced one', () => {
+  const notes = [FN(0, 6.5), FN(0, 6.5)]
+  const add = settled(forceTable({ aim: 'signed', stack: 'add' }, notes)!)
+  const newest = settled(forceTable({ aim: 'signed', stack: 'newest' }, notes)!)
+  const avg = settled(forceTable({ aim: 'signed', stack: 'avg' }, notes)!)
+  assert.ok(add > newest, `add ${add} should outrun newest ${newest}`)
+  // Averaging two identical pushes is the same as replacing with one of them.
+  assert.ok(Math.abs(avg - newest) < 1e-9, `avg ${avg} vs newest ${newest}`)
+})
+
+test('force: gravity brings it back to the floor, a pull to HOME', () => {
+  // Both use a flowing drag, not dry friction: Coulomb friction has a genuine
+  // STALL force, so a body parked above the floor legitimately stays there
+  // rather than sliding back - a box on a slope, not a bug.
+  const g = forceTable({ field: 'gravity', fieldStrength: .8, drag: 'quad' }, [FN(0, 9)])!
+  assert.ok(settled(g) < 0.5, `gravity should land it on the floor, got ${settled(g)}`)
+  const p = forceTable({ field: 'pull', fieldStrength: .8, home: 0.3, drag: 'quad' }, [FN(0, 9)])!
+  // HOME is a FRACTION of the lane's range: 0.3 of 0..10 is 3.
+  assert.ok(Math.abs(settled(p) - 3) < 0.35, `pull should settle near 3, got ${settled(p)}`)
+})
+
+test('force: the body never escapes the lane bounds, however hard it is pushed', () => {
+  for (const drag of ['friction', 'linear', 'quad', 'none'] as const) {
+    const t = forceTable({ drag, force: 1, mass: 0, aim: 'signed' },
+      [FN(0, 10), FN(1, 10), FN(2, 10), FN(3, 0), FN(4, 0)])!
+    const { lo, hi } = extremes(t)
+    assert.ok(lo >= 0 && hi <= 10, `${drag}: escaped to ${lo}..${hi}`)
+    for (const v of t.values) assert.ok(Number.isFinite(v), `${drag}: non-finite sample`)
+  }
+})
+
+test('force: integration is deterministic, so scrub and export replay it exactly', () => {
+  const notes = [FN(0, 8), FN(1.5, 2, 1), FN(4, 9)]
+  const a = forceTable({}, notes)!
+  const b = forceTable({}, notes)!
+  assert.deepEqual(Array.from(a.values), Array.from(b.values))
+})
+
+test('force: sampling holds at both ends and matches the table between', () => {
+  const t = forceTable({}, [FN(4, 8)])!
+  assert.equal(sampleForceLane(t, -100), t.values[0])
+  assert.equal(sampleForceLane(t, 1e6), t.values[t.values.length - 1])
+  // A sample landing exactly on a stored step is that sample.
+  assert.equal(sampleForceLane(t, t.startBeat + t.step * 10), t.values[10])
+  // And one halfway between is the midpoint of its neighbours.
+  const mid = sampleForceLane(t, t.startBeat + t.step * 10.5)
+  assert.ok(Math.abs(mid - (t.values[10] + t.values[11]) / 2) < 1e-9)
+})
+
+test('force: lane bounds are the table extremes exactly', () => {
+  const t = forceTable({}, [FN(0, 9), FN(2, 1, 1)])!
+  const lane: AutomationLane = { mode: 'linear', keyframes: [], force: DEFAULT_FORCE, forceTable: t }
+  const { lo, hi } = extremes(t)
+  assert.deepEqual(automationLaneValueBounds(lane, 5), { min: lo, max: hi })
+  // No table (a lane with no notes) collapses to the base, like every mode.
+  assert.deepEqual(automationLaneValueBounds({ mode: 'linear', keyframes: [], force: DEFAULT_FORCE }, 5), { min: 5, max: 5 })
+})
+
+test('force: mode precedence keeps a lane unambiguous', () => {
+  assert.equal(automationMode({ force: DEFAULT_FORCE }), 'force')
+  assert.equal(automationMode({}), 'curve')
+  // Burst/noise/cycle all win over a stray force config, matching the resolver.
+  assert.equal(automationMode({ force: DEFAULT_FORCE, burst: BURST }), 'burst')
+  assert.equal(automationMode({ force: DEFAULT_FORCE, cycle: DEFAULT_CYCLE }), 'cycle')
+})
+
+test('force: extraction maps pitch to value, normalizes velocity, and sorts by beat', () => {
+  const notes = extractForceNotes(pitchBlock(84, 60), 4, 0, 10)
+  assert.equal(notes.length, 2)
+  close(notes[0].beat, 0)
+  close(notes[1].beat, 1)
+  close(notes[0].value, 10, 'pitch 84 is the lane max')
+  close(notes[1].value, 5, 'pitch 60 is the midpoint')
+  close(notes[0].velocity, 100 / 127)
+  close(notes[0].durationBeats, 1)
+  // Amount scales how hard a note pushes, exactly as it scales every other
+  // mode's values - one gain, applied at the same choke point.
+  close(extractForceNotes(pitchBlock(84), 4, 0, 10, undefined, 0.5)[0].value, 5)
 })

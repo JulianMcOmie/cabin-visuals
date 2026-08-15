@@ -12,7 +12,7 @@ import type {
 import { DEFAULT_ADSR } from './adsr'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
-import { automationAmount, automationLaneValueBounds, automationOutputBounds, extractBurstGates, extractCycleGates, extractKeyframes, extractNoiseGates, sampleAutomationLane, type NoiseConfig } from './automation'
+import { automationAmount, automationLaneValueBounds, automationOutputBounds, extractBurstGates, extractCycleGates, extractForceNotes, extractKeyframes, extractNoiseGates, integrateForceLane, sampleAutomationLane, type NoiseConfig } from './automation'
 import { automationValueBounds, type AutomationRange } from '../trackTypes'
 import { isNumberParam, type ObjectInstrumentDef, type ParamDef } from '../../instruments/types'
 import { SPATIAL_TRANSFORM_PARAM_DEFS, TRANSFORM_PARAM_DEFS, transformDefault, withTransformParams } from '../transform'
@@ -170,6 +170,27 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
       })
       continue
     }
+    // Force mode: integrated ONCE, here, into a table the sampler looks up. This
+    // is the only lane that does real work at resolve; doing it per frame would
+    // make every paused scrub pay for the whole phrase.
+    if (child.force) {
+      out.push({
+        param,
+        sourceTrackId: child.id,
+        mode: 'linear',
+        keyframes: [],
+        force: child.force,
+        forceTable: integrateForceLane(
+          child.force,
+          extractForceNotes(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount, child.automationRange),
+          bounds.min,
+          bounds.max,
+        ),
+        min: bounds.min,
+        max: bounds.max,
+      })
+      continue
+    }
     // min/max ride along for the SPLINE easing, whose tangents may overshoot the
     // keyframes; every other easing stays inside them and ignores the bounds.
     out.push({
@@ -277,6 +298,27 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
         keyframes: [],
         cycle: child.cycle,
         cycles: extractCycleGates(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount, child.automationRange),
+        min: bounds.min,
+        max: bounds.max,
+        base,
+      })
+      continue
+    }
+    // Force rides fx lanes too, integrated here exactly as the object branch
+    // does; 'enabled' stays keyframes (a 0/1 switch is not a body to push).
+    if (child.force && target.key !== 'enabled') {
+      out.push({
+        instanceId: target.instanceId,
+        key: target.key,
+        mode: 'linear',
+        keyframes: [],
+        force: child.force,
+        forceTable: integrateForceLane(
+          child.force,
+          extractForceNotes(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount, child.automationRange),
+          bounds.min,
+          bounds.max,
+        ),
         min: bounds.min,
         max: bounds.max,
         base,

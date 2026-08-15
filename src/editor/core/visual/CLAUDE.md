@@ -44,12 +44,12 @@ than as an index).
 2. **Its chain broadcasts to every object in the scene**, not to "members above" — it holds no members. It is FIRST in DFS, hence last in the reversed group walk, so its entries land after every real group's: the right nesting order for an outermost container.
 3. **A COLORIZER on it paints the BACKDROP**, and is kept out of every object chain (`ResolvedGraph.backdropChain`). This is the one place `def.kind` steers resolution — the visualCopies guide calls it a UI-only discriminator — and the exception is deliberate: objects already have colorizers on their own track, on a group, and via a routed global entry, while the backdrop had **no** beat-driven route at all. `computeAtBeat` evaluates the chain once per frame (copy 0 only — a backdrop is one surface, so a splitter there multiplies objects and nothing here) and `getSceneBackdrop(sceneId)` is what `VisualScene` clears and paints the gradient with. `shiftHex` mirrors `instrumentColor.ts`'s order and both hue regimes exactly, so a colorizer cannot mean one thing on a cube and another on the wall behind it. A transparent backdrop is left alone; both gradient stops travel through ONE shift. "Grade the whole scene, objects included" is the scene EFFECT chain's job, not this one.
 
-## automation.ts — one lane, four modes
+## automation.ts — one lane, five modes
 
-An automation child track's notes mean one of four things, and which one is
+An automation child track's notes mean one of five things, and which one is
 implied by the config the track carries (`automationMode()` owns that precedence;
-burst beats noise beats cycle if a document somehow has several). All four are
-pure functions of the beat, so the pause invariant holds for every mode:
+burst beats noise beats cycle beats force if a document somehow has several). All
+five are pure functions of the beat, so the pause invariant holds for every mode:
 
 | mode | config | what a note is | between notes |
 |---|---|---|---|
@@ -57,6 +57,7 @@ pure functions of the beat, so the pause invariant holds for every mode:
 | noise | `Track.noise` | a gate for seeded random wander around its value | **inert** |
 | burst | `Track.burst` | an ADSR burst from the value underneath toward its own pitch-value, velocity = intensity | **inert** |
 | cycle | `Track.cycle` | an ONSET dividing time: the motion curve plays once between each consecutive onset pair, stretched to fit | the cycle itself; **inert** outside the onset span |
+| force | `Track.force` | a PUSH applied to a body with mass — no target at all | wherever the pushes left it; **never inert** |
 
 **CYCLE mode** (`Track.cycle`): the shape is one cubic bezier y(x) with editable
 ENDPOINT heights — seam continuity is not an option, it is whether the user's
@@ -117,6 +118,49 @@ bursts, and `automationLaneValueBounds` widens the keyframe hull by
 functions peak) so a mover's copy pool is budgeted for the swing. Both are gated
 on the mode, so every other easing stays bit-identical.
 
+**FORCE MODE** (`Track.force`) is the odd one out, and the distinction is worth
+stating plainly because it explains every design choice in it: the other four
+modes are all **target-seeking**. They name a destination and travel there — a
+keyframe interpolates to the next value, a burst travels from the value
+underneath toward the note's own, a cycle rides between two bounds. A spring is
+only the mushiest member of that family; it is still a restoring force aimed at a
+rest point. A force lane has **no destination at all.** One body with a mass;
+notes apply pushes; the value is the consequence.
+
+Four things follow, all of them load-bearing:
+
+- **It is stateful, which no other mode is.** The value at beat 40 depends on
+  every note before it, so there is no formula to evaluate at a beat. The purity
+  rule still holds because the integration runs ONCE at resolve, from a fixed
+  origin, into a fixed-step table (`FORCE_TABLE_STEP` = 1/64 beat, integrated at
+  4× that), and `sampleAutomationLane` does a lookup plus a lerp. **Never
+  integrate per frame** — pause, scrub and export would each pay for the whole
+  phrase. This is the only lane that does real work in `resolve.ts`.
+- **The physics is normalized to the lane's own range**, then mapped back to
+  param units, so MASS and FORCE feel identical on a 0..1 opacity and a -360..360
+  rotation, and a retarget can't silently change the feel. `home` is likewise a
+  FRACTION of the range, not param units.
+- **The body starts at its EQUILIBRIUM** — on the floor under gravity, at HOME
+  under a pull, mid-range with nothing acting — deliberately *not* at the value
+  underneath. That keeps the table independent of the param knob, so a knob drag
+  can't force a re-integration; and a lane with notes owns its param outright
+  anyway, exactly as a keyframe lane does.
+- **It never goes inert.** Burst/noise/cycle return NaN between their gates so the
+  base shows through; a pushed body stays where it landed, so the endpoints HOLD.
+
+Two behaviours that look like bugs and are not. **Dry friction has a real stall
+force**: a body parked above the floor under gravity will simply stay there
+rather than sliding back (a box on a slope), and a weak thrust may not break it
+loose at all. That is why `thrustGain` is geared well above `kickGain` relative
+to `mu` — a sustained push that can't move anything reads as a dead control — and
+why a note near the middle row still stalls under `signed` aim, which is correct,
+since that row means no force. **The range limits are always cushioned**, never a
+hard stop and never a bounce: a hard stop is a velocity discontinuity, the one
+thing this mode exists to avoid, and a bounce would put the spring back.
+
+Bounds for structural budgets are exact here — the table IS every value the lane
+can emit, so `automationLaneValueBounds` just walks it.
+
 Automation lanes are RETARGETABLE from the panel (`setAutomationTarget`):
 same one-lane-per-param rule as creation, `automationRange` resets (its
 min/max speak the old param's units), and the lane renames only when it still
@@ -124,7 +168,7 @@ wore the auto-name.
 
 **`sampleAutomationLane(lane, beat, base)` is the only place the mode is read.**
 The engine, the hover preview and `paramAtBeat` all go through it, so they cannot
-disagree and a fourth mode would land in all of them at once. It returns **NaN for
+disagree and a new mode lands in all of them at once. It returns **NaN for
 an inert lane** — callers keep the value that was already there, which is what
 makes burst/noise composable with the base param and with each other. `base` is
 what a burst departs FROM; the other modes ignore it.
