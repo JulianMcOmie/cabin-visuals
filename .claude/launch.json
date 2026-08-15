@@ -145,6 +145,12 @@
       "runtimeExecutable": "env",
       "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3065", "npm", "run", "dev", "--", "--port", "3065"],
       "port": 3065
+    },
+    {
+      "name": "kaleido-extras-3036",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3036", "npm", "run", "dev", "--", "--port", "3036"],
+      "port": 3036
     }
   ]
 }
