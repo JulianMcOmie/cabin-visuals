@@ -61,9 +61,13 @@ export const glitchScenePlugin: VisualEffect = {
   id: 'sceneGlitch',
   name: 'Glitch',
   category: 'scene',
+  accent: '#a3e635',
   params: [
     { key: 'amount', label: 'Amount', min: 0, max: 1, step: 0.01, default: 0.6 },
-    { key: 'rate', label: 'Rate', min: 0.5, max: 16, step: 0.5, default: 4 },
+    // Shares Grain's musical ladder (scene/rate.ts) - the bottom rung is one
+    // re-seed per bar, which is why the floor is 0.25 rather than the 0.5 this
+    // shipped with.
+    { key: 'rate', label: 'Rate', min: 0.25, max: 16, step: 0.25, default: 4 },
     { key: 'slices', label: 'Slices', min: 2, max: 32, step: 1, default: 12 },
     { key: 'shift', label: 'Shift', min: 0, max: 0.5, step: 0.005, default: 0.1 },
     { key: 'split', label: 'RGB split', min: 0, max: 1, step: 0.01, default: 0.5 },

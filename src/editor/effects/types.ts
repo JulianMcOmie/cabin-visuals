@@ -44,6 +44,14 @@ export interface VisualEffect {
    *  base transform effects are deprecated in favor of the canonical track
    *  transform panel (core/transform.ts). */
   deprecated?: boolean
+  /** The colour this device WEARS in the UI: its console accent and the power
+   *  LED on its rack card. The effect counterpart of a mover definition's
+   *  `identityColor` (core/visualCopies/identityColors.ts) and it exists for
+   *  the same reason — the accent belongs to the device, not to whichever
+   *  panel happens to draw it, so it cannot be re-declared and drift. Absent
+   *  (every per-object effect today) = the host's accent: the parent
+   *  instrument's colour, else the app accent. */
+  accent?: string
   /** User-facing knobs (same shape as an instrument's params). Enum/boolean settings are
    *  encoded as numeric params for now (e.g. axis 0/1/2, a toggle as 0/1). */
   params: ParamDef[]

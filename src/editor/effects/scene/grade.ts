@@ -59,6 +59,7 @@ export const gradeScenePlugin: VisualEffect = {
   id: 'sceneGrade',
   name: 'Grade',
   category: 'scene',
+  accent: '#eab308',
   params: [
     { key: 'amount', label: 'Amount', min: 0, max: 1, step: 0.01, default: 1 },
     { key: 'exposure', label: 'Exposure', min: -2, max: 2, step: 0.01, default: 0 },

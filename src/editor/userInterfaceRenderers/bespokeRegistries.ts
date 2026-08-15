@@ -29,6 +29,7 @@ import { PixelateEffectUserInterfaceRenderer } from './PixelateEffectUserInterfa
 import { ChromaticAberrationEffectUserInterfaceRenderer } from './ChromaticAberrationEffectUserInterface'
 import { OpacityEffectUserInterfaceRenderer } from './OpacityEffectUserInterface'
 import { DeformEffectUserInterfaceRenderer } from './DeformEffectUserInterface'
+import { SCENE_FX_USER_INTERFACES } from './SceneFxUserInterface'
 
 // Bespoke settings surfaces for the non-object tracks, mirroring the object
 // registry in index.ts: movers/splitters are keyed by their definition id,
@@ -70,6 +71,9 @@ export const EFFECT_USER_INTERFACES: Partial<Record<string, UserInterfaceRendere
   chromaticAberration: ChromaticAberrationEffectUserInterfaceRenderer,
   opacity: OpacityEffectUserInterfaceRenderer,
   deform: DeformEffectUserInterfaceRenderer,
+  // The scene chain's seven devices are one family sharing a chassis, so they
+  // register as a map rather than seven imports (SceneFxUserInterface.tsx).
+  ...SCENE_FX_USER_INTERFACES,
 }
 
 export function getMoverUserInterface(definitionId: string | undefined): UserInterfaceRendererDefinition | undefined {

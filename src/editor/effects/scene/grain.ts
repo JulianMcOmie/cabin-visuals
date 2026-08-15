@@ -62,6 +62,9 @@ export const grainScenePlugin: VisualEffect = {
   id: 'sceneGrain',
   name: 'Grain',
   category: 'scene',
+  // Near-achromatic on purpose: this is the film-stock device, and a silver
+  // console beside six coloured ones reads as the monochrome one.
+  accent: '#d6d3d1',
   params: [
     { key: 'amount', label: 'Amount', min: 0, max: 1, step: 0.01, default: 0.4 },
     { key: 'mode', label: 'Texture', type: 'select', options: [

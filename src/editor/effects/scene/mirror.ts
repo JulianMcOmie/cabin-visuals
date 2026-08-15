@@ -58,6 +58,7 @@ export const mirrorScenePlugin: VisualEffect = {
   id: 'sceneMirror',
   name: 'Mirror',
   category: 'scene',
+  accent: '#c084fc',
   params: [
     { key: 'amount', label: 'Amount', min: 0, max: 1, step: 0.01, default: 1 },
     { key: 'mode', label: 'Mode', type: 'select', options: [

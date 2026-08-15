@@ -52,6 +52,7 @@ export const blurScenePlugin: VisualEffect = {
   id: 'sceneBlur',
   name: 'Blur',
   category: 'scene',
+  accent: '#818cf8',
   params: [
     { key: 'amount', label: 'Amount', min: 0, max: 1, step: 0.01, default: 0.35 },
     { key: 'mode', label: 'Mode', type: 'select', options: [

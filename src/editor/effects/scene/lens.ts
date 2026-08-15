@@ -71,6 +71,7 @@ export const lensScenePlugin: VisualEffect = {
   id: 'sceneLens',
   name: 'Lens',
   category: 'scene',
+  accent: '#38bdf8',
   params: [
     { key: 'amount', label: 'Amount', min: 0, max: 1, step: 0.01, default: 1 },
     { key: 'distortion', label: 'Distortion', min: -1, max: 1, step: 0.01, default: 0 },

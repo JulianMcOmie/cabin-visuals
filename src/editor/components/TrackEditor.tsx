@@ -152,6 +152,11 @@ function EffectItem({
 }) {
   const [collapsed, setCollapsed] = useState(false)
   const BespokeEffect = getEffectUserInterface(plugin.id)
+  // A device that declares its own colour wears it here too, so the rack's LEDs
+  // tell the devices apart at a glance and each card matches the console it
+  // opens (the scene FX family; per-object effects have none and inherit the
+  // chain owner's accent as before).
+  const deviceAccent = plugin.accent ?? accent
   return (
     <div className="mb-2 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-track-row)]">
       <div className={`flex h-[26px] items-center gap-2 px-2 bg-[var(--bg-elevated)] ${
@@ -165,7 +170,7 @@ function EffectItem({
           <span
             className="h-1.5 w-1.5 rounded-full transition-all group-active:scale-75"
             style={inst.enabled
-              ? { background: accent, boxShadow: `0 0 5px ${accent}` }
+              ? { background: deviceAccent, boxShadow: `0 0 5px ${deviceAccent}` }
               : { background: 'var(--border-strong)' }}
           />
         </button>

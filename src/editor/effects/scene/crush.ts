@@ -54,6 +54,7 @@ export const crushScenePlugin: VisualEffect = {
   id: 'sceneCrush',
   name: 'Crush',
   category: 'scene',
+  accent: '#fb7185',
   params: [
     { key: 'amount', label: 'Amount', min: 0, max: 1, step: 0.01, default: 1 },
     { key: 'pixelate', label: 'Pixelate', min: 0, max: 1, step: 0.01, default: 0.4 },

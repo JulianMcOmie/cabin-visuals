@@ -54,6 +54,36 @@ plugin. What to know before adding one:
   NOT yet a chain device — it runs on the final composite, per frame not per
   scene, so promoting it is its own task.
 
+### Their consoles
+
+`userInterfaceRenderers/SceneFxUserInterface.tsx` holds all seven (one family,
+one chassis) and `sceneFxPreview.tsx` the shared live window; the shape came
+from an interactive mock (preview=scene · amount=knob · accent=perDevice ·
+kinds=glyphs · size=compact). Four things are load-bearing:
+
+- **The preview runs the device's REAL shader over a procedural REFERENCE FRAME**
+  (`scene/previewFrame.ts` rewires `texture2D(tDiffuse, …)` onto it), because a
+  panel cannot sample the live viewport — a second WebGL context cannot share
+  the compositor's textures. Every element of that frame is there for a specific
+  device (off-centre subject → Mirror, straight lines to the edges → Lens/Blur,
+  flat mid-tones → Grain, a long ramp → Crush, emitters above 1.0 → Grade);
+  `previewFrame.test.ts` fails if one is deleted or if a device stops sampling
+  the way the rewiring expects.
+- **ONE WebGL context for the whole family**, a module singleton in
+  `sceneFxPreview.tsx` with per-plugin program caching; each panel keeps a 2D
+  canvas and blits. Seven expanded devices with a context each would sit near
+  the browser's budget, and exhausting it drops the OLDEST context — the main
+  VIEWPORT. The blit must stay in the same task as the draw (no
+  `preserveDrawingBuffer`).
+- **AMOUNT is the large lead knob in the same slot on every device** — it is the
+  master (0 skips the pass) and the automation target, so it gets one fixed home
+  across the family.
+- **`VisualEffect.accent`** is the effect counterpart of a mover's
+  `identityColor`: declared on the plugin, worn by both the console and the
+  rack LED, never re-declared in a panel. Grain's is deliberately achromatic.
+  Rate knobs on the two re-seeding devices step the shared musical ladder in
+  `scene/rate.ts` and read out in note values (`1/16`), not raw multipliers.
+
 ## Writing a `deform` effect
 
 `deform/` holds the one shipped device (Deformer: 12 operations × 4 drives × 4 falloffs
