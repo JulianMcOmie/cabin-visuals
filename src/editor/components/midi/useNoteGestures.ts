@@ -684,6 +684,10 @@ export function useNoteGestures({
 
   return {
     selectedNoteIds,
+    // midi vim owns a REGION, not a set of ids, and projects it onto this
+    // selection - so the roll's existing selection visuals, ⌘C/⌘V and drags all
+    // see exactly what the keyboard region covers, with no second concept.
+    setSelectedNoteIds,
     drawingNote,
     dragState,
     dragStateRef,

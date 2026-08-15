@@ -15,6 +15,10 @@ import { useLoopDrag } from '../../hooks/useLoopDrag'
 import { Ruler } from '../Ruler'
 import { xToBeat, beatToX, rowIndexToY } from './coords'
 import { startEdgeResize } from '../../utils/edgeResize'
+import { useMidiVim } from './vim/useMidiVim'
+import { rowKeyLabels } from './vim/keyMap'
+import { VIM_ACCENT, type VimKeyRegime } from './vim/types'
+import { VimKeySheet, VimStatusLine } from './vim/VimStatusLine'
 import type { MidiRow, RangeLabel } from './types'
 import { useTimeStore } from '../../store/TimeStore'
 import { scrollLeftAroundBeat } from '../../utils/zoomAroundBeat'
@@ -73,6 +77,14 @@ export interface MidiEditorProps {
   onNoteSelect?: (note: Note) => void
   /** Marquee/group delete: remove these clips (Delete with clips selected). */
   onClipDelete?: (clipIds: string[]) => void
+  /** midi vim: the roll's modal keyboard editor. Off, the grid behaves exactly
+   *  as it did before the mode existed. See ./vim. */
+  vimEnabled?: boolean
+  onVimEnabledChange?: (on: boolean) => void
+  /** How the note keys land on these rows — see VimKeyRegime. */
+  vimRegime?: VimKeyRegime
+  /** vim's `[` / `]` drive the roll's OWN grid rather than shadowing it. */
+  onQuantizeChange?: (beats: number) => void
 }
 
 // The label gutter width lives in UIStore (midiLabelWidth) - drag its right edge to resize.
@@ -113,6 +125,10 @@ export function MidiEditor({
   blockStartBeat = 0,
   blockDurationBeats = 0,
   initialTotalBeats,
+  vimEnabled = false,
+  onVimEnabledChange,
+  vimRegime = 'chromatic',
+  onQuantizeChange,
 }: MidiEditorProps) {
   // Inline word editing (text tracks): which note is being retyped.
   const [wordEdit, setWordEdit] = useState<{ noteId: string; value: string } | null>(null)
@@ -178,6 +194,7 @@ export function MidiEditor({
 
   const {
     selectedNoteIds,
+    setSelectedNoteIds,
     drawingNote,
     dragState,
     dragStateRef,
@@ -206,6 +223,42 @@ export function MidiEditor({
     quantize,
     snapEnabled,
   })
+
+  // midi vim rides on top of all of it: it owns a cursor and a region, and
+  // writes through the very same `onCommit` the mouse gestures use, so an
+  // op is one store write and therefore one undo step.
+  const vimApi = useMidiVim({
+    enabled: vimEnabled,
+    setEnabled: (on) => onVimEnabledChange?.(on),
+    rows,
+    regime: vimRegime,
+    notes,
+    trackId,
+    block,
+    blockStartBeat,
+    blockDurationBeats,
+    beatsPerBar,
+    stepBeats: quantize,
+    totalBeats: initialTotalBeats,
+    commit: onCommit,
+    setQuantize: (beats) => onQuantizeChange?.(beats),
+    setSelectedNoteIds,
+  })
+  const vimOn = vimEnabled && rows.length > 0
+  const vim = useMemo(() => ({
+    active: vimOn,
+    cursorBeat: vimApi.state.cursorBeat,
+    cursorRow: vimApi.state.cursorRow,
+    stepBeats: quantize,
+    noteLengthBeats: vimApi.state.noteLengthBeats,
+    staged: vimApi.state.staged,
+    rowKeys: rowKeyLabels(rows, vimRegime, vimApi.state.anchorRow),
+    ghosts: vimApi.draftGhosts,
+    ghostKind: vimApi.state.draft?.kind ?? null,
+    selection: vimApi.selectionSpanRows,
+    accent: VIM_ACCENT,
+    onCursorSet: vimApi.setCursorFromPointer,
+  }), [vimOn, vimApi, quantize, rows, vimRegime])
 
   // One grid, one selection: while the notes' marquee runs, box the clip row
   // too; while a note GROUP drags, boxed clips ride the same beat delta.
@@ -566,6 +619,12 @@ export function MidiEditor({
           {rows.map((row, rowIndex) => {
             const isLane = row.laneIndex !== undefined && !!onLaneRowClick
             const laneActive = isLane && row.laneIndex === activeLaneIndex
+            // In vim the gutter teaches its own key map: each row shows the
+            // letter that writes it. It takes the note-name slot, because while
+            // you're typing that IS the more useful name for the row - and it's
+            // the only way an arbitrary row vocabulary can explain itself.
+            const vimKey = vimOn ? vim.rowKeys.get(rowIndex) : undefined
+            const onCursorRow = vimOn && rowIndex === vim.cursorRow
             return (
             <div
               key={row.pitch}
@@ -582,7 +641,9 @@ export function MidiEditor({
                 paddingLeft: 6,
                 paddingRight: 8,
                 borderBottom: '1px solid rgba(255,255,255,0.05)',
-                backgroundColor: laneActive
+                backgroundColor: onCursorRow
+                  ? 'rgba(255,255,255,0.07)'
+                  : laneActive
                   ? 'rgba(255,255,255,0.09)'
                   : rowIndex % 2 === 1 ? 'rgba(0,0,0,0.08)' : 'transparent',
                 boxSizing: 'border-box',
@@ -616,7 +677,24 @@ export function MidiEditor({
               >
                 {row.label}
               </span>
-              {row.noteLabel && (
+              {vimKey ? (
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+                    lineHeight: '13px',
+                    minWidth: 13,
+                    textAlign: 'center',
+                    borderRadius: 3,
+                    padding: '0 3px',
+                    flexShrink: 0,
+                    color: onCursorRow ? '#0b0d12' : 'rgba(255,255,255,0.55)',
+                    backgroundColor: onCursorRow ? vim.accent : 'rgba(255,255,255,0.09)',
+                  }}
+                >
+                  {vimKey}
+                </span>
+              ) : row.noteLabel && (
                 <span
                   style={{
                     fontSize: 10,
@@ -683,7 +761,19 @@ export function MidiEditor({
             backgroundColor: '#18181b',
             ...gridBackground,
           }}
-          onPointerDown={handleBackgroundPointerDown}
+          onPointerDown={(e) => {
+            // In vim a left click on the grid also parks the cursor there, so
+            // the mouse and the keyboard address the same place. The marquee
+            // still runs underneath it.
+            if (vimOn && e.button === 0 && gridRef.current) {
+              const rect = gridRef.current.getBoundingClientRect()
+              const beat = xToBeat(e.clientX - rect.left, pixelsPerBeat)
+              const rowIndex = Math.floor((e.clientY - rect.top) / rowHeight)
+              const step = vim.stepBeats
+              vim.onCursorSet(Math.max(0, Math.round(beat / step) * step), rowIndex)
+            }
+            handleBackgroundPointerDown(e)
+          }}
           onContextMenu={(e) => e.preventDefault()}
           onPointerMove={() => {
             if (dragStateRef.current.type === 'none') setCursor('default')
@@ -1017,6 +1107,123 @@ export function MidiEditor({
           {/* Marquee overlay */}
           {marqueeStyle && <div style={marqueeStyle} />}
 
+          {/* --- midi vim ------------------------------------------------
+              Drawn above the notes because every one of these is about where
+              you are ABOUT to write, which has to stay readable over whatever
+              is already there. */}
+          {vimOn && vim.selection && vim.selection.rows.map((rowIndex) => {
+            const left = Math.round(beatToX(vim.selection!.startBeat, pixelsPerBeat))
+            const right = Math.round(beatToX(vim.selection!.endBeat, pixelsPerBeat))
+            return (
+              <div
+                key={`vim-sel-${rowIndex}`}
+                style={{
+                  position: 'absolute',
+                  left,
+                  top: rowIndexToY(rowIndex, rowHeight),
+                  width: Math.max(right - left, 2),
+                  height: rowHeight,
+                  backgroundColor: `${vim.accent}22`,
+                  borderTop: `1px solid ${vim.accent}55`,
+                  borderBottom: `1px solid ${vim.accent}55`,
+                  pointerEvents: 'none',
+                  zIndex: 9,
+                }}
+              />
+            )
+          })}
+
+          {/* A move/copy in flight: where the notes WOULD land. */}
+          {vimOn && vim.ghosts.map((ghost) => {
+            const rowIndex = pitchToRowIndex(ghost.pitch)
+            if (rowIndex === -1) return null
+            const left = Math.round(blockStartPx + beatToX(ghost.startBeat, pixelsPerBeat))
+            const right = Math.round(blockStartPx + beatToX(ghost.startBeat + ghost.durationBeats, pixelsPerBeat))
+            return (
+              <div
+                key={`vim-ghost-${ghost.id}`}
+                style={{
+                  position: 'absolute',
+                  left,
+                  top: rowIndexToY(rowIndex, rowHeight) + 2,
+                  width: Math.max(right - left - 1, 8),
+                  height: rowHeight - 4,
+                  borderRadius: 3,
+                  border: `1px dashed ${vim.accent}`,
+                  backgroundColor: `${vim.accent}${vim.ghostKind === 'copy' ? '33' : '55'}`,
+                  pointerEvents: 'none',
+                  zIndex: 11,
+                }}
+              />
+            )
+          })}
+
+          {/* Staged chord notes: outlined, because they are not notes yet. */}
+          {vimOn && vim.staged.map((rowIndex) => {
+            const left = Math.round(beatToX(vim.cursorBeat, pixelsPerBeat))
+            const right = Math.round(beatToX(vim.cursorBeat + vim.noteLengthBeats, pixelsPerBeat))
+            return (
+              <div
+                key={`vim-staged-${rowIndex}`}
+                style={{
+                  position: 'absolute',
+                  left,
+                  top: rowIndexToY(rowIndex, rowHeight) + 2,
+                  width: Math.max(right - left - 1, 8),
+                  height: rowHeight - 4,
+                  borderRadius: 3,
+                  border: `1px dashed ${vim.accent}`,
+                  backgroundColor: `${vim.accent}22`,
+                  pointerEvents: 'none',
+                  zIndex: 12,
+                }}
+              />
+            )
+          })}
+
+          {/* The cursor: a cell one grid-step wide, plus a full-height column
+              line so its beat stays findable when the row is off screen. */}
+          {vimOn && (() => {
+            const left = Math.round(beatToX(vim.cursorBeat, pixelsPerBeat))
+            const stepPx = Math.max(2, Math.round(vim.stepBeats * pixelsPerBeat))
+            const lenPx = Math.max(2, Math.round(vim.noteLengthBeats * pixelsPerBeat))
+            return (
+              <>
+                <div
+                  style={{
+                    position: 'absolute',
+                    left,
+                    top: 0,
+                    bottom: 0,
+                    width: stepPx,
+                    backgroundColor: `${vim.accent}12`,
+                    borderLeft: `1px solid ${vim.accent}66`,
+                    pointerEvents: 'none',
+                    zIndex: 13,
+                  }}
+                />
+                {/* The note that would land here: the step is where the cursor
+                    goes next, the length is what it would write - two different
+                    sizes, so the cursor shows both. */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    left,
+                    top: rowIndexToY(vim.cursorRow, rowHeight) + 1,
+                    width: lenPx,
+                    height: rowHeight - 2,
+                    borderRadius: 3,
+                    border: `1.5px solid ${vim.accent}`,
+                    backgroundColor: `${vim.accent}26`,
+                    boxShadow: `0 0 10px ${vim.accent}66`,
+                    pointerEvents: 'none',
+                    zIndex: 14,
+                  }}
+                />
+              </>
+            )
+          })()}
+
           {/* Playhead */}
           <div
             ref={playheadRef}
@@ -1060,6 +1267,23 @@ export function MidiEditor({
           row list does. */}
       <div style={{ height: CANVAS_BOTTOM_PADDING, pointerEvents: 'none' }} />
       </div>
+
+      {/* The readout sits under the grid, flush with it - it belongs to the
+          cursor, not to the panel's toolbar. */}
+      {vimOn && (
+        <VimStatusLine
+          state={vimApi.state}
+          rows={rows}
+          beatsPerBar={beatsPerBar}
+          stepBeats={quantize}
+          selectedCount={vimApi.selectedCount}
+          accent={VIM_ACCENT}
+          onExit={() => onVimEnabledChange?.(false)}
+        />
+      )}
+      {vimOn && vimApi.state.showSheet && (
+        <VimKeySheet accent={VIM_ACCENT} onClose={() => vimApi.closeSheet()} />
+      )}
     </div>
   )
 }

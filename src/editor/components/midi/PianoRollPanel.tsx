@@ -25,6 +25,7 @@ import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
 import { automationMode } from '../../core/visual/automation'
 import { resolveDeclaredMidiRows } from './resolveDeclaredRows'
+import { VIM_ACCENT, type VimKeyRegime } from './vim/types'
 import { laneIndexForPitch, resolveLyricWords, resolveStyleLanes } from '../../core/visual/lyricClips'
 import { LyricClipEditorCard, StyleLaneEditorCard } from '../../userInterfaceRenderers/TextDisplayUserInterface'
 import type { AutomationMode, Block, InterpolationMode, Track } from '../../types'
@@ -310,6 +311,8 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const setMidiPixelsPerBeat = useUIStore((s) => s.setMidiPixelsPerBeat)
   const rowHeight = useUIStore((s) => s.midiRowHeight)
   const setMidiRowHeight = useUIStore((s) => s.setMidiRowHeight)
+  const midiVimEnabled = useUIStore((s) => s.midiVimEnabled)
+  const setMidiVimEnabled = useUIStore((s) => s.setMidiVimEnabled)
 
   const [snapEnabled, setSnapEnabled] = useState(true)
   // Toolbar toggles and sliders wear the edited track's color, matching the
@@ -415,6 +418,16 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   if (!automation && !trigger && track?.type === 'base' && track.instrumentId === 'textDisplay') {
     rows.unshift({ pitch: 1000, label: 'Lyric clips', color: trackColor, clipRow: true })
   }
+  // What the note keys MEAN on these rows. A value lane's rows are param
+  // values, not pitches, so the keys spread across the range instead of sitting
+  // on sixteen adjacent rows; a declared vocabulary maps positionally; only the
+  // full piano gets Logic's musical-typing semantics. See vim/keyMap.ts.
+  const vimRegime: VimKeyRegime = automation
+    ? automation.kind === 'toggle' ? 'vocabulary' : 'value'
+    : trigger || videoTrack || photoTrack || defRows
+      ? 'vocabulary'
+      : 'chromatic'
+
   const blockDurationBeats = block.durationBars * beatsPerBar
   // Span the full project length so the MIDI editor scrolls to the same end as
   // the tracks view (at least INITIAL_TOTAL_BARS so short projects still have room).
@@ -580,6 +593,21 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
           Snap
         </button>
 
+        {/* midi vim's way in. Deliberately quiet - the mode is meant to be found,
+            not advertised - but present, so it can be found at all. Double-tap
+            Shift does the same from anywhere in the roll. */}
+        <button
+          onClick={() => setMidiVimEnabled(!midiVimEnabled)}
+          title={midiVimEnabled ? 'midi vim is on — Esc leaves it, ? lists the keys' : 'midi vim: type notes from the keyboard (double-tap Shift)'}
+          className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded font-mono text-[11px] leading-none transition-colors cursor-pointer ${
+            midiVimEnabled ? '' : 'text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300'
+          }`}
+          style={midiVimEnabled ? { background: VIM_ACCENT, color: '#0b0d12' } : undefined}
+          aria-pressed={midiVimEnabled}
+        >
+          ⌶
+        </button>
+
         <ToolbarSelect
           value={quantize}
           onChange={(e) => setQuantize(e.target.value === 'smart' ? 'smart' : Number(e.target.value))}
@@ -719,6 +747,10 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
         beatsPerBar={beatsPerBar}
         quantize={effectiveQuantize}
         snapEnabled={snapEnabled}
+        vimEnabled={midiVimEnabled}
+        onVimEnabledChange={setMidiVimEnabled}
+        vimRegime={vimRegime}
+        onQuantizeChange={setQuantize}
         pixelsPerBeat={midiPixelsPerBeat}
         rowHeight={rowHeight}
         noteWords={noteWords}

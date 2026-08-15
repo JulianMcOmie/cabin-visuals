@@ -57,6 +57,13 @@ interface UIState {
   midiRowHeight: number
   setMidiRowHeight: (px: number) => void
 
+  // midi vim: the piano roll's modal keyboard editor (see components/midi/vim).
+  // Session state on purpose - it is NOT remembered across reloads, because a
+  // roll that silently opens with the keyboard claimed reads as a broken
+  // editor. Double-tap Shift (or the toolbar chip) is one gesture to re-arm.
+  midiVimEnabled: boolean
+  setMidiVimEnabled: (on: boolean) => void
+
   // Horizontal zoom for the tracks timeline (pixels per beat).
   tracksPixelsPerBeat: number
   setTracksPixelsPerBeat: (pixels: number) => void
@@ -173,6 +180,9 @@ export const useUIStore = create<UIState>((set) => ({
   midiPixelsPerBeat: 40,
   setMidiPixelsPerBeat: (pixels) =>
     set({ midiPixelsPerBeat: Math.max(5, Math.min(200, pixels)) }),
+
+  midiVimEnabled: false,
+  setMidiVimEnabled: (on) => set({ midiVimEnabled: on }),
 
   midiRowHeight: 28,
   setMidiRowHeight: (px) =>
