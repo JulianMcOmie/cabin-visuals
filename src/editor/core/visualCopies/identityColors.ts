@@ -120,13 +120,21 @@ export const SYMMETRIC_ROTATION_COLOR = '#d8c830'
 export const LINE_COLOR = '#95db6c'
 /** Hue 150°. */
 export const WAVE_TERRAIN_COLOR = '#6de18b'
-/** Hue 191° - ice, for the mover that stops time. */
-export const FREEZE_COLOR = '#00c0bb'
-/** Hue 205° - the middle of the ~200-210 band the mover consolidation
- *  reopened. An arbitrary pick on purpose: the Cosine Palette's subject is
+// The Conveyor→Impact Scatter stretch, respaced at ~11.8° when Physics joined:
+// by 2026-08 the wheel was full again (no gap anywhere reached the 22° an
+// insertion needs), and this band's two movable entries plus its two immovable
+// panel-accent walls were the only place three even gaps still fit. Freeze and
+// the Cosine Palette moved by ~5-6° and kept their own lightness and chroma -
+// only the hue was re-voiced, which is the only channel that survives
+// midiEditorPalette anyway.
+/** Hue 186° - ice, for the mover that stops time. */
+export const FREEZE_COLOR = '#13c1b4'
+/** Hue 198°. An arbitrary pick on purpose: the Cosine Palette's subject is
  *  every hue at once, so no single hue can stand for it and a computed
  *  `{ param }` identity has no user-picked color to follow. */
-export const COSINE_PALETTE_COLOR = '#00becd'
+export const COSINE_PALETTE_COLOR = '#00bfc4'
+/** Hue 210° - the physics mover's cyan. */
+export const PHYSICS_COLOR = '#00c3db'
 /** Hue 247°. */
 export const MOTION_COLOR = '#4eaeff'
 /** Hue 260°. */

@@ -136,6 +136,51 @@ matrix-identical to the plain ring and none of them needed a persistence upgrade
   Along path is a quarter turn on, aiming each copy down the tangent. The fix rides
   INSIDE the slot (after the translation), so it re-aims without moving anything.
 
+**`physics` — a VALUE lane joined by mechanics instead of by an easing curve.**
+Pitch names a scalar through the automation 36–84 encoding (as Radial's radius
+rows do); the mover integrates a law of motion between onsets and solves its
+INITIAL CONDITIONS so the trajectory intercepts the next value at the next
+onset. Four things carry it:
+
+- **The matrix is (Gravity | Spring | Drag) × (Arrive | Apex | Impulse).**
+  Arrive passes exactly through every value; Apex makes the value the
+  trajectory's EXTREMUM (under Gravity that is the bouncing ball — fall,
+  bounce, crest on the beat); Impulse injects energy sized by the value (under
+  Gravity, exactly enough to peak there) and lets the law free-run. Drag has no
+  extremum, so its Apex cell is a critically damped arrival — stated in the
+  file, not an oversight.
+- **TUNE is the tension the mover exists to expose, and it cannot be dodged.**
+  An interval is fully constrained by its two endpoint values, so a second-order
+  law cannot both arrive on time AND keep velocity continuous. `strike` fixes
+  the field constant and solves the LAUNCH VELOCITY (velocity jumps at every
+  onset — that discontinuity is the hit you see); `smooth` carries velocity
+  through and solves the FIELD CONSTANT per interval instead (C¹, at the price
+  of gravity that breathes). Both ship because both are musically right, and
+  `physicsInterp.test.ts` pins each one's signature — fixed vs varying `a`
+  across the poly pieces.
+- **A solve that can't be met CLAMPS and misses, it never fakes.** Apex/strike
+  over a drop steeper than `2|Δy|/dt²` is asking fixed gravity for a fall it
+  cannot make; the bounce clamps to the interval edge and the crest is missed.
+  That is what `smooth` (which solves gravity) is for. Every ill-conditioned
+  solve degrades to the plain thrown parabola rather than letting a NaN reach a
+  matrix.
+- **Everything precomputes into analytic PIECES** (parabola / damped spring /
+  exponential / hold) — bounces are pieces too, so a bounce chain is a run of
+  parabolas found by closed-form floor crossings and `apply()` is a binary
+  search plus one evaluation, never an integration. The spring closed form is
+  exposed as a LINEAR BASIS (`springBasis` → P,Q,R,S) precisely so each "solve
+  the initial conditions" is a 1×1 or 2×2 solve rather than a search; only
+  drag/smooth needs a bisection, and it falls back to strike when the arrival is
+  outside the band a first-order pull can reach. A nearly elastic lane is capped
+  (`MAX_PIECES`) and always TERMINATES ON A HOLD — a parabola left as the last
+  piece keeps falling for the rest of the timeline and drags the object out of
+  frame.
+
+Value 0.5 (pitch 60) is home, so an empty lane is a no-op and `AMOUNT` spans the
+channel `target` picks (world units for X/Y/Z, degrees for the rotations,
+octaves for Size — an exponent, per impactPulse's rule). LOCAL composition, like
+Waypoints. Note duration and velocity are ignored: a value is a destination.
+
 **`symmetricRotation` — rotation about ONE axis, aimed by each copy's position.**
 Symmetric Motion gives a copy a direction to travel; this one gives it a rotation
 AXIS and a share of the angle, so a formation turns as a symmetric body. Three

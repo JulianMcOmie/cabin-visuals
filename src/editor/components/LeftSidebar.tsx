@@ -379,6 +379,7 @@ const EXTRA_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter(
 const MOVER_DESCRIPTIONS: Record<string, string> = {
   waypoints: 'Lay out positions (line, grid, ring, or custom) - each MIDI row sends the object to its position, and curve rows switch how it travels (linear, ease, or spring physics with overshoot).',
   mover: 'The fundamental mover: translate, rotate or orbit its objects, with notes bursting, holding or oscillating the motion - one lane, seven rows.',
+  physics: 'Notes are values on a lane and real mechanics join them: gravity, a spring or drag, with the launch solved so the object lands on each value exactly on the beat - or crests there, or is simply kicked and left to bounce.',
   allMovers: 'Combines every distinct mover capability into one modular, collision-free MIDI lane.',
   forceFieldPush: 'Launches stackable radial pulses, anticipation-to-strike transitions, and a distance-shaped spiral pulse.',
   radialMotion: 'Nests three rings of copies inside each other and keeps every depth turning on its own - MIDI collapses, blooms, freezes or reverses any of them.',

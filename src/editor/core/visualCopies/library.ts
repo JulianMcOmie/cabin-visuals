@@ -27,6 +27,7 @@ import { symmetricMotionMover } from './symmetricMotion'
 import { symmetricRotationMover } from './symmetricRotation'
 import { conveyorMover } from './conveyor'
 import { waypointsMover } from './waypoints'
+import { physicsMover } from './physicsInterp'
 import { radialMotionMover } from './radialMotion'
 import { parametricPatternSplitter } from './parametricPattern'
 import { polyhedronSplitter } from './polyhedron'
@@ -696,6 +697,7 @@ export { evaluateVisibilityOpacity, visibilityMover, type VisibilitySettings } f
 export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   moverDefinition,
   waypointsMover,
+  physicsMover,
   consolidatedMover,
   motionMover,
   conveyorMover,
