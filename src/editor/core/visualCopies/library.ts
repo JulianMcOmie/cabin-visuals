@@ -24,6 +24,7 @@ import { BURST_EASINGS } from './burstEasings'
 import { BURST_DIRECTIONS, evaluateBurstOffset, type BurstSettings } from './burstOffset'
 import { motionMover } from './motion'
 import { symmetricMotionMover } from './symmetricMotion'
+import { symmetricRotationMover } from './symmetricRotation'
 import { conveyorMover } from './conveyor'
 import { waypointsMover } from './waypoints'
 import { radialMotionMover } from './radialMotion'
@@ -602,6 +603,7 @@ export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   impactScatterMover,
   impactPulseMover,
   symmetricMotionMover,
+  symmetricRotationMover,
   forceFieldPushMover,
   waveTerrainMover,
   visibilityMover,

@@ -110,6 +110,12 @@ export const GRADIENT_COLORIZER_COLOR = '#ff7b5a'
  * reopened the 86-150 band and ~200-210 - see MOVER_COLOR.)
  */
 export const SYMMETRY_COLOR = '#fdb97d'
+/**
+ * Symmetric Rotation's twist ochre. Hue 103° - the middle of the one WIDE gap
+ * the wheel still had, between the Colorizer's unclaimed 86° and Waypoints'
+ * 120°, sitting 17° clear of each. Nothing was moved to fit it.
+ */
+export const SYMMETRIC_ROTATION_COLOR = '#d8c830'
 /** Hue 135° - the middle of the band the mover consolidation reopened. */
 export const LINE_COLOR = '#95db6c'
 /** Hue 150°. */
