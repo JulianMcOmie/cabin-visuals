@@ -4,6 +4,8 @@ import { compositionDef } from '../core/directors'
 import { COMPOSITION_OPACITY_PARAM } from '../core/directors/types'
 import { orderedSceneBindings } from '../core/directors/sceneBindings'
 import { ParamControl } from '../userInterfaceRenderers'
+import { Segmented } from '../userInterfaceRenderers/console'
+import { resolveTrackIdentityColor } from '../utils/trackDisplayColor'
 import type { Track } from '../types'
 
 /**
@@ -30,6 +32,10 @@ export function CompositionSettingsPanel({ track }: { track: Track }) {
   const rows = def?.midiRows(track, scenes, sceneOrder) ?? []
   const bindings = orderedSceneBindings(track, scenes, sceneOrder)
   const cutCount = Math.min(bindings.length, Math.max(1, Math.round(track.params?.sceneCount ?? 3)))
+  // The track's own identity color lights the segmented control, the same rule
+  // the kit's panels follow: the console and the notes you write in it are one
+  // color (the masthead above already wears it).
+  const accent = resolveTrackIdentityColor(track)
   const defId = def?.id
   const isPartitionComposer = defId === 'cut' || defId === 'radialCut'
   const partitionLabel = defId === 'radialCut' ? 'Ring' : 'Cut'
@@ -56,14 +62,32 @@ export function CompositionSettingsPanel({ track }: { track: Track }) {
         onNum={(v) => setTrackParam(track.id, 'opacity', v)}
       />
       {(def?.params.length ?? 0) > 0 && def!.params.map((p) => (
-        <ParamControl
-          key={p.key}
-          param={p}
-          numValue={track.params?.[p.key]}
-          strValue={track.stringParams?.[p.key]}
-          onNum={(v) => setTrackParam(track.id, p.key, v)}
-          onStr={(v) => setTrackStringParam(track.id, p.key, v)}
-        />
+        // A composition def's choices are KINDS, not amounts - which way a cut
+        // slants, whether a switcher holds or latches - so they get the console
+        // kit's segmented control instead of ParamControl's dropdown: the
+        // alternatives stay visible, and picking one is a single click. Numeric
+        // params keep the stock controls.
+        p.type === 'select' ? (
+          <div key={p.key} className="mb-[13px] grid grid-cols-[100px_1fr] items-center gap-2.5">
+            <span className="text-[11px] text-[var(--text-3)] truncate" title={p.label}>{p.label}</span>
+            <Segmented
+              options={p.options}
+              value={track.params?.[p.key] ?? p.default}
+              onChange={(v) => setTrackParam(track.id, p.key, v)}
+              name={p.label}
+              accent={accent}
+            />
+          </div>
+        ) : (
+          <ParamControl
+            key={p.key}
+            param={p}
+            numValue={track.params?.[p.key]}
+            strValue={track.stringParams?.[p.key]}
+            onNum={(v) => setTrackParam(track.id, p.key, v)}
+            onStr={(v) => setTrackStringParam(track.id, p.key, v)}
+          />
+        )
       ))}
       {def?.targetsSingleScene && (() => {
         const visualSceneIds = sceneOrder.filter((id) => scenes[id] && !scenes[id].isMain)

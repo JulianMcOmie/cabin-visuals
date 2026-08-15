@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { Scene, Track } from '../../types'
-import { sceneSwitcherDirector } from './sceneSwitcher'
+import { SCENE_SWITCHER_MODE_LATCH, SCENE_SWITCHER_MODE_PARAM, sceneSwitcherDirector } from './sceneSwitcher'
 import { colorToOklch } from '../../utils/oklch'
 
 const scene = (id: string, name: string, isMain = false): Scene => ({ id, name, isMain, backgroundColor: '#000000', backgroundTransparent: false, tracks: {}, rootTrackIds: [] })
@@ -35,6 +35,28 @@ test('Scene Switcher uses the latest held row, then reveals an older held row on
   assert.equal(resolve(4.999)[0]?.sceneId, 'one')
   assert.equal(resolve(5)[0]?.sceneId, 'two')
   assert.equal(resolve(3)[0]?.sceneId, 'two')
+})
+
+const latchTrack: Track = { ...track, params: { [SCENE_SWITCHER_MODE_PARAM.key]: SCENE_SWITCHER_MODE_LATCH } }
+const resolveLatched = (beat: number) => sceneSwitcherDirector.resolve(latchTrack, {
+  beat, beatsPerBar: 4, totalBars: 8, scenes, sceneOrder: ['main', 'one', 'two'],
+})
+
+test('Latch shows nothing before the first note, then holds the last onset past its release', () => {
+  assert.deepEqual(resolveLatched(0), [])
+  assert.deepEqual(resolveLatched(1.999), [])
+  assert.equal(resolveLatched(2)[0]?.sceneId, 'two')
+  // n2 (pitch 60) starts at beat 4 and is one beat long: the latch keeps
+  // Scene 1 on screen at 6, where hold has already fallen back to nothing.
+  assert.equal(resolveLatched(4)[0]?.sceneId, 'one')
+  assert.equal(resolveLatched(5)[0]?.sceneId, 'one')
+  assert.equal(resolveLatched(6)[0]?.sceneId, 'one')
+  assert.equal(resolveLatched(64)[0]?.sceneId, 'one')
+})
+
+test('Hold is the default, so a track with no mode param is unchanged', () => {
+  assert.equal(SCENE_SWITCHER_MODE_PARAM.default, 0)
+  assert.deepEqual(resolve(6), [])
 })
 
 test('MIDI rows retain stable scene-id bindings independent of scene order', () => {
