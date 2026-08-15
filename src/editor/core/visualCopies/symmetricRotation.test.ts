@@ -16,6 +16,7 @@ import {
   SYMMETRIC_ROTATION_FALLOFF_ALONG,
   SYMMETRIC_ROTATION_FALLOFF_FROM,
   SYMMETRIC_ROTATION_FALLOFF_INTO,
+  SYMMETRIC_ROTATION_FALLOFF_UNIFORM,
   SYMMETRIC_ROTATION_MODE_BURST,
   SYMMETRIC_ROTATION_MODE_CONSTANT,
   SYMMETRIC_ROTATION_MODE_OSCILLATE,
@@ -29,8 +30,11 @@ function note(beat: number, pitch: number, velocity = 1, durationBeats = 1): Res
 
 const DEFAULTS = mergeDefinitionSettings(symmetricRotationMover, undefined) as unknown as SymmetricRotationSettings
 
+// Baseline falloff is pinned to UNIFORM here: most of these tests probe one
+// channel's geometry and want every copy weighted 1. The SHIPPED default is
+// ALONG (see the def), pinned by its own test below.
 function settings(overrides: Partial<SymmetricRotationSettings> = {}): SymmetricRotationSettings {
-  return { ...DEFAULTS, ...overrides }
+  return { ...DEFAULTS, falloff: SYMMETRIC_ROTATION_FALLOFF_UNIFORM, ...overrides }
 }
 
 /** A copy parked at a position, as an upstream splitter would hand it over. */
@@ -91,6 +95,21 @@ test('the axis is exactly its cardinal until aimed, and unit length after', () =
 })
 
 // ── Falloff ──────────────────────────────────────────────────────────────────
+
+test('the SHIPPED default falloff is ALONG: a formation twists per element out of the box', () => {
+  // Uniform + the axis-line anchor is a rigid whole-formation turn - the
+  // "operates on everything as a whole" report. The default must be the twist
+  // deformer the library card advertises: copies either side of center turn
+  // opposite ways with no settings touched.
+  assert.equal(DEFAULTS.falloff, SYMMETRIC_ROTATION_FALLOFF_ALONG)
+  const above = applyAt(copyAt(2, DEFAULTS.span, 0), DEFAULTS, [], 0)
+  const below = applyAt(copyAt(2, -DEFAULTS.span, 0), DEFAULTS, [], 0)
+  const [ax, , az] = positionOf(above)
+  const [bx, , bz] = positionOf(below)
+  close(ax, bx, 'mirrored heights land at mirrored X')
+  close(az, -bz, 'and at opposite Z - the sign reversal that makes it a twist')
+  assert.notEqual(Math.round(az * 1e6), 0, 'a copy one span up really moved')
+})
 
 test('uniform falloff gives every copy the whole angle', () => {
   const s = settings()

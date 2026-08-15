@@ -138,13 +138,14 @@ export const GRADIENT_COLORIZER_COLOR = '#ff7c50'
  */
 export const SYMMETRY_COLOR = '#fdb97d'
 // The Colorizer's reserved 86° → Waypoints (120°, immovable) stretch, respaced
-// at ~11.5° when Hue Rotate joined: Symmetric Rotation had taken the middle of
-// what was then a 34° window, and two entries only fit either side of it by
-// moving the one that could move. The reserved slot counts as a fixed
+// at ~11.5° when Hue Rotate joined. The reserved slot counts as a fixed
 // neighbour, which is why the arithmetic starts at 86 and not at the Mover's
-// 73°.
-/** Symmetric Rotation's twist ochre. Hue 98°. */
-export const SYMMETRIC_ROTATION_COLOR = '#e1c429'
+// 73°. Symmetric Rotation held the 98° slot until 2026-08-15, when its panel
+// went cornflower; Motion took the vacated hex EXACTLY, so the window's
+// spacing is unchanged.
+/** Hue 98° - the ochre Symmetric Rotation vacated (see the blue stretch). An
+ *  arbitrary hue for an abstract mover, like Hue Rotate's below. */
+export const MOTION_COLOR = '#e1c429'
 /**
  * Hue 109°. Arbitrary within its window, on this entry's own reasoning: a
  * device whose subject is every hue at once has no one hue to stand for it,
@@ -186,10 +187,18 @@ export const FREEZE_COLOR = '#13c1b4'
 export const HUE_ROTATE_COLOR = '#00bfc4'
 /** Hue 210° - the physics mover's cyan. */
 export const PHYSICS_COLOR = '#00c3db'
-/** Hue 247°. */
-export const MOTION_COLOR = '#4eaeff'
-/** Hue 260°. */
-export const TUNNEL_COLOR = '#72a7ff'
+// The Approach (234°, immovable) → Radial Motion (286°, immovable) stretch,
+// reshuffled 2026-08-15 when Symmetric Rotation went cornflower on Tyler's
+// pick: #6ea8ff sits at 258.3°, right on Tunnel's old 260° slot, so the wheel
+// being at capacity meant a SWAP rather than an insertion - Tunnel slid onto
+// Motion's 247° hex (still a corridor blue; its panel imports the constant and
+// re-voiced itself), and Motion took Symmetric Rotation's vacated 98° ochre.
+// Gaps after: 234→247.2→258.3→273→285.5, all ≥11°.
+/** Hue 247° - Tunnel's warp blue (Motion's former hex). */
+export const TUNNEL_COLOR = '#4eaeff'
+/** Symmetric Rotation's cornflower. Hue 258.3° - the panel accent picked in
+ *  the 2026-08-15 mock round; its console imports this. */
+export const SYMMETRIC_ROTATION_COLOR = '#6ea8ff'
 /** Hue 273°. */
 export const DUPLICATE_TRAIL_COLOR = '#8ba0ff'
 // The violet-to-rose stretch: five entries respaced evenly (~12.7°) between

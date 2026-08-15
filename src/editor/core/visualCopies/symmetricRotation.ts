@@ -172,7 +172,14 @@ const SYMMETRIC_ROTATION_PARAMS: ParamDef[] = [
       { value: SYMMETRIC_ROTATION_FALLOFF_FROM, label: 'From axis' },
       { value: SYMMETRIC_ROTATION_FALLOFF_INTO, label: 'Into axis' },
     ],
-    default: SYMMETRIC_ROTATION_FALLOFF_UNIFORM,
+    // ALONG, not UNIFORM (changed 2026-08-15): uniform + the axis-line anchor
+    // is a rigid whole-formation turn - indistinguishable from a plain rotate
+    // mover, which is exactly the "it moves everything as a whole" report this
+    // default caused. Along is the twist deformer the library card advertises,
+    // and the panel's live preview now carries the lone-object case uniform
+    // was protecting. Untouched saves pick up the new default, as Tunnel's
+    // orientation change did.
+    default: SYMMETRIC_ROTATION_FALLOFF_ALONG,
   },
   {
     key: 'anchor',
@@ -184,10 +191,10 @@ const SYMMETRIC_ROTATION_PARAMS: ParamDef[] = [
     ],
     default: SYMMETRIC_ROTATION_ANCHOR_AXIS,
   },
-  // 45 rather than a rounder 90 or 180: the default falloff is UNIFORM so the
-  // mover reads on a lone object as well as on a formation, and both of those
-  // are symmetries of a cube - the stock instrument would render identically
-  // with the mover added and without it, which reads as a dead mover.
+  // 45 rather than a rounder 90 or 180: under the ALONG default a copy one
+  // SPAN up the axis turns 45° - a visible shear on any formation - and 90 or
+  // 180 are symmetries of a cube, which would render the stock instrument's
+  // grid identically with the mover and without it and read as a dead mover.
   { key: 'twist', label: 'Twist (°)', min: -720, max: 720, step: 1, default: 45 },
   { key: 'fold', label: 'Fold (°)', min: -720, max: 720, step: 1, default: 0 },
   { key: 'roll', label: 'Roll (°)', min: -720, max: 720, step: 1, default: 0 },

@@ -11,6 +11,7 @@ import { ImpactScatterMoverUserInterfaceRenderer } from './ImpactScatterMoverUse
 import { ImpactPulseMoverUserInterfaceRenderer } from './ImpactPulseMoverUserInterface'
 import { ConveyorMoverUserInterfaceRenderer } from './ConveyorMoverUserInterface'
 import { SymmetricMotionMoverUserInterfaceRenderer } from './SymmetricMotionMoverUserInterface'
+import { SymmetricRotationMoverUserInterfaceRenderer } from './SymmetricRotationMoverUserInterface'
 import { RadialMotionMoverUserInterfaceRenderer } from './RadialMotionMoverUserInterface'
 import { RadialSplitterUserInterfaceRenderer } from './RadialSplitterUserInterface'
 import { LineSplitterUserInterfaceRenderer } from './LineSplitterUserInterface'
@@ -47,6 +48,7 @@ export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRenderer
   impactPulse: ImpactPulseMoverUserInterfaceRenderer,
   conveyor: ConveyorMoverUserInterfaceRenderer,
   symmetricMotion: SymmetricMotionMoverUserInterfaceRenderer,
+  symmetricRotation: SymmetricRotationMoverUserInterfaceRenderer,
   radialMotion: RadialMotionMoverUserInterfaceRenderer,
   radial: RadialSplitterUserInterfaceRenderer,
   line: LineSplitterUserInterfaceRenderer,

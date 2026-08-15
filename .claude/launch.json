@@ -99,6 +99,12 @@
       "port": 3060
     },
     {
+      "name": "dev-3065",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3065", "npm", "run", "dev", "--", "--port", "3065"],
+      "port": 3065
+    },
+    {
       "name": "dev-3066",
       "runtimeExecutable": "env",
       "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3066", "npm", "run", "dev", "--", "--port", "3066"],

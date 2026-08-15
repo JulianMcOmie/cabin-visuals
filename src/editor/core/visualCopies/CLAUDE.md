@@ -217,8 +217,13 @@ so +90° closes a ring onto the axis — the "toward/away from the axis" one), a
   62/63 fold, 64/65 roll, 66 Return), so the notes feel identical across the two
   movers and a time shape has one place to be fixed. The fourth mode, **Amount**,
   declares NO rows at all: the angle knobs are the value, and an automation lane on
-  them is how it moves. Its default (uniform twist) is deliberately visible on a
-  lone object — a formation-only default reads as a broken mover in the picker.
+  them is how it moves. The default FALLOFF is **Along axis** (changed 2026-08-15):
+  the original Uniform default made the out-of-box behaviour a rigid whole-formation
+  turn — indistinguishable from a plain rotate mover, reported as "it moves
+  everything as a whole" — while the library card advertises the graded helix. The
+  lone-object legibility Uniform was protecting is carried by the bespoke panel's
+  live wall preview instead (`SymmetricRotationMoverUserInterface.tsx`, cornflower
+  accent — see the 2026-08-15 blue-stretch shuffle in `identityColors.ts`).
 - **PRE-multiplied, declared `composition: 'chainRoot'`.** Axis, radial and tangent
   are measured on the chain frame the formation was built in; let a copy's own
   rotated frame re-aim them and a mirrored pair twists the same way in world space,
