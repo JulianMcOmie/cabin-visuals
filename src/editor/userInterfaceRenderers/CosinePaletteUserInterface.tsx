@@ -12,7 +12,7 @@
 // segments (PALETTE presets, MAP), then the palette-shape row and the kick
 // pair. OFFSET and the perceptual/linear MIX fold into MORE unlisted.
 //
-// The accent is the definition's identity cyan, imported - never re-declared -
+// The accent is the definition's identity olive, imported - never re-declared -
 // so the console matches the notes written in it (identityColors.ts is the
 // single source). A `{ param }` identity is impossible here: the subject is
 // every hue at once.

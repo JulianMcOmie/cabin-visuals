@@ -146,11 +146,18 @@ export const SYMMETRY_COLOR = '#fdb97d'
 /** Symmetric Rotation's twist ochre. Hue 98°. */
 export const SYMMETRIC_ROTATION_COLOR = '#e1c429'
 /**
- * Hue 109°. Arbitrary within its window, on the Cosine Palette's reasoning: a
+ * Hue 109°. Arbitrary within its window, on this entry's own reasoning: a
  * device whose subject is every hue at once has no one hue to stand for it,
  * and a computed `{ param }` identity has no user-picked colour to follow.
+ *
+ * It sat under HUE_ROTATE_COLOR until 2026-08-15, when the two SWAPPED (see
+ * the note at 198°) - the Cosine Palette took the olive and Hue Rotate took
+ * the cyan. A swap and not a rebalance because this hue has no slack at all:
+ * Symmetric Rotation is 11° below and Waypoints 11° above, so the only way to
+ * move a colour out of the olive band is to trade it for another arbitrary
+ * one.
  */
-export const HUE_ROTATE_COLOR = '#cdcc39'
+export const COSINE_PALETTE_COLOR = '#cdcc39'
 /** Hue 135° - the middle of the band the mover consolidation reopened. */
 export const LINE_COLOR = '#95db6c'
 /** Hue 150°. */
@@ -164,10 +171,19 @@ export const WAVE_TERRAIN_COLOR = '#6de18b'
 // midiEditorPalette anyway.
 /** Hue 186° - ice, for the mover that stops time. */
 export const FREEZE_COLOR = '#13c1b4'
-/** Hue 198°. An arbitrary pick on purpose: the Cosine Palette's subject is
- *  every hue at once, so no single hue can stand for it and a computed
- *  `{ param }` identity has no user-picked color to follow. */
-export const COSINE_PALETTE_COLOR = '#00bfc4'
+/**
+ * Hue 198°. An arbitrary pick on purpose: Hue Rotate's subject is every hue at
+ * once, so no single hue can stand for it and a computed `{ param }` identity
+ * has no user-picked color to follow.
+ *
+ * This slot was the Cosine Palette's until 2026-08-15; the two traded (see
+ * 109°) because both hues are arbitrary by their own reasoning, so exchanging
+ * them costs nothing the palette cares about - the spacing is untouched and no
+ * other entry moves. That is the cheap move available when a colour needs to
+ * leave a band it has no room to move within; a genuinely new hue for either
+ * one would have meant respacing a whole stretch.
+ */
+export const HUE_ROTATE_COLOR = '#00bfc4'
 /** Hue 210° - the physics mover's cyan. */
 export const PHYSICS_COLOR = '#00c3db'
 /** Hue 247°. */
