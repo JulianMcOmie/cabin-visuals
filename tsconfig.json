@@ -64,10 +64,12 @@
     ".next-isolated-3050/types/**/*.ts",
     ".next-isolated-3052/types/**/*.ts",
     ".next-isolated-3062/types/**/*.ts",
+    ".next-isolated-3063/types/**/*.ts",
     ".next-isolated/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-build-bypass/types/**/*.ts"
+    ".next-build-bypass/types/**/*.ts",
+    ".next-build-3063/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"
