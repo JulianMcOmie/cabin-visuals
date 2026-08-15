@@ -93,7 +93,12 @@ function StagePreview({ scene }: { scene: Scene }) {
     <div
       data-testid="scene-stage-preview"
       title="Drag to orbit the stage"
-      className="relative h-[132px] cursor-grab overflow-hidden border-b border-white/[0.06] active:cursor-grabbing"
+      // overflow-CLIP, not hidden: this is a pure clip box, and `hidden` would
+      // make it a scroll container that banks any overhang a wheel or focus
+      // pushes into it (see src/editor/CLAUDE.md). Note the r3f <Canvas>
+      // wrapper INSIDE carries its own inline overflow:hidden, which this does
+      // not reach - reachable only via a `style` prop on the Canvas.
+      className="relative h-[132px] cursor-grab overflow-clip border-b border-white/[0.06] active:cursor-grabbing"
       // The checkerboard is the "nothing behind this" of the compositor - it
       // only shows when the canvas actually clears to alpha. A gradient
       // backdrop paints here in CSS while the canvas stays alpha: same stops,

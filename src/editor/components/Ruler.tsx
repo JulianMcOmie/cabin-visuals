@@ -120,9 +120,17 @@ export function Ruler({
       <div style={{ width: labelWidth }} className="flex-shrink-0 flex items-center border-r border-[var(--timeline-row-line,var(--border))] bg-[var(--bg-track-row)]">
         {corner}
       </div>
+      {/* overflow-CLIP: contentRef below is transform-scrolled to mirror the
+          lanes' scroll container, so this box is a viewport onto content far
+          wider than itself - under `hidden` that made it a real scroll
+          container (2190px of range at 20 bars) whose scrollLeft NOTHING ever
+          reads or resets. One horizontal trackpad swipe over the ruler slid
+          the bar numbers out of sync with the tracks, permanently. `clip`
+          clips identically and cannot be scrolled. Same defect as the
+          workspace card's right margin - see src/editor/CLAUDE.md. */}
       <div
         data-loop-lane=""
-        className="relative flex-1 overflow-hidden"
+        className="relative flex-1 overflow-clip"
         onPointerDown={(e) => {
           // Top half = the loop lane (drag defines a region, click clears it);
           // bottom half = the scrub, unchanged.
@@ -152,7 +160,7 @@ export function Ruler({
           {leadInPx > 0 && (
             <div
               data-pickup-ruler=""
-              className="pointer-events-none absolute top-0 bottom-0 overflow-hidden"
+              className="pointer-events-none absolute top-0 bottom-0 overflow-clip"
               style={{
                 left: -leadInPx,
                 width: leadInPx,
@@ -246,7 +254,7 @@ export function Ruler({
                         actually sitting on the highlight. */}
                     {numberTouchesBand && (
                       <div
-                        className="absolute top-0 overflow-hidden pointer-events-none"
+                        className="absolute top-0 overflow-clip pointer-events-none"
                         style={{ left: Math.max(0, bandStartRel), width: bandEndRel - Math.max(0, bandStartRel), height: '50%', zIndex: 7 }}
                       >
                         <span

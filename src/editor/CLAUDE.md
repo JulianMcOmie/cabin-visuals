@@ -57,6 +57,42 @@ Stores → `store/CLAUDE.md` · engines → `core/*/CLAUDE.md` · UI → `compon
   the buffer resizes once at the start, never during, and the moving box only ever crops a
   fully-rendered scene. Anything else that animates the canvas's container owes the same
   pin; a continuous per-frame resize also re-renders the whole instrument tree ~24 times.
+- **Decoration that overhangs a box must be clipped with `overflow-clip`, never
+  `overflow-hidden`** — `hidden` makes the box a real SCROLL CONTAINER, and an absolutely
+  positioned child hanging past its inline-end edge gives it scroll range nobody asked for.
+  The workspace card (App.tsx, `data-workspace-card`) held the ambient bleed
+  (`left:-15%; width:130%`) and so carried ~15% of horizontal scroll: `clientWidth` 720 vs
+  `scrollWidth` 827 at a 1440px window. One stray trackpad swipe, focus, or `scrollIntoView`
+  anywhere inside slid the card left and opened a ~108px blank margin down the right side,
+  shoving the visualizer and the inspector off the viewport edge with no way home but
+  scrolling it back — reported as "sometimes there's randomly margin on the right", and it
+  looks like a flex/panel-sizing bug, which is why it survived so long. Only the RIGHT side
+  showed because the bleed's `top:-30%; height:118%` ends at 88%, so there was no bottom
+  overhang. `clip` clips pixel-identically and simply is not scrollable, and fixed-position
+  descendants still escape it, so VisualPanel's fullscreen glide is unaffected (all three
+  verified in the live DOM, 2026-08-14). The whole editor was swept for the family the
+  next day: the ruler's `[data-loop-lane]` (`Ruler.tsx`) was the other live one — 2190px of
+  range over transform-scrolled content nothing reads `scrollLeft` from, so a swipe over
+  the ruler desynced the bar numbers from the lanes permanently — plus the pickup band and
+  clipped bar-number boxes beside it, `TimelineArea`'s lane wrapper / playhead clip /
+  project-end host, `BottomArea`'s roll-slide clip, and the two preview clip boxes
+  (`InstrumentHoverPreview`, `SceneSettingsPanel`). The subtlest was `VisualPanel`'s
+  framed box: both canvas pins park the r3f root inside it as an absolute child WIDER
+  than the box and centered, so it grew ~150px of range for the 400ms of every sidebar
+  toggle and aspect switch — a transient window, but a wheel inside it left the canvas
+  permanently off-centre in its frame. Anything that pins an oversized child owes the
+  same treatment. (The `w-screen h-screen` root stays `overflow-hidden`: measured zero
+  range, and every child now clips itself.) **The rule now: a box that exists only
+  to CLIP takes `overflow-clip`; `overflow-hidden` is reserved for something you actually
+  intend to scroll** (the timeline's `absolute inset-0 overflow-auto` is the one real
+  scroller here, and its `scrollLeft` is read all over — don't convert it).
+  Diagnose by trying to scroll everything, not by comparing widths — only the former
+  distinguishes reachable range: for each element set `scrollLeft`/`scrollTop` to 99999,
+  read them back, restore. Two known non-findings: Tailwind's `truncate` is
+  `overflow:hidden`, so every truncated line reports a few px of range (unreachable —
+  nothing focusable lives inside a text span), and in the embedded Browser pane r3f's
+  `<Canvas>` wrapper reports ~19px because the pane's starved ResizeObserver leaves the
+  canvas at its intrinsic 300×150; that one is the environment, not the app.
 - `useVerticalSplit.ts` — the timeline/piano-roll divider.
 - `utils/` — pure helpers: `selection.ts` (track select), `edgeResize.ts` (shared block-edge drag), `snapStep.ts`, `oklch.ts` + `trackColors.ts` (hue-cycled track colors), `trackTags.ts`, `zoomAroundBeat.ts`, `multiStyleApply.ts` (lyric style switching), `midiEditorPalette.ts`.
 - `hooks/` — transport-facing hooks: `usePlayback` (wires PlaybackEngine callbacks), `usePlayhead` (RAF playhead px), `useScrub`, `useTransportKeys` (space/enter/F), `useUndoRedoKeys`, `useProjectPersistence` (load + autosave lifecycle), `useAnonymousAdoption` (anon → signed-in project handoff).

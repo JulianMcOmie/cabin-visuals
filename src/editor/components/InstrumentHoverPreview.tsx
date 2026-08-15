@@ -1073,7 +1073,9 @@ export function InstrumentPreviewLayer() {
   )
   return (
     <div
-      className="fixed z-[90] w-[228px] h-[128px] rounded border border-[var(--border)] bg-transparent shadow-xl shadow-black/60 pointer-events-none overflow-hidden"
+      // overflow-CLIP, not hidden: a pure clip box should never be a scroll
+      // container (see src/editor/CLAUDE.md).
+      className="fixed z-[90] w-[228px] h-[128px] rounded border border-[var(--border)] bg-transparent shadow-xl shadow-black/60 pointer-events-none overflow-clip"
       style={preview ? { left: preview.anchor.left + 8, top } : { left: -9999, top, visibility: 'hidden' }}
     >
       {/* dpr follows the device (clamped) - at dpr 1 a HiDPI screen renders the

@@ -627,9 +627,16 @@ function VisualPanel({
         ? ({ '--aspect-canvas-w': `${glide.pin.width}px`, '--aspect-canvas-h': `${glide.pin.height}px` } as CSSProperties)
         : undefined}
     >
+      {/* overflow-CLIP: both pins (.canvas-glide-freeze for sidebar toggles,
+          .aspect-canvas-pin for aspect switches) make the r3f root an absolute
+          child of THIS box, wider than it and centered - so under `hidden` the
+          box grew real scroll range for the length of every glide (measured
+          150px on a 300px sidebar). A wheel inside that 400ms window banked it
+          and left the canvas sitting off-centre in its frame for good.
+          See src/editor/CLAUDE.md. */}
       <div
         ref={boxRef}
-        className={`relative overflow-hidden ${isFullscreen ? '' : 'rounded-[6px] border border-[rgba(255,255,255,0.07)]'} ${glide?.moving ? 'aspect-glide-anim' : ''}`}
+        className={`relative overflow-clip ${isFullscreen ? '' : 'rounded-[6px] border border-[rgba(255,255,255,0.07)]'} ${glide?.moving ? 'aspect-glide-anim' : ''}`}
         style={boxStyle}
       >
         <Scene previewSceneId={previewSceneId} sourceCanvasRef={sourceCanvasRef} />
@@ -1150,7 +1157,11 @@ function BottomArea() {
     if (!editing) setRollSettled(false)
   }, [editing])
   return (
-    <div className="relative h-full overflow-hidden">
+    // overflow-CLIP: the roll slides in from y:'100%', which under `hidden`
+    // gives this box a pane-height of vertical scroll range for the length of
+    // the animation - a wheel or focus mid-slide banks it and the timeline
+    // sits shifted afterwards. See src/editor/CLAUDE.md.
+    <div className="relative h-full overflow-clip">
       {(!editing || !rollSettled) && <TimelineArea />}
       <MotionConfig reducedMotion="user">
         <AnimatePresence>
@@ -1365,7 +1376,20 @@ export default function EditorApp() {
                 card's z-index for the glide (see beginGlide) - the isolate
                 stacking context would otherwise trap the gliding panel under
                 the timeline. */}
-            <div data-workspace-card className="relative isolate flex h-full flex-col overflow-hidden">
+            {/* overflow-CLIP, not hidden, and that is load-bearing. The ambient
+                bleed is an absolute child hanging 15% past this card's right
+                edge (left:-15%, width:130%), which under `hidden` makes the
+                card a real scroll container with ~15% of horizontal scroll
+                range. Nothing ever wanted to scroll here, but a stray
+                trackpad swipe, a focus, or a scrollIntoView anywhere inside
+                would slide the whole card left and open a blank margin down
+                the right side - the visualizer and the inspector shoved off
+                the viewport edge, with no way back but scrolling it home.
+                `clip` clips identically (verified) and simply is not
+                scrollable; fixed-position descendants still escape it, so the
+                fullscreen glide is untouched. Anything else that hangs
+                decoration past this card's edges depends on this. */}
+            <div data-workspace-card className="relative isolate flex h-full flex-col overflow-clip">
               <VisualAmbientBleed sourceCanvasRef={visualCanvasRef} />
               <div className="min-h-0 flex-1">
                   <PanelGroup

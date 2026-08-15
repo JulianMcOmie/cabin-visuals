@@ -402,10 +402,12 @@ export function TimelineArea() {
       {/* Lanes: a relative wrapper holds the scroll container plus a viewport-space
           playhead overlay clipped to the lane region (so the playhead is never drawn
           over the frozen label column, its dividers, or the empty space - it slides
-          under the label edge when scrolled). overflow-hidden clips the playhead
+          under the label edge when scrolled). overflow-CLIP clips the playhead
           overlay to the lane region, so a resize frame where its imperatively-set
-          width lags can't spill out and spawn a stray (unstyled) scrollbar. */}
-      <div className="relative flex-1 min-h-0 overflow-hidden">
+          width lags can't spill out and spawn a stray (unstyled) scrollbar -
+          and unlike `hidden` it never becomes a scroll container of its own
+          (the real scroller is the overflow-auto child below). */}
+      <div className="relative flex-1 min-h-0 overflow-clip">
         {/* The label column's surface and its divider against the lanes, in
             VIEWPORT space (behind the scroll container, which is transparent).
             Content space would be wrong: the column is frozen (each row's label
@@ -680,7 +682,7 @@ export function TimelineArea() {
             RAF offsets it by the scroll and sizes this clip box to the scroll
             container's client area, so the line tracks horizontal scroll, hides
             under the label edge, and never draws over the scrollbars. */}
-        <div ref={clipRef} className="absolute top-0 overflow-hidden pointer-events-none" style={{ left: labelWidth + PLAYHEAD_TRIANGLE_HALF }}>
+        <div ref={clipRef} className="absolute top-0 overflow-clip pointer-events-none" style={{ left: labelWidth + PLAYHEAD_TRIANGLE_HALF }}>
           <div ref={playheadRef} className="absolute top-0 bottom-0" style={{ left: 0, width: 0 }}>
             <div className="absolute top-0 bottom-0" style={{ left: -0.5, width: 1, backgroundColor: '#ecedef' }} />
             <div
@@ -694,9 +696,12 @@ export function TimelineArea() {
 
       {/* One draggable project-end edge across the ruler and every lane. The
           clipping host keeps it out of the frozen label column and hides it when
-          horizontal scrolling moves the boundary outside the lane viewport. */}
+          horizontal scrolling moves the boundary outside the lane viewport.
+          overflow-CLIP: the edge inside is translated to the project's end, so
+          under `hidden` this host carried real scroll range (787px on a fresh
+          project) that a stray swipe could bank - see src/editor/CLAUDE.md. */}
       <div
-        className="pointer-events-none absolute top-0 right-0 bottom-0 z-[44] overflow-hidden"
+        className="pointer-events-none absolute top-0 right-0 bottom-0 z-[44] overflow-clip"
         style={{ left: labelWidth + PLAYHEAD_TRIANGLE_HALF }}
       >
         <div
