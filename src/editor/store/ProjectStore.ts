@@ -10,6 +10,7 @@ import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import { AUTOMATION_AMOUNT_MAX, DEFAULT_BURST, DEFAULT_CYCLE, DEFAULT_NOISE } from '../core/visual/automation'
 import type { ImportedMidiTrack } from '../core/midiImport'
+import type { AspectRatioId } from '../core/aspectRatios'
 import { placeTranscription, invertStrobeSpans, groupTimingIntoLines, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
 import { DEFAULT_SCENE_BACKGROUND, defaultSceneGradient, sceneBackdropMode, type SceneBackdropMode, type SceneGradient, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type AutomationMode, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type Routing } from '../types'
 import type { ProjectDocument } from '../../persistence/types'
@@ -301,8 +302,10 @@ function insertTrackTreeIntoState(
   return { tracks, rootTrackIds }
 }
 
-/** Editor viewport aspect pin - a project-level display setting. */
-export type ViewAspect = 'fill' | '16:9' | '9:16'
+/** Editor viewport aspect pin - a project-level display setting. Every export
+ *  shape is pinnable (core/aspectRatios.ts), so the viewport can preview what
+ *  any release will compose like; 'fill' is the unpinned panel. */
+export type ViewAspect = 'fill' | AspectRatioId
 
 export interface ProjectState {
   scenes: Record<string, Scene>

@@ -28,7 +28,7 @@ export interface VideoEncodeSession {
  *  probe THIS config (not a stand-in) before spending minutes rendering. */
 export function exportEncoderConfig(settings: ExportSettings): VideoEncoderConfig {
   const base: VideoEncoderConfig = {
-    codec: videoCodec(Math.max(settings.width, settings.height), settings.fps),
+    codec: videoCodec(settings.width, settings.height, settings.fps),
     width: settings.width,
     height: settings.height,
     framerate: settings.fps,

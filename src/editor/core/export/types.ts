@@ -2,10 +2,26 @@
 // here touches the project document (no schema bump) - settings live with the
 // dialog and die with it (a localStorage nicety aside).
 
+import { ASPECT_RATIO_IDS, frameSizeFor, type AspectRatioId } from '../aspectRatios'
+
 export type ExportRangeMode = 'whole' | 'loop' | 'custom'
 
-/** Output orientation. '9:16' is the vertical TikTok/Reels/Shorts frame. */
-export type ExportAspect = '16:9' | '9:16'
+/** Output frame shape. Any of the shapes the editor can pin - see
+ *  core/aspectRatios.ts. */
+export type ExportAspect = AspectRatioId
+export const EXPORT_ASPECTS = ASPECT_RATIO_IDS
+
+/** What the export dialog offers, and it is deliberately only TWO cards:
+ *  the shape you composed against (the viewport's pin, 16:9 when nothing is
+ *  pinned) and 9:16, because the vertical cut is a second RELEASE of the same
+ *  piece rather than a different composition. Choosing the shape belongs to
+ *  the viewport, where you can see it; the dialog just confirms it. A viewport
+ *  pinned to 9:16 pairs with 16:9 instead, so the picker is never one lonely
+ *  card. First entry is the default. */
+export function exportAspectChoices(pinned: AspectRatioId | 'fill'): [ExportAspect, ExportAspect] {
+  const primary: ExportAspect = pinned === 'fill' ? '16:9' : pinned
+  return primary === '9:16' ? ['9:16', '16:9'] : [primary, '9:16']
+}
 
 /** Rate control. 'bitrate' = fixed target (predictable size, but busy grainy
  *  frames get starved and macroblock). 'quality' = constant-quality quantizer
@@ -68,23 +84,31 @@ export function resolveExportRange(
   return null
 }
 
-export const RESOLUTIONS = [
-  { label: '4K', width: 3840, height: 2160 },
-  { label: '1080p', width: 1920, height: 1080 },
-  { label: '720p', width: 1280, height: 720 },
+/** The tiers, named by the SHORT edge they render at - the axis every aspect
+ *  shares (see frameSizeFor). 16:9 lands on the canonical 3840×2160 /
+ *  1920×1080 / 1280×720; 9:16 on those rotated. */
+export const RESOLUTION_TIERS = [
+  { label: '4K', shortEdge: 2160 },
+  { label: '1080p', shortEdge: 1080 },
+  { label: '720p', shortEdge: 720 },
 ] as const
 
-/** The tier list for an aspect: canonical 16:9, or the same tiers rotated
- *  (portrait "1080p" = 1080×1920, TikTok's native frame). */
-export function resolutionsFor(aspect: ExportAspect): { label: string; width: number; height: number }[] {
-  return aspect === '9:16'
-    ? RESOLUTIONS.map((r) => ({ label: r.label, width: r.height, height: r.width }))
-    : RESOLUTIONS.map((r) => ({ ...r }))
+/** Free-tier ceiling and the fallback tier the pickers land on. */
+const FREE_TIER_SHORT_EDGE = 720
+
+export const RESOLUTIONS = RESOLUTION_TIERS.map((t) => ({ label: t.label, ...frameSizeFor('16:9', t.shortEdge) }))
+
+/** The tier list for an aspect, widest-first-tier order preserved. */
+export function resolutionsFor(aspect: ExportAspect): { label: string; shortEdge: number; width: number; height: number }[] {
+  return RESOLUTION_TIERS.map((t) => ({ label: t.label, shortEdge: t.shortEdge, ...frameSizeFor(aspect, t.shortEdge) }))
 }
 
-// Bitrate and H.264 level are pixel-rate properties - orientation-agnostic -
-// so both key off the frame's LONG edge: 1080×1920 is the same tier as
-// 1920×1080. Callers pass max(width, height).
+// Bitrate keys off the frame's SHORT edge - the axis the tiers are named for
+// and the only one that's orientation- AND aspect-independent: 1080×1920,
+// 1920×1080 and 2160×1080 are all "the 1080 tier". (Keying off the long edge
+// worked while 16:9 and its rotation were the only shapes; a 2:1 1080p is
+// 2160 wide and would have been charged the 4K rate.) Callers pass
+// min(width, height).
 
 /** Motion-friendly H.264 bitrates for each fixed output tier.
  *
@@ -93,18 +117,33 @@ export function resolutionsFor(aspect: ExportAspect): { label: string; width: nu
  *  the final grade, HDR bloom halos, particle fields), so busy projects were
  *  visibly starved at the old tiers (12/35-50 Mbps) while simple ones looked
  *  fine. Headroom costs file size, never quality; the platform re-encode gets
- *  a cleaner source to work from. All values sit far inside the H.264 High
- *  profile level ceilings picked by videoCodec below. */
-export function defaultBitrate(longEdge: number, fps: number): number {
-  if (longEdge >= 3840) return fps === 30 ? 60_000_000 : 80_000_000
-  const base = longEdge >= 1920 ? 20_000_000 : 12_000_000
+ *  a cleaner source to work from. All values sit inside the H.264 High profile
+ *  level ceilings picked by videoCodec below. */
+export function defaultBitrate(shortEdge: number, fps: number): number {
+  if (shortEdge >= 2160) return fps === 30 ? 60_000_000 : 80_000_000
+  const base = shortEdge >= 1080 ? 20_000_000 : 12_000_000
   return fps === 30 ? Math.round(base * 0.75) : base
 }
 
-/** H.264 High profile level required by the selected frame size/rate. */
-export function videoCodec(longEdge: number, fps: number): string {
-  if (longEdge >= 3840) return fps === 30 ? 'avc1.640033' : 'avc1.640034'
-  return 'avc1.64002a'
+/** H.264 High profile levels: [level_idc, MaxFS in macroblocks, MaxMBPS].
+ *  Only the rungs we can actually land on, lowest first - a level that's too
+ *  low is a lie in the bitstream (players may refuse the file), and one that's
+ *  needlessly high narrows the hardware that will decode it. */
+const H264_LEVELS: readonly [number, number, number][] = [
+  [42, 8_704, 522_240],      // 4.2 - up to 1080p60
+  [51, 36_864, 983_040],     // 5.1 - 4K30
+  [52, 36_864, 2_073_600],   // 5.2 - 4K60
+  [60, 139_264, 4_177_920],  // 6.0 - wider-than-16:9 4K60 (e.g. 2:1 at 4320×2160)
+]
+
+/** H.264 High profile codec string for the selected frame size/rate: the
+ *  lowest level whose frame-size AND macroblock-rate ceilings both fit. */
+export function videoCodec(width: number, height: number, fps: number): string {
+  const macroblocks = Math.ceil(width / 16) * Math.ceil(height / 16)
+  const level =
+    H264_LEVELS.find(([, maxFs, maxMbps]) => macroblocks <= maxFs && macroblocks * fps <= maxMbps)?.[0] ??
+    H264_LEVELS[H264_LEVELS.length - 1][0]
+  return `avc1.6400${level.toString(16)}`
 }
 
 export function defaultSettings(fileName: string): ExportSettings {
@@ -114,7 +153,7 @@ export function defaultSettings(fileName: string): ExportSettings {
     aspect: '16:9',
     fps: 60,
     includeAudio: true,
-    videoBitrate: defaultBitrate(1920, 60),
+    videoBitrate: defaultBitrate(1080, 60),
     rateControl: 'bitrate',
     fileName,
     watermark: false,
@@ -128,12 +167,10 @@ export function defaultSettings(fileName: string): ExportSettings {
  *  Applied to settings at dialog-open AND at export-start, so a stale
  *  localStorage 1080p can't leak through. */
 export function clampToFreeTier(s: ExportSettings): ExportSettings {
-  const portrait = s.aspect === '9:16'
   return {
     ...s,
-    width: portrait ? 720 : 1280,
-    height: portrait ? 1280 : 720,
-    videoBitrate: defaultBitrate(1280, s.fps),
+    ...frameSizeFor(s.aspect, FREE_TIER_SHORT_EDGE),
+    videoBitrate: defaultBitrate(FREE_TIER_SHORT_EDGE, s.fps),
     watermark: false,
   }
 }

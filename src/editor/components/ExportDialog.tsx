@@ -18,7 +18,8 @@ import { getFrameDriver } from '../core/export/frameDriver'
 import { isExportSupported } from '../core/export/support'
 import { useScrub } from '../hooks/useScrub'
 import { resolveTrackIdentityColor } from '../utils/trackDisplayColor'
-import { clampToFreeTier, defaultBitrate, defaultSettings, resolveExportRange, resolutionsFor, type ExportAspect, type ExportRateControl, type ExportSettings } from '../core/export/types'
+import { clampToFreeTier, defaultBitrate, defaultSettings, exportAspectChoices, resolveExportRange, resolutionsFor, type ExportAspect, type ExportRateControl, type ExportSettings } from '../core/export/types'
+import { aspectRatioValue } from '../core/aspectRatios'
 
 const SETTINGS_KEY = 'cabin.exportSettings'
 
@@ -68,19 +69,23 @@ function loadSavedSettings(isPro: boolean): ExportSettings {
     }
   } catch { /* corrupt storage - fall through to defaults */ }
 
-  if (merged.aspect !== '16:9' && merged.aspect !== '9:16') merged.aspect = '16:9'
+  // A PINNED viewport wins outright - you composed against that shape, so
+  // that's what the dialog opens on. Unpinned ('fill'), the saved choice
+  // stands as long as it's one of the two on offer; anything else is a stale
+  // localStorage value from another project's pin.
   const viewAspect = useProjectStore.getState().viewAspect
-  if (viewAspect === '16:9' || viewAspect === '9:16') merged.aspect = viewAspect
+  const choices = exportAspectChoices(viewAspect)
+  if (viewAspect !== 'fill' || !choices.includes(merged.aspect)) merged.aspect = choices[0]
 
   const tiers = resolutionsFor(merged.aspect)
   if (!tiers.some((r) => r.width === merged.width && r.height === merged.height)) {
-    const longEdge = Math.max(merged.width, merged.height)
-    const tier = tiers.find((r) => Math.max(r.width, r.height) === longEdge)
+    const shortEdge = Math.min(merged.width, merged.height)
+    const tier = tiers.find((r) => r.shortEdge === shortEdge)
       ?? tiers.find((r) => r.label === '1080p') ?? tiers[0]
     merged.width = tier.width
     merged.height = tier.height
   }
-  merged.videoBitrate = defaultBitrate(Math.max(merged.width, merged.height), merged.fps)
+  merged.videoBitrate = defaultBitrate(Math.min(merged.width, merged.height), merged.fps)
   if (merged.rateControl !== 'quality') merged.rateControl = 'bitrate'
   merged.watermark = false
   return isPro ? merged : clampToFreeTier(merged)
@@ -253,19 +258,32 @@ function ClipMap({
 // ── Rail controls ────────────────────────────────────────────────────────────
 
 // Aspect switching wears the viewport's glide (M3 emphasized, 400ms - see
-// .aspect-glide-anim / ASPECT_GLIDE_MS in the editor): the 16:9 monitor keeps
-// its box and the 9:16 crop mattes travel instead. Half the 16:9 frame minus
-// half the 9:16 column (9/16 of the frame's height = 28.125% of its width), so
-// one matte covers 50% - 14.0625%.
+// .aspect-glide-anim / ASPECT_GLIDE_MS in the editor): the monitor keeps its
+// 16:9 box and the crop mattes travel instead.
 const ASPECT_GLIDE = { duration: 0.4, ease: [0.2, 0, 0, 1] } as const
-const CROP_MATTE_PCT = 50 - 14.0625
+const MONITOR_RATIO = 16 / 9
+
+/** How much of the 16:9 monitor each matte covers, in %: an aspect NARROWER
+ *  than the monitor is matted at the sides, a WIDER one top and bottom, and
+ *  16:9 itself is matted nowhere (both zero, so the mattes sweep back out to
+ *  the edges instead of blinking away). Contain-fit against the monitor, so a
+ *  9:16 column is (9/16)² = 31.64% of the frame's width. */
+function cropMattePcts(ratio: number): { side: number; band: number } {
+  return {
+    side: Math.max(0, ((1 - ratio / MONITOR_RATIO) / 2) * 100),
+    band: Math.max(0, ((1 - MONITOR_RATIO / ratio) / 2) * 100),
+  }
+}
 
 const RAIL_LABEL = 'font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] select-none'
 const CHIP_SELECT =
   'h-8 rounded-[8px] border border-[rgba(255,255,255,0.1)] bg-[#10131c] px-2 font-mono text-[12px] text-[var(--text-2)] outline-none cursor-pointer'
 
 function AspectCard({ aspect, selected, onPick }: { aspect: ExportAspect; selected: boolean; onPick: () => void }) {
-  const wide = aspect === '16:9'
+  // Proportional glyph, long edge fixed - the cards then read as one family of
+  // frames rather than differently-sized boxes.
+  const ratio = aspectRatioValue(aspect)
+  const glyph = ratio >= 1 ? { width: 30, height: Math.round(30 / ratio) } : { width: Math.round(30 * ratio), height: 30 }
   return (
     <button
       onClick={onPick}
@@ -276,10 +294,13 @@ function AspectCard({ aspect, selected, onPick }: { aspect: ExportAspect; select
           : 'border-[rgba(255,255,255,0.1)] bg-[#10131c] hover:border-[rgba(255,255,255,0.2)]'
       }`}
     >
-      <span
-        className={`rounded-[3px] border-2 ${selected ? 'border-[#0c0d12]' : 'border-[var(--text-3)]'}`}
-        style={{ width: wide ? 30 : 17, height: wide ? 17 : 30 }}
-      />
+      {/* Fixed-height glyph slot so every card's label sits on one line. */}
+      <span className="flex h-[30px] items-center justify-center">
+        <span
+          className={`rounded-[3px] border-2 ${selected ? 'border-[#0c0d12]' : 'border-[var(--text-3)]'}`}
+          style={glyph}
+        />
+      </span>
       <span className={`font-mono text-[11px] ${selected ? 'text-[#0c0d12] font-semibold' : 'text-[var(--text-3)]'}`}>{aspect}</span>
     </button>
   )
@@ -340,7 +361,7 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
     const { bpm, beatsPerBar, totalBars, tracks, rootTrackIds } = useProjectStore.getState()
     const audioTracks = rootTrackIds.map((id) => tracks[id]).filter((t) => t?.type === 'audio')
     const tiered = isPro ? { ...settings, watermark: false } : clampToFreeTier(settings)
-    const effective = { ...tiered, includeAudio: tiered.includeAudio && audioOk, videoBitrate: defaultBitrate(Math.max(tiered.width, tiered.height), tiered.fps) }
+    const effective = { ...tiered, includeAudio: tiered.includeAudio && audioOk, videoBitrate: defaultBitrate(Math.min(tiered.width, tiered.height), tiered.fps) }
     const { fileName: _fileName, watermark: _watermark, ...remembered } = effective
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(remembered)) } catch { /* private mode */ }
 
@@ -396,7 +417,12 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
     ? { start: Math.max(0, loopRegion.startBeat / totalBeats), end: Math.min(1, loopRegion.endBeat / totalBeats) }
     : null
 
-  const vertical = settings.aspect === '9:16'
+  const aspectRatio = aspectRatioValue(settings.aspect)
+  const matte = cropMattePcts(aspectRatio)
+  const vertical = aspectRatio < 1
+  // Fixed for the dialog's life: the viewport is behind the scrim, so the pin
+  // can't move while this is open.
+  const [aspectChoices] = useState(() => exportAspectChoices(useProjectStore.getState().viewAspect))
   const title = phase.kind === 'running' ? 'RENDERING' : phase.kind === 'done' ? 'EXPORT COMPLETE' : phase.kind === 'error' ? 'EXPORT FAILED' : 'EXPORT'
 
   return (
@@ -427,26 +453,40 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
             <div className="min-w-0 flex-1">
               <div className={`relative overflow-hidden rounded-[10px] border ${running ? 'border-[rgba(69,198,255,0.4)]' : 'border-[rgba(255,255,255,0.08)]'}`}>
                 <MonitorCanvas />
-                {/* 9:16 shows the live center-crop: bright column, dimmed sides.
-                    The guides SWEEP in from the frame edges to the crop, on the
-                    viewport's aspect-glide curve - same switch, same motion, so
-                    picking an aspect feels like one gesture whether you do it
-                    here or under the canvas. Both mattes stay mounted and
-                    animate to zero width, so 16:9 sweeps them back out to the
-                    edges instead of blinking them away; each carries its own
-                    accent hairline on its inner edge, which is what makes the
-                    line travel with the matte for free. `initial={false}` keeps
-                    a dialog that OPENS on 9:16 from animating on arrival. */}
+                {/* The monitor stays 16:9 and the mattes show the live crop:
+                    bright frame, dimmed surround. Narrower aspects are matted
+                    at the SIDES, wider ones (2:1) top and bottom. The guides
+                    SWEEP in from the frame edges to the crop, on the viewport's
+                    aspect-glide curve - same switch, same motion, so picking an
+                    aspect feels like one gesture whether you do it here or
+                    under the canvas. All four mattes stay mounted and animate
+                    to zero, so 16:9 sweeps them back out to the edges instead
+                    of blinking them away; each carries its own accent hairline
+                    on its inner edge, which is what makes the line travel with
+                    the matte for free. `initial={false}` keeps a dialog that
+                    OPENS on a cropped aspect from animating on arrival. */}
                 {(['left', 'right'] as const).map((side) => (
                   <motion.div
                     key={side}
                     aria-hidden
                     className={`pointer-events-none absolute inset-y-0 ${side === 'left' ? 'left-0' : 'right-0'} overflow-hidden bg-black/60`}
                     initial={false}
-                    animate={{ width: vertical ? `${CROP_MATTE_PCT}%` : '0%', opacity: vertical ? 1 : 0 }}
+                    animate={{ width: `${matte.side}%`, opacity: matte.side > 0 ? 1 : 0 }}
                     transition={ASPECT_GLIDE}
                   >
                     <span className={`absolute inset-y-0 w-px bg-[var(--accent)] ${side === 'left' ? 'right-0' : 'left-0'}`} />
+                  </motion.div>
+                ))}
+                {(['top', 'bottom'] as const).map((edge) => (
+                  <motion.div
+                    key={edge}
+                    aria-hidden
+                    className={`pointer-events-none absolute inset-x-0 ${edge === 'top' ? 'top-0' : 'bottom-0'} overflow-hidden bg-black/60`}
+                    initial={false}
+                    animate={{ height: `${matte.band}%`, opacity: matte.band > 0 ? 1 : 0 }}
+                    transition={ASPECT_GLIDE}
+                  >
+                    <span className={`absolute inset-x-0 h-px bg-[var(--accent)] ${edge === 'top' ? 'bottom-0' : 'top-0'}`} />
                   </motion.div>
                 ))}
               </div>
@@ -458,15 +498,19 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
             <div className="flex w-[280px] flex-shrink-0 flex-col gap-4">
               <div className="flex flex-col gap-2">
                 <span className={RAIL_LABEL}>Aspect</span>
+                {/* Two cards only - the shape you pinned in the viewport, plus
+                    the 9:16 social cut. See exportAspectChoices. */}
                 <div className="flex gap-2">
-                  {(['16:9', '9:16'] as const).map((aspect) => (
+                  {aspectChoices.map((aspect) => (
                     <AspectCard
                       key={aspect}
                       aspect={aspect}
                       selected={settings.aspect === aspect}
                       onPick={() => setSettings((s) => {
+                        // Hold the resolution TIER across the switch (tiers are
+                        // named by short edge, which every aspect shares).
                         const tiers = resolutionsFor(aspect)
-                        const tier = tiers.find((r) => Math.max(r.width, r.height) === Math.max(s.width, s.height)) ?? tiers[1]
+                        const tier = tiers.find((r) => r.shortEdge === Math.min(s.width, s.height)) ?? tiers[1]
                         return { ...s, aspect, width: tier.width, height: tier.height }
                       })}
                     />
@@ -503,19 +547,22 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
               <label className="flex items-center justify-between">
                 <span className={RAIL_LABEL}>Resolution</span>
                 <select
-                  value={settings.width}
+                  value={Math.min(settings.width, settings.height)}
                   onChange={(e) => {
                     const tiers = resolutionsFor(settings.aspect)
-                    const r = tiers.find((r) => r.width === Number(e.target.value)) ?? tiers[0]
+                    const r = tiers.find((r) => r.shortEdge === Number(e.target.value)) ?? tiers[0]
                     setSettings((s) => ({ ...s, width: r.width, height: r.height }))
                   }}
                   className={CHIP_SELECT}
                 >
+                  {/* Dimensions ride along: a tier's pixel size now depends on
+                      the aspect (2:1 "1080p" is 2160×1080), so the label alone
+                      no longer says what you get. */}
                   {resolutionsFor(settings.aspect).map((r) => {
-                    const gated = !isPro && Math.max(r.width, r.height) > 1280
+                    const gated = !isPro && r.shortEdge > 720
                     return (
-                      <option key={r.width} value={r.width} disabled={gated}>
-                        {r.label}{gated ? ' - Pro' : ''}
+                      <option key={r.shortEdge} value={r.shortEdge} disabled={gated}>
+                        {r.label} · {r.width}×{r.height}{gated ? ' - Pro' : ''}
                       </option>
                     )
                   })}
@@ -720,7 +767,7 @@ function RunningView({
       </div>
 
       {vertical ? (
-        // 9:16: a thin accent progress line under the monitor.
+        // Portrait: a thin accent progress line under the monitor.
         <div className="h-[3px] overflow-hidden rounded-full bg-[#1a1f2c]">
           <div className="h-full bg-[var(--accent)] shadow-[0_0_8px_rgba(69,198,255,0.8)] transition-[width] duration-200" style={{ width: `${progress * 100}%` }} />
         </div>

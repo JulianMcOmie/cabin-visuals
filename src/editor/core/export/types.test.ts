@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { clampToFreeTier, defaultBitrate, defaultSettings, makeTimebase, RESOLUTIONS, resolutionsFor, resolveExportRange, videoCodec } from './types'
+import { clampToFreeTier, defaultBitrate, defaultSettings, EXPORT_ASPECTS, exportAspectChoices, makeTimebase, RESOLUTIONS, resolutionsFor, resolveExportRange, videoCodec } from './types'
 
 // 120 bpm, 4/4, 4 bars, 60 fps: the arithmetic stays exact in these cases.
 const BPM = 120
@@ -8,45 +8,97 @@ const BPB = 4
 const BARS = 4
 const FPS = 60
 
+const sizes = (aspect: Parameters<typeof resolutionsFor>[0]) =>
+  resolutionsFor(aspect).map(({ label, width, height }) => ({ label, width, height }))
+
 test('export resolutions include 4K UHD', () => {
   assert.deepEqual(RESOLUTIONS[0], { label: '4K', width: 3840, height: 2160 })
 })
 
 test('4K uses appropriate H.264 levels and bitrates', () => {
-  assert.equal(videoCodec(3840, 30), 'avc1.640033')
-  assert.equal(videoCodec(3840, 60), 'avc1.640034')
-  assert.equal(defaultBitrate(3840, 30), 60_000_000)
-  assert.equal(defaultBitrate(3840, 60), 80_000_000)
-  assert.equal(videoCodec(1920, 60), 'avc1.64002a')
-  assert.equal(defaultBitrate(1920, 60), 20_000_000)
+  assert.equal(videoCodec(3840, 2160, 30), 'avc1.640033')
+  assert.equal(videoCodec(3840, 2160, 60), 'avc1.640034')
+  assert.equal(defaultBitrate(2160, 30), 60_000_000)
+  assert.equal(defaultBitrate(2160, 60), 80_000_000)
+  assert.equal(videoCodec(1920, 1080, 60), 'avc1.64002a')
+  assert.equal(defaultBitrate(1080, 60), 20_000_000)
+})
+
+test('a frame past 4K60s macroblock rate steps up to level 6.0', () => {
+  // 2:1 at 4K is 4320×2160 - inside level 5.2s frame size, past its rate.
+  assert.equal(videoCodec(4320, 2160, 30), 'avc1.640034')
+  assert.equal(videoCodec(4320, 2160, 60), 'avc1.64003c')
 })
 
 test('9:16 tiers are the 16:9 tiers rotated', () => {
-  assert.deepEqual(resolutionsFor('9:16'), [
+  assert.deepEqual(sizes('9:16'), [
     { label: '4K', width: 2160, height: 3840 },
     { label: '1080p', width: 1080, height: 1920 },
     { label: '720p', width: 720, height: 1280 },
   ])
-  assert.deepEqual(resolutionsFor('16:9'), [...RESOLUTIONS.map((r) => ({ ...r }))])
+  assert.deepEqual(sizes('16:9'), [...RESOLUTIONS.map((r) => ({ ...r }))])
 })
 
-test('portrait exports get the same tier codec/bitrate via the long edge', () => {
-  // 1080×1920 is the same pixel rate as 1920×1080 - callers pass max(w, h).
-  assert.equal(videoCodec(Math.max(1080, 1920), 60), videoCodec(1920, 60))
-  assert.equal(defaultBitrate(Math.max(1080, 1920), 60), 20_000_000)
-  assert.equal(videoCodec(Math.max(2160, 3840), 60), 'avc1.640034')
+test('a tier names the SHORT edge, whatever the aspect', () => {
+  assert.deepEqual(sizes('2:1'), [
+    { label: '4K', width: 4320, height: 2160 },
+    { label: '1080p', width: 2160, height: 1080 },
+    { label: '720p', width: 1440, height: 720 },
+  ])
+  assert.deepEqual(sizes('1:1'), [
+    { label: '4K', width: 2160, height: 2160 },
+    { label: '1080p', width: 1080, height: 1080 },
+    { label: '720p', width: 720, height: 720 },
+  ])
+  assert.deepEqual(sizes('4:5'), [
+    { label: '4K', width: 2160, height: 2700 },
+    { label: '1080p', width: 1080, height: 1350 },
+    { label: '720p', width: 720, height: 900 },
+  ])
+  assert.deepEqual(sizes('4:3'), [
+    { label: '4K', width: 2880, height: 2160 },
+    { label: '1080p', width: 1440, height: 1080 },
+    { label: '720p', width: 960, height: 720 },
+  ])
 })
 
-test('free tier clamps portrait to 720×1280, landscape to 1280×720', () => {
+test('the dialog offers the pinned shape plus the 9:16 cut, always two', () => {
+  assert.deepEqual(exportAspectChoices('fill'), ['16:9', '9:16'])
+  assert.deepEqual(exportAspectChoices('2:1'), ['2:1', '9:16'])
+  assert.deepEqual(exportAspectChoices('4:5'), ['4:5', '9:16'])
+  // Pinned to the vertical cut already: pair it with 16:9, never one card.
+  assert.deepEqual(exportAspectChoices('9:16'), ['9:16', '16:9'])
+  for (const pinned of [...EXPORT_ASPECTS, 'fill' as const]) {
+    const choices = exportAspectChoices(pinned)
+    assert.equal(choices.length, 2)
+    assert.notEqual(choices[0], choices[1])
+    assert.ok(choices.includes('9:16'))
+  }
+})
+
+test('every aspect at every tier has even dimensions', () => {
+  for (const aspect of EXPORT_ASPECTS) {
+    for (const { width, height } of resolutionsFor(aspect)) {
+      assert.equal(width % 2, 0, `${aspect} width ${width}`)
+      assert.equal(height % 2, 0, `${aspect} height ${height}`)
+    }
+  }
+})
+
+test('portrait exports get the same tier bitrate via the short edge', () => {
+  // 1080×1920 is the same tier as 1920×1080 - callers pass min(w, h).
+  assert.equal(defaultBitrate(Math.min(1080, 1920), 60), 20_000_000)
+  assert.equal(videoCodec(1080, 1920, 60), videoCodec(1920, 1080, 60))
+})
+
+test('free tier clamps every aspect to its 720 tier', () => {
   const base = defaultSettings('x')
-  assert.deepEqual(
-    (({ width, height }) => ({ width, height }))(clampToFreeTier({ ...base, aspect: '9:16', width: 1080, height: 1920 })),
-    { width: 720, height: 1280 },
-  )
-  assert.deepEqual(
-    (({ width, height }) => ({ width, height }))(clampToFreeTier({ ...base, width: 1920, height: 1080 })),
-    { width: 1280, height: 720 },
-  )
+  const clamped = (aspect: Parameters<typeof resolutionsFor>[0], width: number, height: number) =>
+    (({ width, height }) => ({ width, height }))(clampToFreeTier({ ...base, aspect, width, height }))
+  assert.deepEqual(clamped('9:16', 1080, 1920), { width: 720, height: 1280 })
+  assert.deepEqual(clamped('16:9', 1920, 1080), { width: 1280, height: 720 })
+  assert.deepEqual(clamped('2:1', 4320, 2160), { width: 1440, height: 720 })
+  assert.deepEqual(clamped('1:1', 2160, 2160), { width: 720, height: 720 })
 })
 
 test('whole-project timebase is unchanged by the range parameter being absent', () => {

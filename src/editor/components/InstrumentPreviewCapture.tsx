@@ -129,7 +129,7 @@ export function InstrumentPreviewCapture() {
           error: (e) => { error = e instanceof Error ? e : new Error(String(e)) },
         })
         encoder.configure({
-          codec: videoCodec(CLIP_W, CLIP_FPS),
+          codec: videoCodec(CLIP_W, CLIP_H, CLIP_FPS),
           width: CLIP_W,
           height: CLIP_H,
           framerate: CLIP_FPS,

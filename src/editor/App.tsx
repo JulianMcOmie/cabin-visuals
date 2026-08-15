@@ -10,6 +10,7 @@ import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
 import { getPlaybackEngine } from './core/playback'
 import { useProjectStore, type ViewAspect } from './store/ProjectStore'
+import { ASPECT_RATIO_IDS, aspectRatioValue } from './core/aspectRatios'
 import { PREVIEW_QUALITIES, useUIStore, type PreviewQuality } from './store/UIStore'
 import { VisualScene } from './components/visual/VisualScene'
 import { ExportDriver } from './components/visual/ExportDriver'
@@ -227,7 +228,7 @@ const ASPECT_GLIDE_MS = 400
  *  resting CSS below, and the glide's two endpoints. */
 function fitAspectBox(cw: number, ch: number, aspect: ViewAspect): { width: number; height: number } {
   if (aspect === 'fill') return { width: cw, height: ch }
-  const ratio = aspect === '16:9' ? 16 / 9 : 9 / 16
+  const ratio = aspectRatioValue(aspect)
   return { width: Math.min(cw, ch * ratio), height: Math.min(ch, cw / ratio) }
 }
 
@@ -239,7 +240,7 @@ function fitAspectBox(cw: number, ch: number, aspect: ViewAspect): { width: numb
  *  hands back to exactly the same two properties. */
 function restingAspectBox(aspect: ViewAspect): { width: string; height: string } {
   if (aspect === 'fill') return { width: '100cqw', height: '100cqh' }
-  const ratio = aspect === '16:9' ? 16 / 9 : 9 / 16
+  const ratio = aspectRatioValue(aspect)
   return {
     width: `min(100cqw, calc(100cqh * ${ratio}))`,
     height: `min(100cqh, calc(100cqw * ${1 / ratio}))`,
@@ -533,7 +534,7 @@ function VisualPanel({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  // The framed box: contain-fit for 16:9 / 9:16, fill-the-panel for 'fill'
+  // The framed box: contain-fit for any pinned aspect, fill-the-panel for 'fill'
   // and fullscreen. Everything outside it is the panel's deep background -
   // that IS the letterbox bar - so animating the box animates the bars.
   //
@@ -566,12 +567,13 @@ function VisualPanel({
   // catches up. `≥ wherever the glide lands` is the same rule the sidebar
   // freeze follows, and it leans on the same identity - the camera's FOV is
   // vertical, so an over-wide render center-crops pixel-identically to the
-  // narrower one, making both the start and the settle resize invisible. (All
-  // three aspects are height-limited in a panel wider than 16:9, so the height
-  // is normally constant across a switch and only the width is over-rendered.
-  // In a panel TALLER than 16:9 the over-rendered height does change the
-  // vertical extent for the glide's duration - bounded and uniform, the same
-  // trade the sidebar freeze documents.) It also spares the instrument tree
+  // narrower one, making both the start and the settle resize invisible. (Any
+  // aspect NARROWER than the panel is height-limited, so a switch between two
+  // of them keeps the height constant and only the width is over-rendered. A
+  // switch involving one that's wider than the panel - 2:1 in a squat pane,
+  // anything at all in a pane taller than it is wide - does over-render the
+  // height for the glide's duration: bounded and uniform, the same trade the
+  // sidebar freeze documents.) It also spares the instrument tree
   // ~24 re-renders per switch.
   const [glide, setGlide] = useState<{
     width: number
@@ -842,7 +844,7 @@ function EditorPanelToggle({
   )
 }
 
-const VIEW_ASPECTS: ViewAspect[] = ['fill', '16:9', '9:16']
+const VIEW_ASPECTS: ViewAspect[] = ['fill', ...ASPECT_RATIO_IDS]
 
 // Fast Preview levels as the toolbar spells them (the store owns the order and
 // the resolution each one renders at - see UIStore.PREVIEW_QUALITY_SCALE).
@@ -892,7 +894,7 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
         <div className="relative">
           <button
             onClick={() => setAspectOpen((v) => !v)}
-            title="Preview aspect ratio - see the visual as a 16:9 or 9:16 export would compose it"
+            title="Preview aspect ratio - see the visual as an export at that shape would compose it"
             className="flex h-7 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2.5 font-mono text-[9px] uppercase tracking-wide text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer"
           >
             {aspect === 'fill' ? 'Fill' : aspect}

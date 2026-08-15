@@ -32,7 +32,8 @@ Stores → `store/CLAUDE.md` · engines → `core/*/CLAUDE.md` · UI → `compon
 - `constants.ts` — shared layout px constants (track label width, playhead triangle).
 - `uiSettings.ts` — localStorage-backed pane open/closed defaults.
 - **Panel-toggle motion (App.tsx)**: sidebar toggles glide by putting `.panel-toggle-anim` (globals.css, M3 emphasized-decelerate 400ms on `flex-grow`) on the panel's GROUP for the toggle's duration. Two traps: react-resizable-panels v4's `onResize` tracks the DOM *through* the CSS transition, so open/closed state is set from INTENT at click and `onResize` writes are suppressed for the glide window (`suppressResizeUntilRef`) — otherwise the header icon re-blues mid-close; and the WebGL canvas must not resize DURING a glide (per-frame buffer resizes stretch the picture — the buffer lags the element), so the toggle also freezes the r3f root (`.canvas-glide-freeze`), centered, at a width ≥ its landing size (current + the toggled panel's width) — the glide is horizontal-only and the camera's FOV is vertical, so the wider render center-crops pixel-identically and the panel edge just reveals/covers a fully-rendered scene; the start/settle resizes are invisible. `.visual-canvas-smooth canvas` pins the canvas to 100% of its root with `!important` (bridges the inline-px lag at the snap), and the letterbox box is pure CSS (`cqh` contain-fit, no ResizeObserver).
-- **Aspect-switch motion (App.tsx `VisualPanel`)**: Fill / 16:9 / 9:16 glide instead of
+- **Aspect-switch motion (App.tsx `VisualPanel`)**: Fill plus every export shape
+  (`core/aspectRatios.ts` — 16:9, 2:1, 4:3, 1:1, 9:16, 4:5) glide instead of
   snapping — the framed box travels between the two contain-fit rects on M3 emphasized
   400ms (`.aspect-glide-anim` in globals.css; keep it in step with `ASPECT_GLIDE_MS`), and
   since everything outside that box is the panel's deep background, animating the box IS
