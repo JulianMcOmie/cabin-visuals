@@ -299,26 +299,19 @@ function photoCardIfLoaded(): HTMLImageElement | undefined {
   return photoCardImage.complete && photoCardImage.naturalWidth > 0 ? photoCardImage : undefined
 }
 
-/** Photo: one still, full stop - a white-bordered print of a real photograph
- *  with "photo" centered on it. Nothing animates: a photo doesn't play, and
- *  the stillness against Video's rushing ridges IS the tell. */
+/** Photo: one still, full stop - a real photograph full-bleed with "photo"
+ *  centered on it. Nothing animates: a photo doesn't play, and the stillness
+ *  against Video's moving footage IS the tell. */
 const drawPhoto: Draw2D = (ctx, w, h) => {
-  ctx.fillStyle = '#0b0b0b'
-  ctx.fillRect(0, 0, w, h)
-  const m = 8
-  ctx.fillStyle = '#f8fafc'
-  ctx.fillRect(m - 4, m - 4, w - 2 * (m - 4), h - 2 * (m - 4))
   const img = photoCardIfLoaded()
   if (img) {
-    // Cover-fit the photograph into the print window.
-    const dw = w - 2 * m
-    const dh = h - 2 * m
-    const scale = Math.max(dw / img.naturalWidth, dh / img.naturalHeight)
-    const sw = dw / scale
-    const sh = dh / scale
-    ctx.drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, m, m, dw, dh)
+    // Cover-fit the photograph edge to edge.
+    const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight)
+    const sw = w / scale
+    const sh = h / scale
+    ctx.drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, 0, 0, w, h)
   } else {
-    drawLandscape(ctx, m, m, w - 2 * m, h - 2 * m, 2)
+    drawLandscape(ctx, 0, 0, w, h, 2)
     // The reduced-motion path draws exactly once, so repaint when the load
     // lands; under the rAF loop the next frame would cover this anyway.
     photoCardImage?.addEventListener('load', () => drawPhoto(ctx, w, h, 0), { once: true })
