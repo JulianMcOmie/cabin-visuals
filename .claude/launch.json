@@ -379,6 +379,20 @@
         "3070"
       ],
       "port": 3070
+    },
+    {
+      "name": "track-icons-3072",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "NEXT_DIST_DIR=.next-isolated-3072",
+        "npm",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3072"
+      ],
+      "port": 3072
     }
   ]
 }

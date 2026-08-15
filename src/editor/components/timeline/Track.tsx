@@ -18,6 +18,8 @@ import { resolveDeclaredMidiRows } from '../midi/resolveDeclaredRows'
 import type { InstrumentItem } from '../LeftSidebar'
 import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react'
 import type { Track as TrackType } from '../../types'
+import { TrackIcon, TRACK_ICON_WIDTH } from './TrackIcon'
+import { trackGlyph } from './trackGlyphs'
 import { TrackTransformPanel, beginTransformDrag, resetTransformValues, transformValue } from './TrackTransformPanel'
 import { TrackTagsPanel } from './TrackTagsPanel'
 import { TF_OPACITY } from '../../core/transform'
@@ -134,8 +136,10 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
   const [tagsAnchor, setTagsAnchor] = useState<{ left: number; top: number; bottom: number } | null>(null)
   // The fader needs real room: hide it (keeping the opener) when the label
   // column is too narrow for name + fader + buttons, so it never crowds the
-  // M/S cluster out of alignment.
-  const showFader = hasTransform && labelWidth - (LABEL_BASE_PX + depth * INDENT_PX) >= 210
+  // M/S cluster out of alignment. The icon slot eats into that room, so it is
+  // part of the sum - otherwise adding icons silently shrinks the name instead.
+  const showFader = hasTransform
+    && labelWidth - (LABEL_BASE_PX + depth * INDENT_PX) >= 210 + TRACK_ICON_WIDTH
 
   // Double-click the name → inline rename. Enter/blur commits, Esc cancels.
   const [renaming, setRenaming] = useState(false)
@@ -404,6 +408,20 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
             style={{ left: dividerInset }}
           />
         )}
+        {/* The instrument mark. Its shape comes from the track (a pure function,
+            no subscription); its color is the row's own display color, so a
+            replace-drop previews the incoming instrument's color here too.
+            `relative` is LOAD-BEARING, not tidiness: the row-state background a
+            few lines up is an absolutely positioned sibling, and a positioned
+            element paints above every non-positioned in-flow box regardless of
+            DOM order. A static icon slot therefore reserved its width and then
+            rendered UNDERNEATH the opaque background - a gap where the mark
+            should be, which reads as the glyph failing to draw. Every other
+            content box in this label (the name group, the control cluster)
+            carries `relative` for the same reason. */}
+        <span className="relative flex flex-shrink-0 items-center" style={{ opacity: ghostOpacity }}>
+          <TrackIcon glyph={trackGlyph(track, activeIsMain)} color={blockColor} muted={isDarkenedRow} />
+        </span>
         {/* Name + its collapse toggle, grouped so the chevron hugs the name text
             (the empty space sits to their right, not between them). */}
         {/* Rows showing the opacity fader give it the free space (DAW-style
