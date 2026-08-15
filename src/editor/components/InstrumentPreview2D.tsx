@@ -198,11 +198,39 @@ const drawCameraOrbit: Draw2D = (ctx, w, h, t) => {
   ctx.fill()
 }
 
-/** Video: the video itself, nothing else - full-frame sunset footage with
- *  mountain ridges rushing past in parallax (the far ridge slower than the
- *  near one, like footage shot from a moving car) and "video" centered over
- *  it. No player chrome: the instrument shows footage, it doesn't add UI. */
+// The Video card's footage is a real clip (public/library/video-card.mp4, a
+// CC0 blooming-flower time-lapse, bundled) drawn frame-by-frame into the
+// canvas - same move as the Photo card's photograph. Loaded and started
+// lazily; the drawn parallax ridges cover the frames before playback begins.
+let videoCardClip: HTMLVideoElement | undefined
+function videoCardFrameIfReady(): HTMLVideoElement | undefined {
+  if (typeof document === 'undefined') return undefined
+  if (!videoCardClip) {
+    videoCardClip = document.createElement('video')
+    videoCardClip.src = '/library/video-card.mp4'
+    videoCardClip.muted = true
+    videoCardClip.loop = true
+    videoCardClip.playsInline = true
+    void videoCardClip.play().catch(() => {})
+  }
+  return videoCardClip.readyState >= 2 ? videoCardClip : undefined
+}
+
+/** Video: the video itself, nothing else - real full-frame footage playing
+ *  under "video" centered over it. No player chrome: the instrument shows
+ *  footage, it doesn't add UI. The drawn sunset-and-ridges parallax remains
+ *  as the pre-load fallback. */
 const drawVideo: Draw2D = (ctx, w, h, t) => {
+  const clip = videoCardFrameIfReady()
+  if (clip) {
+    // Cover-fit the current frame, then the caption below paints over it.
+    const scale = Math.max(w / clip.videoWidth, h / clip.videoHeight)
+    const sw = w / scale
+    const sh = h / scale
+    ctx.drawImage(clip, (clip.videoWidth - sw) / 2, (clip.videoHeight - sh) / 2, sw, sh, 0, 0, w, h)
+    drawVideoCaption(ctx, w, h)
+    return
+  }
   const sky = ctx.createLinearGradient(0, 0, 0, h)
   sky.addColorStop(0, '#fbbf24')
   sky.addColorStop(1, '#ec4899')
@@ -237,7 +265,11 @@ const drawVideo: Draw2D = (ctx, w, h, t) => {
   ridge(t * w * 0.09, h * 0.82, h * 0.34, '#b0486b')
   ridge(t * w * 0.28, h * 1.04, h * 0.5, '#7c2d12')
 
-  // Centered "video", steady - a video just plays, it doesn't beat.
+  drawVideoCaption(ctx, w, h)
+}
+
+// Centered "video", steady - a video just plays, it doesn't beat.
+function drawVideoCaption(ctx: CanvasRenderingContext2D, w: number, h: number) {
   const capSize = h * 0.2
   ctx.font = `900 ${capSize}px "Arial Black", Impact, sans-serif`
   ctx.textAlign = 'center'
