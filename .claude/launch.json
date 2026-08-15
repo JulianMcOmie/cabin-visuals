@@ -147,6 +147,12 @@
       "port": 3069
     },
     {
+      "name": "note-drag-guide-3082",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3082", "npm", "run", "dev", "--", "--port", "3082"],
+      "port": 3082
+    },
+    {
       "name": "track-drag-3065",
       "runtimeExecutable": "env",
       "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3065", "npm", "run", "dev", "--", "--port", "3065"],

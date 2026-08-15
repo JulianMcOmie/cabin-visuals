@@ -29,6 +29,9 @@ const DRAG_NONE: DragState = { type: 'none', startX: 0, startY: 0, currentX: 0, 
 interface UseNoteGesturesOptions {
   containerRef: RefObject<HTMLDivElement | null>
   gridRef: RefObject<HTMLDivElement | null>
+  /** Full-height vertical alignment guide (the timeline's block-drag hairline,
+   *  mirrored for notes). Positioned imperatively - no re-renders per move. */
+  dragGuideRef: RefObject<HTMLDivElement | null>
   scrubbingRef: RefObject<boolean>
   block: Block
   notes: Note[]
@@ -57,6 +60,7 @@ interface UseNoteGesturesOptions {
 export function useNoteGestures({
   containerRef,
   gridRef,
+  dragGuideRef,
   scrubbingRef,
   block,
   notes,
@@ -92,6 +96,30 @@ export function useNoteGestures({
   const setCursor = useCallback((cursor: string) => {
     if (containerRef.current) containerRef.current.style.cursor = cursor
   }, [containerRef])
+
+  // Alignment guide: same imperative hairline as the timeline's block drags.
+  // Rides the grabbed note's snapped MOVING edge (left on move/left-resize,
+  // right on right-resize, the fixed start on draw) so the line previews the
+  // edge being placed.
+  const placeDragGuideAtClientX = useCallback((clientX: number | null) => {
+    const guide = dragGuideRef.current
+    if (!guide) return
+    if (clientX == null) {
+      guide.style.visibility = 'hidden'
+      return
+    }
+    const hostLeft = guide.parentElement?.getBoundingClientRect().left ?? 0
+    guide.style.transform = `translateX(${clientX - hostLeft}px)`
+    guide.style.visibility = 'visible'
+  }, [dragGuideRef])
+
+  // absBeat is in absolute timeline beats (block-relative note beats must add
+  // blockStartBeat before coming through here).
+  const placeDragGuideAtBeat = useCallback((absBeat: number, ppb: number) => {
+    const gridR = gridRef.current?.getBoundingClientRect()
+    if (!gridR) return
+    placeDragGuideAtClientX(gridR.left + beatToX(absBeat, ppb))
+  }, [gridRef, placeDragGuideAtClientX])
 
   // Snap resolution: use quantize grid when enabled, fine resolution when off
   const snapSize = snapEnabled ? quantize : 1 / 128
@@ -180,6 +208,7 @@ export function useNoteGestures({
         if (newDuration !== dn.durationBeats) {
           setDrawingNote(prev => prev ? { ...prev, durationBeats: newDuration } : null)
         }
+        placeDragGuideAtBeat(latest.current.blockStartBeat + dn.startBeat, latest.current.pixelsPerBeat)
       } else if (ds.type === 'moving' && ds.originalStartBeats && ds.originalPitches) {
         const deltaX = grid.x - ds.startX
         const deltaBeats = xToBeat(deltaX, latest.current.pixelsPerBeat)
@@ -210,6 +239,8 @@ export function useNoteGestures({
         })
         latest.current.onNotesChange(next)
         pendingCommitRef.current = next
+        const grabbed = next.find(n => n.id === ds.noteId)
+        if (grabbed) placeDragGuideAtBeat(curBlockStart + grabbed.startBeat, latest.current.pixelsPerBeat)
       } else if (ds.type === 'resizing' && ds.originalDurations) {
         const deltaX = grid.x - ds.startX
         const deltaBeats = xToBeat(deltaX, latest.current.pixelsPerBeat)
@@ -225,6 +256,8 @@ export function useNoteGestures({
         })
         latest.current.onNotesChange(next)
         pendingCommitRef.current = next
+        const grabbed = next.find(n => n.id === ds.noteId)
+        if (grabbed) placeDragGuideAtBeat(latest.current.blockStartBeat + grabbed.startBeat + grabbed.durationBeats, latest.current.pixelsPerBeat)
       } else if (ds.type === 'resizing-left' && ds.originalStartBeats && ds.originalDurations) {
         const deltaX = grid.x - ds.startX
         const deltaBeats = xToBeat(deltaX, latest.current.pixelsPerBeat)
@@ -246,6 +279,8 @@ export function useNoteGestures({
         })
         latest.current.onNotesChange(next)
         pendingCommitRef.current = next
+        const grabbed = next.find(n => n.id === ds.noteId)
+        if (grabbed) placeDragGuideAtBeat(latest.current.blockStartBeat + grabbed.startBeat, latest.current.pixelsPerBeat)
       } else if (ds.type === 'marquee') {
         // The rectangle never extends into the (sticky) label column: clamp to
         // the labels' ON-SCREEN right edge, expressed in grid coordinates so it
@@ -283,6 +318,7 @@ export function useNoteGestures({
       setDragState(DRAG_NONE)
       setCursor('default')
       didDragRef.current = true
+      placeDragGuideAtClientX(null)
       unlockCursor()
       controller.abort()
       gestureAbortRef.current = null
@@ -290,7 +326,7 @@ export function useNoteGestures({
 
     window.addEventListener('pointermove', handleMove, { signal: controller.signal })
     window.addEventListener('pointerup', handleUp, { signal: controller.signal })
-  }, [setCursor, gridRef, containerRef])
+  }, [setCursor, gridRef, containerRef, placeDragGuideAtBeat, placeDragGuideAtClientX])
 
   // If the component unmounts mid-drag, tear the window listeners down
   useEffect(() => {
@@ -348,6 +384,7 @@ export function useNoteGestures({
         originalDurations,
       })
       setCursor('ew-resize')
+      placeDragGuideAtBeat(blockStartBeat + note.startBeat + (nearRight ? note.durationBeats : 0), pixelsPerBeat)
       beginGestureTracking('ew-resize')
       return
     }
@@ -406,6 +443,7 @@ export function useNoteGestures({
         originalPitches,
       })
       setCursor('default')
+      placeDragGuideAtBeat(blockStartBeat + note.startBeat, pixelsPerBeat)
       beginGestureTracking('default')
       return
     }
@@ -430,8 +468,9 @@ export function useNoteGestures({
       originalPitches,
     })
     setCursor('default')
+    placeDragGuideAtBeat(blockStartBeat + note.startBeat, pixelsPerBeat)
     beginGestureTracking('default')
-  }, [selectedNoteIds, notes, onNotesChange, setCursor, beginGestureTracking, gridRef])
+  }, [selectedNoteIds, notes, onNotesChange, setCursor, beginGestureTracking, gridRef, placeDragGuideAtBeat, blockStartBeat, pixelsPerBeat])
 
   // Handle note hover for cursor changes. stopPropagation keeps the grid's
   // own pointermove handler from firing afterward and resetting the cursor
@@ -491,6 +530,7 @@ export function useNoteGestures({
             currentX: gridX,
             currentY: gridY,
           })
+          placeDragGuideAtBeat(startBeat, pixelsPerBeat)
           beginGestureTracking('default')
         }
       }
@@ -513,7 +553,7 @@ export function useNoteGestures({
     })
     setCursor('default')
     beginGestureTracking('default')
-  }, [selectedNoteIds, rowHeight, rows, pixelsPerBeat, roundDownToStep, snapEnabled, quantize, blockStartBeat, initialTotalBeats, setCursor, beginGestureTracking, gridRef])
+  }, [selectedNoteIds, rowHeight, rows, pixelsPerBeat, roundDownToStep, snapEnabled, quantize, blockStartBeat, initialTotalBeats, setCursor, beginGestureTracking, gridRef, placeDragGuideAtBeat])
 
   // Keyboard handler (capture phase so editor consumes Delete/Esc before the panel)
   useEffect(() => {

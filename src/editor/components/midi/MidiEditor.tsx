@@ -143,6 +143,7 @@ export function MidiEditor({
   const prevDragTypeRef = useRef<string>('none')
   const containerRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
+  const dragGuideRef = useRef<HTMLDivElement>(null)
   const playheadRef = useRef<HTMLDivElement>(null)
   const rulerPlayheadRef = useRef<HTMLDivElement>(null)
   const rulerContentRef = useRef<HTMLDivElement>(null)
@@ -208,6 +209,7 @@ export function MidiEditor({
   } = useNoteGestures({
     containerRef,
     gridRef,
+    dragGuideRef,
     scrubbingRef,
     block,
     notes,
@@ -1307,6 +1309,20 @@ export function MidiEditor({
           scroll container's marquee handler like the empty space below a short
           row list does. */}
       <div style={{ height: CANVAS_BOTTOM_PADDING, pointerEvents: 'none' }} />
+      </div>
+
+      {/* Note drag alignment guide - the timeline's block-drag hairline,
+          mirrored for note gestures. Positioned imperatively from the grabbed
+          note's snapped edge; this root begins at the ruler and ends at the
+          bottom of the pane, so the hairline spans the whole editor. */}
+      <div
+        ref={dragGuideRef}
+        data-midi-note-drag-guide=""
+        aria-hidden="true"
+        className="pointer-events-none absolute left-0 top-0 bottom-0 z-[45]"
+        style={{ visibility: 'hidden', width: 0, willChange: 'transform' }}
+      >
+        <div className="absolute top-0 bottom-0 w-px bg-white/60" style={{ left: -0.5 }} />
       </div>
 
       {/* The readout sits under the grid, flush with it - it belongs to the

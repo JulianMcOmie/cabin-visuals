@@ -82,11 +82,13 @@
     ".next-isolated-3069/types/**/*.ts",
     ".next-isolated-3071/types/**/*.ts",
     ".next-isolated-3097/types/**/*.ts",
+    ".next-isolated-3082/types/**/*.ts",
     ".next-isolated/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
     ".next-build-3069/types/**/*.ts",
-    ".next-build-3097/types/**/*.ts"
+    ".next-build-3097/types/**/*.ts",
+    ".next-build-3082/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"
