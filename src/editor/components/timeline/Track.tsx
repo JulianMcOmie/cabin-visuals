@@ -65,7 +65,8 @@ interface TrackProps {
   descendantRows?: number
   /** During an Alt copy-drag / library drag: vertical shift (px) to open the gap. */
   liftOffset?: number
-  /** This row is the source of an in-progress nest-drag (dim it). */
+  /** This row is the source of an in-progress nest-drag: it stays as the hole the
+   *  track came out of, so only its CONTENT fades (see `ghostOpacity`). */
   dimmed?: boolean
   /** This row is the live nest-into target (highlight it). */
   dropInto?: boolean
@@ -225,6 +226,15 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
   // down beside the children (the two spans below), so a straight full-width bottom
   // border would cut through the region the drop is actually offering.
   const wrapsChildren = descendantRows > 0
+  // The nest-drag's source row is the PLACEHOLDER for where the track sits now, so
+  // it must keep looking like a row of the stack: fading the whole row (opacity on
+  // the wrapper) took the label chrome with it - the ancestor bracket lines broke
+  // for exactly this row's height, and the row's own translucent background let the
+  // near-black lane surface through while the parent's strip in the indent gap
+  // beside it stayed opaque, which reads as a left margin appearing mid-drag. Only
+  // the CONTENT (name, controls, blocks) ghosts; background, brackets and dividers
+  // stay at full strength.
+  const ghostOpacity = dimmed ? 0.4 : undefined
   const dropOutline = [
     'inset 0 1px 0 0 var(--accent)',
     'inset 1px 0 0 0 var(--accent)',
@@ -237,7 +247,6 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
       style={{
         transform: inCopyDrag ? `translateY(${liftOffset}px)` : undefined,
         transition: inCopyDrag ? 'transform 0.15s ease' : undefined,
-        opacity: dimmed ? 0.4 : 1,
         // During a copy-drag the shifted rows must sit above the empty label box
         // below them (z-10), or the bottom row hides under it as it reflows down.
         zIndex: inCopyDrag ? 15 : undefined,
@@ -344,14 +353,26 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
         {/* Logic-style hierarchy brackets: each ancestor's border drops down the
             label past its children; on the first child it curves in from the
             divider above. Extends 1px above the row to paint over the previous
-            row's divider so the vertical line reads as continuous. */}
-        {guides?.map((g, level) => (
-          <span
-            key={level}
-            className={`pointer-events-none absolute right-0 border-[var(--timeline-row-line,var(--border))] border-l ${g.curve ? 'border-t rounded-tl-md' : ''}`}
-            style={{ left: LABEL_BASE_PX + level * INDENT_PX, top: -1, bottom: 0 }}
-          />
-        ))}
+            row's divider so the vertical line reads as continuous.
+            The DEEPEST guide is this row's own parent bracket, drawn at exactly
+            `regionLeft` - the same pixel as the nest-into outline's left border,
+            and painted after it. On a nested target that hid the blue line down
+            the whole row (only a root row, which has no guides, looked right), so
+            the guide wears the accent while the drop is offered: same geometry,
+            including the first-child corner, in the outline's colour. */}
+        {guides?.map((g, level) => {
+          const isOwnBracket = level === guides.length - 1
+          const asOutline = dropInto && isOwnBracket
+          return (
+            <span
+              key={level}
+              className={`pointer-events-none absolute right-0 border-l ${
+                asOutline ? 'border-[var(--accent)]' : 'border-[var(--timeline-row-line,var(--border))]'
+              } ${g.curve ? 'border-t rounded-tl-md' : ''}`}
+              style={{ left: LABEL_BASE_PX + level * INDENT_PX, top: asOutline ? 0 : -1, bottom: 0 }}
+            />
+          )
+        })}
         {/* Bottom divider, inset so it starts at the bracket it meets (never
             crossing a parent's bracket region); the divider above a first child
             is drawn by that child's curve instead. */}
@@ -365,7 +386,10 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
             (the empty space sits to their right, not between them). */}
         {/* Rows showing the opacity fader give it the free space (DAW-style
             channel strip); other rows keep it on the name as before. */}
-        <div className={`relative ${showFader ? '' : 'flex-1'} min-w-0 flex ${showTagBadges ? 'flex-col justify-center' : 'items-center gap-1.5'}`}>
+        <div
+          style={{ opacity: ghostOpacity }}
+          className={`relative ${showFader ? '' : 'flex-1'} min-w-0 flex ${showTagBadges ? 'flex-col justify-center' : 'items-center gap-1.5'}`}
+        >
           {/* display:contents when single-line, so the name/chevron keep sitting
               directly in the row flex; a real flex row when badges add line 2. */}
           <div className={showTagBadges ? 'flex min-w-0 items-center gap-1.5' : 'contents'}>
@@ -422,7 +446,11 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
           )}
         </div>
 
-        <div className={`relative flex items-center gap-1 ${showFader ? 'flex-1 min-w-0' : 'flex-shrink-0'}`} onClick={(e) => e.stopPropagation()}>
+        <div
+          style={{ opacity: ghostOpacity }}
+          className={`relative flex items-center gap-1 ${showFader ? 'flex-1 min-w-0' : 'flex-shrink-0'}`}
+          onClick={(e) => e.stopPropagation()}
+        >
           {showFader && (
             <div
               data-strip-control
@@ -564,7 +592,7 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
         {/* Block space is offset by the pickup: bar 0 of the music sits pickupPx
             into the lane, so audio with startBar < 0 still renders on-lane
             (flush with the left edge when it defines the pickup). */}
-        <div className="absolute inset-y-0" style={{ left: pickupPx, right: 0 }}>
+        <div className="absolute inset-y-0" style={{ left: pickupPx, right: 0, opacity: ghostOpacity }}>
         {/* A selected block's light spills onto its lane: a wide wash behind
             the blocks (first child = painted under them), clipped to the row.
             The cross-row reach comes from the block's own bloom shadows.

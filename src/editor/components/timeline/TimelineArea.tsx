@@ -17,7 +17,7 @@ import { useTrackGestures } from './useTrackGestures'
 import { useTrackCopyDrag } from './useTrackCopyDrag'
 import { useTrackNestDrag } from './useTrackNestDrag'
 import { flattenVisualRows, rowGuidesOf } from './trackTree'
-import { BRACKET_CORNER_RADIUS_PX, rowIndentPx } from './trackDrop'
+import { rowIndentPx } from './trackDrop'
 import { deselectTrack, selectNewTrack } from '../../utils/selection'
 import { startEdgeResize } from '../../utils/edgeResize'
 import {
@@ -611,23 +611,19 @@ export function TimelineArea() {
 
             {/* Shared drop insertion line (nest-drag + library drag). Content-space,
                 full width so it stays visible through horizontal scroll; it starts at
-                the landing depth's bracket, exactly where the real row divider will,
-                and bends down at that bracket when the drop nests under the row above
-                (the divider there is the first child's curve, not a straight line).
-                Nesting *into* a row shows that row's highlight instead. */}
+                the landing depth's bracket, exactly where the real row divider will.
+                Straight even when the drop becomes a first child - the divider there
+                is the parent's bracket corner, but an indicator that drew the corner
+                read as a hook hanging off the row above. Nesting *into* a row shows
+                that row's highlight instead. */}
             {trackDrop?.line && (
               <div
                 className="absolute z-30 pointer-events-none"
                 style={{ top: trackDrop.line.top - 1, left: 0, right: 0, height: 2 }}
               >
                 <div
-                  className={`border-t-2 border-[var(--accent)] ${
-                    trackDrop.line.curve ? 'rounded-tl-md border-l-2' : ''
-                  }`}
-                  style={{
-                    marginLeft: trackDrop.line.left,
-                    height: trackDrop.line.curve ? 2 + BRACKET_CORNER_RADIUS_PX : 2,
-                  }}
+                  className="border-t-2 border-[var(--accent)]"
+                  style={{ marginLeft: trackDrop.line.left, height: 2 }}
                 />
               </div>
             )}

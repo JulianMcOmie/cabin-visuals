@@ -29,10 +29,12 @@ export interface DropTarget {
   /** Index among the new siblings; undefined = append (used when nesting into). */
   index: number | undefined
   /** Sibling-drop insertion line (content-space px); null when nesting into a row.
-   *  `left` is the landing depth's `rowIndentPx`, and `curve` marks a drop that
-   *  becomes the row above's FIRST CHILD - where the real divider is the bracket
-   *  corner bending down, not a straight line, so the indicator bends too. */
-  line: { top: number; left: number; curve: boolean } | null
+   *  `left` is the landing depth's `rowIndentPx`, so the line sits exactly where the
+   *  row divider it becomes will. It is always STRAIGHT: a drop that becomes a first
+   *  child turns the real divider into the parent's bracket corner, but an indicator
+   *  that drew the corner read as a hook hanging off the row above (Tyler,
+   *  2026-08-15) - the line stops where the bend would start. */
+  line: { top: number; left: number } | null
   /** The row being nested into (highlighted); null for a sibling drop. */
   intoId: string | null
 }
@@ -145,12 +147,12 @@ function resolveBoundaryDrop(args: DropArgs, boundary: number): DropTarget | nul
       }
     }
     // The line lands on a real row boundary, so it wears that boundary's own
-    // geometry: the next row's indent, bending down at the bracket when the drop
-    // would make the row above a parent (see rowIndentPx / Track's guide curve).
+    // indent (see rowIndentPx). Straight, always - even for a drop that becomes a
+    // first child, where the divider it replaces is the parent's bracket corner.
     return {
       parentId: at.parentId,
       index,
-      line: { top, left: rowIndentPx(depth), curve: !!prev && depth === prev.depth + 1 },
+      line: { top, left: rowIndentPx(depth) },
       intoId: null,
     }
   }

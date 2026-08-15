@@ -43,20 +43,19 @@ test('the boundary after a grandchild reaches every depth via pointer X', () => 
 
   // X at C's indent → sibling of the grandchild, after C.
   assert.deepEqual(drop(f, xAt(2), y), {
-    parentId: 'B', index: 1, line: { top: 120, left: rowIndentPx(2), curve: false }, intoId: null,
+    parentId: 'B', index: 1, line: { top: 120, left: rowIndentPx(2) }, intoId: null,
   })
   // One step left → uncle level: after B inside A.
   assert.deepEqual(drop(f, xAt(1), y), {
-    parentId: 'A', index: 1, line: { top: 120, left: rowIndentPx(1), curve: false }, intoId: null,
+    parentId: 'A', index: 1, line: { top: 120, left: rowIndentPx(1) }, intoId: null,
   })
   // Far left → root level: after A, before D.
   assert.deepEqual(drop(f, 0, y), {
-    parentId: null, index: 1, line: { top: 120, left: 0, curve: false }, intoId: null,
+    parentId: null, index: 1, line: { top: 120, left: 0 }, intoId: null,
   })
   // One step deeper than C → C's first child (great-grandchild).
-  // ...and the line bends, the way the divider under a new first child does.
   assert.deepEqual(drop(f, xAt(3), y), {
-    parentId: 'C', index: 0, line: { top: 120, left: rowIndentPx(3), curve: true }, intoId: null,
+    parentId: 'C', index: 0, line: { top: 120, left: rowIndentPx(3) }, intoId: null,
   })
   // X clamps to the valid range on both sides.
   assert.equal(drop(f, xAt(9), y)?.parentId, 'C')
@@ -78,11 +77,28 @@ test('below the last row un-nests to any level, not just root', () => {
   const y = 999
   // Far left → append at root (the old fixed behavior).
   assert.deepEqual(drop(f, 0, y), {
-    parentId: null, index: 2, line: { top: 4 * ROW, left: 0, curve: false }, intoId: null,
+    parentId: null, index: 2, line: { top: 4 * ROW, left: 0 }, intoId: null,
   })
   // Indented one step → first child of the last row (D).
   assert.deepEqual(drop(f, xAt(1), y), {
-    parentId: 'D', index: 0, line: { top: 4 * ROW, left: rowIndentPx(1), curve: true }, intoId: null,
+    parentId: 'D', index: 0, line: { top: 4 * ROW, left: rowIndentPx(1) }, intoId: null,
+  })
+})
+
+test('a first-child drop draws the same straight line as any other', () => {
+  const f = grandchildForest()
+  // Boundary between A and its shown child B: the divider there is B's bracket
+  // CORNER, but the indicator stays a plain rule at the landing depth - a bending
+  // one read as a hook hanging off the row above. deepEqual also pins the absence
+  // of any bend flag on the line.
+  assert.deepEqual(drop(f, xAt(1), 45), {
+    parentId: 'A', index: 0, line: { top: ROW, left: rowIndentPx(1) }, intoId: null,
+  })
+  // Collapsing A hides B, so the same X now means "A's first child" with nothing
+  // between them - same landing, same line.
+  const collapsed = { ...f, rows: flattenVisualRows(f.tracks, f.rootTrackIds, new Set(['A'])) }
+  assert.deepEqual(drop(collapsed, xAt(1), 45), {
+    parentId: 'A', index: 0, line: { top: ROW, left: rowIndentPx(1) }, intoId: null,
   })
 })
 
@@ -100,11 +116,11 @@ test('dragged subtree is excluded: depths inside it fall back shallower', () => 
   // At the C/D boundary, depth 2-3 would land inside the dragged subtree; a deep X
   // falls back to B's own current slot inside A.
   assert.deepEqual(drop(f, xAt(3), 122, dragging), {
-    parentId: 'A', index: 0, line: { top: 120, left: rowIndentPx(1), curve: false }, intoId: null,
+    parentId: 'A', index: 0, line: { top: 120, left: rowIndentPx(1) }, intoId: null,
   })
   // Root level stays reachable, with B's subtree not counted among the siblings.
   assert.deepEqual(drop(f, 0, 122, dragging), {
-    parentId: null, index: 1, line: { top: 120, left: 0, curve: false }, intoId: null,
+    parentId: null, index: 1, line: { top: 120, left: 0 }, intoId: null,
   })
 })
 
@@ -116,11 +132,11 @@ test('nothing drops above, between, or under the pinned audio tracks', () => {
 
   // Top edge of the audio row → lands right below the pinned block.
   assert.deepEqual(drop(f, 0, 2), {
-    parentId: null, index: 1, line: { top: ROW, left: 0, curve: false }, intoId: null,
+    parentId: null, index: 1, line: { top: ROW, left: 0 }, intoId: null,
   })
   // A deep X below the audio row can't nest into it: falls back to a root drop.
   assert.deepEqual(drop(f, xAt(1), 38), {
-    parentId: null, index: 1, line: { top: ROW, left: 0, curve: false }, intoId: null,
+    parentId: null, index: 1, line: { top: ROW, left: 0 }, intoId: null,
   })
 })
 
