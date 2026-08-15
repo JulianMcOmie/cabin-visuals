@@ -84,14 +84,17 @@ test('typing a note writes it block-local and advances the cursor one step', () 
 
 test('a count prefix repeats the note that many steps', () => {
   const ctx = makeCtx()
+  // 1-4 are bar hops, so a count starts at 5-9 (see the count test below).
   let s = state()
   s = press(s, ctx, '3').state
-  const { state: next, intents } = press(s, ctx, 'a')
+  assert.equal(s.cursorBeat, 8, 'a bare 3 hops to bar 3 rather than counting')
 
+  s = press(state(), ctx, '6').state
+  const { state: next, intents } = press(s, ctx, 'a')
   const notes = committed(intents)!
-  assert.equal(notes.length, 3)
-  assert.deepEqual(notes.map((n) => n.startBeat), [0, 0.5, 1])
-  assert.equal(next.cursorBeat, 1.5)
+  assert.equal(notes.length, 6)
+  assert.deepEqual(notes.map((n) => n.startBeat), [0, 0.5, 1, 1.5, 2, 2.5])
+  assert.equal(next.cursorBeat, 3)
   assert.equal(next.count, '', 'the count is spent')
 })
 
@@ -144,11 +147,11 @@ test('placing inside the block does not touch its length', () => {
   assert.ok(!intents.some((i) => i.type === 'growBlockTo'))
 })
 
-test('space rests, z/x step, c/v change row, shift jumps by bar and octave', () => {
+test('space rests, z/x step, c/v change row, shift jumps by page and octave', () => {
   const ctx = makeCtx()
   assert.equal(press(state(), ctx, ' ').state.cursorBeat, 0.5)
   assert.equal(press(state({ cursorBeat: 4 }), ctx, 'z').state.cursorBeat, 3.5)
-  assert.equal(press(state({ cursorBeat: 4 }), ctx, 'x', { shift: true }).state.cursorBeat, 8)
+  assert.equal(press(state({ cursorBeat: 4 }), ctx, 'x', { shift: true }).state.cursorBeat, 20, 'a page is four bars')
   assert.equal(press(state(), ctx, 'c').state.cursorRow, 21, 'c goes down the rows')
   assert.equal(press(state(), ctx, 'v').state.cursorRow, 19, 'v goes up')
   assert.equal(press(state(), ctx, 'v', { shift: true }).state.cursorRow, 8, 'an octave is twelve rows on a piano')
@@ -202,7 +205,7 @@ test('in select mode the note keys filter rows instead of playing them', () => {
     { id: 'w-row', startBeat: 0, durationBeats: 1, pitch: rows[19].pitch, velocity: 100 },
   ]
   const ctx = makeCtx({ notes })
-  let s = state({ mode: 'select', selection: { anchorBeat: 0, anchorRow: 0, rowFilter: null }, cursorRow: 36 })
+  let s = state({ mode: 'select', selection: { anchorBeat: 0, anchorRow: 0, rowFilter: null, timeRanges: null }, cursorRow: 36 })
 
   const filtered = press(s, ctx, 'w')
   s = filtered.state
@@ -221,7 +224,7 @@ test('deleting in select mode removes the region and drops back to ground', () =
     { id: 'safe', startBeat: 12, durationBeats: 1, pitch: rows[20].pitch, velocity: 100 },
   ]
   const ctx = makeCtx({ notes })
-  const s = state({ mode: 'select', selection: { anchorBeat: 0, anchorRow: 20, rowFilter: null } })
+  const s = state({ mode: 'select', selection: { anchorBeat: 0, anchorRow: 20, rowFilter: null, timeRanges: null } })
   const { state: next, intents } = press(s, ctx, 'b')
 
   assert.deepEqual(committed(intents)!.map((n) => n.id), ['safe'])
@@ -247,7 +250,7 @@ test('r after a selection lands a copy directly after it', () => {
   const notes: Note[] = [{ id: 'seed', startBeat: 0, durationBeats: 1, pitch: rows[20].pitch, velocity: 100 }]
   const ctx = makeCtx({ notes })
   // A region one bar wide: anchor at 0, cursor at 3.5, plus the cursor's step.
-  const s = state({ mode: 'select', cursorBeat: 3.5, selection: { anchorBeat: 0, anchorRow: 20, rowFilter: null } })
+  const s = state({ mode: 'select', cursorBeat: 3.5, selection: { anchorBeat: 0, anchorRow: 20, rowFilter: null, timeRanges: null } })
   const { state: next, intents } = press(s, ctx, 'r')
 
   const out = committed(intents)!
@@ -311,7 +314,7 @@ test('Escape pops one level at a time and only then leaves vim', () => {
 
   assert.ok(press(cleared.state, ctx, 'escape').intents.some((i) => i.type === 'exit'), 'a clean ground Escape exits')
 
-  const selecting = state({ mode: 'select', selection: { anchorBeat: 0, anchorRow: 0, rowFilter: null } })
+  const selecting = state({ mode: 'select', selection: { anchorBeat: 0, anchorRow: 0, rowFilter: null, timeRanges: null } })
   assert.equal(press(selecting, ctx, 'escape').state.mode, 'ground', 'Escape in select returns to ground, not out')
 })
 
@@ -345,18 +348,204 @@ test('grid and note length are prefs, live in every mode', () => {
   assert.ok(shorter.state.noteLengthBeats < 0.5)
 })
 
-test('/ and \\ travel to the next note, preferring the row you are on', () => {
+test('the time jump prefers the row you are on over sheer proximity', () => {
   const rows = chromaticRows()
   const notes: Note[] = [
     { id: 'same-row-far', startBeat: 8, durationBeats: 1, pitch: rows[20].pitch, velocity: 100 },
     { id: 'other-row-near', startBeat: 2, durationBeats: 1, pitch: rows[30].pitch, velocity: 100 },
   ]
   const ctx = makeCtx({ notes })
-  const fwd = press(state(), ctx, '/')
-  assert.equal(fwd.state.cursorBeat, 8, 'the row you are editing wins over sheer proximity')
+  assert.equal(press(state(), ctx, "'").state.cursorBeat, 8, 'the row you are editing wins')
+  assert.equal(press(state({ cursorBeat: 12 }), ctx, ';').state.cursorBeat, 8)
+})
 
-  const back = press(state({ cursorBeat: 12 }), ctx, '\\')
-  assert.equal(back.state.cursorBeat, 8)
+// --- the page: 1-4 and everything hung off it -----------------------------
+
+test('1-4 hop to the bars of the page the cursor is in', () => {
+  const ctx = makeCtx() // 4 beats per bar, so a page is 16 beats
+  assert.equal(press(state(), ctx, '3').state.cursorBeat, 8, 'bar 3 of page 1')
+  assert.equal(press(state({ cursorBeat: 20 }), ctx, '1').state.cursorBeat, 16, 'page 2 starts at beat 16')
+  assert.equal(press(state({ cursorBeat: 20 }), ctx, '4').state.cursorBeat, 28)
+  assert.ok(press(state(), ctx, '2').intents.some((i) => i.type === 'seek' && i.beat === 4))
+})
+
+test('counts still work, they just start at 5-9', () => {
+  const ctx = makeCtx()
+  let s = press(state(), ctx, '7').state
+  assert.equal(s.count, '7')
+  const notes = committed(press(s, ctx, 'a').intents)!
+  assert.equal(notes.length, 7)
+
+  // And a digit that would be a bar hop extends a count already under way.
+  let two = press(state(), ctx, '5').state
+  two = press(two, ctx, '2').state
+  assert.equal(two.count, '52')
+})
+
+test('Shift+z/x travels a whole page, since a bar is what 1-4 are for', () => {
+  const ctx = makeCtx()
+  assert.equal(press(state({ cursorBeat: 16 }), ctx, 'x', { shift: true }).state.cursorBeat, 32)
+  assert.equal(press(state({ cursorBeat: 16 }), ctx, 'z', { shift: true }).state.cursorBeat, 0)
+})
+
+test('1-4 in select mode toggle whole bars, and they need not touch', () => {
+  const rows = chromaticRows()
+  const notes: Note[] = [
+    { id: 'bar1', startBeat: 1, durationBeats: 1, pitch: rows[20].pitch, velocity: 100 },
+    { id: 'bar2', startBeat: 5, durationBeats: 1, pitch: rows[20].pitch, velocity: 100 },
+    { id: 'bar3', startBeat: 9, durationBeats: 1, pitch: rows[20].pitch, velocity: 100 },
+  ]
+  const ctx = makeCtx({ notes })
+  let s = press(state(), ctx, 'tab').state
+  s = press(s, ctx, '1').state
+  s = press(s, ctx, '3').state
+
+  assert.equal(s.selection!.timeRanges!.length, 2, 'two disjoint bars')
+  assert.deepEqual(
+    notesInSelection(s, ctx).map((n) => n.id),
+    ['bar1', 'bar3'],
+    'bar 2 sits between them and is NOT selected',
+  )
+
+  // Toggling one back off leaves the other.
+  s = press(s, ctx, '1').state
+  assert.deepEqual(notesInSelection(s, ctx).map((n) => n.id), ['bar3'])
+  // Toggling the last one off falls back to the anchor..cursor span rather
+  // than leaving a region that can never match anything.
+  s = press(s, ctx, '3').state
+  assert.equal(s.selection!.timeRanges, null)
+})
+
+test('r moves a disjoint region as a body and stays repeatable', () => {
+  const rows = chromaticRows()
+  const notes: Note[] = [
+    { id: 'bar1', startBeat: 0, durationBeats: 1, pitch: rows[20].pitch, velocity: 100 },
+    { id: 'bar3', startBeat: 8, durationBeats: 1, pitch: rows[20].pitch, velocity: 100 },
+  ]
+  const ctx = makeCtx({ notes })
+  let s = press(state(), ctx, 'tab').state
+  s = press(s, ctx, '1').state
+  s = press(s, ctx, '3').state
+
+  const out = committed(press(s, ctx, 'r').intents)!
+  // The region spans bars 1..3 = 12 beats, so the copies land 12 beats on.
+  assert.ok(out.some((n) => n.startBeat === 12), 'bar 1 copy')
+  assert.ok(out.some((n) => n.startBeat === 20), 'bar 3 copy keeps its gap')
+  assert.equal(press(s, ctx, 'r').state.actionPendingClear, true)
+})
+
+test('after r, a nav key walks away instead of reshaping the region', () => {
+  const rows = chromaticRows()
+  const ctx = makeCtx({ notes: [{ id: 'seed', startBeat: 0, durationBeats: 1, pitch: rows[20].pitch, velocity: 100 }] })
+  const s = state({
+    mode: 'select',
+    cursorBeat: 3.5,
+    selection: { anchorBeat: 0, anchorRow: 20, rowFilter: null, timeRanges: null },
+  })
+  const repeated = press(s, ctx, 'r')
+  assert.equal(repeated.state.actionPendingClear, true)
+
+  const walked = press(repeated.state, ctx, 'x')
+  assert.equal(walked.state.mode, 'ground', 'the region is let go')
+  assert.equal(walked.state.selection, null)
+  assert.ok(walked.intents.some((i) => i.type === 'selectNotes' && i.ids.length === 0))
+})
+
+test('Shift+1-4 loops bars of the page, and a gap is covered not skipped', () => {
+  const ctx = makeCtx()
+  const first = press(state(), ctx, '1', { shift: true })
+  assert.deepEqual(first.state.loopSlots, [1])
+  const loop = first.intents.find((i) => i.type === 'setLoop')
+  assert.ok(loop && loop.type === 'setLoop' && loop.range)
+  assert.deepEqual(loop.type === 'setLoop' && loop.range, { startBeat: 0, endBeat: 4 })
+
+  // One region, so bars 1 and 3 loop 1 THROUGH 3 - the documented compromise.
+  const third = press(first.state, ctx, '3', { shift: true })
+  const spanning = third.intents.find((i) => i.type === 'setLoop')
+  assert.deepEqual(spanning!.type === 'setLoop' && spanning!.range, { startBeat: 0, endBeat: 12 })
+
+  // Turning every slot off disables it.
+  let s = press(third.state, ctx, '1', { shift: true }).state
+  const off = press(s, ctx, '3', { shift: true })
+  assert.deepEqual(off.state.loopSlots, [])
+  assert.equal(off.intents.find((i) => i.type === 'setLoop')!.type === 'setLoop' ? (off.intents.find((i) => i.type === 'setLoop') as { range: unknown }).range : 'x', null)
+})
+
+test('Shift+A takes the page, narrowed to the rows that have notes', () => {
+  const rows = chromaticRows()
+  const notes: Note[] = [
+    { id: 'in-page', startBeat: 2, durationBeats: 1, pitch: rows[20].pitch, velocity: 100 },
+    { id: 'also-in', startBeat: 6, durationBeats: 1, pitch: rows[25].pitch, velocity: 100 },
+    { id: 'next-page', startBeat: 18, durationBeats: 1, pitch: rows[30].pitch, velocity: 100 },
+  ]
+  const ctx = makeCtx({ notes })
+  const { state: next } = press(state(), ctx, 'a', { shift: true })
+
+  assert.equal(next.mode, 'select')
+  assert.deepEqual(next.selection!.rowFilter, [20, 25], 'empty rows are left out of the filter')
+  assert.deepEqual(notesInSelection(next, ctx).map((n) => n.id), ['in-page', 'also-in'])
+})
+
+// --- the rest of the prototype's vocabulary --------------------------------
+
+test('| swaps the grid between straight and triplet, both ways', () => {
+  const straight = press(state(), makeCtx({ stepBeats: 0.5 }), '|')
+  const toTriplet = straight.intents.find((i) => i.type === 'setQuantize')
+  assert.ok(toTriplet && toTriplet.type === 'setQuantize')
+  assert.ok(Math.abs(toTriplet.beats - 1 / 3) < 1e-9, '1/8 becomes 1/8 triplet')
+
+  const back = press(state(), makeCtx({ stepBeats: 1 / 3 }), '|')
+  const toStraight = back.intents.find((i) => i.type === 'setQuantize')
+  assert.ok(toStraight!.type === 'setQuantize' && Math.abs(toStraight!.beats - 0.5) < 1e-9, 'and back again')
+})
+
+test('/ and \\ walk the notes stacked in the cursor’s column', () => {
+  const rows = chromaticRows()
+  const notes: Note[] = [
+    { id: 'high', startBeat: 0, durationBeats: 1, pitch: rows[10].pitch, velocity: 100 },
+    { id: 'mid', startBeat: 0, durationBeats: 1, pitch: rows[20].pitch, velocity: 100 },
+    { id: 'low', startBeat: 0, durationBeats: 1, pitch: rows[30].pitch, velocity: 100 },
+    { id: 'elsewhere', startBeat: 8, durationBeats: 1, pitch: rows[5].pitch, velocity: 100 },
+  ]
+  const ctx = makeCtx({ notes })
+  assert.equal(press(state({ cursorRow: 20 }), ctx, '/').state.cursorRow, 30, 'down the column')
+  assert.equal(press(state({ cursorRow: 20 }), ctx, '\\').state.cursorRow, 10, 'up the column')
+  assert.equal(press(state({ cursorRow: 30 }), ctx, '/').state.cursorRow, 30, 'nothing below, so it stays')
+})
+
+test('; and \' travel between notes in time', () => {
+  const rows = chromaticRows()
+  const notes: Note[] = [
+    { id: 'first', startBeat: 2, durationBeats: 1, pitch: rows[20].pitch, velocity: 100 },
+    { id: 'second', startBeat: 9, durationBeats: 1, pitch: rows[20].pitch, velocity: 100 },
+  ]
+  const ctx = makeCtx({ notes })
+  assert.equal(press(state(), ctx, "'").state.cursorBeat, 2)
+  assert.equal(press(state({ cursorBeat: 12 }), ctx, ';').state.cursorBeat, 9)
+})
+
+test('Shift+b deletes and drops back onto the note before it', () => {
+  const rows = chromaticRows()
+  const notes: Note[] = [
+    { id: 'earlier', startBeat: 0, durationBeats: 1, pitch: rows[20].pitch, velocity: 100 },
+    { id: 'doomed', startBeat: 4, durationBeats: 1, pitch: rows[20].pitch, velocity: 100 },
+  ]
+  const ctx = makeCtx({ notes })
+  const plain = press(state({ cursorBeat: 4 }), ctx, 'b')
+  assert.equal(plain.state.cursorBeat, 4, 'b alone leaves the cursor where it was')
+
+  const back = press(state({ cursorBeat: 4 }), ctx, 'b', { shift: true })
+  assert.deepEqual(committed(back.intents)!.map((n) => n.id), ['earlier'])
+  assert.equal(back.state.cursorBeat, 0, 'and the cursor walks back to what is left')
+})
+
+test('q forgets the last stamp as well as the staged chord', () => {
+  const ctx = makeCtx()
+  let s = press(state(), ctx, 'a').state
+  assert.ok(s.lastStamp, 'typing a note records a stamp')
+  s = press(s, ctx, 'q').state
+  assert.equal(s.lastStamp, null)
+  assert.deepEqual(s.staged, [])
 })
 
 test('? opens the key sheet and Escape closes it without exiting vim', () => {

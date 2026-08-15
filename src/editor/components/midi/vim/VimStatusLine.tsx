@@ -57,10 +57,10 @@ export function VimStatusLine({
     state.mode === 'draft'
       ? [['z x c v', 'nudge'], [state.draft?.kind === 'copy' ? 'n' : 'm', 'drop'], ['esc', 'cancel']]
       : state.mode === 'select'
-        ? [['z x c v', 'shape'], ['note keys', 'rows'], ['m n', 'move copy'], ['r', 'repeat'], ['b', 'delete']]
+        ? [['z x c v', 'shape'], ['1-4', 'bars'], ['note keys', 'rows'], ['m n', 'move copy'], ['r', 'repeat'], ['b', 'delete']]
         : state.staged.length > 0 || state.staging
           ? [['note keys', 'stage'], ['return', 'commit chord'], ['esc', 'clear']]
-          : [['note keys', 'write'], ['z x c v', 'move'], ['space', 'rest'], ['tab', 'select']]
+          : [['note keys', 'write'], ['z x c v', 'move'], ['1-4', 'bars'], ['space', 'rest'], ['tab', 'select']]
 
   const modeLabel =
     state.mode === 'draft' ? (state.draft?.kind === 'copy' ? 'COPY' : 'MOVE') : state.mode === 'select' ? 'SELECT' : 'VIM'
@@ -90,6 +90,7 @@ export function VimStatusLine({
       {state.staged.length > 0 && <span style={{ color: accent }}>{state.staged.length} staged</span>}
       {state.staging && state.staged.length === 0 && <span style={{ color: accent }}>staging</span>}
       {state.mode === 'select' && <span style={{ color: accent }}>{selectedCount} notes</span>}
+      {state.loopSlots.length > 0 && <span style={{ color: accent }}>loop {state.loopSlots.join('')}</span>}
 
       <div className="flex-1" />
 
@@ -111,23 +112,28 @@ const SHEET: { title: string; items: [string, string][] }[] = [
     items: [
       [TYPING_KEYS.join(' '), 'the note keys — write and step on'],
       ['⌘ + note', 'move to that row without writing'],
-      ['1-9 then note', 'write it that many times'],
+      ['5-9 then note', 'write it that many times'],
       ['space', 'rest — step on without writing'],
       ['return', 'write the cursor’s own row'],
       ['⇧ + note', 'stage a chord note'],
       ['⇧ tap', 'latch staging, then return to commit'],
       ['( )', 'note length'],
+      ['r', 'write the last thing again'],
+      ['q', 'clear staging and forget it'],
     ],
   },
   {
     title: 'Move',
     items: [
+      ['1 2 3 4', 'hop to that bar of the page'],
       ['z x', 'left / right by one step'],
       ['c v', 'down / up one row'],
-      ['⇧ z x', 'by the bar'],
+      ['⇧ z x', 'by the page (four bars)'],
       ['⇧ c v', 'by the octave'],
-      ['/ \\', 'to the next / previous note'],
+      ['/ \\', 'down / up the notes stacked here'],
+      ['; \'', 'back / on to the next note in time'],
       ['[ ]', 'grid step'],
+      ['|', 'make the grid a triplet'],
       ['- =', 'zoom'],
     ],
   },
@@ -135,11 +141,13 @@ const SHEET: { title: string; items: [string, string][] }[] = [
     title: 'Select & edit',
     items: [
       ['tab', 'start a region — z x c v shape it'],
+      ['1 2 3 4', 'add / drop whole bars — they need not touch'],
       ['note keys', 'in a region: keep only those rows'],
-      ['⇧ a', 'the whole block'],
+      ['⇧ a', 'everything on this page'],
       ['m / n', 'move / copy — nudge, then the same key drops it'],
-      ['r', 'repeat the region after itself'],
+      ['r', 'repeat the region after itself, again and again'],
       ['b', 'delete'],
+      ['⇧ b', 'delete, then back to the note before it'],
       [', .', 'undo / redo'],
       ['esc', 'back one level, then out'],
     ],
@@ -149,6 +157,7 @@ const SHEET: { title: string; items: [string, string][] }[] = [
     items: [
       ['⇧ space', 'play / pause'],
       ['⇧ return', 'back to the start'],
+      ['⇧ 1-4', 'loop those bars of the page'],
       ['⇧⇧', 'the way in, from anywhere in the roll'],
     ],
   },

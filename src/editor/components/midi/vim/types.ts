@@ -28,13 +28,24 @@ export type VimMode = 'ground' | 'select' | 'draft'
  */
 export type VimKeyRegime = 'chromatic' | 'vocabulary' | 'value'
 
+/** A half-open span of absolute beats: `[startBeat, endBeat)`. */
+export interface VimTimeRange {
+  startBeat: number
+  endBeat: number
+}
+
 /** Region selection. The head is always the cursor, so only the anchor is stored.
- *  `rowFilter` is the explicit row set built by pressing note keys in select mode;
- *  null means "every row between the anchor row and the cursor row". */
+ *
+ *  Both filters are null by default and mean "whatever the anchor and the cursor
+ *  span". Setting either switches that axis to an EXPLICIT set, which is what
+ *  makes disjoint selections possible: `rowFilter` is built by pressing note keys,
+ *  `timeRanges` by toggling bar slots with 1-4 — so "the kick and snare rows, in
+ *  bars 1 and 3" is one selection. */
 export interface VimSelection {
   anchorBeat: number
   anchorRow: number
   rowFilter: number[] | null
+  timeRanges: VimTimeRange[] | null
 }
 
 /** A move/copy in flight: nudged with the nav keys, committed with its own key. */
@@ -76,6 +87,13 @@ export interface VimState {
   draft: VimDraft | null
   lastStamp: VimStamp | null
   showSheet: boolean
+  /** Bars of the current page currently looped by Shift+1-4 (1-based slots). */
+  loopSlots: number[]
+  /** Set by an action that LEAVES its region selected and repeatable (`r`). The
+   *  next nav key then clears the region and moves, instead of re-shaping it —
+   *  so `r r r` builds a phrase and `x` walks away from it, with no Escape in
+   *  between. Ported from the prototype's `selectionActionPendingClear`. */
+  actionPendingClear: boolean
 }
 
 export type VimAction =
@@ -99,6 +117,8 @@ export type VimIntent =
   | { type: 'seek'; beat: number }
   | { type: 'setQuantize'; beats: number }
   | { type: 'zoom'; direction: 1 | -1 }
+  /** Loop the transport over these absolute beats; null disables the loop. */
+  | { type: 'setLoop'; range: VimTimeRange | null }
   | { type: 'undo' }
   | { type: 'redo' }
   | { type: 'togglePlay' }
@@ -142,8 +162,28 @@ export const VIM_ACCENT = '#5ad1e8'
 /** Note lengths `(` / `)` cycle through, in beats. */
 export const VIM_NOTE_LENGTHS = [1 / 8, 1 / 6, 1 / 4, 1 / 3, 1 / 2, 2 / 3, 1, 1.5, 2, 3, 4, 8]
 
-/** Grid steps `[` / `]` cycle through, in beats. Written to the roll's quantize. */
-export const VIM_GRID_STEPS = [1 / 8, 1 / 6, 1 / 4, 1 / 3, 1 / 2, 2 / 3, 1, 2, 4]
+/** Grid steps `[` / `]` cycle through, in beats. Written to the roll's quantize.
+ *  Straight values only — `|` swaps the current one for its triplet. */
+export const VIM_GRID_STEPS = [1 / 8, 1 / 4, 1 / 2, 1, 2, 4]
+
+/** Triplet counterparts, keyed by the straight step they replace: three in the
+ *  space of two, so `|` is a toggle rather than another rung on the ladder. */
+export const VIM_TRIPLET_OF: [straight: number, triplet: number][] = [
+  [1 / 8, 1 / 12],
+  [1 / 4, 1 / 6],
+  [1 / 2, 1 / 3],
+  [1, 2 / 3],
+  [2, 4 / 3],
+  [4, 8 / 3],
+]
+
+/**
+ * How many bars the `1-4` keys address. The prototype's "page" — the cursor's
+ * position rounds down to a page boundary and the four keys hop to the bars
+ * inside it, so the digits always mean something local and never need a target
+ * typed out. `Shift+z/x` travels a whole page at a time.
+ */
+export const VIM_PAGE_BARS = 4
 
 export function initialVimState(cursorBeat: number, cursorRow: number, anchorRow: number): VimState {
   return {
@@ -159,5 +199,7 @@ export function initialVimState(cursorBeat: number, cursorRow: number, anchorRow
     draft: null,
     lastStamp: null,
     showSheet: false,
+    loopSlots: [],
+    actionPendingClear: false,
   }
 }

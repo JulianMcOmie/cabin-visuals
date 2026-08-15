@@ -3,6 +3,8 @@ import {
   DEFAULT_VELOCITY,
   VIM_GRID_STEPS,
   VIM_NOTE_LENGTHS,
+  VIM_PAGE_BARS,
+  VIM_TRIPLET_OF,
   type VimAction,
   type VimContext,
   type VimDraft,
@@ -10,6 +12,7 @@ import {
   type VimResult,
   type VimSelection,
   type VimState,
+  type VimTimeRange,
 } from './types'
 import { anchorForCursor, bigRowStep, keyMapForRows, TYPING_KEY_SET } from './keyMap'
 
@@ -58,23 +61,103 @@ function selectionRows(state: VimState, selection: VimSelection): number[] {
   return rows
 }
 
-/** The region's time span. The end is inclusive of the cursor's own step, so a
- *  region that hasn't been dragged anywhere still covers the cell under it. */
-export function selectionSpan(state: VimState, ctx: VimContext, selection: VimSelection) {
-  const start = Math.min(selection.anchorBeat, state.cursorBeat)
-  const end = Math.max(selection.anchorBeat, state.cursorBeat) + ctx.stepBeats
-  return { start, end }
+/**
+ * The region's time spans. Explicit ranges (bar slots toggled with 1-4) if it
+ * has them, else the single span between the anchor and the cursor — whose end
+ * includes the cursor's own step, so a region that hasn't been dragged anywhere
+ * still covers the cell under it.
+ */
+export function selectionSpans(state: VimState, ctx: VimContext, selection: VimSelection): VimTimeRange[] {
+  if (selection.timeRanges) return selection.timeRanges
+  return [{
+    startBeat: Math.min(selection.anchorBeat, state.cursorBeat),
+    endBeat: Math.max(selection.anchorBeat, state.cursorBeat) + ctx.stepBeats,
+  }]
+}
+
+/** Outer bounds of the region, for the operations that need one number (`r`'s
+ *  travel distance, delete's fallback cursor). */
+function selectionBounds(state: VimState, ctx: VimContext, selection: VimSelection) {
+  const spans = selectionSpans(state, ctx, selection)
+  return {
+    startBeat: Math.min(...spans.map((s) => s.startBeat)),
+    endBeat: Math.max(...spans.map((s) => s.endBeat)),
+  }
 }
 
 export function notesInSelection(state: VimState, ctx: VimContext): Note[] {
   if (!state.selection) return []
-  const { start, end } = selectionSpan(state, ctx, state.selection)
+  const spans = selectionSpans(state, ctx, state.selection)
   const rows = new Set(selectionRows(state, state.selection))
   return ctx.notes.filter((n) => {
     const beat = noteStartGlobal(ctx, n)
-    if (beat < start - EPS || beat >= end - EPS) return false
+    if (!spans.some((s) => beat >= s.startBeat - EPS && beat < s.endBeat - EPS)) return false
     return rows.has(rowIndexForPitch(ctx, n.pitch))
   })
+}
+
+/** Start of the 4-bar page the cursor is in. */
+function pageStartBeat(state: VimState, ctx: VimContext) {
+  const pageBeats = VIM_PAGE_BARS * ctx.beatsPerBar
+  return Math.floor(state.cursorBeat / pageBeats) * pageBeats
+}
+
+function slotRange(state: VimState, ctx: VimContext, slot: number): VimTimeRange {
+  const start = pageStartBeat(state, ctx) + (slot - 1) * ctx.beatsPerBar
+  return { startBeat: start, endBeat: start + ctx.beatsPerBar }
+}
+
+/** `1-4` in ground: hop to that bar of the current page. */
+function jumpToPageBar(state: VimState, ctx: VimContext, slot: number): VimResult {
+  const next = withCursor(state, ctx, slotRange(state, ctx, slot).startBeat, state.cursorRow)
+  return done({ ...next, actionPendingClear: false }, [{ type: 'seek', beat: next.cursorBeat }])
+}
+
+/** `1-4` in select: toggle that bar of the page in or out of the region. This
+ *  is where selections become disjoint — bars 1 and 3 with bar 2 untouched. */
+function togglePageBarSlot(state: VimState, ctx: VimContext, slot: number): VimResult {
+  if (!state.selection) return done(state)
+  const range = slotRange(state, ctx, slot)
+  const existing = state.selection.timeRanges ?? []
+  const hit = existing.findIndex((r) => Math.abs(r.startBeat - range.startBeat) < EPS)
+  const timeRanges = hit >= 0
+    ? existing.filter((_, i) => i !== hit)
+    : [...existing, range].sort((a, b) => a.startBeat - b.startBeat)
+
+  const next: VimState = {
+    ...state,
+    cursorBeat: range.startBeat,
+    // Toggling every slot off leaves an empty explicit set, which would select
+    // nothing forever; fall back to the anchor..cursor span.
+    selection: { ...state.selection, timeRanges: timeRanges.length > 0 ? timeRanges : null },
+    count: '',
+    actionPendingClear: false,
+  }
+  return done(next, [
+    { type: 'selectNotes', ids: notesInSelection(next, ctx).map((n) => n.id) },
+    { type: 'seek', beat: next.cursorBeat },
+  ])
+}
+
+/** `Shift+1-4`: loop the transport over bars of the page.
+ *
+ *  The prototype looped a set of disjoint bars, playing 1 then 3 and skipping 2.
+ *  cabin-visuals' transport has ONE contiguous loop region, so a disjoint pick
+ *  is honoured as the span that covers it — bars 1 and 3 loop bars 1 THROUGH 3.
+ *  Toggling every slot off disables the loop. */
+function toggleLoopSlot(state: VimState, ctx: VimContext, slot: number): VimResult {
+  const slots = state.loopSlots.includes(slot)
+    ? state.loopSlots.filter((s) => s !== slot)
+    : [...state.loopSlots, slot].sort((a, b) => a - b)
+
+  if (slots.length === 0) {
+    return done({ ...state, loopSlots: slots, count: '' }, [{ type: 'setLoop', range: null }])
+  }
+  const first = slotRange(state, ctx, slots[0])
+  const last = slotRange(state, ctx, slots[slots.length - 1])
+  return done({ ...state, loopSlots: slots, count: '' }, [
+    { type: 'setLoop', range: { startBeat: first.startBeat, endBeat: last.endBeat } },
+  ])
 }
 
 /** The note the cursor is sitting on: same row, overlapping the cursor's cell. */
@@ -173,12 +256,31 @@ function placeStamp(
   ])
 }
 
-function deleteNotes(state: VimState, ctx: VimContext, doomed: Note[], nextState: VimState): VimResult {
+/** `jumpBack` is Shift+b: after the delete, put the cursor on the note before
+ *  what was removed, so unwinding a phrase walks backwards through it. */
+function deleteNotes(
+  state: VimState,
+  ctx: VimContext,
+  doomed: Note[],
+  nextState: VimState,
+  jumpBack = false,
+  referenceBeat = state.cursorBeat,
+): VimResult {
   if (doomed.length === 0) return done({ ...nextState, count: '' })
   const ids = new Set(doomed.map((n) => n.id))
-  return done({ ...nextState, count: '' }, [
-    { type: 'commitNotes', notes: ctx.notes.filter((n) => !ids.has(n.id)) },
+  const remaining = ctx.notes.filter((n) => !ids.has(n.id))
+  const back = jumpBack ? previousNoteBefore(state, ctx, remaining, referenceBeat) : null
+
+  const finalState: VimState = {
+    ...nextState,
+    count: '',
+    actionPendingClear: false,
+    ...(back ? { cursorBeat: back.beat, cursorRow: back.row } : {}),
+  }
+  return done(finalState, [
+    { type: 'commitNotes', notes: remaining },
     { type: 'selectNotes', ids: [] },
+    ...(back ? [{ type: 'seek' as const, beat: back.beat }] : []),
   ])
 }
 
@@ -191,6 +293,7 @@ function startDraft(state: VimState, ctx: VimContext, kind: 'move' | 'copy'): Vi
     anchorBeat: state.cursorBeat,
     anchorRow: state.cursorRow,
     rowFilter: [state.cursorRow],
+    timeRanges: null,
   }
   const draft: VimDraft = {
     kind,
@@ -251,15 +354,26 @@ function duplicateSelection(state: VimState, ctx: VimContext): VimResult {
   const selected = notesInSelection(state, ctx)
   if (selected.length === 0) return done({ ...state, count: '' })
 
-  const { start, end } = selectionSpan(state, ctx, state.selection)
-  const span = end - start
+  const bounds = selectionBounds(state, ctx, state.selection)
+  const span = bounds.endBeat - bounds.startBeat
   const copies = selected.map((n) => ({ ...n, id: ctx.newId(), startBeat: n.startBeat + span }))
   const nextNotes = [...ctx.notes, ...copies]
   const nextState: VimState = {
     ...state,
     count: '',
     cursorBeat: clamp(state.cursorBeat + span, 0, ctx.totalBeats),
-    selection: { ...state.selection, anchorBeat: state.selection.anchorBeat + span },
+    selection: {
+      ...state.selection,
+      anchorBeat: state.selection.anchorBeat + span,
+      // Disjoint ranges travel as a body, so r on "bars 1 and 3" lands the pair
+      // at bars 4 and 6 and stays repeatable.
+      timeRanges: state.selection.timeRanges?.map((r) => ({
+        startBeat: r.startBeat + span,
+        endBeat: r.endBeat + span,
+      })) ?? null,
+    },
+    // The region survives, so the next nav key means "walk away", not "reshape".
+    actionPendingClear: true,
   }
 
   return done(nextState, [
@@ -270,25 +384,45 @@ function duplicateSelection(state: VimState, ctx: VimContext): VimResult {
   ])
 }
 
-function selectAllInBlock(state: VimState, ctx: VimContext): VimResult {
+/**
+ * `Shift+A` — select the page under the cursor, narrowed to the rows that
+ * actually have notes in it. Grabbing every empty row too would make the next
+ * note key (which toggles rows) start from a filter of forty rows nobody chose.
+ */
+function selectVisiblePage(state: VimState, ctx: VimContext): VimResult {
+  const pageStart = pageStartBeat(state, ctx)
+  const pageEnd = pageStart + VIM_PAGE_BARS * ctx.beatsPerBar
+  const inPage = ctx.notes.filter((n) => {
+    const beat = noteStartGlobal(ctx, n)
+    return beat >= pageStart - EPS && beat < pageEnd - EPS
+  })
+  const rowsWithNotes = [...new Set(inPage.map((n) => rowIndexForPitch(ctx, n.pitch)))]
+    .filter((r) => r >= 0)
+    .sort((a, b) => a - b)
+
   const selection: VimSelection = {
-    anchorBeat: ctx.blockStartBeat,
-    anchorRow: 0,
-    rowFilter: null,
+    anchorBeat: pageStart,
+    anchorRow: rowsWithNotes[0] ?? state.cursorRow,
+    rowFilter: rowsWithNotes.length > 0 ? rowsWithNotes : null,
+    timeRanges: [{ startBeat: pageStart, endBeat: pageEnd }],
   }
   const next: VimState = {
     ...state,
     mode: 'select',
     selection,
-    cursorBeat: clamp(ctx.blockStartBeat + ctx.blockDurationBeats - ctx.stepBeats, 0, ctx.totalBeats),
-    cursorRow: Math.max(0, ctx.rows.length - 1),
+    cursorBeat: pageStart,
+    cursorRow: rowsWithNotes[0] ?? state.cursorRow,
     count: '',
+    actionPendingClear: false,
   }
-  return done(next, [{ type: 'selectNotes', ids: notesInSelection(next, ctx).map((n) => n.id) }])
+  return done(next, [
+    { type: 'selectNotes', ids: notesInSelection(next, ctx).map((n) => n.id) },
+    { type: 'seek', beat: next.cursorBeat },
+  ])
 }
 
-/** `/` and `\` — travel to the next thing worth editing rather than stepping
- *  there. Same row first, since that's the line you're working on. */
+/** `;` / `'` — travel to the next note in TIME rather than stepping there.
+ *  Same row first, since that's the line you're working on. */
 function jumpToNote(state: VimState, ctx: VimContext, direction: 1 | -1): VimResult {
   const row = ctx.rows[state.cursorRow]
   const ahead = ctx.notes
@@ -304,6 +438,42 @@ function jumpToNote(state: VimState, ctx: VimContext, direction: 1 | -1): VimRes
   const intents: VimIntent[] = [{ type: 'seek', beat: next.cursorBeat }]
   if (next.selection) intents.push({ type: 'selectNotes', ids: notesInSelection(next, ctx).map((n) => n.id) })
   return done(next, intents)
+}
+
+/**
+ * `/` and `\` — move between the notes stacked in the cursor's own COLUMN,
+ * i.e. sounding at this beat on other rows. On a drum pattern this is how you
+ * walk a hit's chord without knowing which rows are in it.
+ */
+function jumpToColumnNote(state: VimState, ctx: VimContext, direction: 1 | -1): VimResult {
+  const cellEnd = state.cursorBeat + ctx.stepBeats
+  const inColumn = ctx.notes
+    .filter((n) => {
+      const start = noteStartGlobal(ctx, n)
+      return start < cellEnd - EPS && start + Math.max(n.durationBeats, EPS) > state.cursorBeat + EPS
+    })
+    .map((n) => rowIndexForPitch(ctx, n.pitch))
+    .filter((r) => r >= 0 && (direction > 0 ? r > state.cursorRow : r < state.cursorRow))
+
+  if (inColumn.length === 0) return done({ ...state, count: '' })
+  const target = direction > 0 ? Math.min(...inColumn) : Math.max(...inColumn)
+  const next = withCursor(state, ctx, state.cursorBeat, target)
+  const intents: VimIntent[] = [{ type: 'seek', beat: next.cursorBeat }]
+  if (next.selection) intents.push({ type: 'selectNotes', ids: notesInSelection(next, ctx).map((n) => n.id) })
+  return done(next, intents)
+}
+
+/** The note before `referenceBeat`, preferring the cursor's own row — where
+ *  `Shift+b` lands you after a delete, so backing out of a phrase walks it
+ *  backwards instead of leaving the cursor in the hole it just made. */
+function previousNoteBefore(state: VimState, ctx: VimContext, notes: Note[], referenceBeat: number) {
+  const before = notes
+    .map((n) => ({ note: n, beat: noteStartGlobal(ctx, n), row: rowIndexForPitch(ctx, n.pitch) }))
+    .filter(({ beat }) => beat < referenceBeat - EPS)
+  if (before.length === 0) return null
+  return before.sort(
+    (a, b) => b.beat - a.beat || Math.abs(a.row - state.cursorRow) - Math.abs(b.row - state.cursorRow),
+  )[0]
 }
 
 function cycleValue(values: number[], current: number, direction: 1 | -1) {
@@ -343,7 +513,9 @@ function reduceKey(state: VimState, action: Extract<VimAction, { type: 'key' }>,
   const rowCount = ctx.rows.length
   const bigStep = bigRowStep(ctx.regime, rowCount)
   const keyMap = keyMapForRows(ctx.rows, ctx.regime, state.anchorRow)
-  const barBeats = ctx.beatsPerBar
+  // Shift travels a PAGE horizontally (the same four bars the 1-4 keys address),
+  // not a bar - a bar is what 1-4 are for, so shift is the coarser gear.
+  const pageBeats = VIM_PAGE_BARS * ctx.beatsPerBar
   const noteRow = TYPING_KEY_SET.has(key) ? keyMap.get(key) : undefined
 
   // The key sheet swallows the next Escape, so `?` then Esc is a round trip.
@@ -355,6 +527,10 @@ function reduceKey(state: VimState, action: Extract<VimAction, { type: 'key' }>,
   // Transport rides shifted, because bare Space and Enter are the note keys'.
   if (shift && key === ' ') return done(state, [{ type: 'togglePlay' }])
   if (shift && key === 'enter') return done(state, [{ type: 'returnToStart' }])
+
+  // Shift+1-4 loops a bar of the page, in every mode - it's a monitoring
+  // control, not an edit, so it never disturbs the cursor or the region.
+  if (shift && /^[1-4]$/.test(key)) return toggleLoopSlot(state, ctx, Number.parseInt(key, 10))
 
   // Everything else with a command modifier stays cabin-visuals': copy, paste,
   // split, join, group, undo. The one exception is jumping to a row.
@@ -371,11 +547,20 @@ function reduceKey(state: VimState, action: Extract<VimAction, { type: 'key' }>,
   if (key === ']') return done({ ...state, count: '' }, [{ type: 'setQuantize', beats: cycleValue(VIM_GRID_STEPS, ctx.stepBeats, 1) }])
   if (key === '-' || key === '_') return done({ ...state, count: '' }, [{ type: 'zoom', direction: -1 }])
   if (key === '=' || key === '+') return done({ ...state, count: '' }, [{ type: 'zoom', direction: 1 }])
-  if (key === '(' || key === ';') {
+  if (key === '(') {
     return done({ ...state, noteLengthBeats: cycleValue(VIM_NOTE_LENGTHS, state.noteLengthBeats, -1), count: '' })
   }
-  if (key === ')' || key === "'") {
+  if (key === ')') {
     return done({ ...state, noteLengthBeats: cycleValue(VIM_NOTE_LENGTHS, state.noteLengthBeats, 1), count: '' })
+  }
+  // `|` swaps the grid between a straight value and its triplet - a toggle, so
+  // the ladder in [ ] stays straight and switching back is the same key.
+  if (key === '|') {
+    const straight = VIM_TRIPLET_OF.find(([s]) => Math.abs(s - ctx.stepBeats) < EPS)
+    const triplet = VIM_TRIPLET_OF.find(([, t]) => Math.abs(t - ctx.stepBeats) < EPS)
+    const next = straight ? straight[1] : triplet ? triplet[0] : null
+    if (next === null) return done({ ...state, count: '' })
+    return done({ ...state, count: '' }, [{ type: 'setQuantize', beats: next }])
   }
   if (key === ',') return done({ ...state, count: '' }, [{ type: 'undo' }])
   if (key === '.') return done({ ...state, count: '' }, [{ type: 'redo' }])
@@ -394,8 +579,8 @@ function reduceKey(state: VimState, action: Extract<VimAction, { type: 'key' }>,
         cursorRow: clamp(state.cursorRow + dRow, 0, rowCount - 1),
       })
 
-    if (key === 'z') return nudge(shift ? -barBeats : -ctx.stepBeats, 0)
-    if (key === 'x') return nudge(shift ? barBeats : ctx.stepBeats, 0)
+    if (key === 'z') return nudge(shift ? -pageBeats : -ctx.stepBeats, 0)
+    if (key === 'x') return nudge(shift ? pageBeats : ctx.stepBeats, 0)
     if (key === 'c') return nudge(0, shift ? bigStep : 1)
     if (key === 'v') return nudge(0, shift ? -bigStep : -1)
     if (key === 'enter' || key === (state.draft.kind === 'copy' ? 'n' : 'm')) return commitDraft(state, ctx)
@@ -416,6 +601,20 @@ function reduceKey(state: VimState, action: Extract<VimAction, { type: 'key' }>,
     if (key === 'tab' || key === 'escape' || key === 'q') {
       return done({ ...state, mode: 'ground', selection: null, count: '' }, [{ type: 'selectNotes', ids: [] }])
     }
+    // Straight after a repeatable action (`r`), a nav key means "walk away from
+    // what I just made", not "reshape it" - so r r r x leaves the phrase behind
+    // with no Escape in between.
+    if (state.actionPendingClear && (key === 'z' || key === 'x' || key === 'c' || key === 'v')) {
+      const cleared: VimState = { ...state, mode: 'ground', selection: null, actionPendingClear: false }
+      const walked = key === 'z' ? moveCursor(cleared, ctx, shift ? -pageBeats : -ctx.stepBeats, 0)
+        : key === 'x' ? moveCursor(cleared, ctx, shift ? pageBeats : ctx.stepBeats, 0)
+        : key === 'c' ? moveCursor(cleared, ctx, 0, shift ? bigStep : 1)
+        : moveCursor(cleared, ctx, 0, shift ? -bigStep : -1)
+      return done(walked.state, [...walked.intents, { type: 'selectNotes', ids: [] }])
+    }
+
+    if (/^[1-4]$/.test(key)) return togglePageBarSlot(state, ctx, Number.parseInt(key, 10))
+
     if (noteRow !== undefined) {
       // Note keys filter the region by row instead of playing — the same keys,
       // reading as "these lanes" rather than "these pitches". The FIRST key
@@ -430,21 +629,32 @@ function reduceKey(state: VimState, action: Extract<VimAction, { type: 'key' }>,
         cursorRow: noteRow,
         selection: { ...state.selection, rowFilter: [...current].sort((a, b) => a - b) },
         count: '',
+        actionPendingClear: false,
       }
       return done(next, [{ type: 'selectNotes', ids: notesInSelection(next, ctx).map((n) => n.id) }])
     }
-    if (key === 'z') return moveCursor(state, ctx, shift ? -barBeats : -ctx.stepBeats, 0)
-    if (key === 'x') return moveCursor(state, ctx, shift ? barBeats : ctx.stepBeats, 0)
+    if (key === 'z') return moveCursor(state, ctx, shift ? -pageBeats : -ctx.stepBeats, 0)
+    if (key === 'x') return moveCursor(state, ctx, shift ? pageBeats : ctx.stepBeats, 0)
     if (key === 'c') return moveCursor(state, ctx, 0, shift ? bigStep : 1)
     if (key === 'v') return moveCursor(state, ctx, 0, shift ? -bigStep : -1)
-    if (key === '/') return jumpToNote(state, ctx, 1)
-    if (key === '\\') return jumpToNote(state, ctx, -1)
-    if (key === 'a' && shift) return selectAllInBlock(state, ctx)
+    if (key === '/') return jumpToColumnNote(state, ctx, 1)
+    if (key === '\\') return jumpToColumnNote(state, ctx, -1)
+    if (key === ';') return jumpToNote(state, ctx, -1)
+    if (key === "'") return jumpToNote(state, ctx, 1)
+    if (key === 'a' && shift) return selectVisiblePage(state, ctx)
     if (key === 'r') return duplicateSelection(state, ctx)
     if (key === 'm') return startDraft(state, ctx, 'move')
     if (key === 'n') return startDraft(state, ctx, 'copy')
     if (key === 'b' || key === 'backspace' || key === 'delete') {
-      return deleteNotes(state, ctx, notesInSelection(state, ctx), { ...state, mode: 'ground', selection: null })
+      const bounds = selectionBounds(state, ctx, state.selection)
+      return deleteNotes(
+        state,
+        ctx,
+        notesInSelection(state, ctx),
+        { ...state, mode: 'ground', selection: null },
+        key === 'b' && shift,
+        bounds.startBeat,
+      )
     }
     return done(state)
   }
@@ -454,7 +664,9 @@ function reduceKey(state: VimState, action: Extract<VimAction, { type: 'key' }>,
     if (state.staging || state.staged.length > 0) return done({ ...state, staging: false, staged: [] })
     return done(state, [{ type: 'exit' }])
   }
-  if (key === 'q') return done({ ...state, staging: false, staged: [], count: '' })
+  // `q` also forgets the last stamp, so the next `r` repeats the cursor's row
+  // rather than something typed several edits ago.
+  if (key === 'q') return done({ ...state, staging: false, staged: [], lastStamp: null, count: '' })
 
   if (key === 'tab') {
     return done({
@@ -463,11 +675,17 @@ function reduceKey(state: VimState, action: Extract<VimAction, { type: 'key' }>,
       staging: false,
       staged: [],
       count: '',
-      selection: { anchorBeat: state.cursorBeat, anchorRow: state.cursorRow, rowFilter: null },
+      actionPendingClear: false,
+      selection: {
+        anchorBeat: state.cursorBeat,
+        anchorRow: state.cursorRow,
+        rowFilter: null,
+        timeRanges: null,
+      },
     })
   }
 
-  if (shift && key === 'a') return selectAllInBlock(state, ctx)
+  if (shift && key === 'a') return selectVisiblePage(state, ctx)
 
   if (noteRow !== undefined) {
     if (shift || state.staging) {
@@ -478,6 +696,13 @@ function reduceKey(state: VimState, action: Extract<VimAction, { type: 'key' }>,
     }
     return placeStamp({ ...state, cursorRow: noteRow }, ctx, [noteRow], countOf(state), true)
   }
+
+  // 1-4 hop to the bars of the current page, so getting somewhere is one key
+  // rather than a count. The cost is that a count can only START at 5-9 - but
+  // only start: a count already under way swallows any digit, so 52 is
+  // reachable even though 12 is not. (The prototype dropped the count here and
+  // hopped instead, which threw away unambiguous intent for nothing.)
+  if (/^[1-4]$/.test(key) && state.count === '') return jumpToPageBar(state, ctx, Number.parseInt(key, 10))
 
   if (/^[0-9]$/.test(key)) {
     if (key === '0' && state.count === '') return done(state)
@@ -494,18 +719,20 @@ function reduceKey(state: VimState, action: Extract<VimAction, { type: 'key' }>,
     }
     return placeStamp(state, ctx, [state.cursorRow], countOf(state), true)
   }
-  if (key === 'z') return moveCursor(state, ctx, shift ? -barBeats : -ctx.stepBeats, 0)
-  if (key === 'x') return moveCursor(state, ctx, shift ? barBeats : ctx.stepBeats, 0)
+  if (key === 'z') return moveCursor(state, ctx, shift ? -pageBeats : -ctx.stepBeats, 0)
+  if (key === 'x') return moveCursor(state, ctx, shift ? pageBeats : ctx.stepBeats, 0)
   if (key === 'c') return moveCursor(state, ctx, 0, shift ? bigStep : 1)
   if (key === 'v') return moveCursor(state, ctx, 0, shift ? -bigStep : -1)
-  if (key === '/') return jumpToNote(state, ctx, 1)
-  if (key === '\\') return jumpToNote(state, ctx, -1)
+  if (key === '/') return jumpToColumnNote(state, ctx, 1)
+  if (key === '\\') return jumpToColumnNote(state, ctx, -1)
+  if (key === ';') return jumpToNote(state, ctx, -1)
+  if (key === "'") return jumpToNote(state, ctx, 1)
   if (key === 'r') return duplicateSelection(state, ctx)
   if (key === 'm') return startDraft(state, ctx, 'move')
   if (key === 'n') return startDraft(state, ctx, 'copy')
   if (key === 'b' || key === 'backspace' || key === 'delete') {
     const target = noteUnderCursor(state, ctx)
-    return deleteNotes(state, ctx, target ? [target] : [], state)
+    return deleteNotes(state, ctx, target ? [target] : [], state, key === 'b' && shift)
   }
 
   return unhandled(state)

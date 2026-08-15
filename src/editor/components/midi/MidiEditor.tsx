@@ -17,7 +17,7 @@ import { xToBeat, beatToX, rowIndexToY } from './coords'
 import { startEdgeResize } from '../../utils/edgeResize'
 import { useMidiVim } from './vim/useMidiVim'
 import { rowKeyLabels } from './vim/keyMap'
-import { VIM_ACCENT, type VimKeyRegime } from './vim/types'
+import { VIM_ACCENT, VIM_PAGE_BARS, type VimKeyRegime } from './vim/types'
 import { VimKeySheet, VimStatusLine } from './vim/VimStatusLine'
 import type { MidiRow, RangeLabel } from './types'
 import { useTimeStore } from '../../store/TimeStore'
@@ -256,9 +256,11 @@ export function MidiEditor({
     ghosts: vimApi.draftGhosts,
     ghostKind: vimApi.state.draft?.kind ?? null,
     selection: vimApi.selectionSpanRows,
+    pageStartBeat: Math.floor(vimApi.state.cursorBeat / (VIM_PAGE_BARS * beatsPerBar)) * VIM_PAGE_BARS * beatsPerBar,
+    loopSlots: vimApi.state.loopSlots,
     accent: VIM_ACCENT,
     onCursorSet: vimApi.setCursorFromPointer,
-  }), [vimOn, vimApi, quantize, rows, vimRegime])
+  }), [vimOn, vimApi, quantize, rows, vimRegime, beatsPerBar])
 
   // One grid, one selection: while the notes' marquee runs, box the clip row
   // too; while a note GROUP drags, boxed clips ride the same beat delta.
@@ -1111,27 +1113,29 @@ export function MidiEditor({
               Drawn above the notes because every one of these is about where
               you are ABOUT to write, which has to stay readable over whatever
               is already there. */}
-          {vimOn && vim.selection && vim.selection.rows.map((rowIndex) => {
-            const left = Math.round(beatToX(vim.selection!.startBeat, pixelsPerBeat))
-            const right = Math.round(beatToX(vim.selection!.endBeat, pixelsPerBeat))
-            return (
-              <div
-                key={`vim-sel-${rowIndex}`}
-                style={{
-                  position: 'absolute',
-                  left,
-                  top: rowIndexToY(rowIndex, rowHeight),
-                  width: Math.max(right - left, 2),
-                  height: rowHeight,
-                  backgroundColor: `${vim.accent}22`,
-                  borderTop: `1px solid ${vim.accent}55`,
-                  borderBottom: `1px solid ${vim.accent}55`,
-                  pointerEvents: 'none',
-                  zIndex: 9,
-                }}
-              />
-            )
-          })}
+          {vimOn && vim.selection && vim.selection.rows.flatMap((rowIndex) =>
+            vim.selection!.spans.map((span, spanIndex) => {
+              const left = Math.round(beatToX(span.startBeat, pixelsPerBeat))
+              const right = Math.round(beatToX(span.endBeat, pixelsPerBeat))
+              return (
+                <div
+                  key={`vim-sel-${rowIndex}-${spanIndex}`}
+                  style={{
+                    position: 'absolute',
+                    left,
+                    top: rowIndexToY(rowIndex, rowHeight),
+                    width: Math.max(right - left, 2),
+                    height: rowHeight,
+                    backgroundColor: `${vim.accent}22`,
+                    borderTop: `1px solid ${vim.accent}55`,
+                    borderBottom: `1px solid ${vim.accent}55`,
+                    pointerEvents: 'none',
+                    zIndex: 9,
+                  }}
+                />
+              )
+            }),
+          )}
 
           {/* A move/copy in flight: where the notes WOULD land. */}
           {vimOn && vim.ghosts.map((ghost) => {
@@ -1178,6 +1182,43 @@ export function MidiEditor({
                   zIndex: 12,
                 }}
               />
+            )
+          })}
+
+          {/* The page strip: the four bars the 1-4 keys address, numbered, with
+              the looped ones (Shift+1-4) lit. Without it the digits are an
+              invisible coordinate system - this is what makes them findable. */}
+          {vimOn && Array.from({ length: VIM_PAGE_BARS }, (_, i) => {
+            const slot = i + 1
+            const startBeat = vim.pageStartBeat + i * beatsPerBar
+            const left = Math.round(beatToX(startBeat, pixelsPerBeat))
+            const right = Math.round(beatToX(startBeat + beatsPerBar, pixelsPerBeat))
+            const looped = vim.loopSlots.includes(slot)
+            const onCursor = vim.cursorBeat >= startBeat && vim.cursorBeat < startBeat + beatsPerBar
+            return (
+              <div
+                key={`vim-page-${slot}`}
+                style={{
+                  position: 'absolute',
+                  left,
+                  top: 0,
+                  width: Math.max(right - left - 1, 8),
+                  height: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 8,
+                  fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+                  lineHeight: '12px',
+                  color: looped ? '#0b0d12' : onCursor ? vim.accent : `${vim.accent}88`,
+                  backgroundColor: looped ? vim.accent : onCursor ? `${vim.accent}2e` : `${vim.accent}12`,
+                  borderRight: `1px solid ${vim.accent}33`,
+                  pointerEvents: 'none',
+                  zIndex: 13,
+                }}
+              >
+                {slot}
+              </div>
             )
           })}
 

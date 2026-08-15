@@ -6,7 +6,7 @@ import { useProjectStore } from '../../../store/ProjectStore'
 import { useUIStore } from '../../../store/UIStore'
 import { useHistoryStore } from '../../../store/HistoryStore'
 import { anchorForCursor } from './keyMap'
-import { notesInSelection, projectDraft, vimReduce } from './vimReducer'
+import { notesInSelection, projectDraft, selectionSpans, vimReduce } from './vimReducer'
 import {
   initialVimState,
   type VimContext,
@@ -134,6 +134,15 @@ export function useMidiVim({
           useUIStore.getState().setMidiPixelsPerBeat(intent.direction > 0 ? current * 1.25 : current / 1.25)
           break
         }
+        case 'setLoop':
+          // The roll already draws and honours TimeStore's loop region, so the
+          // slots drive that rather than inventing a second loop.
+          useTimeStore.getState().setLoopRegion(
+            intent.range
+              ? { startBeat: intent.range.startBeat, endBeat: intent.range.endBeat, enabled: true }
+              : null,
+          )
+          break
         case 'undo':
           useHistoryStore.getState().undo()
           break
@@ -303,20 +312,20 @@ export function useMidiVim({
     [enabled, state],
   )
 
+  /** The region as rectangles for the grid: every selected row crossed with
+   *  every selected time span, so a disjoint pick draws as separate blocks. */
   const selectionSpanRows = useMemo(() => {
     if (!enabled || !state.selection) return null
-    const rowsIn = state.selection.rowFilter
-      ? [...state.selection.rowFilter]
+    const sel = state.selection
+    const rows = sel.rowFilter
+      ? [...sel.rowFilter]
       : (() => {
-          const lo = Math.min(state.selection.anchorRow, state.cursorRow)
-          const hi = Math.max(state.selection.anchorRow, state.cursorRow)
+          const lo = Math.min(sel.anchorRow, state.cursorRow)
+          const hi = Math.max(sel.anchorRow, state.cursorRow)
           return Array.from({ length: hi - lo + 1 }, (_, i) => lo + i)
         })()
-    return {
-      rows: rowsIn,
-      startBeat: Math.min(state.selection.anchorBeat, state.cursorBeat),
-      endBeat: Math.max(state.selection.anchorBeat, state.cursorBeat) + stepBeats,
-    }
+    const spans = selectionSpans(state, ctxRef.current, sel)
+    return { rows, spans }
   }, [enabled, state, stepBeats])
 
   return {
@@ -347,6 +356,12 @@ function normalizeKey(e: KeyboardEvent): string | null {
     default:
       break
   }
+  // Digits come from the CODE, not the key: Shift+1 is "!" on a US layout and
+  // something else again elsewhere, and the loop slots need Shift+1-4 to be
+  // legible as digits. The prototype resolved them the same way.
+  const digit = /^(?:Digit|Numpad)([0-9])$/.exec(e.code)
+  if (digit) return digit[1]
+
   if (e.key.length !== 1) return null
   return e.key.toLowerCase()
 }
