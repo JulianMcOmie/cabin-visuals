@@ -324,7 +324,7 @@ export function TimelineArea() {
     }
   })
 
-  function insertTrack() {
+  function insertTrack(opts?: { withStarterBlock?: boolean }) {
     const state = useProjectStore.getState()
     const isMain = !!state.scenes[state.activeSceneId]?.isMain
     const id = crypto.randomUUID()
@@ -332,6 +332,17 @@ export function TimelineArea() {
     // for the whole timeline with no notes drawn, so a freshly added track is
     // never a blank frame waiting to be played. (The switcher is still one drag
     // away in the library.)
+    //
+    // The empty-scene "Add a track" row asks for a starter block: an empty
+    // 4-bar MIDI block at bar 1, so the very first track arrives with somewhere
+    // to put notes instead of a bare lane whose draw gesture hasn't been taught
+    // yet. Seeded in the same addTrack call so track + block are one undo step.
+    // Not on Main - its Scene composer runs without notes, so an empty block
+    // would just be inert chrome.
+    const starterBlock =
+      opts?.withStarterBlock && !isMain
+        ? [{ id: crypto.randomUUID(), startBar: 0, durationBars: 4, loop: false, notes: [] }]
+        : []
     state.addTrack({
       id,
       name: isMain ? 'Scene' : 'Cube',
@@ -341,7 +352,7 @@ export function TimelineArea() {
       color: resolveNextTrackColor(state),
       muted: false,
       solo: false,
-      blocks: [],
+      blocks: starterBlock,
       childIds: [],
     })
     // A new instrument becomes the selection; blocks deselect.
@@ -389,7 +400,7 @@ export function TimelineArea() {
             <div className="flex items-center gap-2 px-3 w-full">
               <button
                 className="flex items-center justify-center w-4 h-4 rounded-[3px] bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors cursor-pointer"
-                onClick={insertTrack}
+                onClick={() => insertTrack()}
                 title={`Add track`}
               >
                 <Plus size={11} />
@@ -483,7 +494,7 @@ export function TimelineArea() {
           empty={rootTrackIds.length === 0}
           labelWidth={labelWidth}
           isMain={activeSceneIsMain}
-          onAddTrack={insertTrack}
+          onAddTrack={() => insertTrack({ withStarterBlock: true })}
         />
         <div
           ref={scrollRef}
