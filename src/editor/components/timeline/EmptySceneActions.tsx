@@ -64,8 +64,9 @@ export function EmptySceneActions({
   /** Left inset of the lane region: the cluster sits at the top-left of the
    *  lanes, not over the frozen label column. */
   labelWidth: number
-  /** Main composes the other scenes, so its first track is a Scene Switcher
-   *  rather than an object - the row says what it will actually add. */
+  /** Main composes the other scenes, so its first track is a Scene composition
+   *  instrument rather than an object - the row says what it will actually do,
+   *  which is put a scene on screen. */
   isMain: boolean
   onAddTrack: () => void
 }) {
@@ -119,7 +120,7 @@ export function EmptySceneActions({
   const actions: Action[] = [
     {
       key: 'track',
-      label: isMain ? 'Add a scene switcher' : 'Add a track',
+      label: isMain ? 'Add a scene' : 'Add a track',
       icon: Plus,
       run: onAddTrack,
     },

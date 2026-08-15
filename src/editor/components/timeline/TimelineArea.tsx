@@ -328,11 +328,15 @@ export function TimelineArea() {
     const state = useProjectStore.getState()
     const isMain = !!state.scenes[state.activeSceneId]?.isMain
     const id = crypto.randomUUID()
+    // Main's default composer is Scene, not Scene Switcher: it shows its scene
+    // for the whole timeline with no notes drawn, so a freshly added track is
+    // never a blank frame waiting to be played. (The switcher is still one drag
+    // away in the library.)
     state.addTrack({
       id,
-      name: isMain ? 'Scene Switcher' : 'Cube',
+      name: isMain ? 'Scene' : 'Cube',
       type: 'base' as const,
-      instrumentId: isMain ? 'sceneSwitcher' : 'cube',
+      instrumentId: isMain ? 'scene' : 'cube',
       sceneBindings: isMain ? seedSceneBindings(state.scenes, state.sceneOrder) : undefined,
       color: resolveNextTrackColor(state),
       muted: false,
