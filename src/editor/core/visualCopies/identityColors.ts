@@ -59,6 +59,22 @@
 // the hex at 0.73/0.19, or 0.82/0.16 in the 60-158° band. If the definition has
 // a bespoke panel, make the panel import the constant rather than repeating the
 // value.
+//
+// ── THE WHEEL IS AT CAPACITY (2026-08-14) ────────────────────────────────────
+//
+// Not "full, so rebalance a stretch" - out of room entirely, and the arithmetic
+// is worth writing down so the next person does not spend a round rediscovering
+// it. Nine hues are IMMOVABLE panel accents (2, 51, 73, 120, 163, 175, 222,
+// 234, 286) and the Colorizer reserves a tenth slot at 86. Those ten walls cut
+// the wheel into ten windows, and a window of width W can hold at most
+// floor(W/11) − 1 movable entries. Summed over all ten that ceiling is 19 - and
+// there are exactly 19 movable entries today. Every window is therefore packed:
+// the widest single gap left anywhere is 15°, where an insertion needs 22.
+//
+// So a genuinely new HUE now costs re-voicing a bespoke panel's accent, which
+// is a design decision and not a palette one. A definition that can live
+// without a hue should take the grey road below instead - which is what Bypass
+// did, and it had the better reason for it anyway.
 
 // ── Already a panel accent: copied exactly, panels import these ──────────────
 /** Impact Pulse's strike rose. Hue 2°. */
@@ -183,3 +199,17 @@ export const GRID_COLOR = '#fb6dba'
  * indistinguishable from Tunnel's.
  */
 export const CONSOLIDATED_MOVER_COLOR = '#ababab'
+/**
+ * Bypass claims no hue either, and for a better reason than "nothing to stand
+ * for": its whole subject is a device being switched OFF, and every hue on this
+ * wheel means some device being on. (It is also the only option left - see the
+ * capacity note at the top of the file.)
+ *
+ * PURE grey, like All Movers, for the same 0.02 floor reason - and BRIGHT where
+ * that one is mid, which is as far apart as two greys can be placed. Be honest
+ * about what that buys: a lane's blocks and its console tell them apart, but
+ * midiEditorPalette pins every note to one lightness, so the two definitions'
+ * NOTES render identically. They are the only pair in the palette that does,
+ * and a third grey would have nowhere left to sit.
+ */
+export const BYPASS_COLOR = '#d9d9d9'

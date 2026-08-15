@@ -56,6 +56,18 @@ export interface MoverOrSplitterDefinition<Settings> {
    * between reading a chain and decoding it.
    */
   identityColor?: string | { param: string }
+  /**
+   * This definition acts on the DEVICE it is nested under, not on copies, so it
+   * only makes sense as a child of a mover/splitter/colorizer track. The Bypass
+   * is the only one (bypass.ts).
+   *
+   * It is `kind: 'mover'` for storage and chrome - the track field, the
+   * inspector, the timeline row are all a mover's - but the pickers read this
+   * flag: it is kept out of the library shelf and out of the "add mover track"
+   * lists on objects and groups, where it would resolve to nothing, and gets
+   * its own group on the tracks it can actually gate.
+   */
+  parentGate?: boolean
   midiRows?: (settings: Settings, context?: { priorCount: number }) => MidiRowDef[]
   /** Keep the editor to exactly midiRows, even if saved notes use other pitches. */
   strictMidiRows?: boolean

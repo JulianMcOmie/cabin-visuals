@@ -2,6 +2,7 @@ import type { UserInterfaceRendererDefinition } from './types'
 import { MoverUserInterfaceRenderer } from './MoverUserInterface'
 import { WaypointsUserInterfaceRenderer } from './WaypointsUserInterface'
 import { VisibilityMoverUserInterfaceRenderer } from './VisibilityMoverUserInterface'
+import { BypassUserInterfaceRenderer } from './BypassUserInterface'
 import { MeteorImpactMoverUserInterfaceRenderer } from './MeteorImpactMoverUserInterface'
 import { ColorizerUserInterfaceRenderer } from './ColorizerUserInterface'
 import { GradientColorizerUserInterfaceRenderer } from './GradientColorizerUserInterface'
@@ -36,6 +37,7 @@ export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRenderer
   mover: MoverUserInterfaceRenderer,
   waypoints: WaypointsUserInterfaceRenderer,
   visibility: VisibilityMoverUserInterfaceRenderer,
+  bypass: BypassUserInterfaceRenderer,
   meteorImpact: MeteorImpactMoverUserInterfaceRenderer,
   // The Colorizer's definition id is still its original `calmHueRotate`.
   calmHueRotate: ColorizerUserInterfaceRenderer,

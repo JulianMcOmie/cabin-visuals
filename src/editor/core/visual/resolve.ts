@@ -24,6 +24,7 @@ import { splitterWithChildChain } from '../visualCopies/splitterChildChain'
 import type { MoverOrSplitter } from '../visualCopies/types'
 import { structuralCopyCount } from '../visualCopies/resolveVisualCopies'
 import { gatedMoverOrSplitter } from '../visualCopies/copyTargets'
+import { bypassGated } from '../visualCopies/bypass'
 import { identitySV } from './stateVector'
 import { flattenTrackNotes as flattenTrackNotesRaw } from './noteFlatten'
 
@@ -372,6 +373,47 @@ function moverOrSplitterId(track: Track): string | undefined {
   return undefined
 }
 
+/** True for a track that contributes an ENTRY to some mover-and-splitter chain.
+ *
+ *  Not every track with a definition does. A `parentGate` definition (Bypass)
+ *  acts on the DEVICE it is nested under rather than on copies: it is lifted out
+ *  in `resolveMoverOrSplitterTrack` and wrapped around that parent, so it must
+ *  never also appear as an entry of the parent's frame or child chain.
+ *
+ *  EVERY walk over a track's chain children shares this predicate, and that is
+ *  load-bearing rather than tidy: `weaveSplitterTfLanes` and
+ *  `weaveTfAutomationLanes` re-walk `childIds` counting entries to line lanes up
+ *  with the already-resolved chain, so a filter that disagreed with
+ *  `resolveMoverAndSplitterChain` by one track would silently weave every lane
+ *  into the wrong slot. */
+function isChainEntryTrack(track: Track): boolean {
+  const def = getMoverOrSplitterDefinition(moverOrSplitterId(track))
+  return !!def && !def.parentGate
+}
+
+/** The bypass gates a mover/splitter track carries: its `parentGate` children,
+ *  resolved to the one thing they export (`bypassAt`). Muted lanes are ignored
+ *  and solo pools among themselves, mirroring the automation/envelope lanes
+ *  rather than the chain - they are not chain entries, so they do not belong in
+ *  the chain's pool. */
+function resolveBypassGates(track: Track, p: ProjectSnapshot): ((beat: number) => boolean)[] {
+  const lanes = (track.childIds ?? [])
+    .map((cid) => p.tracks[cid])
+    .filter((c): c is Track => {
+      const def = c ? getMoverOrSplitterDefinition(moverOrSplitterId(c)) : undefined
+      return !!def?.parentGate
+    })
+  if (lanes.length === 0) return []
+  const anySolo = lanes.some((lane) => lane.solo)
+  const gates: ((beat: number) => boolean)[] = []
+  for (const lane of lanes) {
+    if (lane.muted || (anySolo && !lane.solo)) continue
+    const resolved = resolveOwnMoverOrSplitter(lane, p)
+    if (resolved?.bypassAt) gates.push(resolved.bypassAt.bind(resolved))
+  }
+  return gates
+}
+
 /** Resolve one mover/splitter track's OWN definition, without its child chain:
  *  merge the definition's param defaults with the track's stored inputValues
  *  (numeric) and stringParams (color/string),
@@ -405,6 +447,10 @@ function resolveOwnMoverOrSplitter(track: Track, p: ProjectSnapshot): MoverOrSpl
   // only thing this loses is automating a remap's own params, which for Freeze
   // means automating a two-value "on release" switch.
   if (resolved.warpBeat) wrapped.warpBeat = (beat) => resolved.warpBeat!(beat)
+  // A bypass gate is taken from the UN-automated resolution for the same reason,
+  // and loses even less by it: the only thing a Bypass has to automate is a
+  // two-value polarity switch.
+  if (resolved.bypassAt) wrapped.bypassAt = (beat) => resolved.bypassAt!(beat)
   // Automation makes the per-beat settings - and so possibly the COPY COUNT -
   // vary with the beat, which a single-beat structural probe cannot see. Hand
   // the probe the definition resolved at every lane's maximum reach (and
@@ -431,7 +477,11 @@ function resolveOwnMoverOrSplitter(track: Track, p: ProjectSnapshot): MoverOrSpl
  *  on the parent. Under a MOVER they are its FRAME and move its field
  *  (visualCopies/moverFrame.ts); under a SPLITTER they act on its copies in
  *  its reference frame (visualCopies/splitterChildChain.ts). Both collect
- *  through the same function as an object's chain, so nesting recurses. */
+ *  through the same function as an object's chain, so nesting recurses.
+ *
+ *  A BYPASS child is neither: it says whether this device runs at all, so it is
+ *  filtered out of that collection (isChainEntryTrack) and wraps the finished
+ *  entry instead (visualCopies/bypass.ts). */
 function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrSplitter | null {
   const own = resolveOwnMoverOrSplitter(track, p)
   if (!own) return null
@@ -450,7 +500,12 @@ function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrS
   // these copies" has to mean its nested frame/child chain too, or a targeted
   // splitter would still spin its untargeted copies. Absent targeting is the
   // common case and adds no wrapper at all.
-  return track.copyTargets ? gatedMoverOrSplitter(entry, track.copyTargets) : entry
+  const targeted = track.copyTargets ? gatedMoverOrSplitter(entry, track.copyTargets) : entry
+  // A Bypass lane wraps everything else, because "this device is switched off"
+  // has to mean its frame, its child chain AND its copy targeting - a bypassed
+  // splitter that still acted on the copies it had targeted would be off and on
+  // at the same time.
+  return bypassGated(targeted, resolveBypassGates(track, p))
 }
 
 /** A splitter's own spatial tf* automation lanes (x/y/z, rotations, size): each
@@ -472,11 +527,11 @@ function weaveSplitterTfLanes(track: Track, chain: MoverOrSplitter[], p: Project
     if (lane.sourceTrackId !== undefined) laneBySource.set(lane.sourceTrackId, lane)
   }
   // Walk childIds interleaving lane deltas with the resolved chain entries.
-  // Mirrors resolveMoverAndSplitterChain's filters (known definition, mute/solo
+  // Mirrors resolveMoverAndSplitterChain's filters (isChainEntryTrack, mute/solo
   // pool) so the chain entries line up with the walk.
   const chainChildren = (track.childIds ?? [])
     .map((cid) => p.tracks[cid])
-    .filter((c): c is Track => !!c && !!getMoverOrSplitterDefinition(moverOrSplitterId(c)))
+    .filter((c): c is Track => !!c && isChainEntryTrack(c))
   const anySolo = chainChildren.some((c) => c.solo)
   const woven: MoverOrSplitter[] = []
   let chainIndex = 0
@@ -488,7 +543,7 @@ function weaveSplitterTfLanes(track: Track, chain: MoverOrSplitter[], p: Project
       const base = track.params?.[lane.param] ?? transformDefault(lane.param)
       woven.push(tfAutomationChainEntry(lane, base))
     } else if (
-      getMoverOrSplitterDefinition(moverOrSplitterId(child)) &&
+      isChainEntryTrack(child) &&
       !child.muted && (!anySolo || child.solo) &&
       chainIndex < chain.length
     ) {
@@ -500,11 +555,13 @@ function weaveSplitterTfLanes(track: Track, chain: MoverOrSplitter[], p: Project
 
 /** Collect an object track's mover and splitter children together, in exact
  *  childIds order. Muted entries are removed from the chain (a structural
- *  change - the copy count may drop); solo is a pool among the chain children. */
+ *  change - the copy count may drop); solo is a pool among the chain children.
+ *  Bypass lanes are not entries at all (isChainEntryTrack) - they gate the
+ *  device they are nested under, and reach it through resolveBypassGates. */
 function resolveMoverAndSplitterChain(track: Track, p: ProjectSnapshot): MoverOrSplitter[] {
   const candidates = (track.childIds ?? [])
     .map((cid) => p.tracks[cid])
-    .filter((c): c is Track => !!c && !!getMoverOrSplitterDefinition(moverOrSplitterId(c)))
+    .filter((c): c is Track => !!c && isChainEntryTrack(c))
   const anySolo = candidates.some((c) => c.solo)
   const chain: MoverOrSplitter[] = []
   for (const child of candidates) {
@@ -541,11 +598,11 @@ function weaveTfAutomationLanes(
 ): { chain: MoverOrSplitter[]; overlay: ResolvedAutomation[] } {
   if (chain.length === 0 || lanes.length === 0) return { chain, overlay: lanes }
   // How many chain ENTRIES sit above each automation child. Mirrors
-  // resolveMoverAndSplitterChain's filters exactly (candidates with a known
-  // definition, mute/solo pool), so the count lines up with `chain`.
+  // resolveMoverAndSplitterChain's filters exactly (isChainEntryTrack, mute/solo
+  // pool), so the count lines up with `chain`.
   const chainChildren = (track.childIds ?? [])
     .map((cid) => p.tracks[cid])
-    .filter((c): c is Track => !!c && !!getMoverOrSplitterDefinition(moverOrSplitterId(c)))
+    .filter((c): c is Track => !!c && isChainEntryTrack(c))
   const anySolo = chainChildren.some((c) => c.solo)
   const gapByChildId = new Map<string, number>()
   let entriesAbove = 0
@@ -554,7 +611,7 @@ function weaveTfAutomationLanes(
     if (!child) continue
     if (!child.instrumentId && child.type === 'automation') gapByChildId.set(cid, entriesAbove)
     else if (
-      getMoverOrSplitterDefinition(moverOrSplitterId(child)) &&
+      isChainEntryTrack(child) &&
       !child.muted && (!anySolo || child.solo)
     ) entriesAbove++
   }
@@ -688,7 +745,7 @@ function priorChainPrefixes(trackId: string, p: ProjectSnapshot): MoverOrSplitte
     if (parent.type === 'group') {
       const chainCandidates = (parent.childIds ?? [])
         .map((id) => p.tracks[id])
-        .filter((child): child is Track => !!child && !!getMoverOrSplitterDefinition(moverOrSplitterId(child)))
+        .filter((child): child is Track => !!child && isChainEntryTrack(child))
       const anySolo = chainCandidates.some((child) => child.solo)
       const entriesAbove: MoverOrSplitter[] = []
       const memberObjects: Track[] = []
@@ -702,7 +759,7 @@ function priorChainPrefixes(trackId: string, p: ProjectSnapshot): MoverOrSplitte
         if (cid === trackId) break
         const child = p.tracks[cid]
         if (!child) continue
-        if (getMoverOrSplitterDefinition(moverOrSplitterId(child))) {
+        if (isChainEntryTrack(child)) {
           if (child.muted || (anySolo && !child.solo)) continue
           const resolved = resolveMoverOrSplitterTrack(child, p)
           if (resolved) entriesAbove.push(resolved)
@@ -717,7 +774,7 @@ function priorChainPrefixes(trackId: string, p: ProjectSnapshot): MoverOrSplitte
     }
     const candidates = (parent.childIds ?? [])
       .map((id) => p.tracks[id])
-      .filter((child): child is Track => !!child && !!getMoverOrSplitterDefinition(moverOrSplitterId(child)))
+      .filter((child): child is Track => !!child && isChainEntryTrack(child))
     const anySolo = candidates.some((child) => child.solo)
     const prefix: MoverOrSplitter[] = []
     // A SPLITTER's child chain runs over the splitter's own copies
@@ -747,7 +804,7 @@ function priorChainPrefixes(trackId: string, p: ProjectSnapshot): MoverOrSplitte
       const global = p.tracks[globalId]
       if (
         !global || global.muted ||
-        !getMoverOrSplitterDefinition(moverOrSplitterId(global)) ||
+        !isChainEntryTrack(global) ||
         isChainChild(global, p) ||
         !globalTrackTargetsObject(global, object, p)
       ) continue
@@ -945,14 +1002,14 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     if (!g || g.type !== 'group') continue
     const chainChildren = (g.childIds ?? [])
       .map((cid) => p.tracks[cid])
-      .filter((c): c is Track => !!c && !!getMoverOrSplitterDefinition(moverOrSplitterId(c)))
+      .filter((c): c is Track => !!c && isChainEntryTrack(c))
     if (chainChildren.length === 0) continue
     const anySolo = chainChildren.some((c) => c.solo)
     const membersAbove: ResolvedObject[] = []
     for (const cid of g.childIds ?? []) {
       const child = p.tracks[cid]
       if (!child) continue
-      if (getMoverOrSplitterDefinition(moverOrSplitterId(child))) {
+      if (isChainEntryTrack(child)) {
         if (child.muted || (anySolo && !child.solo)) continue
         // Same identity-keyed reuse as the global pass: a group entry
         // re-resolves only when its own subtree changed.
@@ -984,7 +1041,7 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
   // entries are skipped; entries with no targets affect nothing.
   for (const trackId of flattenTree(p)) {
     const track = p.tracks[trackId]
-    if (!track || track.muted || !getMoverOrSplitterDefinition(moverOrSplitterId(track))) continue
+    if (!track || track.muted || !isChainEntryTrack(track)) continue
     if (isChainChild(track, p)) continue
     // Same identity-keyed reuse as objects: a global entry re-resolves only
     // when its own subtree (settings, notes, automation, frame) changed.

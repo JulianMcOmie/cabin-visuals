@@ -13,6 +13,9 @@ One instrument track produces ONE opaque visual output; an ordered chain of move
 - **The rest of that whiteness is NOT the mix and cannot be fixed from here.** `components/visual/VisualScene.tsx` composites `scene + bloom * 0.9` with `luminanceThreshold: 1.15` — a literal add that saturates all three channels, so past the clip point every picked color converges on the same white core with a colored halo. On top of it an instrument's own material adds white specular (Cube: `clearcoat 0.9`, `envMapIntensity 1.25`). Verified end to end: at INTENSITY 1 the Colorizer delivers `#ffd166` to the Cube's albedo *exactly*, and the cube still renders as a near-white face ringed in gold. The contract is deliberate — instruments keep ownership of emissive, lighting and HDR — so "my flash looks white at high intensity on an emissive instrument" is an instrument/bloom question, not a colorizer one.
 - New fields go INSIDE `colorShift`, not beside it: every definition already spreads `{ ...visualCopy.colorShift }`, so they propagate through the whole library for free. A sibling field means editing ~15 files. **And every new field must also be `put()` into `core/visual/instrumentFrame.ts`'s signature buffer**, or editing it while paused changes nothing on screen (the frame is skipped as unchanged) and you will chase a phantom bug.
 - Context gives `{ beat, index, count }` where index/count describe the COMPLETE output of the previous step, so movers can react to upstream splitter multiplicity. It also carries `formation` — the whole array of copies the step is about to transform, for movers whose treatment of one copy depends on how the others are arranged (Conveyor's belt period). Passed by reference with a stable identity per step, so measuring it is O(n) per frame, not O(n²); the copies are immutable, as everywhere else.
+- **`bypassAt` is the one escape from a copy into another DEVICE.** An entry that
+  implements it contributes nothing itself; it answers "the device I am nested under is
+  switched off at this beat". Only `bypass` does — see the section below.
 - **`warpBeat` is the one escape from space into time.** `apply` can only restate the copy it is handed — it cannot un-compute the instrument animation, automation or upstream motion already baked in below it, so freeze/reverse cannot be a transform. An entry may instead implement optional `warpBeat(realBeat) → beat`, and `computeAtBeat` evaluates that object's ENTIRE state at the result (energy, automation, envelopes, localTransform, activeNotes, `state.beat`, and the whole chain). Object-wide, not a chain partition: the entry's position in the chain is irrelevant. Multiple entries compose by SUMMING deltas against the real beat (`warpChainBeat` in `resolveVisualCopies.ts`) — feeding one the other's output would make it read its own notes at the wrong times. Subtree scope comes free from a top-level mover's `targets` routing.
 
 ## Structure
@@ -45,6 +48,7 @@ One instrument track produces ONE opaque visual output; an ordered chain of move
     picked, so its device row, notes and panel all move together. Hue ~86° (its
     palette default) is therefore left unclaimed in `identityColors.ts`. A param that
     resolves near-achromatic falls through to the lane's own cycle colour.
+- `bypass.ts` — the `parentGate` device: notes switch the device it is nested under OFF (or, flipped, on). Not a chain entry — see its own section below.
 - `resolveVisualCopies.ts` — evaluates a track's chain into `VisualCopy[]`; `identityVisualCopy.ts` — the 1-copy default.
 - `copyTargets.ts` — **which of the incoming copies a chain row acts on** (the
   inspector's Targets tab). The whole vocabulary is a slice count plus which slices
@@ -347,6 +351,45 @@ Three colorizers now declare the same MAP constants by value (`COSINE_MAP_*`,
 `RISO_MAP_*`, `HUE_MAP_*` — identical numbers on purpose, since two devices
 asking "where does this copy sit" must not answer differently). A FOURTH should
 extract them into a shared module rather than copy them again.
+
+## `bypass` — the device that acts on a DEVICE
+
+Nested under a mover/splitter/colorizer, its notes switch that parent off: while a note
+is held the parent evaluates to identity and everything else in the chain keeps running.
+Its MODE segment flips the polarity, so the parent can instead be off at rest and on for
+the length of each note — which is the half that makes it more than a mute, since a muted
+device is off for the whole timeline. Five things carry it:
+
+- **It is not a chain entry, and every walk over a track's chain children has to agree
+  about that.** `core/visual/resolve.ts`'s `isChainEntryTrack` is the one predicate
+  (`definition.parentGate`); `resolveMoverOrSplitterTrack` lifts the lane out, resolves it
+  to its `bypassAt`, and wraps the finished parent in `bypassGated` — OUTSIDE the frame /
+  child chain / copy-targeting wrappers, because "this device is off" has to mean all
+  three. Three other places re-walk `childIds` counting entries to line automation lanes
+  up with the already-resolved chain (`weaveSplitterTfLanes`, `weaveTfAutomationLanes`),
+  so a filter that disagreed by one track would weave every lane into the wrong slot; that
+  is why they share the predicate rather than each testing for a definition.
+- **Under a MOVER it is not part of the frame; under a SPLITTER not part of the child
+  chain.** Left in either it would resolve as an ordinary identity entry and gate nothing —
+  which looks exactly like the feature not working. `bypassRuntime.test.ts` pins both the
+  chain length and the gating, so the two halves can't drift apart.
+- **A bypassed SPLITTER varies the copy count with the beat**, which the invariant below
+  forbids for a definition's own settings. The sanctioned way out is the automated mover's:
+  `bypassGated` publishes the UNGATED entry as `structuralVariants[0]`, so the probe sizes
+  the pool at full fan-out and bypassed frames are padded with hidden copies. Without it a
+  splitter that happens to be bypassed at beat 0 — the beat the probe samples — mounts a
+  pool of one and overflows on every later frame.
+- **The gate is binary, and that is a design decision, not a missing knob.** A chain
+  entry's contribution is a matrix and "half a mover" is not a well-defined interpolation
+  of one; a splitter's is a copy count, which is worse. A fade already has homes: automate
+  the parent's params, or use Visibility when what you want is the object dimming.
+- **`apply` gates on `context.beat`, `warpBeat` on the real playhead beat** — each is
+  gating what its own arm is asked about, which is what makes bypassing a Freeze
+  un-freeze the object rather than nothing.
+
+It is `kind: 'mover'` for storage and chrome, but `parentGate` keeps it out of the library
+shelf and out of the "add mover track" lists on objects and groups (where it would gate
+nothing); the mover/splitter context menu offers it under "Switch this device with".
 
 ## Invariants
 

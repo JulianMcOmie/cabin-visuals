@@ -75,7 +75,14 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   // colorizer catalog applies.
   const isGroup = track.type === 'group'
   const newDefs = def || moverDef || isGroup ? listMoverOrSplitterDefinitions() : []
-  const movers = newDefs.filter((d) => d.kind === 'mover')
+  // A `parentGate` definition (Bypass) acts on the DEVICE it is nested under, so
+  // it is only offered on a mover/splitter track - never on an object or a
+  // group, where it would have nothing to gate - and never in the mover list,
+  // which means something else there.
+  const movers = newDefs.filter((d) => d.kind === 'mover' && !d.parentGate)
+  // Not offered on a gate itself: nothing resolves a gate's own children, so a
+  // Bypass under a Bypass would sit there doing nothing.
+  const parentGates = moverDef && !moverDef.parentGate ? newDefs.filter((d) => d.parentGate) : []
   const colorizers = def || isGroup ? newDefs.filter((d) => d.kind === 'colorizer') : []
   const splitters = def || isGroup ? newDefs.filter((d) => d.kind === 'splitter') : []
   const childTracks = track.childIds.map((cid) => tracks[cid])
@@ -154,6 +161,11 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       items: colorizers.map((d) => ({ id: d.id, label: d.label })),
     },
     {
+      key: 'parentGate',
+      label: 'Switch this device with',
+      items: parentGates.map((d) => ({ id: d.id, label: d.label })),
+    },
+    {
       key: 'splitter',
       label: 'Add splitter track',
       items: splitters.map((d) => ({ id: d.id, label: d.label })),
@@ -208,6 +220,9 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       if (d) addMoverTrack(trackId, d.id, d.label)
     } else if (groupKey === 'colorizer') {
       const d = colorizers.find((c) => c.id === itemId)
+      if (d) addMoverTrack(trackId, d.id, d.label)
+    } else if (groupKey === 'parentGate') {
+      const d = parentGates.find((g) => g.id === itemId)
       if (d) addMoverTrack(trackId, d.id, d.label)
     } else if (groupKey === 'automation') {
       const p = params.find((pp) => pp.key === itemId)

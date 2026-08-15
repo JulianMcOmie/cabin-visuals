@@ -401,8 +401,12 @@ const MOVER_REMOVED_IDS = new Set([
   'constantRotate', 'constantOrbit', 'translationOscillator',
 ])
 
+// `parentGate` definitions (Bypass) are deliberately absent from the library:
+// they only mean anything nested under a device, and the library's one gesture
+// is dragging onto an object. They are added from a mover/splitter track's
+// context menu instead, the same way ability lanes are.
 const ALL_MOVER_INSTRUMENTS = withKind('mover', listMoverOrSplitterDefinitions()
-  .filter((d) => d.kind === 'mover' && !MOVER_REMOVED_IDS.has(d.id))
+  .filter((d) => d.kind === 'mover' && !MOVER_REMOVED_IDS.has(d.id) && !d.parentGate)
   .map((d) => ({
   id: d.id,
   name: d.label,

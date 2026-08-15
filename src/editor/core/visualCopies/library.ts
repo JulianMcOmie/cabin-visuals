@@ -21,6 +21,7 @@ import { impactPulseMover } from './impactPulse'
 import { waveTerrainMover } from './waveTerrain'
 import { visibilityMover } from './visibility'
 import { freezeMover } from './freeze'
+import { bypassMover } from './bypass'
 import { consolidatedMover } from './consolidatedMover'
 import { BURST_EASINGS } from './burstEasings'
 import { BURST_DIRECTIONS, evaluateBurstOffset, type BurstSettings } from './burstOffset'
@@ -686,6 +687,7 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
 }
 
 export { evaluateVisibilityOpacity, visibilityMover, type VisibilitySettings } from './visibility'
+export { bypassGated, bypassMover, evaluateBypassed, BYPASS_ID, type BypassSettings } from './bypass'
 
 /** Every production definition, in picker order. Seeded into the registry.
  *
@@ -713,6 +715,7 @@ export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   waveTerrainMover,
   visibilityMover,
   freezeMover,
+  bypassMover,
   noteColorizer,
   gradientColorizer,
   cosinePaletteColorizer,

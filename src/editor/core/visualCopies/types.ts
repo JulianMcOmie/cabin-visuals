@@ -227,4 +227,20 @@ export interface MoverOrSplitter {
    * each one keeps reading its own notes at their true timeline positions.
    */
   warpBeat?(beat: number): number
+  /**
+   * OPTIONAL, and the one thing a chain entry may say about ANOTHER entry
+   * rather than about a copy: "the device I am nested under is switched off at
+   * this beat".
+   *
+   * `apply` can only restate the copy it is handed, so "make this rotation stop
+   * contributing" is not something a chain entry can express - and for a
+   * splitter it is not even a matrix, it is a copy count. An entry that
+   * implements this contributes nothing itself; core/visual/resolve.ts lifts it
+   * off the entry, keeps it OUT of the parent's frame/child chain, and wraps
+   * the parent in `bypassGated` (bypass.ts) instead.
+   *
+   * Must be a pure function of the beat plus resolved data, like `apply`.
+   * Several gates on one parent compose by OR.
+   */
+  bypassAt?(beat: number): boolean
 }
