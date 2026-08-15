@@ -9,6 +9,7 @@ import { getEffect } from '../../effects'
 import { fxTarget } from '../../effects/automation'
 import { NestedMenu, type NestedMenuGroup } from '../NestedMenu'
 import { useUIStore } from '../../store/UIStore'
+import { isSceneTrackId } from '../../core/sceneTrack'
 
 interface TrackContextMenuProps {
   x: number
@@ -81,6 +82,7 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   // to a group, and what lands there becomes another row of its lane.
   const isSwitcher = track.type === 'switcher'
   const isDevice = track.type === 'mover' || track.type === 'splitter'
+  const isSceneTrack = isSceneTrackId(track.id)
   const newDefs = def || moverDef || isGroup || isSwitcher ? listMoverOrSplitterDefinitions() : []
   // A `parentGate` definition (Bypass) acts on the DEVICE it is nested under, so
   // it is only offered on a mover/splitter track - never on an object or a
@@ -100,7 +102,9 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   // tracks; mainOnly composers (switcher/cut/radialCut) never leave Main; crop
   // and plain instruments move freely between visual scenes.
   const moveDef = track.type === 'base' ? compositionDef(track.instrumentId) : undefined
-  const moveDestinations = !track.parentId && track.type !== 'audio'
+  // The scene instrument belongs to its scene by definition - there is no
+  // document entry to move, and offering it would be a dead item.
+  const moveDestinations = !track.parentId && track.type !== 'audio' && !isSceneTrack
     ? sceneOrder
       .map((id) => scenes[id])
       .filter((scene) => scene && scene.id !== activeSceneId && (scene.isMain
@@ -111,8 +115,11 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   // Effect automation targets: per instance, its On/Off pseudo-param plus every
   // numeric plugin param, addressed by the fx-namespaced targetParam. Not
   // offered on a group: its broadcast effects have no engine-side lane
-  // sampling yet, so a lane would be silently inert.
-  const automatableEffects = isGroup ? [] : track.effects ?? []
+  // sampling yet, so a lane would be silently inert. The SCENE INSTRUMENT is
+  // the exception even though it materializes as a group: its chain is the
+  // scene EFFECT chain, whose fx lanes the engine samples per frame
+  // (graph.sceneFxAutomations → getSceneFxOverrides).
+  const automatableEffects = isGroup && !isSceneTrack ? [] : track.effects ?? []
   const fxNumericItems = automatableEffects.flatMap((inst) => {
     const plugin = getEffect(inst.pluginId)
     if (!plugin) return []
@@ -211,7 +218,10 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
     {
       key: 'ungroup',
       label: 'Group',
-      items: isGroup ? [{ id: 'ungroup', label: 'Ungroup' }] : [],
+      // Ungroup is meaningless on the scene instrument: it holds no members
+      // (the scene's tracks stay at root), and it cannot be dissolved - ⌘⇧S
+      // hides it. See core/sceneTrack.ts.
+      items: isGroup && !isSceneTrack ? [{ id: 'ungroup', label: 'Ungroup' }] : [],
     },
     // Racking a device is the one-track case of wrapTracksInSwitcher; unwrapping
     // splices the devices back where the rack stood, exactly as ungroup does.

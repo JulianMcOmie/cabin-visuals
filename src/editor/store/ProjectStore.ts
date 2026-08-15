@@ -9,6 +9,7 @@ import { TRANSFORM_PARAM_DEFS } from '../core/transform'
 import { seedSceneBindings } from '../core/directors/sceneBindings'
 import { seedSwitcherBindings } from '../core/switcherBindings'
 import { SWITCHER_MODE_PARAM } from '../core/visualCopies/switcher'
+import { canBeSceneTrackChild, dematerializeSceneTrack, isSceneTrackId, sceneTrackId, sceneTrackView } from '../core/sceneTrack'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import { AUTOMATION_AMOUNT_MAX, DEFAULT_BURST, DEFAULT_CYCLE, DEFAULT_NOISE } from '../core/visual/automation'
@@ -429,6 +430,11 @@ export interface ProjectState {
   setSceneEffectSetting: (sceneId: string, instanceId: string, key: string, value: number) => void
   toggleSceneEffect: (sceneId: string, instanceId: string) => void
   reorderSceneEffect: (sceneId: string, instanceId: string, direction: -1 | 1) => void
+  /** Show/hide the scene instrument (core/sceneTrack.ts) for one scene.
+   *  Turning it OFF keeps its params and lanes on the Scene, so the shortcut is
+   *  a peek rather than a destructive toggle - but the lanes stop resolving, so
+   *  a hidden scene instrument affects nothing. */
+  setSceneTrackEnabled: (sceneId: string, enabled: boolean) => void
   duplicateScene: (sceneId: string) => string | null
   deleteScene: (sceneId: string) => void
   reorderScenes: (sceneIds: string[]) => void
@@ -657,10 +663,31 @@ export function viewForScene(
   audioRootTrackIds: string[],
 ): Pick<ProjectState, 'tracks' | 'rootTrackIds'> {
   const scene = scenes[sceneId]
+  // The scene instrument is spliced in HERE and nowhere else on the read path:
+  // it is virtual (core/sceneTrack.ts), so the flattened view is the only place
+  // the rest of the editor can meet it as an ordinary track. The engine gets
+  // the same splice from its own `sceneTrackView` call, per scene.
+  const view = scene ? sceneTrackView(scene) : { tracks: {}, rootTrackIds: [] }
   return {
-    tracks: { ...audioTracks, ...(scene?.tracks ?? {}) },
-    rootTrackIds: [...audioRootTrackIds, ...(scene?.rootTrackIds ?? [])],
+    tracks: { ...audioTracks, ...view.tracks },
+    rootTrackIds: [...audioRootTrackIds, ...view.rootTrackIds],
   }
+}
+
+/** One scene-effect edit: the scene with its new chain, plus - when that scene
+ *  is the active one - the rebuilt flattened view, so a materialized scene
+ *  track (⌘⇧S) re-derives with the new chain immediately. Same discipline as
+ *  setSceneTrackEnabled; cheap when the scene track is off (viewForScene is a
+ *  spread), and inactive scenes need no view at all. */
+function sceneEffectsPatch(
+  s: ProjectState,
+  sceneId: string,
+  effects: EffectInstance[],
+): Partial<ProjectState> {
+  const scenes = { ...s.scenes, [sceneId]: { ...s.scenes[sceneId], effects } }
+  return sceneId === s.activeSceneId
+    ? { scenes, ...viewForScene(scenes, sceneId, s.audioTracks, s.audioRootTrackIds) }
+    : { scenes }
 }
 
 export function sceneSnapshot(state: ProjectState, sceneId: string) {
@@ -692,11 +719,21 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     const sceneRootTrackIds = nextRoots.filter((id) => !!sceneTracks[id])
     const active = s.scenes[s.activeSceneId]
     if (!active) return value
+    // Peel the synthetic scene track back off before it can be written into the
+    // document (core/sceneTrack.ts). Every ordinary track action - param
+    // writes, adding a lane, deleting one, a nest drag - therefore reaches the
+    // scene instrument with no special case of its own, and `tracks` /
+    // `rootTrackIds` on the Scene stay exactly what they were before the
+    // feature existed. Skipped entirely while it's off, so the untouched path
+    // allocates nothing new.
+    const scenePatch = active.sceneTrackEnabled
+      ? dematerializeSceneTrack(active.id, sceneTracks, sceneRootTrackIds)
+      : { tracks: sceneTracks, rootTrackIds: sceneRootTrackIds }
     return {
       ...value,
       scenes: {
         ...s.scenes,
-        [active.id]: { ...active, tracks: sceneTracks, rootTrackIds: sceneRootTrackIds },
+        [active.id]: { ...active, ...scenePatch },
       },
       audioTracks,
       audioRootTrackIds,
@@ -793,9 +830,15 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     return { scenes: { ...s.scenes, [sceneId]: { ...scene, backgroundGradient: gradient } } }
   }),
 
-  // Scene-level effect chain - same contract as the per-track actions below, but
-  // the chain lives on the scene itself (see Scene.effects in types.ts: document
-  // + inspector only for now, the engine does not yet apply these).
+  // Scene-level effect chain - same contract as the per-track actions below,
+  // but the chain lives on the scene itself (Scene.effects). Applied by
+  // VisualScene's compositor as full-frame passes, and surfaced as the scene
+  // instrument's effect channel when ⌘⇧S shows it (core/sceneTrack.ts folds
+  // the synthetic track's `effects` back onto this field). Each action ships
+  // through `sceneEffectsPatch`, which also REBUILDS the flattened view when
+  // the edited scene is active: the materialized scene track carries this
+  // chain as `track.effects`, so skipping the rebuild leaves the timeline row
+  // and inspector showing the pre-edit chain until an unrelated edit.
   addSceneEffect: (sceneId, pluginId) => rawSet((s) => {
     const scene = s.scenes[sceneId]
     const plugin = getEffect(pluginId)
@@ -803,35 +846,27 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     const settings: Record<string, number> = {}
     for (const p of plugin.params) if (typeof p.default === 'number') settings[p.key] = p.default
     const instance: EffectInstance = { id: crypto.randomUUID(), pluginId, enabled: true, settings }
-    return { scenes: { ...s.scenes, [sceneId]: { ...scene, effects: [...(scene.effects ?? []), instance] } } }
+    return sceneEffectsPatch(s, sceneId, [...(scene.effects ?? []), instance])
   }),
 
   removeSceneEffect: (sceneId, instanceId) => rawSet((s) => {
     const scene = s.scenes[sceneId]
     if (!scene?.effects) return s
-    return { scenes: { ...s.scenes, [sceneId]: { ...scene, effects: scene.effects.filter((e) => e.id !== instanceId) } } }
+    return sceneEffectsPatch(s, sceneId, scene.effects.filter((e) => e.id !== instanceId))
   }),
 
   setSceneEffectSetting: (sceneId, instanceId, key, value) => rawSet((s) => {
     const scene = s.scenes[sceneId]
     if (!scene?.effects) return s
-    return {
-      scenes: {
-        ...s.scenes,
-        [sceneId]: { ...scene, effects: scene.effects.map((e) => e.id === instanceId ? { ...e, settings: { ...e.settings, [key]: value } } : e) },
-      },
-    }
+    return sceneEffectsPatch(s, sceneId,
+      scene.effects.map((e) => e.id === instanceId ? { ...e, settings: { ...e.settings, [key]: value } } : e))
   }),
 
   toggleSceneEffect: (sceneId, instanceId) => rawSet((s) => {
     const scene = s.scenes[sceneId]
     if (!scene?.effects) return s
-    return {
-      scenes: {
-        ...s.scenes,
-        [sceneId]: { ...scene, effects: scene.effects.map((e) => e.id === instanceId ? { ...e, enabled: !e.enabled } : e) },
-      },
-    }
+    return sceneEffectsPatch(s, sceneId,
+      scene.effects.map((e) => e.id === instanceId ? { ...e, enabled: !e.enabled } : e))
   }),
 
   reorderSceneEffect: (sceneId, instanceId, direction) => rawSet((s) => {
@@ -843,7 +878,24 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     const effects = scene.effects.slice()
     effects[from] = scene.effects[to]
     effects[to] = scene.effects[from]
-    return { scenes: { ...s.scenes, [sceneId]: { ...scene, effects } } }
+    return sceneEffectsPatch(s, sceneId, effects)
+  }),
+
+  setSceneTrackEnabled: (sceneId, enabled) => rawSet((s) => {
+    const scene = s.scenes[sceneId]
+    if (!scene || !!scene.sceneTrackEnabled === enabled) return s
+    // Absence is the OFF state (core/sceneTrack.ts reads it as "no scene
+    // instrument at all"), so turning it off drops the field rather than
+    // storing false - a scene that has never been peeked at stays byte-identical
+    // to a pre-feature save. Its params and lanes are deliberately kept.
+    const next: Scene = { ...scene, sceneTrackEnabled: enabled }
+    if (!enabled) delete next.sceneTrackEnabled
+    const scenes = { ...s.scenes, [sceneId]: next }
+    // The flattened view is derived, so it has to be rebuilt when the scene
+    // being toggled is the one on screen.
+    return sceneId === s.activeSceneId
+      ? { scenes, ...viewForScene(scenes, sceneId, s.audioTracks, s.audioRootTrackIds) }
+      : { scenes }
   }),
 
   duplicateScene: (sceneId) => {
@@ -860,7 +912,18 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         if (tree[0]) rootTrackIds.push(tree[0].id)
         for (const track of tree) tracks[track.id] = track
       }
+      // The scene instrument's lanes are not in `rootTrackIds` (it is virtual -
+      // core/sceneTrack.ts), so they need their own clone pass or the copy
+      // arrives with a scene instrument whose lanes all dangle.
       nextId = crypto.randomUUID()
+      const sceneTrackChildIds: string[] = []
+      for (const childId of source.sceneTrackChildIds ?? []) {
+        const snapshot = snapshotTrackTree(childId, source.tracks)
+        if (!snapshot) continue
+        const tree = cloneTrackTree(snapshot, sceneTrackId(nextId))
+        if (tree[0]) sceneTrackChildIds.push(tree[0].id)
+        for (const track of tree) tracks[track.id] = track
+      }
       const scene: Scene = {
         id: nextId,
         name: `${source.name} Copy`,
@@ -873,6 +936,10 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         effects: source.effects?.map((e) => ({ ...e, id: crypto.randomUUID(), settings: { ...e.settings } })),
         tracks,
         rootTrackIds,
+        sceneTrackEnabled: source.sceneTrackEnabled,
+        sceneTrackParams: source.sceneTrackParams && { ...source.sceneTrackParams },
+        sceneTrackStringParams: source.sceneTrackStringParams && { ...source.sceneTrackStringParams },
+        sceneTrackChildIds: sceneTrackChildIds.length ? sceneTrackChildIds : undefined,
       }
       const at = Math.max(0, s.sceneOrder.indexOf(sceneId)) + 1
       const sceneOrder = s.sceneOrder.slice()
@@ -915,6 +982,13 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       // undefined (persisted as null), and the timeline row renders key={undefined}
       // - React's missing-key warning pointing at TimelineArea's keyed map. Mint one.
       if (!track.id) track = { ...track, id: crypto.randomUUID() }
+      // The scene instrument takes only the lane types it can express - an
+      // object nested under it would say what `rootTrackIds` already says, and
+      // the dematerializer has nowhere to put it. Land it at root instead of
+      // dropping the add on the floor. (core/sceneTrack.ts)
+      if (isSceneTrackId(track.parentId) && !canBeSceneTrackChild(track)) {
+        track = { ...track, parentId: undefined }
+      }
       const tracks = { ...s.tracks, [track.id]: track }
       // Nested under a parent: insert into the parent's childIds at atIndex.
       if (track.parentId) {
@@ -1175,6 +1249,10 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     set((s) => {
       const target = s.tracks[trackId]
       if (!target) return s
+      // The scene instrument is virtual: there is no document entry to remove,
+      // and deleting it here would silently take its lanes with it. ⌘⇧S hides
+      // it (setSceneTrackEnabled); nothing deletes it.
+      if (isSceneTrackId(trackId)) return s
       // Deleting a track takes its whole subtree with it - automation and ability
       // lanes are meaningless without their parent, and nested children go too.
       const doomed = new Set<string>()
@@ -1209,6 +1287,9 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
   moveTrackToScene: (trackId, targetSceneId) => rawSet((s) => {
     const source = s.scenes[s.activeSceneId]
     const target = s.scenes[targetSceneId]
+    // `source.tracks` is the document, so the virtual scene instrument is
+    // simply absent here and needs no guard of its own - but a scene LANE is
+    // present and has to be refused, and its parentId check does that.
     const root = source?.tracks[trackId]
     if (!source || !target || source.id === target.id || !root || root.parentId || root.type === 'audio') return s
     // Main is composition-only, and mainOnly composers never leave it. Crop
@@ -1248,6 +1329,10 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       if (!snapshot) return s
       // Nothing nests under the audio track (the UI blocks this; the backstop).
       if (parentId != null && (!s.tracks[parentId] || s.tracks[parentId].type === 'audio')) return s
+      // The scene instrument is one per scene and virtual - it cannot be copied,
+      // and only its own lane types may be copied onto it.
+      if (isSceneTrackId(srcId)) return s
+      if (isSceneTrackId(parentId) && !canBeSceneTrackChild(snapshot.tracks[srcId])) return s
       const tree = cloneTrackTree(snapshot, parentId)
       newId = tree[0]?.id ?? null
       return insertTrackTreeIntoState(s, tree, index)
@@ -1271,6 +1356,11 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       // under it (the UI blocks both; this is the backstop).
       if (child.type === 'audio') return s
       if (parentId != null && s.tracks[parentId].type === 'audio') return s
+      // The scene instrument is pinned the same way, and takes only the lane
+      // types it can express (core/sceneTrack.ts) - an object nested under it
+      // would say what `rootTrackIds` already says.
+      if (isSceneTrackId(trackId)) return s
+      if (isSceneTrackId(parentId) && !canBeSceneTrackChild(child)) return s
       // Cycle guard: the new parent must not sit inside trackId's own subtree.
       for (let cur: string | undefined = parentId ?? undefined; cur != null; cur = s.tracks[cur]?.parentId) {
         if (cur === trackId) return s
@@ -1312,6 +1402,8 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         const child = s.tracks[id]
         if (!child || child.type === 'audio' || id === parentId) return false
         if (parentId != null && (!s.tracks[parentId] || s.tracks[parentId].type === 'audio')) return false
+        if (isSceneTrackId(id)) return false
+        if (isSceneTrackId(parentId) && !canBeSceneTrackChild(child)) return false
         for (let cur: string | undefined = parentId ?? undefined; cur != null; cur = s.tracks[cur]?.parentId) {
           if (cur === id) return false
         }
@@ -1363,7 +1455,9 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
   groupTracks: (trackIds) => wrapSelection(set, trackIds, {
     // Lanes live only on their parent and audio is pinned - neither joins.
     eligible: (t) => t.type !== 'audio' && t.type !== 'automation'
-      && t.type !== 'ability' && t.type !== 'envelope',
+      && t.type !== 'ability' && t.type !== 'envelope'
+      // The scene instrument is the scene; it cannot be a member of anything.
+      && !isSceneTrackId(t.id),
     build: (id, parentId, members, color) => ({
       id,
       name: 'Group',
@@ -1383,7 +1477,9 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     // rows. Only the lanes that live on their parent, and audio, stay out -
     // the same exclusions grouping makes.
     eligible: (t) => t.type !== 'audio' && t.type !== 'automation'
-      && t.type !== 'ability' && t.type !== 'envelope',
+      && t.type !== 'ability' && t.type !== 'envelope'
+      // The scene instrument is the scene; it cannot be a member of anything.
+      && !isSceneTrackId(t.id),
     build: (id, parentId, members, color) => ({
       id,
       name: 'Switcher',
@@ -1409,6 +1505,10 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       // Switchers dissolve the same way groups do - the members splice back
       // into the container's slot and the container's own lane dies with it.
       if (!g || (g.type !== 'group' && g.type !== 'switcher')) return s
+      // The scene instrument is a group only by materialization; dissolving it
+      // would delete its lanes and leave the Scene's fields orphaned. ⌘⇧S hides
+      // it instead (setSceneTrackEnabled).
+      if (isSceneTrackId(trackId)) return s
       const parentId = g.parentId ?? null
       // Members splice back where the group was; the group's own lanes are
       // meaningless without it and are deleted, subtrees included.

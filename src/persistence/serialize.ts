@@ -1,4 +1,4 @@
-import { useProjectStore } from '../editor/store/ProjectStore'
+import { useProjectStore, viewForScene } from '../editor/store/ProjectStore'
 import { useAudioStore } from '../editor/store/AudioStore'
 import { useVideoStore } from '../editor/store/VideoStore'
 import { usePhotoStore } from '../editor/store/PhotoStore'
@@ -40,12 +40,14 @@ export function hydrate(doc: ProjectDocument) {
   const activeSceneId = fields.activeSceneId && fields.scenes[fields.activeSceneId]
     ? fields.activeSceneId
     : fields.sceneOrder.find((id) => !fields.scenes[id]?.isMain) ?? fields.sceneOrder[0]
-  const scene = fields.scenes[activeSceneId]
   useProjectStore.setState({
     ...fields,
     activeSceneId,
-    tracks: { ...fields.audioTracks, ...(scene?.tracks ?? {}) },
-    rootTrackIds: [...fields.audioRootTrackIds, ...(scene?.rootTrackIds ?? [])],
+    // Through viewForScene rather than inline, so a loaded project gets the
+    // same flattened view every other path builds - including the virtual
+    // scene instrument (core/sceneTrack.ts), which is derived and therefore
+    // absent from the saved document.
+    ...viewForScene(fields.scenes, activeSceneId, fields.audioTracks, fields.audioRootTrackIds),
     // Explicit default: an older save without the field must reset the store,
     // not inherit whatever the previously open project had.
     viewAspect: viewAspect ?? 'fill',

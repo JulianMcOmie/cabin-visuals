@@ -153,6 +153,12 @@
       "port": 3065
     },
     {
+      "name": "scene-fx-3097",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3097", "npm", "run", "dev", "--", "--port", "3097"],
+      "port": 3097
+    },
+    {
       "name": "kaleido-extras-3036",
       "runtimeExecutable": "env",
       "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3036", "npm", "run", "dev", "--", "--port", "3036"],

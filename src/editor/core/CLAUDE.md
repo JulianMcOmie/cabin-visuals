@@ -17,6 +17,20 @@ Key behaviors (each has a war-story comment in the file — read before changing
 
 Reserved `tf*` param keys (`tfX/Y/Z`, `tfRotX/Y/Z` in degrees, `tfSize`, `tfOpacity`) stored in `track.params` so automation/envelope machinery targets them like any param, but **declared here, not by instruments**. Composed as the PARENT of the instrument's own `localTransform`, so they inherit down the track hierarchy; `tfSize` is a "group fader" (scales subtree + mover layouts), unlike instrument mesh scale which stays private to the mesh.
 
+## sceneTrack.ts — the scene instrument (a VIRTUAL track)
+
+The scene as a device: scene-wide movers/splitters, backdrop colorizers, a scene-wide `tf*` transform, and automation lanes on all of it. ⌘⇧S (`hooks/useSceneTrackKeys.ts`) shows and selects it per scene; Main is skipped (it composes other scenes, so there is nothing to act on).
+
+**It is not in the document.** `Scene.sceneTrackEnabled/sceneTrackParams/sceneTrackStringParams/sceneTrackChildIds` are its whole state; this module materializes them into a synthetic `group` track (id `scene-track:<sceneId>`, derived not minted, so selection survives reload/undo) and `ProjectStore`'s `set()` wrapper calls `dematerializeSceneTrack` to fold writes back. Two seams read it — `viewForScene` (the editor's flattened view) and `VisualEngine.setProject` (per scene, because the engine reads `scenes[id]` directly, not the flattened view) — and **both must go through `sceneTrackView`**, which memoizes on the Scene's identity. Skip the memo and you lose the timeline's row memoization AND the engine's whole-graph reuse in one go.
+
+Things that bite:
+
+- **Its `childIds` hold only its lanes.** The scene's objects stay in `rootTrackIds`; the resolver does the "applies to everything" part. An earlier design nested the whole arrangement under it — free group semantics, but it re-indents the timeline, moves ids in the document, and makes root-drop/`audioPinnedCount` math ambiguous.
+- **Lane `parentId` is normalized by the view, not trusted from the document.** `isChainChild` (resolve.ts) tells a chain entry from a globally-routed mover by `p.tracks[parentId]`, and undo / `duplicateScene` / hand-built fixtures would each have to get the field right. The normalized clone is WeakMap-cached on the original track's ref so the reference stays stable — resolve.ts's per-track cache and the memoized rows both compare on it.
+- **Off is ABSENCE**, not `false`, so a scene nobody has pressed ⌘⇧S on stays byte-identical to a pre-feature save. Same for empty params/childIds. No upgrade step was needed (purely additive optional fields).
+- **`Scene.effects` IS the scene instrument's effect chain** — the dematerializer folds `effects` back onto the Scene, so the ordinary per-track effect actions drive it and the two inspector surfaces (scene track selected, nothing selected) edit one chain. The engine still does not APPLY scene effects; that gap predates this.
+- `hydrate` builds the flattened view through `viewForScene` for this reason — it used to inline the merge, which meant a loaded project came back with no scene row until the next scene switch.
+
 ## trackTypes.ts — automation pitch encoding
 
 Automation lanes encode value in note pitch: `pitchToValue`/`valueToPitch` over pitch span 36–84 → param [min,max]. Shared by piano-roll row labels and engine keyframe extraction.

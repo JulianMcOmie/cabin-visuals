@@ -29,6 +29,7 @@ import { computeRulerGrid } from '../rulerGrid'
 import { updateMidiActivityAtBeat } from './midiActivityRegistry'
 import { scrollLeftAroundBeat } from '../../utils/zoomAroundBeat'
 import { audioPickupBars } from '../../utils/audioPickup'
+import { isSceneTrackId } from '../../core/sceneTrack'
 
 const MIN_OUTSIDE_PROJECT_BARS = 8
 const OUTSIDE_PROJECT_OVERSCAN_BARS = 2
@@ -489,9 +490,12 @@ export function TimelineArea() {
             null once the fade is done). Keyed on the scene so switching to a
             different empty scene replays the entrance - the view genuinely
             appeared again - instead of silently reusing the settled one. */}
+        {/* `empty` ignores the scene instrument's own row: it is a root track
+            when it's showing (core/sceneTrack.ts), but a scene wearing nothing
+            else is still empty and needs the add-a-track list. */}
         <EmptySceneActions
           key={activeSceneId}
-          empty={rootTrackIds.length === 0}
+          empty={rootTrackIds.every(isSceneTrackId)}
           labelWidth={labelWidth}
           isMain={activeSceneIsMain}
           onAddTrack={() => insertTrack({ withStarterBlock: true })}

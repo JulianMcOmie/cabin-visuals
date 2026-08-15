@@ -35,6 +35,7 @@ import {
 import { orderedSwitcherBindings } from '../switcherBindings'
 import { identitySV } from './stateVector'
 import { flattenTrackNotes as flattenTrackNotesRaw } from './noteFlatten'
+import { isSceneTrackId } from '../sceneTrack'
 
 /** The slice of the project the resolver reads. ProjectStore's state satisfies it
  *  structurally, so the engine never imports the store's internals. */
@@ -1037,6 +1038,15 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
   const objects: ResolvedObject[] = []
   const groups: ResolvedGroup[] = []
   const tagIndex = new Map<string, string[]>()
+  const backdropChain: MoverOrSplitter[] = []
+
+  // The scene instrument (core/sceneTrack.ts), if this scene wears one. It
+  // arrives as an ordinary `group` track spliced in at the front of the roots,
+  // so the group machinery below carries it - what it needs on top is the two
+  // things a group cannot say: it is the implicit PARENT of every root object
+  // (nothing is nested under it in the document), and its colorizers paint the
+  // BACKDROP rather than the objects.
+  const sceneTrack = p.rootTrackIds.map((id) => p.tracks[id]).find((t) => t && isSceneTrackId(t.id))
 
   // Real solo, scoped to OBJECTS: if any object is soloed, non-soloed objects go off
   // (muted). Child automation keeps its own mute, so soloing an object never
@@ -1105,7 +1115,9 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     if (track.type === 'group' || track.type === 'switcher') {
       groups.push({
         trackId: id,
-        parentId: track.parentId,
+        // Same implicit parenting as the objects below - but the scene
+        // instrument is itself a group, and must never parent on itself.
+        parentId: track.parentId ?? (id === sceneTrack?.id ? undefined : sceneTrack?.id),
         params: track.params ?? {},
         automations: resolveAutomationLanes(track, TRANSFORM_PARAM_DEFS, p),
         afterObjectIndex: objects.length,
@@ -1162,6 +1174,12 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     }
     objects.push({
       ...base,
+      // Parenting on the scene instrument is per-RESOLVE, not part of the
+      // cached `base`: the cache is keyed on the track's own reference, and
+      // toggling the scene instrument changes neither the track nor its
+      // subtree. Baking it into `base` would leave every cached object still
+      // claiming the old parent after ⌘⇧S.
+      parentId: track.parentId ?? sceneTrack?.id,
       muted: objectOff(track),
       // Per-resolve, never cached onto `base`: it closes over this resolve's
       // lane memos, and the switcher standing above an object is not in that
@@ -1225,7 +1243,14 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       .filter((c): c is Track => !!c && isChainEntryTrack(c, p))
     if (chainChildren.length === 0) continue
     const anySolo = chainChildren.some((c) => c.solo)
-    const membersAbove: ResolvedObject[] = []
+    // The scene instrument holds no members in its childIds - the scene's
+    // objects stay at root in the document. Every object in the scene is a
+    // member, and they are all "above" it, so an entry anywhere in its chain
+    // reaches all of them. (The scene node is FIRST in DFS, so it is the last
+    // group this reversed walk visits: its entries land after every real
+    // group's, which is the right nesting order for an outermost container.)
+    const isSceneNode = isSceneTrackId(gid)
+    const membersAbove: ResolvedObject[] = isSceneNode ? [...objects] : []
     for (const cid of g.childIds ?? []) {
       const child = p.tracks[cid]
       if (!child) continue
@@ -1243,6 +1268,20 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
           globalMoverResolveCache.set(child, { deps, entries })
         }
         if (entries.length === 0) continue
+        // On the scene instrument a COLORIZER means the backdrop, not the
+        // objects. That is the one place `kind` steers resolution (the
+        // visualCopies guide calls it a UI-only discriminator), and it earns
+        // the exception: the scene's own colour IS its backdrop, objects
+        // already have colorizers at every other level (their own track, a
+        // group, a routed global entry), and the backdrop has no other way to
+        // be driven by the beat at all. "Grade the whole scene, objects
+        // included" is the scene EFFECT chain's job, not this one. A switcher
+        // resolves to several entries, so the whole splice goes to the
+        // backdrop together.
+        if (isSceneNode && getMoverOrSplitterDefinition(moverOrSplitterId(child))?.kind === 'colorizer') {
+          backdropChain.push(...entries)
+          continue
+        }
         for (const member of membersAbove) member.moverAndSplitterChain.push(...entries)
       } else {
         for (const oid of objectsInSubtree(cid)) {
@@ -1312,5 +1351,15 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     }
   }
 
-  return { objects, groups, tagIndex }
+  // The scene instrument's fx lanes drive the scene EFFECT chain (its
+  // `effects` are Scene.effects on the synthetic track), resolved through the
+  // same gatherer objects use so all four automation modes carry over.
+  const sceneFxAutomations = sceneTrack ? resolveEffectAutomations(sceneTrack, p) : []
+  return {
+    objects,
+    groups,
+    tagIndex,
+    backdropChain: backdropChain.length ? backdropChain : undefined,
+    sceneFxAutomations: sceneFxAutomations.length ? sceneFxAutomations : undefined,
+  }
 }

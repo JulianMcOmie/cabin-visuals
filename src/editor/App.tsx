@@ -17,7 +17,7 @@ import { ExportDriver } from './components/visual/ExportDriver'
 import { RenderGovernor } from './components/visual/RenderGovernor'
 import { DevRenderStats } from './components/visual/DevRenderStats'
 import { VisualBeatSync } from './core/visual/VisualBeatSync'
-import { getCompositionLayers, getMountedRenderScenes, getObjectState, getVisualCopies, getVisualCopyCount, setEditorPreviewSceneId } from './core/visual/VisualEngine'
+import { getCompositionLayers, getMountedRenderScenes, getObjectState, getSceneBackdrop, getVisualCopies, getVisualCopyCount, setEditorPreviewSceneId } from './core/visual/VisualEngine'
 import { track } from '../analytics/analytics'
 // Tutorial is disabled in the UI - see the commented mount below.
 // import { TutorialOverlay } from './components/TutorialOverlay'
@@ -39,6 +39,7 @@ import { usePlayback } from './hooks/usePlayback'
 import { useTransportKeys } from './hooks/useTransportKeys'
 import { useUndoRedoKeys } from './hooks/useUndoRedoKeys'
 import { useGroupKeys } from './hooks/useGroupKeys'
+import { useSceneTrackKeys } from './hooks/useSceneTrackKeys'
 import { useProjectPersistence } from './hooks/useProjectPersistence'
 import { useAnonymousAdoption } from './hooks/useAnonymousAdoption'
 import { useSaveStatus } from '../persistence/autosave'
@@ -62,7 +63,9 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   }
   // The VisualCopy pull API too, so E2E checks can read a track's resolved
   // copies (transform + opacity) without reaching into an R3F scene graph.
-  ;(window as unknown as Record<string, unknown>).__cabinVisual = { getVisualCopies, getVisualCopyCount, getMountedRenderScenes, getCompositionLayers, getObjectState }
+  // getSceneBackdrop rides along because a scene colorizer's whole effect is a
+  // clear colour - there is no object state to read it off (core/sceneTrack.ts).
+  ;(window as unknown as Record<string, unknown>).__cabinVisual = { getVisualCopies, getVisualCopyCount, getMountedRenderScenes, getCompositionLayers, getObjectState, getSceneBackdrop }
 }
 
 // Sidebar toggles glide (Material 3 emphasized-decelerate - the .panel-toggle-anim
@@ -1115,6 +1118,7 @@ function Header({
   useTransportKeys({ play, pause, reset })
   useUndoRedoKeys()
   useGroupKeys()
+  useSceneTrackKeys()
 
   // Export: capability-gated (Chrome-first - WebCodecs or nothing).
   const [exportOpen, setExportOpen] = useState(false)

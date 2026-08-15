@@ -1,4 +1,6 @@
-import { Matrix4, type Scene as ThreeScene } from 'three'
+import { Color, Matrix4, type Scene as ThreeScene } from 'three'
+import { mixOklabLinearRgb, rotateHueOklabLinearRgb } from '../../utils/oklch'
+import { sceneTrackView } from '../sceneTrack'
 import { resolveAutomationLanes, resolveProject, type ProjectSnapshot } from './resolve'
 import { evaluatePulse } from './energy'
 import { sampleAutomationLane } from './automation'
@@ -10,7 +12,7 @@ import { resolveVisualCopies, structuralCopyCount, warpChainBeat } from '../visu
 import type { VisualCopy } from '../visualCopies/types'
 import type { ResolvedGraph, ResolvedGroup, ObjectState, ResolvedEnvelope } from './types'
 import type { ProjectState } from '../../store/ProjectStore'
-import { DEFAULT_SCENE_BACKGROUND, type Scene } from '../../types'
+import { DEFAULT_SCENE_BACKGROUND, type Scene, type SceneGradient } from '../../types'
 import { compositionAutomatableParams, compositionDef, isCompositionTrack, type CompositionLayer } from '../directors'
 
 // The engine is a plain module singleton, NOT a zustand/React store: per-frame
@@ -140,9 +142,14 @@ export function setProject(input: ProjectState | ProjectSnapshot) {
     // scene objects - this skip is the load-bearing gate that keeps them out
     // of the object graphs.
     if (!scene || scene.isMain) continue
+    // The scene instrument is virtual, so the resolver only meets it if we
+    // splice it in here (core/sceneTrack.ts). `sceneTrackView` memoizes on the
+    // Scene's identity, which is what keeps the reference test below - and with
+    // it the whole-graph reuse - working exactly as before.
+    const view = sceneTrackView(scene)
     const inputs: GraphInputs = {
-      tracks: scene.tracks,
-      rootTrackIds: scene.rootTrackIds,
+      tracks: view.tracks,
+      rootTrackIds: view.rootTrackIds,
       bpm: p.bpm,
       beatsPerBar: p.beatsPerBar,
       totalBars: p.totalBars,
@@ -215,8 +222,12 @@ export function syncParams(input: ProjectState | ProjectSnapshot) {
   for (const [sceneId, graph] of graphs) {
     // Group tf* knobs follow the same 60fps rule as instrument params: the
     // strip's sliders write params, and the frame after must see them.
+    const scene = p.scenes[sceneId]
     for (const grp of graph.groups ?? []) {
-      const track = p.scenes[sceneId]?.tracks[grp.trackId]
+      // Through the materialized view, so the scene instrument's own transform
+      // strip is live at 60fps like every other group's - its params live on
+      // the Scene, not in `tracks`.
+      const track = scene && sceneTrackView(scene).tracks[grp.trackId]
       if (track) grp.params = track.params ?? {}
     }
   }
@@ -334,6 +345,11 @@ function resolveComposition(beat: number): CompositionLayer[] {
 export function computeAtBeat(beat: number) {
   const secPerBeat = 60 / bpm
   compositionLayers = resolveComposition(beat)
+  // Backdrops before the objects: cheap (one chain per scene that has one, and
+  // nothing at all otherwise), and VisualScene clears with the result before it
+  // renders anything into the scene's target.
+  computeSceneBackdrops(beat)
+  computeSceneFxOverrides(beat)
   const activeSceneIds = new Set(compositionLayers.map((layer) => layer.sceneId))
   activeTrackIds = new Set()
   const activeGraphs = [...activeSceneIds].map((id) => graphs.get(id)).filter((graph): graph is ResolvedGraph => !!graph)
@@ -552,6 +568,135 @@ function composeGroupPlacement(grp: ResolvedGroup, beat: number) {
   else world.copy(_local)
   const parentOpacity = grp.parentId ? inheritedOpacities.get(grp.parentId) ?? 1 : 1
   inheritedOpacities.set(grp.trackId, parentOpacity * trackOpacity(params))
+}
+
+// ── Scene backdrops ──────────────────────────────────────────────────────────
+// A colorizer on the scene instrument (core/sceneTrack.ts) paints the BACKDROP.
+// The chain is resolved apart from every object chain (`graph.backdropChain`),
+// evaluated here once per frame, and the result is what VisualScene clears and
+// paints the gradient with - so background colour becomes automatable through
+// exactly the machinery every other colorizer already has, and stays a pure
+// function of the beat.
+
+/** What a scene's backdrop actually renders as this frame - the document's own
+ *  colours when nothing drives them, else those colours run through the scene
+ *  instrument's colorizer chain. */
+export interface SceneBackdrop {
+  color: string
+  gradient: SceneGradient | null
+  transparent: boolean
+}
+
+const sceneBackdrops = new Map<string, SceneBackdrop>()
+const _backdropColor = new Color()
+const _backdropTint = new Color()
+
+/** Both gradient stops travel through the SAME shift, so a hue sweep turns the
+ *  whole backdrop rather than pulling its two ends apart. */
+function shiftedGradient(gradient: SceneGradient, shift: VisualCopy['colorShift']): SceneGradient {
+  return {
+    ...gradient,
+    from: shiftHex(gradient.from, shift),
+    to: shiftHex(gradient.to, shift),
+  }
+}
+
+function shiftHex(hex: string, shift: VisualCopy['colorShift']): string {
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex
+  _backdropColor.set(hex)
+  const tintMix = shift.tint && /^#[0-9a-f]{6}$/i.test(shift.tint)
+    ? clamp(shift.tintAmount, 0, 1)
+    : 0
+  if (tintMix > 0) {
+    _backdropTint.set(shift.tint as string)
+    if (shift.tintPerceptual) mixOklabLinearRgb(_backdropColor, _backdropTint, tintMix)
+    else _backdropColor.lerp(_backdropTint, tintMix)
+  }
+  // Same order and the same two hue regimes as instrumentColor.ts, which is the
+  // object-side twin of this function - a colorizer must not mean one thing on
+  // a cube and another on the wall behind it.
+  if (shift.huePerceptual) {
+    rotateHueOklabLinearRgb(_backdropColor, shift.hue)
+    _backdropColor.offsetHSL(0, shift.saturation, shift.lightness)
+  } else {
+    _backdropColor.offsetHSL(shift.hue, shift.saturation, shift.lightness)
+  }
+  return `#${_backdropColor.getHexString()}`
+}
+
+function computeSceneBackdrops(beat: number) {
+  sceneBackdrops.clear()
+  if (!project) return
+  for (const [sceneId, graph] of graphs) {
+    const scene = project.scenes[sceneId]
+    if (!scene) continue
+    const stored: SceneBackdrop = {
+      color: scene.backgroundColor ?? DEFAULT_SCENE_BACKGROUND,
+      gradient: scene.backgroundGradient?.enabled ? scene.backgroundGradient : null,
+      transparent: scene.backgroundTransparent,
+    }
+    // No colorizers on the scene, or a transparent backdrop (there is no colour
+    // to shift, and tinting alpha away would be a surprise): the stored values.
+    if (!graph.backdropChain?.length || stored.transparent) {
+      sceneBackdrops.set(sceneId, stored)
+      continue
+    }
+    // The chain is evaluated exactly as an object's would be, then only copy 0
+    // is read: a backdrop is one surface, so a SPLITTER on the scene has
+    // nothing to multiply here (it still multiplies the objects, through the
+    // ordinary member broadcast). Colorizers accumulate into copy 0's shift.
+    const copies = resolveVisualCopies(graph.backdropChain, beat)
+    const shift = copies[0]?.colorShift
+    if (!shift) {
+      sceneBackdrops.set(sceneId, stored)
+      continue
+    }
+    sceneBackdrops.set(sceneId, {
+      color: shiftHex(stored.color, shift),
+      gradient: stored.gradient ? shiftedGradient(stored.gradient, shift) : null,
+      transparent: false,
+    })
+  }
+}
+
+/** The renderer's pull for one scene's backdrop this frame. Falls back to the
+ *  document when the engine has not resolved that scene (Main, or before the
+ *  first computeAtBeat), so callers never need a branch. */
+export function getSceneBackdrop(sceneId: string): SceneBackdrop | undefined {
+  return sceneBackdrops.get(sceneId)
+}
+
+// ── Scene effect-chain automation ────────────────────────────────────────────
+// The scene instrument's `fx:<instanceId>:<key>` lanes (graph.sceneFxAutomations)
+// drive the scene EFFECT chain, which lives on the Scene rather than on any
+// object - so their per-frame samples land in a per-scene override map instead
+// of an ObjectState. VisualScene merges them over each instance's stored
+// settings with the same effectiveEffectState the object wrappers use. Sampled
+// at the playhead beat: the scene chain has no warpBeat of its own.
+
+const sceneFxOverrides = new Map<string, Record<string, Record<string, number>>>()
+
+function computeSceneFxOverrides(beat: number) {
+  sceneFxOverrides.clear()
+  for (const [sceneId, graph] of graphs) {
+    const lanes = graph.sceneFxAutomations
+    if (!lanes?.length) continue
+    const overrides: Record<string, Record<string, number>> = {}
+    for (const ea of lanes) {
+      // Value first, slot second - an inert lane must not leave an empty
+      // override map behind (same rule as the object path above).
+      const base = overrides[ea.instanceId]?.[ea.key] ?? ea.base ?? 0
+      const v = sampleAutomationLane(ea, beat, base)
+      if (!Number.isNaN(v)) (overrides[ea.instanceId] ??= {})[ea.key] = v
+    }
+    if (Object.keys(overrides).length) sceneFxOverrides.set(sceneId, overrides)
+  }
+}
+
+/** Per-frame sampled fx-lane values for one scene's effect chain
+ *  (instanceId → key → value), or undefined when nothing drives it. */
+export function getSceneFxOverrides(sceneId: string): Record<string, Record<string, number>> | undefined {
+  return sceneFxOverrides.get(sceneId)
 }
 
 // Preview objects (instrument-browser hover popups): synthetic states

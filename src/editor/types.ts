@@ -158,6 +158,25 @@ export interface Scene {
   /** Scene-level effect chain. Document + inspector UI only for now: the
    *  visual engine does not yet apply these to the scene's rendered output. */
   effects?: EffectInstance[]
+
+  // ── The scene instrument (core/sceneTrack.ts) ──────────────────────────────
+  // The scene as a device you can point things at. It is a VIRTUAL track: no
+  // entry ever exists in `tracks`, and `rootTrackIds` is untouched by it. The
+  // three fields below are its whole document state; `core/sceneTrack.ts`
+  // materializes them into a synthetic `group` track for every reader, and
+  // ProjectStore's set() wrapper folds edits back down onto them.
+  /** Absent/false = the scene has no scene instrument at all and every reader
+   *  sees exactly the pre-feature document. Toggled by ⌘⇧S. */
+  sceneTrackEnabled?: boolean
+  /** The scene instrument's canonical `tf*` transform - parent of every root
+   *  object in the scene, so it moves the whole arrangement as one. */
+  sceneTrackParams?: Record<string, number>
+  sceneTrackStringParams?: Record<string, string>
+  /** Its child lanes, in order: mover/splitter/colorizer chain entries and the
+   *  automation lanes on its own params. These ARE real tracks in `tracks`
+   *  (they carry blocks and notes like any lane) - this list is their order and
+   *  the record of which children belong to the scene rather than to a track. */
+  sceneTrackChildIds?: string[]
 }
 
 /**

@@ -12,6 +12,7 @@ import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
 import { seedSceneBindings } from '../core/directors/sceneBindings'
 import { SWITCHER_MODE_PARAM } from '../core/visualCopies/switcher'
 import type { Track } from '../types'
+import { isSceneTrackId } from '../core/sceneTrack'
 
 type LibraryItem = { id: string; name: string; kind: 'object' | 'modulator' | 'mover' | 'splitter' | 'colorizer' | 'director' | 'switcher' }
 
@@ -125,6 +126,14 @@ export function useLibraryDrag() {
             clientY: ev.clientY,
           })
         }
+      }
+      // The scene instrument takes chain entries only (core/sceneTrack.ts), so
+      // an object card hovering it must not draw a nest indicator the store
+      // will refuse - same reasoning as the composition case below. Runs first,
+      // so the replace pass below never sees a scene-track landing either.
+      const chainCard = item.kind === 'mover' || item.kind === 'splitter' || item.kind === 'colorizer'
+      if (drop && !chainCard && (isSceneTrackId(drop.parentId) || isSceneTrackId(drop.intoId))) {
+        drop = { ...drop, parentId: null, intoId: null }
       }
       // An instrument card over an instrument row's middle band swaps that track's
       // instrument in place instead of nesting under it (nesting is still reachable

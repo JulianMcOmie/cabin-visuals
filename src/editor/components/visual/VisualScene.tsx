@@ -26,7 +26,9 @@ import {
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js'
 import { BloomEffect } from 'postprocessing'
-import { getCompositionLayers, getObjectState, setMountedRenderScenes, subscribeObjects, getObjectList, type ObjectListEntry } from '../../core/visual/VisualEngine'
+import { getCompositionLayers, getObjectState, getSceneBackdrop, getSceneFxOverrides, setMountedRenderScenes, subscribeObjects, getObjectList, type ObjectListEntry } from '../../core/visual/VisualEngine'
+import { getEffect, PLUGIN_LIST } from '../../effects'
+import { effectiveEffectState } from '../../effects/automation'
 import type { CompositionLayer } from '../../core/directors'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
@@ -746,6 +748,31 @@ export function VisualScene() {
     const filterMesh = new Mesh(new PlaneGeometry(2, 2), filterMaterial)
     filterMesh.frustumCulled = false
     filterScene.add(filterMesh)
+    // One ShaderMaterial per scene-category effect plugin, shared by every
+    // Scene FX chain (uniforms are rewritten per pass, so sharing is safe -
+    // the same discipline as filterMaterial serving several tracks). Uniforms:
+    // tDiffuse/time/resolution/aspect plus one float per param; a shader that
+    // doesn't read one simply leaves it inactive.
+    const sceneFxMaterials = new Map<string, ShaderMaterial>()
+    for (const plugin of PLUGIN_LIST) {
+      if (plugin.category !== 'scene' || !plugin.fragmentShader) continue
+      const uniforms: Record<string, { value: unknown }> = {
+        tDiffuse: { value: null as Texture | null },
+        time: { value: 0 },
+        resolution: { value: new Vector2(1, 1) },
+        aspect: { value: 1 },
+      }
+      for (const p of plugin.params) {
+        uniforms[p.key] = { value: typeof p.default === 'number' ? p.default : 0 }
+      }
+      sceneFxMaterials.set(plugin.id, new ShaderMaterial({
+        vertexShader: COLOR_FILTER_VERTEX,
+        fragmentShader: plugin.fragmentShader,
+        uniforms: uniforms as ShaderMaterial['uniforms'],
+        depthTest: false,
+        depthWrite: false,
+      }))
+    }
     const hdrOptions = { minFilter: LinearFilter, magFilter: LinearFilter, type: HalfFloatType }
     const compositeTarget = new WebGLRenderTarget(1, 1, hdrOptions)
     // Production mip-chain bloom from `postprocessing`. It extracts luminance
@@ -777,6 +804,7 @@ export function VisualScene() {
     return {
       scene, invertScene, cam, meshes, invertMeshes,
       filterScene, filterCam, filterMesh, filterMaterial, warpMaterial, impactWarpMaterial, cropMaskMaterial, gradientMaterial,
+      sceneFxMaterials,
       compositeTarget, bloomEffect, finalMaterial,
     }
   }, [gl])
@@ -891,6 +919,7 @@ export function VisualScene() {
     compositor.impactWarpMaterial.dispose()
     compositor.cropMaskMaterial.dispose()
     compositor.gradientMaterial.dispose()
+    for (const material of compositor.sceneFxMaterials.values()) material.dispose()
     compositor.bloomEffect.dispose()
     compositor.finalMaterial.dispose()
     compositor.compositeTarget.dispose()
@@ -991,10 +1020,19 @@ export function VisualScene() {
           continue
         }
         const projectScene = useProjectStore.getState().scenes[sceneId]
+        // The engine's per-frame backdrop, so a colorizer on the scene
+        // instrument reaches the clear colour and the gradient stops (see
+        // VisualEngine's getSceneBackdrop). With no scene instrument it IS the
+        // document's own values, so this path is unchanged for every project
+        // that never presses ⌘⇧S.
+        const backdrop = getSceneBackdrop(sceneId)
         gl.setRenderTarget(runtime.target)
-        gl.setClearColor(projectScene?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, projectScene?.backgroundTransparent ? 0 : 1)
+        gl.setClearColor(
+          backdrop?.color ?? projectScene?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND,
+          (backdrop ? backdrop.transparent : projectScene?.backgroundTransparent) ? 0 : 1,
+        )
         gl.clear(true, true, true)
-        const sceneGradient = activeBackdropGradient(projectScene)
+        const sceneGradient = backdrop ? backdrop.gradient : activeBackdropGradient(projectScene)
         if (sceneGradient) paintBackdropGradient(sceneGradient)
         gl.render(runtime.base, camera)
         const presence = passPresence.get(sceneId)
@@ -1090,6 +1128,45 @@ export function VisualScene() {
           gl.render(compositor.filterScene, compositor.filterCam)
           filteredTexture = output.texture
           filterPass++
+        }
+        // The scene EFFECT chain (Scene.effects - the scene instrument's
+        // effect channel, chain order = array order) runs after every
+        // post-process instrument: those are PLAYED gestures over the raw
+        // scene, this is the scene's finished LOOK - grade, lens, destruction
+        // - applied over their result. Only the Crop matte comes later, so the
+        // punched holes stay holes. Settings merge per-frame automation
+        // through effectiveEffectState (fx:<id>:<key> lanes on the scene
+        // instrument, sampled by the engine into getSceneFxOverrides), and
+        // amount 0 skips the pass entirely - an idle device is free.
+        const sceneChain = projectScene?.effects
+        if (sceneChain?.length) {
+          const fxOverrides = getSceneFxOverrides(sceneId)
+          const fxBeat = getBeatOverride() ?? useTimeStore.getState().currentBeat
+          for (const inst of sceneChain) {
+            const plugin = getEffect(inst.pluginId)
+            const material = plugin ? compositor.sceneFxMaterials.get(plugin.id) : undefined
+            if (!plugin || !material) continue
+            const { enabled, settings } = effectiveEffectState(inst, fxOverrides)
+            if (!enabled) continue
+            if (settings.amount !== undefined && settings.amount <= 0) continue
+            const output = runtime.filterTargets[filterPass % runtime.filterTargets.length]
+            compositor.filterMesh.material = material
+            const uniforms = material.uniforms
+            uniforms.tDiffuse.value = filteredTexture
+            uniforms.time.value = fxBeat
+            ;(uniforms.resolution.value as Vector2).set(runtime.target.width, runtime.target.height)
+            uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
+            for (const p of plugin.params) {
+              const u = uniforms[p.key]
+              if (u) u.value = settings[p.key] ?? (typeof p.default === 'number' ? p.default : 0)
+            }
+            gl.setRenderTarget(output)
+            gl.setClearColor(0x000000, 0)
+            gl.clear(true, true, true)
+            gl.render(compositor.filterScene, compositor.filterCam)
+            filteredTexture = output.texture
+            filterPass++
+          }
         }
         // The in-scene Crop mask runs after even the Strobe: it is a matte
         // over the finished look, so every grade, warp and flash lands inside

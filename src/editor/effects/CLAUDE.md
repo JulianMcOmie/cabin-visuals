@@ -1,6 +1,6 @@
-# src/editor/effects — per-object effect plugins
+# src/editor/effects — per-object effect plugins (+ the scene chain)
 
-Plugins attached per track (`track.effects: EffectInstance[]`) — the mechanism for "apply this to any instrument". Four categories:
+Plugins attached per track (`track.effects: EffectInstance[]`) — the mechanism for "apply this to any instrument". Five categories — four per-object, plus `scene` (below):
 
 - **transform** — mutates the wrapping Group per frame.
 - **shader** — screen-space GLSL post pass over the object's rendered output.
@@ -10,6 +10,49 @@ Plugins attached per track (`track.effects: EffectInstance[]`) — the mechanism
   A `transform` effect moves the wrapping Group rigidly; a deformer bends the surface.
 
 Clone effects were replaced by VisualCopy splitters (`core/visualCopies/`).
+
+## `scene` effects — the per-scene chain (2026-08-15)
+
+Full-frame passes over a SCENE's finished render (`scene/*.ts`: Grade, Lens,
+Blur, Grain, Crush, Glitch, Mirror). Not per-object at all: the chain is
+**`Scene.effects`**, which is also the SCENE INSTRUMENT's effect channel —
+⌘⇧S materializes the virtual scene track (`core/sceneTrack.ts`) whose
+`effects` field IS this chain, so the two inspector surfaces (scene track
+selected / nothing selected) edit one list. VisualScene's compositor runs it
+in array order after the post-process instruments (ripple → impact → colour →
+strobe) and before the Crop matte, building ONE shared ShaderMaterial per
+plugin. What to know before adding one:
+
+- **The contract is fragmentShader-only**: sample `tDiffuse`, see `time` (the
+  BEAT), `resolution`, `aspect`, plus one float uniform per param — the runtime
+  wires uniforms BY PARAM KEY, and `scene/sceneEffects.test.ts` pins the
+  params⟷uniforms agreement in both directions plus the required `amount`.
+- **`amount` 0 must be a bit-exact passthrough** — the runtime skips the pass
+  entirely (`settings.amount <= 0`), so an idle device costs nothing. Two
+  conventions inside the shaders: sub-knob devices (Grade, Lens, Crush) keep
+  every sub-param NEUTRAL at default and let AMOUNT scale the lot (the
+  note-punch lane); single-verb devices (Blur, Glitch) make AMOUNT the strength.
+- **Randomness is seeded from the QUANTIZED beat** (`floor(time * rate)`), so a
+  paused frame holds one grain/glitch pattern forever and export is
+  frame-exact. No feedback/trail devices: they need the previous frame, which
+  is state, which the one rule bans.
+- **Automation is the ordinary `fx:<id>:<key>` lane on the scene instrument**:
+  the resolver gathers its lanes through the same `resolveEffectAutomations`
+  objects use (`ResolvedGraph.sceneFxAutomations`), `computeAtBeat` samples
+  them per frame (`getSceneFxOverrides(sceneId)`), and the compositor merges
+  via `effectiveEffectState` — so curve/noise/burst/cycle all work. Envelope
+  lanes are NOT offered on it (no instrument def), matching the engine.
+  TrackContextMenu deliberately excepts the scene track from the "no group fx
+  lanes" rule.
+- Scene-category devices appear ONLY in the scene chain's add menu
+  (`SCENE_EFFECT_MENU_GROUPS` in TrackEditor) — both the scene-track arm and
+  the no-selection arm — and never in an object chain's, where they would sit
+  inert. Conversely the scene track's picker hides the object categories:
+  its synthetic group is absent from `scene.tracks`, so ObjectRenderer's
+  group-chain merge would never see them.
+- The composite-level Bloom (VisualScene's `BloomEffect` + `bloomIntensity`) is
+  NOT yet a chain device — it runs on the final composite, per frame not per
+  scene, so promoting it is its own task.
 
 ## Writing a `deform` effect
 

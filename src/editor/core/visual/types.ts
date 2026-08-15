@@ -172,6 +172,20 @@ export interface ResolvedGraph {
   groups?: ResolvedGroup[]
   /** tag → object trackIds, so tag-scoped mover targets expand to a group. */
   tagIndex: Map<string, string[]>
+  /** The scene instrument's `fx:<instanceId>:<key>` automation lanes. They
+   *  drive the scene EFFECT chain (Scene.effects, applied full-frame by
+   *  VisualScene's compositor), so no object's `effectAutomations` can carry
+   *  them; resolved off the synthetic scene track exactly as an object's fx
+   *  lanes are, so every automation mode means the same thing here. Sampled
+   *  once per frame into `getSceneFxOverrides`. */
+  sceneFxAutomations?: ResolvedEffectAutomation[]
+  /** The COLORIZER entries on the scene instrument's chain (core/sceneTrack.ts).
+   *  They are held apart from every object chain on purpose: on the scene, a
+   *  colorizer paints the BACKDROP. `computeAtBeat` evaluates them once per
+   *  frame into the scene's rendered background (`getSceneBackdrop`), which is
+   *  the only beat-driven route the backdrop has. Absent = the ordinary case:
+   *  no scene instrument, or one with no colorizers on it. */
+  backdropChain?: MoverOrSplitter[]
 }
 
 /** Per-frame state the renderer pulls for one object. */

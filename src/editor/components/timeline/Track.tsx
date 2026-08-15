@@ -21,6 +21,7 @@ import type { Track as TrackType } from '../../types'
 import { TrackTransformPanel, beginTransformDrag, resetTransformValues, transformValue } from './TrackTransformPanel'
 import { TrackTagsPanel } from './TrackTagsPanel'
 import { TF_OPACITY } from '../../core/transform'
+import { isSceneTrackId } from '../../core/sceneTrack'
 
 // The strip fader is the track's "volume": opacity 0..1, snapping at 0/50/100%.
 const OPACITY_FADER_SPEC = { min: 0, max: 1, step: 0.01, snaps: [0, 0.5, 1], snapThreshold: 0.03 }
@@ -115,6 +116,11 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
   // and crop-in-a-scene keeps its fader this way).
   const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
   const isObjectTrack = track.type === 'base' && !!track.instrumentId && !activeIsMain
+  // The scene instrument (core/sceneTrack.ts) materializes as a group track, so
+  // it takes the group chrome - the transform strip especially, since its tf*
+  // moves the whole scene - but not the parts that would write a field it has
+  // nowhere to store: its name is the scene's, and it has no mute/solo.
+  const isSceneTrack = isSceneTrackId(track.id)
   // Groups wear the same canonical transform strip (their tf* inherits to the
   // whole subtree); tags and hover previews stay object-only.
   // A switcher is a placement node too (resolve.ts gives it a ResolvedGroup),
@@ -423,8 +429,8 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
             />
           ) : (
             <span
-              onDoubleClick={() => setRenaming(true)}
-              title="Double-click to rename"
+              onDoubleClick={isSceneTrack ? undefined : () => setRenaming(true)}
+              title={isSceneTrack ? 'The scene itself - rename it on its tab' : 'Double-click to rename'}
               className="text-[11px] font-medium truncate text-[var(--text)]"
             >
               {replacePreview?.name ?? track.name}
@@ -503,6 +509,11 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
               </div>
             </div>
           )}
+          {/* No M/S on the scene instrument: it is virtual (core/sceneTrack.ts)
+              and carries no mute/solo field, so the buttons would toggle a
+              value the next materialization throws away. */}
+          {!isSceneTrack && (
+          <>
           <button
             onPointerDown={(e) => {
               if (e.button !== 0) return
@@ -537,6 +548,8 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
           >
             S
           </button>
+          </>
+          )}
           {isObjectTrack && (
             <button
               aria-label="Edit tags"

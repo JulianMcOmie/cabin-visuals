@@ -105,31 +105,31 @@ test('scene effect chain edits, reorders, duplicates with fresh ids, and persist
   hydrate(emptyDocument())
   const sceneId = useProjectStore.getState().activeSceneId
 
-  useProjectStore.getState().addSceneEffect(sceneId, 'pixelate')
-  useProjectStore.getState().addSceneEffect(sceneId, 'boil')
+  useProjectStore.getState().addSceneEffect(sceneId, 'sceneGrade')
+  useProjectStore.getState().addSceneEffect(sceneId, 'sceneGlitch')
   let effects = useProjectStore.getState().scenes[sceneId].effects!
-  assert.deepEqual(effects.map((e) => e.pluginId), ['pixelate', 'boil'])
+  assert.deepEqual(effects.map((e) => e.pluginId), ['sceneGrade', 'sceneGlitch'])
   assert.ok(effects.every((e) => e.enabled))
 
-  const [pixelate, boil] = effects
-  useProjectStore.getState().reorderSceneEffect(sceneId, boil.id, -1)
-  useProjectStore.getState().toggleSceneEffect(sceneId, pixelate.id)
-  useProjectStore.getState().setSceneEffectSetting(sceneId, boil.id, 'amount', 0.5)
+  const [grade, glitch] = effects
+  useProjectStore.getState().reorderSceneEffect(sceneId, glitch.id, -1)
+  useProjectStore.getState().toggleSceneEffect(sceneId, grade.id)
+  useProjectStore.getState().setSceneEffectSetting(sceneId, glitch.id, 'amount', 0.5)
   effects = useProjectStore.getState().scenes[sceneId].effects!
-  assert.deepEqual(effects.map((e) => e.pluginId), ['boil', 'pixelate'])
-  assert.equal(effects.find((e) => e.id === pixelate.id)!.enabled, false)
-  assert.equal(effects.find((e) => e.id === boil.id)!.settings.amount, 0.5)
+  assert.deepEqual(effects.map((e) => e.pluginId), ['sceneGlitch', 'sceneGrade'])
+  assert.equal(effects.find((e) => e.id === grade.id)!.enabled, false)
+  assert.equal(effects.find((e) => e.id === glitch.id)!.settings.amount, 0.5)
 
   const copyId = useProjectStore.getState().duplicateScene(sceneId)!
   const copied = useProjectStore.getState().scenes[copyId].effects!
-  assert.deepEqual(copied.map((e) => e.pluginId), ['boil', 'pixelate'])
+  assert.deepEqual(copied.map((e) => e.pluginId), ['sceneGlitch', 'sceneGrade'])
   assert.ok(copied.every((e) => !effects.some((source) => source.id === e.id)))
 
   hydrate(serialize())
-  assert.deepEqual(useProjectStore.getState().scenes[sceneId].effects!.map((e) => e.pluginId), ['boil', 'pixelate'])
+  assert.deepEqual(useProjectStore.getState().scenes[sceneId].effects!.map((e) => e.pluginId), ['sceneGlitch', 'sceneGrade'])
 
-  useProjectStore.getState().removeSceneEffect(sceneId, pixelate.id)
-  assert.deepEqual(useProjectStore.getState().scenes[sceneId].effects!.map((e) => e.pluginId), ['boil'])
+  useProjectStore.getState().removeSceneEffect(sceneId, grade.id)
+  assert.deepEqual(useProjectStore.getState().scenes[sceneId].effects!.map((e) => e.pluginId), ['sceneGlitch'])
 })
 
 test('adding a scene extends every director binding and keeps the active Main view in sync', () => {

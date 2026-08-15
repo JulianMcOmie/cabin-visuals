@@ -29,6 +29,7 @@ import { SwitcherUserInterface } from '../userInterfaceRenderers/SwitcherUserInt
 import { resolveTrackDisplayColor, resolveTrackIdentityColor } from '../utils/trackDisplayColor'
 import { withAlpha } from '../userInterfaceRenderers/colorWheel'
 import type { Routing, EffectInstance, Scene, Track } from '../types'
+import { isSceneTrackId } from '../core/sceneTrack'
 
 type Tab = 'instrument' | 'effects' | 'targets'
 
@@ -120,6 +121,14 @@ const EFFECT_MENU_GROUPS: NestedMenuGroup[] = EFFECT_CATEGORIES.map((c) => ({
   label: c.label,
   items: PLUGIN_LIST.filter((p) => p.category === c.key && !p.deprecated).map((p) => ({ id: p.id, label: p.name })),
 }))
+// Scene-category effects are full-frame passes over a scene's finished render -
+// they only run on a Scene FX chain, so the picker offers ONLY them there and
+// never offers them on an object/group chain, where they would sit inert.
+const SCENE_EFFECT_MENU_GROUPS: NestedMenuGroup[] = [{
+  key: 'scene',
+  label: 'Scene',
+  items: PLUGIN_LIST.filter((p) => p.category === 'scene' && !p.deprecated).map((p) => ({ id: p.id, label: p.name })),
+}]
 
 /** One effect in the Effects tab, styled as a device in a rack (the Ableton
  *  read): a chassis card whose header carries a power LED (lit by the parent
@@ -265,6 +274,12 @@ function panelIdentity(
   scene: Scene | null | undefined,
 ): { name: string; kind: string; color: string } | null {
   if (track) {
+    // The scene instrument wears the SCENE's name and the theme accent, exactly
+    // as the no-selection scene panel does - it is the same subject, reached a
+    // different way, and a masthead that said "Group" would deny that.
+    if (isSceneTrackId(track.id)) {
+      return { name: scene?.name ?? track.name, kind: 'Scene instrument', color: 'var(--accent)' }
+    }
     const kind =
       track.type === 'base'
         ? getInstrument(track.instrumentId)?.name ?? compositionDef(track.instrumentId)?.name ?? 'Instrument'
@@ -409,8 +424,13 @@ export function TrackEditor() {
   const parent = useProjectStore((s) => (track?.parentId ? s.tracks[track.parentId] : undefined))
   // With a track selected the scene object is unused (the track wins every
   // branch below), so skip the subscription: the active scene's identity
-  // changes on every edit to any of its tracks.
-  const activeScene = useProjectStore((s) => (track ? null : s.scenes[s.activeSceneId] ?? null))
+  // changes on every edit to any of its tracks. The SCENE INSTRUMENT is the
+  // exception - it IS the scene, wearing a track's clothes, and its panel is
+  // the scene console - so it opts back in and accepts the same re-render cost
+  // the no-selection state already pays.
+  const activeScene = useProjectStore((s) => (
+    !track || isSceneTrackId(track.id) ? s.scenes[s.activeSceneId] ?? null : null
+  ))
   // Composition-vs-object dispatch for dual-surface ids (crop) hangs on which
   // scene the track lives in; a primitive selector keeps the render budget.
   const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
@@ -728,6 +748,34 @@ export function TrackEditor() {
                   if (track.type === 'switcher') {
                     return <SwitcherUserInterface trackId={track.id} />
                   }
+                  // The SCENE INSTRUMENT (core/sceneTrack.ts) is a group track
+                  // by materialization, so it must be caught before the group
+                  // branch below. Its "instrument" is the backdrop - the same
+                  // console the scene wears when nothing is selected - with the
+                  // scene-wide transform under it.
+                  if (isSceneTrackId(track.id) && activeScene) {
+                    return (
+                      <>
+                        <SceneSettingsPanel scene={activeScene} />
+                        <div className="mt-12">
+                          <p className="text-[11px] text-zinc-500 mb-3">
+                            Scene transform: moves every track in the scene as one.
+                            Movers and splitters added below apply to all of them;
+                            a colorizer here paints the backdrop above.
+                          </p>
+                          {TRANSFORM_PARAM_DEFS.map((p) => (
+                            <ParamControl
+                              key={p.key}
+                              param={p}
+                              numValue={track.params?.[p.key] ?? p.default}
+                              strValue={undefined}
+                              onNum={(v) => setTrackParam(track.id, p.key, v)}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    )
+                  }
 
                   // Group track → the canonical transform knobs, applied to the
                   // whole subtree (world-matrix inheritance; tfOpacity cascades
@@ -852,8 +900,14 @@ export function TrackEditor() {
         )}
         {tab === 'effects' && (() => {
           // One chain UI, two owners: the selected track's per-object chain, or -
-          // with no track selected - the active scene's chain (document-only for
-          // now, the engine does not yet apply it; see Scene.effects in types.ts).
+          // with no track selected - the active scene's chain (Scene.effects,
+          // applied by VisualScene's compositor as full-frame passes). The
+          // SCENE INSTRUMENT (⌘⇧S, core/sceneTrack.ts) is the same chain
+          // reached through the track arm: its synthetic track carries
+          // Scene.effects as `track.effects`, and the ordinary track actions
+          // fold edits back onto the scene - so both arms offer only the
+          // scene-category devices for it.
+          const isSceneChain = track ? isSceneTrackId(track.id) : true
           const fx = track
             ? {
                 effects: track.effects ?? [],
@@ -861,6 +915,7 @@ export function TrackEditor() {
                 // tracks, plus GROUP tracks - a group's chain broadcasts to
                 // every member object (ObjectRenderer merges it in).
                 canAdd: !!getInstrument(track.instrumentId) || track.type === 'group',
+                groups: isSceneChain ? SCENE_EFFECT_MENU_GROUPS : EFFECT_MENU_GROUPS,
                 add: (pluginId: string) => addEffect(track.id, pluginId),
                 toggle: (instanceId: string) => toggleEffect(track.id, instanceId),
                 remove: (instanceId: string) => removeEffect(track.id, instanceId),
@@ -871,6 +926,7 @@ export function TrackEditor() {
               ? {
                   effects: activeScene.effects ?? [],
                   canAdd: true,
+                  groups: SCENE_EFFECT_MENU_GROUPS,
                   add: (pluginId: string) => addSceneEffect(activeScene.id, pluginId),
                   toggle: (instanceId: string) => toggleSceneEffect(activeScene.id, instanceId),
                   remove: (instanceId: string) => removeSceneEffect(activeScene.id, instanceId),
@@ -928,7 +984,7 @@ export function TrackEditor() {
                 <NestedMenu
                   x={fxMenu.x}
                   y={fxMenu.y}
-                  groups={EFFECT_MENU_GROUPS}
+                  groups={fx.groups}
                   onPick={(_, pluginId) => fx.add(pluginId)}
                   onClose={() => setFxMenu(null)}
                 />

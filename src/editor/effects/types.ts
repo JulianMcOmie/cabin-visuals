@@ -23,7 +23,17 @@ import type { ParamDef } from '../instruments/types'
 // over one material is how you get a shader that compiles differently depending
 // on mount order. It therefore inherits that path's limit exactly: instruments
 // drawing with their own raw ShaderMaterial are left untouched.
-export type EffectCategory = 'transform' | 'shader' | 'material' | 'deform'
+// `scene` is the fifth, and the only one that never touches an object: it is a
+// full-frame pass over a SCENE's finished render, run by VisualScene's
+// compositor after the scene's own post-process instruments (ripple → impact →
+// colour → strobe) and before the Crop matte. Scene effects live on a scene's
+// Scene FX track (`instruments/SceneFx.tsx`), so the ordinary `fx:` automation
+// lanes drive them. A scene effect declares `fragmentShader` only: it samples
+// `tDiffuse` and sees `time` (the beat), `resolution`, `aspect`, plus one float
+// uniform per param. Every scene effect carries an `amount` param with
+// default such that amount 0 is a bit-exact passthrough - the runtime skips
+// the pass entirely at 0, so an idle device costs nothing.
+export type EffectCategory = 'transform' | 'shader' | 'material' | 'deform' | 'scene'
 
 
 export interface VisualEffect {
