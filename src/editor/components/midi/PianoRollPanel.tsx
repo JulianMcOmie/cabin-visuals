@@ -25,6 +25,7 @@ import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
 import { automationMode } from '../../core/visual/automation'
 import { resolveDeclaredMidiRows } from './resolveDeclaredRows'
+import { EmptyRollBlank } from './EmptyRollBlank'
 import { VIM_ACCENT, type VimKeyRegime } from './vim/types'
 import { laneIndexForPitch, resolveLyricWords, resolveStyleLanes } from '../../core/visual/lyricClips'
 import { LyricClipEditorCard, StyleLaneEditorCard } from '../../userInterfaceRenderers/TextDisplayUserInterface'
@@ -385,7 +386,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [automation, trigger, track, bpm, beatsPerBar, totalBars, sceneNamesKey])
   const defRows = declaredRows?.rows
-  const rows = automation
+  const resolvedRows = automation
     ? automation.kind === 'toggle'
       ? generateToggleRows(notes.map((n) => n.pitch), trackColor)
       : generateValueRows(automation.paramMin, automation.paramMax, notes.map((n) => n.pitch), trackColor, undefined, track.automationRange)
@@ -413,6 +414,10 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
           : noteColor
             ? generateRows(noteColor)
             : generateRows(trackColor)
+  // An empty declared vocabulary (defRows === [] is truthy, so the instrument
+  // arm above yields zero rows) swaps the grid for the blank state below.
+  const rowsAreEmpty = resolvedRows.length === 0
+  const rows = resolvedRows
   // Text tracks: the LYRIC CLIPS row sits above the style lanes - a real row
   // (standard height, striping, gutter), whose contents are the clips.
   if (!automation && !trigger && track?.type === 'base' && track.instrumentId === 'textDisplay') {
@@ -732,6 +737,11 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
           plain block wrapper this div let the roll grow to its content height, so
           the grid never overflowed and vertical scrolling died. */}
       <div className="flex min-w-0 flex-1 flex-col">
+      {/* Zero declared rows means there is no grid to show — the blank state
+          takes the editor's slot rather than rendering an empty scroller. */}
+      {rowsAreEmpty ? (
+        <EmptyRollBlank trackColor={trackColor} />
+      ) : (
       <MidiEditor
         trackId={trackId}
         trackColor={trackColor}
@@ -768,6 +778,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
           if (i >= 0) setSidecar({ kind: 'lane', index: i })
         } : undefined}
       />
+      )}
       </div>
       {textTrack && sidecar !== null && (
         <div className="w-[236px] flex-shrink-0 overflow-y-auto border-l border-[var(--border)] bg-[var(--bg-panel)]">
