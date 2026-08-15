@@ -572,9 +572,12 @@ function ItemGrid({ items, onItemPointerDown, onItemDoubleClick }: { items: Inst
           onPointerDown={(e) => onItemPointerDown(e, item)}
           onDoubleClick={() => onItemDoubleClick(item)}
           title={item.description}
-          className="group min-w-0 cursor-default select-none overflow-hidden rounded-md border border-[var(--border)] transition-colors hover:border-[var(--border-strong)]"
+          className="group min-w-0 cursor-default select-none overflow-hidden rounded-md"
         >
-          <div className="relative aspect-video">
+          {/* Borderless like the template cards: the preview's own pixels carry
+              the card's edge, with the app background behind the ids that
+              render an icon or nameplate instead of a full frame. */}
+          <div className="relative aspect-video bg-[var(--bg-app)]">
             {canPreview(item)
               ? <InstrumentCardPreview item={item} />
               : (
