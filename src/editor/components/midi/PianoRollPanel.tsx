@@ -699,7 +699,11 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
       {/* Piano roll grid + the lane-style side panel (docked, flush right,
           full height of whatever the roll gets) */}
       <div className="flex min-h-0 flex-1">
-      <div className="min-w-0 flex-1">
+      {/* flex-col is load-bearing: MidiEditor's grid scrolls via `flex-1 min-h-0
+          overflow-auto`, which only bounds its height inside a flex COLUMN. As a
+          plain block wrapper this div let the roll grow to its content height, so
+          the grid never overflowed and vertical scrolling died. */}
+      <div className="flex min-w-0 flex-1 flex-col">
       <MidiEditor
         trackId={trackId}
         trackColor={trackColor}
