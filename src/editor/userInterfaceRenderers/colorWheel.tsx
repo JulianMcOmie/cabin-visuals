@@ -40,8 +40,12 @@ export function hsvToHex(h: number, s: number, v: number): string {
   const c = v * s
   const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
   const m = v - c
+  // The last sextant is [c, 0, x], NOT [c, x, 0] (that's the first sextant's
+  // formula): shipped wrong for months, it swapped G and B above 300° so every
+  // magenta/pink pick came out orange - hue 330 gave #ff8000, not #ff0080.
+  // colorWheel.test.ts pins all six sextants and the hex→HSV round trip.
   const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x]
-    : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, x, 0]
+    : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x]
   const to = (u: number) => Math.round((u + m) * 255).toString(16).padStart(2, '0')
   return `#${to(r)}${to(g)}${to(b)}`
 }

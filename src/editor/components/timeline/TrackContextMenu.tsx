@@ -31,6 +31,7 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const addMoverTrack = useProjectStore((s) => s.addMoverTrack)
   const moveTrackToScene = useProjectStore((s) => s.moveTrackToScene)
   const ungroupTrack = useProjectStore((s) => s.ungroupTrack)
+  const wrapTracksInSwitcher = useProjectStore((s) => s.wrapTracksInSwitcher)
   const scenes = useProjectStore((s) => s.scenes)
   const sceneOrder = useProjectStore((s) => s.sceneOrder)
   const activeSceneId = useProjectStore((s) => s.activeSceneId)
@@ -61,7 +62,9 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       ? track.type === 'splitter' ? withSpatialTransformParams(moverDef.params) : moverDef.params
       // A GROUP automates its canonical transform (opacity included) - the
       // formation-as-one channel, inherited by the whole subtree.
-      : track.type === 'group' ? TRANSFORM_PARAM_DEFS
+      // A GROUP and a SWITCHER both automate their canonical transform - the
+      // formation-as-one channel, inherited by the whole subtree.
+      : track.type === 'group' || track.type === 'switcher' ? TRANSFORM_PARAM_DEFS
         : isComposition ? compositionAutomatableParams(directorDef) : []
   ).filter(isNumberParam)
   // A mover/splitter track offers movers too, but they mean something different
@@ -74,7 +77,11 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   // objects above them (resolve.ts's group pass), so the full mover/splitter/
   // colorizer catalog applies.
   const isGroup = track.type === 'group'
-  const newDefs = def || moverDef || isGroup ? listMoverOrSplitterDefinitions() : []
+  // A SWITCHER racks devices: the full catalog applies to it exactly as it does
+  // to a group, and what lands there becomes another row of its lane.
+  const isSwitcher = track.type === 'switcher'
+  const isDevice = track.type === 'mover' || track.type === 'splitter'
+  const newDefs = def || moverDef || isGroup || isSwitcher ? listMoverOrSplitterDefinitions() : []
   // A `parentGate` definition (Bypass) acts on the DEVICE it is nested under, so
   // it is only offered on a mover/splitter track - never on an object or a
   // group, where it would have nothing to gate - and never in the mover list,
@@ -83,8 +90,8 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   // Not offered on a gate itself: nothing resolves a gate's own children, so a
   // Bypass under a Bypass would sit there doing nothing.
   const parentGates = moverDef && !moverDef.parentGate ? newDefs.filter((d) => d.parentGate) : []
-  const colorizers = def || isGroup ? newDefs.filter((d) => d.kind === 'colorizer') : []
-  const splitters = def || isGroup ? newDefs.filter((d) => d.kind === 'splitter') : []
+  const colorizers = def || isGroup || isSwitcher ? newDefs.filter((d) => d.kind === 'colorizer') : []
+  const splitters = def || isGroup || isSwitcher ? newDefs.filter((d) => d.kind === 'splitter') : []
   const childTracks = track.childIds.map((cid) => tracks[cid])
   const addedAbilities = new Set(childTracks.filter((c) => c?.type === 'ability').map((c) => c!.abilityKey))
   const automatedParams = new Set(childTracks.filter((c) => c?.type === 'automation').map((c) => c!.targetParam))
@@ -152,7 +159,7 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
     },
     {
       key: 'mover',
-      label: def || isGroup ? 'Add mover track' : 'Move this mover with',
+      label: def || isGroup || isSwitcher ? 'Add mover track' : 'Move this mover with',
       items: movers.map((d) => ({ id: d.id, label: d.label })),
     },
     {
@@ -206,6 +213,15 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       label: 'Group',
       items: isGroup ? [{ id: 'ungroup', label: 'Ungroup' }] : [],
     },
+    // Racking a device is the one-track case of wrapTracksInSwitcher; unwrapping
+    // splices the devices back where the rack stood, exactly as ungroup does.
+    {
+      key: 'switcher',
+      label: 'Switcher',
+      items: isSwitcher
+        ? [{ id: 'unwrap', label: 'Unwrap switcher' }]
+        : isDevice ? [{ id: 'wrap', label: 'Wrap in a switcher' }] : [],
+    },
   ]
 
   const onPick = (groupKey: string, itemId: string) => {
@@ -239,6 +255,14 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
     } else if (groupKey === 'ungroup') {
       ungroupTrack(trackId)
       useUIStore.getState().setSelectedTrackId(null)
+    } else if (groupKey === 'switcher') {
+      if (itemId === 'wrap') {
+        const id = wrapTracksInSwitcher([trackId])
+        if (id) useUIStore.getState().setSelectedTrackId(id)
+      } else {
+        ungroupTrack(trackId)
+        useUIStore.getState().setSelectedTrackId(null)
+      }
     }
   }
 

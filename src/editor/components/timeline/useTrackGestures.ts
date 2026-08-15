@@ -44,12 +44,16 @@ function rootAncestorId(tracks: Record<string, Track>, id: string): string {
 function canPasteChildUnder(track: Track, copiedRoot: Track): boolean {
   if (track.type === 'audio') return false
   if (copiedRoot.type === 'mover' || copiedRoot.type === 'splitter') {
-    // Groups take chain children too (they broadcast to the members above).
+    // Groups take chain children too (they broadcast to the members above), and
+    // a switcher takes them as rows of its rack.
     return (track.type === 'base' && !track.parentId) || track.type === 'group'
+      || track.type === 'switcher'
   }
   if (copiedRoot.type === 'ability') return track.type === 'base'
   // A formation lane's own params automate, so automation pastes onto one too.
-  if (copiedRoot.type === 'automation') return track.type === 'base' || track.type === 'mover' || track.type === 'group'
+  // A switcher carries the canonical transform like a group does.
+  if (copiedRoot.type === 'automation') return track.type === 'base' || track.type === 'mover'
+    || track.type === 'group' || track.type === 'switcher'
   if (copiedRoot.type === 'envelope') return track.type === 'base'
   return true
 }

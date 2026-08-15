@@ -10,6 +10,7 @@ import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
 import { identityVisualCopy } from '../core/visualCopies/identityVisualCopy'
 import { resolveVisualCopies } from '../core/visualCopies/resolveVisualCopies'
 import type { VisualCopy } from '../core/visualCopies/types'
+import { liveChildrenAt, SWITCHER_LATCH } from '../core/visualCopies/switcher'
 import { setPreviewObjectState } from '../core/visual/VisualEngine'
 import { resolveProject, type ProjectSnapshot } from '../core/visual/resolve'
 import { evaluatePulse } from '../core/visual/energy'
@@ -239,8 +240,9 @@ export function canPreview(item: InstrumentItem): boolean {
   if (get2DPreview(item.id)) return true
   if (item.kind === 'object') return !!getInstrument(item.id)
   if (item.kind === 'mover' || item.kind === 'splitter' || item.kind === 'colorizer') return !!getMoverOrSplitterDefinition(item.id)
-  // A formation lane has no object of its own: it previews as the thing it
-  // actually does, which is Text Display wearing three arrangements in turn.
+  // A rack has no object of its own: it previews as the thing it actually
+  // does, which is three solids taking the frame in turn (SwitcherPreview).
+  if (item.kind === 'switcher') return true
   return false
 }
 
@@ -385,6 +387,66 @@ export function ObjectPreview({ instrumentId, trackId = PREVIEW_TRACK_ID, notes,
       <ObjectPreviewDriver instrumentId={instrumentId} trackId={trackId} notes={notes} sync={sync} />
       {def.fullFrame ? <FullFramePreviewAnchor>{content}</FullFramePreviewAnchor> : content}
     </>
+  )
+}
+
+// ── Switcher preview: three shapes, one lane, one of them at a time ────────
+//
+// A rack has no look of its own - it previews as the thing it DOES. Three
+// solids share the frame and the lane hands it to one of them in turn, which is
+// the whole idea in one loop. It runs the real `liveChildrenAt` on real notes
+// rather than a timer of its own, so the card cannot drift from what the rack
+// actually does; Latch is the mode shown because it is the one with no gaps -
+// a Gate preview would spend a third of the loop empty and read as broken.
+
+const SWITCHER_PREVIEW_NOTES = makeLoopNotes([60, 61, 62], 0.5, 2)
+const SWITCHER_PREVIEW_BINDINGS = [
+  { pitch: 60, index: 0 },
+  { pitch: 61, index: 1 },
+  { pitch: 62, index: 2 },
+]
+const SWITCHER_PREVIEW_COLORS = ['#f0abfc', '#7dd3fc', '#fcd34d']
+
+export function SwitcherPreview({ sync }: { sync?: boolean }) {
+  const groupRef = useRef<Group>(null)
+  const boxRef = useRef<Mesh>(null)
+  const icoRef = useRef<Mesh>(null)
+  const torusRef = useRef<Mesh>(null)
+
+  useFrame((root) => {
+    const beat = previewBeatNow(root.clock.elapsedTime, sync)
+    const live = liveChildrenAt(
+      SWITCHER_PREVIEW_BINDINGS,
+      SWITCHER_PREVIEW_NOTES,
+      { mode: SWITCHER_LATCH },
+      beat,
+    )
+    const shown = new Set(live)
+    if (boxRef.current) boxRef.current.visible = shown.has(0)
+    if (icoRef.current) icoRef.current.visible = shown.has(1)
+    if (torusRef.current) torusRef.current.visible = shown.has(2)
+    // A slow turn so each solid reads as a solid rather than a silhouette.
+    if (groupRef.current) {
+      groupRef.current.rotation.y = beat * 0.45
+      groupRef.current.rotation.x = 0.3
+    }
+  })
+
+  return (
+    <group ref={groupRef}>
+      <mesh ref={boxRef}>
+        <boxGeometry args={[1.5, 1.5, 1.5]} />
+        <meshStandardMaterial color={SWITCHER_PREVIEW_COLORS[0]} roughness={0.35} metalness={0.15} />
+      </mesh>
+      <mesh ref={icoRef} visible={false}>
+        <icosahedronGeometry args={[1.05, 0]} />
+        <meshStandardMaterial color={SWITCHER_PREVIEW_COLORS[1]} roughness={0.35} metalness={0.15} flatShading />
+      </mesh>
+      <mesh ref={torusRef} visible={false}>
+        <torusGeometry args={[0.85, 0.34, 16, 32]} />
+        <meshStandardMaterial color={SWITCHER_PREVIEW_COLORS[2]} roughness={0.35} metalness={0.15} />
+      </mesh>
+    </group>
   )
 }
 
@@ -1254,7 +1316,9 @@ export function InstrumentPreviewLayer() {
           ? <ProjectTrackPreview key={preview.projectTrackId} data={projectData} sync={preview.sync} />
           : preview.item.kind === 'object'
             ? <ObjectPreview key={preview.item.id} instrumentId={preview.item.id} notes={preview.notes} sync={preview.sync} />
-            : <MoverPreview key={preview.item.id} moverId={preview.item.id} notes={preview.notes} sync={preview.sync} inputValues={preview.inputValues} />)}
+            : preview.item.kind === 'switcher'
+              ? <SwitcherPreview key={preview.item.id} sync={preview.sync} />
+              : <MoverPreview key={preview.item.id} moverId={preview.item.id} notes={preview.notes} sync={preview.sync} inputValues={preview.inputValues} />)}
         <LaserPreviewBloom instrumentId={projectData?.object.instrumentId ?? preview?.item.id} />
       </Canvas>
       {preview && draw2d && <Preview2D key={preview.item.id} draw={draw2d} />}

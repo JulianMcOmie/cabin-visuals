@@ -19,14 +19,22 @@ Flattens each scene's track forest depth-first (cycle-guarded), expands looped b
 
 **SPLITTER tracks offer the spatial tf\* params to their own lanes too** (`weaveSplitterTfLanes`): such a lane becomes a `tfAutomationChainEntry` woven among the splitter's mover children at the lane's child position — it acts exactly like a mover child in that slot, moving the splitter's copies about the splitter's origin in its reference frame (`visualCopies/splitterChildChain.ts`), count-neutral and never re-framing the chain below. NO mirroring here, unlike the object-track weave — the splitter child chain composes top-down in child order already. Base is the panel value (splitters store no tf\* params, so the transform default), so keyframe values are absolute deltas and inert lanes are no-ops. The UI surfaces offering the list (context menu, piano-roll rows, retarget dropdown) all go through `withSpatialTransformParams` (core/transform.ts) — opacity is excluded, it isn't a transform.
 
-**A BYPASS lane is a chain child that is NOT a chain entry.** `isChainEntryTrack` (a
-definition's `parentGate` flag) is the one predicate every walk over a track's chain
-children shares — `resolveMoverAndSplitterChain` and the two `childIds` re-walks that
-line automation lanes up against the resolved chain. `resolveMoverOrSplitterTrack` lifts
-those lanes out instead and wraps the finished parent in `bypassGated`
-(`visualCopies/bypass.ts`), outermost of the frame / child-chain / copy-target wrappers.
-Add a filter site without the predicate and the lane silently becomes an identity entry
-of its parent's frame, gating nothing — see `bypassRuntime.test.ts`.
+**A chain child contributes 0, 1 or N entries, and `chainEntryCount` is the one place
+that says which.** 0 for a BYPASS lane (a `parentGate` definition — it is not an entry of
+anything; `resolveMoverOrSplitterTrack` lifts it out and wraps the finished parent in
+`bypassGated`, outermost of the frame / child-chain / copy-target wrappers). 1 for an
+ordinary device. **N for a SWITCHER**, which splices its whole rack into the chain it sits
+in, contiguously in child order (`visualCopies/switcher.ts`).
+
+Five walks share that count and they must not disagree by one:
+`resolveMoverAndSplitterChain`, `weaveTfAutomationLanes` (`entriesAbove += n`),
+`weaveSplitterTfLanes` (`chainIndex += n`), `priorChainPrefixes`, and the group/global
+passes — all of which now go through `resolveChainChildEntries` for the resolving half.
+Before switchers this was a hazard; with a child that can own several slots it is a
+certainty, and the failure is silent: every automation lane below the disagreement weaves
+into the wrong slot. `bypassRuntime.test.ts` pins the 0 case, `switcherRuntime.test.ts`
+the N case (including a tf lane weaving against a rack, asserted as transparency rather
+than as an index).
 
 **GROUP tracks** (`type: 'group'`) resolve to placement nodes (`ResolvedGraph.groups`), never objects: per frame `computeAtBeat` interleaves them among the objects at their DFS slot (`afterObjectIndex`) so a group's world matrix (tf\* params + their lanes, sampled per frame) is composed before any member reads it, and its `tfOpacity` accumulates through `inheritedOpacities` onto member objects (objects pass the value through without adding their own — nested-object behavior is unchanged). A group's mover/splitter children broadcast at resolve: each appends to the chain of every member OBJECT above it in the group's child order, per member in the member's own frame (deepest group first, so a member chain reads [own chain, inner group entries, outer group entries, global movers]). `isChainChild` counts group children, so they never route through `targets`. A broadcast Freeze warps each member; the group's own placement always samples the real beat.
 
@@ -144,6 +152,42 @@ off-switch. Neutral (1) is stored as field absence (`setTrackAutomationAmount`).
 - **Signature skip**: if none of the inputs changed, cb is not called (pure function ⇒ same pixels). This is what makes paused editing cheap.
 - **Return `false` if you can't apply the frame yet** (refs unattached, canvas not ready). A silent bail eats the change and the object renders stale until the next input change — which may never come while paused (the LaserSphere "params do nothing until remount" bug).
 - Runs after `VisualBeatSync`'s computeAtBeat (mount order), so state is always this frame's.
+
+## instancedFrame.ts — the instanced copy-pool fast path (2026-08)
+
+`useInstancedCopyFrame(trackId, cb)` is the instanced counterpart of
+`useInstrumentFrame`: ONE mount per track draws every VisualCopy occurrence by
+writing per-instance buffers on an `InstancedMesh2` (@three.ez/instanced-mesh),
+instead of VisualScene mounting one ObjectRenderer + instrument component per
+copy. An instrument opts in with `instancedComponent` on its def; Cube is the
+reference port. Facts that cost time to establish:
+
+- **Routing lives in `components/visual/InstancedObjectRenderer.tsx`**, which
+  falls back to the per-copy path whenever the track has ANY effect instance
+  (own or group-broadcast, enabled or not — an `enabled` automation lane can
+  switch a disabled one on), a routed crop mask, or full-frame mode. The
+  fallback keys are byte-identical to the ungrouped mounts, so flipping an
+  effect on/off remounts cleanly.
+- **Deliberately NO signature skip**: copy transforms refresh imperatively in
+  computeAtBeat and aren't identity-comparable, so a skip would eat paused
+  mover-knob drags. The callback runs on every rendered frame; RenderGovernor
+  still gates frames while paused.
+- **Per-instance opacity is the colors texture's alpha**: `setColorAt` writes
+  rgb only (3 floats at offset id*4), `setOpacityAt` owns the 4th — order-free.
+  Mirror applyMaterialOpacity's rule by flipping the shared material's
+  `transparent` when any copy is mid-fade; hide (never just fade) copies at
+  ≤0.001 or the ghost-wall depth artifact returns.
+- **Custom ShaderMaterials CAN instance**: the lib registers global
+  `ShaderChunk['instanced_pars_vertex']` etc. at import, and the mesh's
+  onBeforeCompile injects `USE_INSTANCING_INDIRECT` / `USE_INSTANCING_COLOR_INDIRECT`
+  defines (fires for ShaderMaterial too). Include the chunks, call
+  `getInstancedMatrix()` / `getColorTexture()` — `createInstancedPosterMaterial`
+  in instruments/posterShading.ts is the reference.
+- **Per-copy colorShift on shared materials reaches DIFFUSE only** (instance
+  color): gloss emissive and the unlit-gloss surface carry the track's own
+  color, not the copy's. Documented fidelity trade; the poster path is fully
+  per-copy. The shift math is `applyColorShiftToColor` (instrumentColor.ts),
+  the same function the string-param path uses, so the two paths cannot drift.
 
 ## Supporting files worth knowing
 

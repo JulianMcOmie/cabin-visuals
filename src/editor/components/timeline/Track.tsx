@@ -111,7 +111,10 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
   const isObjectTrack = track.type === 'base' && !!track.instrumentId && !activeIsMain
   // Groups wear the same canonical transform strip (their tf* inherits to the
   // whole subtree); tags and hover previews stay object-only.
-  const hasTransform = isObjectTrack || (track.type === 'group' && !activeIsMain)
+  // A switcher is a placement node too (resolve.ts gives it a ResolvedGroup),
+  // so a rack can be positioned as one exactly like a group.
+  const hasTransform = isObjectTrack
+    || ((track.type === 'group' || track.type === 'switcher') && !activeIsMain)
   const opacityValue = useProjectStore((s) =>
     hasTransform ? transformValue(s.tracks[track.id]?.params, TF_OPACITY) : 1,
   )

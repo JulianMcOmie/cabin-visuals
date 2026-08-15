@@ -12,6 +12,7 @@ import {
   PreviewLighting,
   previewForegroundHex,
   setPreviewTimeOverride,
+  SwitcherPreview,
 } from './InstrumentHoverPreview'
 import { get2DPreview, Preview2D } from './InstrumentPreview2D'
 import { ALL_LIBRARY_ITEMS, type InstrumentItem } from './LeftSidebar'
@@ -211,7 +212,9 @@ export function InstrumentPreviewCapture() {
                 <PreviewLighting foreground={previewForegroundHex(active)} />
                 {active.kind === 'object'
                   ? <ObjectPreview instrumentId={active.id} />
-                  : <MoverPreview moverId={active.id} />}
+                  : active.kind === 'switcher'
+                    ? <SwitcherPreview />
+                    : <MoverPreview moverId={active.id} />}
                 <LaserPreviewBloom instrumentId={active.kind === 'object' ? active.id : undefined} />
               </Canvas>
             )}

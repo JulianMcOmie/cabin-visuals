@@ -1,5 +1,8 @@
 import { compositionDef } from '../../core/directors'
-import { getPriorVisualCopyCount } from '../../core/visual/resolve'
+import { getPriorVisualCopyCount, switcherChildTracks } from '../../core/visual/resolve'
+import { orderedSwitcherBindings } from '../../core/switcherBindings'
+import { switcherRows } from '../../core/visualCopies/switcher'
+import { resolveTrackDisplayColor } from '../../utils/trackDisplayColor'
 import { mergeDefinitionSettings } from '../../core/visualCopies/definitions'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { getInstrument } from '../../instruments'
@@ -39,6 +42,27 @@ export function resolveDeclaredMidiRows(
     const rows = def?.midiRowsFor?.(track) ?? def?.midiRows
       ?? compositionDef(track.instrumentId)?.midiRows(track, project.scenes, project.sceneOrder)
     return rows ? { rows, strict: false } : undefined
+  }
+
+  // A switcher's vocabulary IS its rack: one row per device in child order,
+  // each wearing that device's own identity colour (the row is the thing it
+  // selects - sceneRowColor's convention), then the reserved None row.
+  // Deliberately NOT strict: deleting a device removes its row, and a strict
+  // vocabulary would take the notes written on it out of the editor with no
+  // trace. Non-strict gives them a dimmed orphan row instead, so the work is
+  // still there to move or delete - the rule every other lane here keeps.
+  if (track.type === 'switcher') {
+    const children = switcherChildTracks(track, project)
+    if (children.length === 0) return undefined
+    const indexByChild = new Map(children.map((child, index) => [child.id, index]))
+    return {
+      rows: switcherRows(
+        children.map((child) => ({ label: child.name, color: resolveTrackDisplayColor(child) })),
+        orderedSwitcherBindings(track, children.map((c) => c.id))
+          .map(({ pitch, childTrackId }) => ({ pitch, index: indexByChild.get(childTrackId)! })),
+      ),
+      strict: false,
+    }
   }
 
   if (track.type === 'mover' || track.type === 'splitter') {

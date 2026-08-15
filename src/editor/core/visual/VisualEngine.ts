@@ -358,8 +358,15 @@ export function computeAtBeat(beat: number) {
     // itself is a pure function of the real beat, so scrub == playback ==
     // export holds. Objects with no remap get beat back, unchanged.
     const objBeat = warpChainBeat(obj.moverAndSplitterChain, beat)
+    // Off this frame: muted/soloed-out (a resolve-time constant), or switched
+    // off by a SWITCHER standing above it (a pure function of the beat, so the
+    // pause invariant holds). Gating on objBeat rather than the playhead beat
+    // matches the device arm, which gates on `context.beat` for the same
+    // reason: it is the beat everything else about this object is read at.
+    const switchedOff = obj.liveAt ? !obj.liveAt(objBeat) : false
+    const off = obj.muted || switchedOff
     // The note-pulse signal (the old implicit `energy` port, now direct).
-    const energy = !obj.muted && obj.notes.length > 0 ? evaluatePulse(obj.notes, objBeat) : 0
+    const energy = !off && obj.notes.length > 0 ? evaluatePulse(obj.notes, objBeat) : 0
     // Automation drives params over time: overlay each lane's sampled value onto the
     // base params for this frame (a pure function of the beat, so scrub == playback).
     let params = obj.params
@@ -454,8 +461,11 @@ export function computeAtBeat(beat: number) {
       }
     }
 
-    // Muted (or soloed-out) objects are hidden.
-    const blackedOut = obj.muted
+    // Muted, soloed-out, or switched off by a rack above it: all hidden the
+    // same way. The object stays MOUNTED either way - a switcher gates
+    // visibility, never structure, so the object list is unchanged and there is
+    // nothing for the renderer to reconcile per beat.
+    const blackedOut = off
     // Notes live at this beat - pitch-reactive instruments read them (a zero-length note
     // stays "on" for a hair so single-tick triggers still register).
     const activeNotes = obj.notes.filter((n) => objBeat >= n.beat && objBeat < n.beat + (n.durationBeats || 0.05))

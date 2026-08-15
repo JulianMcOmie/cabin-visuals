@@ -397,6 +397,66 @@ It is `kind: 'mover'` for storage and chrome, but `parentGate` keeps it out of t
 shelf and out of the "add mover track" lists on objects and groups (where it would gate
 nothing); the mover/splitter context menu offers it under "Switch this device with".
 
+## `switcher` — a RACK of anything, with one MIDI lane over it
+
+A `switcher` TRACK (not a definition — `editor/types.ts`'s TrackType, like `group`) gives
+each of its children a row and says which of them are running.
+
+**A row may be anything, and the lane does not know which is which** — that genericity is
+the point, and it costs one branch: a DEVICE row splices chain entries (gated by
+`switchGated`), an OBJECT or GROUP row gates its objects' visibility instead
+(`ResolvedObject.liveAt` → `blackedOut`), and a nested SWITCHER row contributes its own
+span gated as one. So a MIXED rack works, and switching a cube for a grid of spheres is
+the same gesture as switching one mover for another. `switcherChildTracks` is the one
+place that says what may be a row; `chainEntryCount` sums (objects contribute 0).
+
+Two things about the object arm that are not obvious:
+
+- **A switcher resolves to a `ResolvedGroup` placement node as well.** Not a convenience:
+  `computeAtBeat` composes an object's world from `worldMatrices.get(obj.parentId)`, so a
+  rack standing between an object and its group would otherwise have no matrix under its
+  id and the object would silently lose the group's transform. It also makes a rack
+  movable as one, exactly like a group — hence `tf*` on the timeline strip.
+- **Gating is visibility, never structure.** Every member stays mounted and the object
+  list is unchanged; only `blackedOut` (and therefore `energy`) flips. Several racks above
+  one object compose by AND, so an inner rack cannot re-enable what an outer one switched
+  off. A rack therefore does NOT save the cost of what it hides.
+
+Five things carry the device arm:
+
+- **Gate mode with every row held is bit-identical to those devices being plain chain
+  siblings.** That is the design, not a nice property of it: exclusivity, latching and the
+  empty lane are all restrictions on WHICH SUBSET runs, and none of them changes how the
+  running entries compose. `switcherRuntime.test.ts`'s first test asserts exactly that and
+  is the tripwire for every ordering, splice-position and gate-wrapper bug at once.
+- **Splicing, not delegating.** One entry running a sub-chain internally would be called
+  PER COPY by the kernel, so its inner entries would see `index`/`count`/`formation`
+  describing a private fan-out instead of the real formation — every position-reading
+  device (Symmetric Motion, a world-placed field, Conveyor's belt period) would measure the
+  wrong thing. Splicing also lets each child keep its own `composition` declaration, which
+  a folded-together entry could not express for a mixed set. A NESTED switcher is one row
+  of the outer lane that owns several entries; the outer gate switches the whole span.
+- **The four modes** (`params.mode`, append-only) are Gate / Toggle / Solo / Latch — a
+  voices × notes matrix where every cell is real. Solo and Latch are
+  `directors/sceneSwitcher.ts`'s two modes lifted verbatim, newest-onset-wins included, so
+  the two switchers cannot disagree about what a chord means. Toggle's parity does NOT
+  self-correct (one inserted note flips that device for the rest of the timeline); the
+  panel says so, and that is the reason it says so.
+- **An empty lane runs everything**, so wrapping devices changes nothing until you play it
+  — the `scene` def's non-destructive convention. Not a special case: it is the full subset.
+- **The copy ceiling depends on the MODE, and the variant publication has to follow.**
+  Gate/Toggle can run everything at once, so the ceiling is the PRODUCT of the children's
+  fan-outs and every entry publishes its ungated self at `structuralVariants[0]`.
+  Solo/Latch run at most one, so the ceiling is the MAX: entry *i* publishes a variants
+  array that is pass-through everywhere except rank *i*, and rank *r* then probes "only
+  child *r* running". Exclusivity therefore SAVES the pool rather than costing it. Get the
+  Gate direction wrong and a rack whose beat-0 subset is small mounts a pool for it and
+  overflows on every later frame — bypass's bug, one rack over.
+
+Mute/solo among the children are AUTHORING overrides that beat the lane: such a device
+keeps its slot in the span (so pitches and rows never shift) but is gated permanently off
+and publishes no variants, so it adds nothing to the ceiling either.
+
 ## Invariants
 
 - **Copy COUNT never depends on the beat** (fixed at resolve; MIDI gates opacity). VisualEngine warns if violated. Count may still be DERIVED from settings rather than asked for — Duplicate sizes its trail from speed × density so it doesn't need a length knob. AUTOMATED settings are the sanctioned exception: an automated entry carries `structuralVariants` (the def resolved at each lane's min/max reach), `structuralCopyCount` sizes the mounted pool to the maximum, and frames asking for less are padded with hidden copies — so a definition may return fewer copies than its structural max under automation, but never more, and never fewer because of the BEAT itself. Sound while count is monotonic in each param (true of every shipped def).

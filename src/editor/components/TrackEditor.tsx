@@ -25,6 +25,7 @@ import { consolePanel } from '../userInterfaceRenderers/console'
 import { EnvelopeUserInterface } from '../userInterfaceRenderers/EnvelopeUserInterface'
 import { AutomationUserInterface } from '../userInterfaceRenderers/AutomationUserInterface'
 import { CopyTargetsUserInterface } from '../userInterfaceRenderers/CopyTargetsUserInterface'
+import { SwitcherUserInterface } from '../userInterfaceRenderers/SwitcherUserInterface'
 import { resolveTrackDisplayColor, resolveTrackIdentityColor } from '../utils/trackDisplayColor'
 import { withAlpha } from '../userInterfaceRenderers/colorWheel'
 import type { Routing, EffectInstance, Scene, Track } from '../types'
@@ -274,6 +275,7 @@ function panelIdentity(
       : track.type === 'envelope' ? 'Envelope'
       : track.type === 'ability' ? 'Ability'
       : track.type === 'group' ? 'Group'
+      : track.type === 'switcher' ? 'Switcher'
       : 'Track'
     // The instrument's own color, not the timeline's display color: the tab is
     // naming this instrument, so an achromatic instrument should light the tab
@@ -667,7 +669,7 @@ export function TrackEditor() {
                           ? getMoverOrSplitterDefinition(parent.moverId)?.params ?? []
                           // A GROUP's lanes drive its canonical transform - the
                           // formation-as-one channel (opacity included).
-                          : parent && parent.type === 'group'
+                          : parent && (parent.type === 'group' || parent.type === 'switcher')
                             ? TRANSFORM_PARAM_DEFS
                             : parent && isCompositionTrack(parent)
                               ? compositionAutomatableParams(compositionDef(parent.instrumentId))
@@ -718,6 +720,13 @@ export function TrackEditor() {
                         onRange={(range) => setTrackAutomationRange(track.id, range)}
                       />
                     )
+                  }
+
+                  // Switcher track → the rack's console: which devices its lane
+                  // is allowed to run. It has no params of its own beyond the
+                  // mode, so the whole panel is that one decision.
+                  if (track.type === 'switcher') {
+                    return <SwitcherUserInterface trackId={track.id} />
                   }
 
                   // Group track → the canonical transform knobs, applied to the

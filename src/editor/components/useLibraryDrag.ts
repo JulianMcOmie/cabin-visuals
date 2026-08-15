@@ -9,9 +9,10 @@ import { computeDropTarget } from './timeline/trackDrop'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
 import { seedSceneBindings } from '../core/directors/sceneBindings'
+import { SWITCHER_MODE_PARAM } from '../core/visualCopies/switcher'
 import type { Track } from '../types'
 
-type LibraryItem = { id: string; name: string; kind: 'object' | 'modulator' | 'mover' | 'splitter' | 'colorizer' | 'director' }
+type LibraryItem = { id: string; name: string; kind: 'object' | 'modulator' | 'mover' | 'splitter' | 'colorizer' | 'director' | 'switcher' }
 
 function makeTrack(item: LibraryItem, parentId: string | null): Track {
   // Movers and splitters resolve through the MoverOrSplitter registry; ignore
@@ -22,15 +23,22 @@ function makeTrack(item: LibraryItem, parentId: string | null): Track {
   // tracks whose instrumentId names a composition def - they just start with
   // seeded scene bindings and always land at the root.
   const isComposition = item.kind === 'director'
+  // A rack is a CONTAINER, not an instrument: it lands empty and starts doing
+  // something when tracks are dropped into it. Its default mode is Gate, whose
+  // empty lane runs every row - so an empty rack, and a freshly filled one, are
+  // both no-ops until it is played.
+  const isSwitcher = item.kind === 'switcher'
   const state = useProjectStore.getState()
   return {
     id: crypto.randomUUID(),
     name: item.name,
-    type: isSplitter ? 'splitter' : isMover ? 'mover' : 'base',
-    instrumentId: isMover || isSplitter ? '' : item.id,
+    type: isSwitcher ? 'switcher' : isSplitter ? 'splitter' : isMover ? 'mover' : 'base',
+    instrumentId: isMover || isSplitter || isSwitcher ? '' : item.id,
     moverId: isMover ? item.id : undefined,
     splitterId: isSplitter ? item.id : undefined,
     sceneBindings: isComposition ? seedSceneBindings(state.scenes, state.sceneOrder) : undefined,
+    params: isSwitcher ? { [SWITCHER_MODE_PARAM.key]: SWITCHER_MODE_PARAM.default } : undefined,
+    switcherBindings: isSwitcher ? [] : undefined,
     inputValues: isMover || isSplitter ? {} : undefined,
     color: resolveNextTrackColor(state, parentId),
     muted: false,

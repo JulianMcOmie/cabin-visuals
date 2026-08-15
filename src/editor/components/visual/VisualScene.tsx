@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useSyncExternalStore, type ReactElement } from 'react'
 import { createPortal, useFrame, useThree } from '@react-three/fiber'
 import {
   Mesh,
@@ -33,6 +33,7 @@ import { getInstrument } from '../../instruments'
 import { isOnTopTrack } from '../../instruments/types'
 import { DEFAULT_SCENE_BACKGROUND, type Scene, type SceneGradient } from '../../types'
 import { ObjectRenderer } from './ObjectRenderer'
+import { InstancedObjectRenderer } from './InstancedObjectRenderer'
 import { FinalInvertMaskContext } from '../../core/visual/finalInvertMask'
 import { resolveActiveColorFilter } from '../../instruments/ColorFilters'
 import { resolveActiveStrobe } from '../../instruments/Strobe'
@@ -1136,21 +1137,21 @@ export function VisualScene() {
             {createPortal(
             <>
               {lights()}
-              {base.map((o) => <ObjectRenderer key={`${o.trackId}:${o.visualCopyIndex}`} sceneId={o.sceneId} trackId={o.trackId} instrumentId={o.instrumentId} visualCopyIndex={o.visualCopyIndex} maskSourceIds={o.maskSourceIds} />)}
+              {mountObjects(base, '')}
             </>,
             runtime.base,
             )}
             {createPortal(
             <>
               {lights()}
-              {front.map((o) => <ObjectRenderer key={`${o.trackId}:${o.visualCopyIndex}:front`} sceneId={o.sceneId} trackId={o.trackId} instrumentId={o.instrumentId} visualCopyIndex={o.visualCopyIndex} maskSourceIds={o.maskSourceIds} />)}
+              {mountObjects(front, ':front')}
             </>,
             runtime.front,
             )}
             {createPortal(
             <FinalInvertMaskContext.Provider value>
               {lights()}
-              {invert.map((o) => <ObjectRenderer key={`${o.trackId}:${o.visualCopyIndex}:invert`} sceneId={o.sceneId} trackId={o.trackId} instrumentId={o.instrumentId} visualCopyIndex={o.visualCopyIndex} maskSourceIds={o.maskSourceIds} />)}
+              {mountObjects(invert, ':invert')}
             </FinalInvertMaskContext.Provider>,
             runtime.invert,
             )}
@@ -1159,4 +1160,42 @@ export function VisualScene() {
       })}
     </>
   )
+}
+
+/** Mount one pass's entries: instanced-capable tracks collapse their contiguous
+ *  copy slice to ONE InstancedObjectRenderer (which may still render the
+ *  per-copy fallback inside itself - see that file); everything else keeps the
+ *  historical one-ObjectRenderer-per-copy mounts with byte-identical keys. */
+function mountObjects(list: readonly ObjectListEntry[], keySuffix: string) {
+  const out: ReactElement[] = []
+  for (let i = 0; i < list.length; i++) {
+    const o = list[i]
+    if (getInstrument(o.instrumentId)?.instancedComponent) {
+      if (o.visualCopyIndex !== 0) continue // grouped under its first entry
+      const entries: ObjectListEntry[] = []
+      for (let j = i; j < list.length && list[j].trackId === o.trackId; j++) entries.push(list[j])
+      out.push(
+        <InstancedObjectRenderer
+          key={`${o.trackId}${keySuffix}:instanced`}
+          sceneId={o.sceneId}
+          trackId={o.trackId}
+          instrumentId={o.instrumentId}
+          entries={entries}
+          keySuffix={keySuffix}
+        />,
+      )
+      continue
+    }
+    out.push(
+      <ObjectRenderer
+        key={`${o.trackId}:${o.visualCopyIndex}${keySuffix}`}
+        sceneId={o.sceneId}
+        trackId={o.trackId}
+        instrumentId={o.instrumentId}
+        visualCopyIndex={o.visualCopyIndex}
+        maskSourceIds={o.maskSourceIds}
+      />,
+    )
+  }
+  return out
 }

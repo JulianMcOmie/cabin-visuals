@@ -6,6 +6,8 @@ import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 // import instruments/index (components import stores - instant cycle).
 import { compositionDef, isCompositionTrack } from '../core/directors'
 import { seedSceneBindings } from '../core/directors/sceneBindings'
+import { seedSwitcherBindings } from '../core/switcherBindings'
+import { SWITCHER_MODE_PARAM } from '../core/visualCopies/switcher'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import { AUTOMATION_AMOUNT_MAX, DEFAULT_BURST, DEFAULT_CYCLE, DEFAULT_NOISE } from '../core/visual/automation'
@@ -267,6 +269,85 @@ export function cloneTrackTree(snapshot: TrackTreeSnapshot, parentId?: string | 
 /** Audio tracks sit as a pinned block at the top of the root list (the backing
  *  tracks lead the arrangement) - nothing non-audio may land above them.
  *  Returns the first root index open to other tracks. */
+/**
+ * Wrap a selection in a new container track: members reparent under it in
+ * timeline (DFS) order and the container lands in the first member's slot. One
+ * set() = one undo step; returns the container's id, or null if nothing
+ * eligible was selected.
+ *
+ * Shared by `groupTracks` (⌘⇧G) and `wrapTracksInSwitcher`, which differ only in
+ * which tracks may join and what the container is. The slot arithmetic is the
+ * fiddly part - an insertion index counted among the siblings that REMAIN once
+ * every member is detached - so it lives here once rather than in each caller.
+ */
+function wrapSelection(
+  set: (fn: (s: ProjectState) => Partial<ProjectState> | ProjectState) => void,
+  trackIds: string[],
+  opts: {
+    eligible: (track: Track) => boolean
+    build: (id: string, parentId: string | null, members: string[], color: string) => Track
+  },
+): string | null {
+  let newId: string | null = null
+  set((s) => {
+    const selected = new Set(trackIds)
+    // Timeline (DFS) order, so the container's children read in the order the
+    // user sees them, whatever order the selection was clicked in.
+    const ordered: string[] = []
+    const visit = (id: string) => {
+      const t = s.tracks[id]
+      if (!t) return
+      if (selected.has(id)) ordered.push(id)
+      for (const c of t.childIds ?? []) visit(c)
+    }
+    for (const rid of s.rootTrackIds) visit(rid)
+    const members = ordered.filter((id) => {
+      const t = s.tracks[id]!
+      if (!opts.eligible(t)) return false
+      // Inside another selected track's subtree: rides along with its ancestor.
+      for (let cur = t.parentId; cur != null; cur = s.tracks[cur]?.parentId) {
+        if (selected.has(cur)) return false
+      }
+      return true
+    })
+    if (members.length === 0) return s
+    const first = s.tracks[members[0]]!
+    const parentId = first.parentId ?? null
+    const id = crypto.randomUUID()
+    const memberSet = new Set(members)
+    const tracks: Record<string, Track> = { ...s.tracks }
+    let rootTrackIds = [...s.rootTrackIds]
+    const siblings = parentId != null ? tracks[parentId]!.childIds : rootTrackIds
+    const firstAt = siblings.indexOf(members[0])
+    const insertAt = siblings
+      .slice(0, firstAt < 0 ? siblings.length : firstAt)
+      .filter((sid) => !memberSet.has(sid)).length
+    for (const mid of members) {
+      const m = tracks[mid]!
+      if (m.parentId != null) {
+        const op = tracks[m.parentId]
+        if (op) tracks[m.parentId] = { ...op, childIds: op.childIds.filter((c) => !memberSet.has(c)) }
+      } else {
+        rootTrackIds = rootTrackIds.filter((rid) => !memberSet.has(rid))
+      }
+      tracks[mid] = { ...m, parentId: id }
+    }
+    tracks[id] = opts.build(id, parentId, members, resolveNextTrackColor(s, parentId))
+    if (parentId != null) {
+      const np = tracks[parentId]!
+      const childIds = np.childIds.filter((c) => !memberSet.has(c))
+      childIds.splice(Math.min(insertAt, childIds.length), 0, id)
+      tracks[parentId] = { ...np, childIds }
+    } else {
+      const min = audioPinnedCount(tracks, rootTrackIds)
+      rootTrackIds.splice(Math.max(min, Math.min(insertAt, rootTrackIds.length)), 0, id)
+    }
+    newId = id
+    return { tracks, rootTrackIds }
+  })
+  return newId
+}
+
 export function audioPinnedCount(tracks: Record<string, Track>, rootTrackIds: string[]): number {
   let n = 0
   while (n < rootTrackIds.length && tracks[rootTrackIds[n]]?.type === 'audio') n++
@@ -384,8 +465,15 @@ export interface ProjectState {
    *  set() = one undo step. Returns the group's id, or null if nothing
    *  groupable was selected. */
   groupTracks: (trackIds: string[]) => string | null
-  /** Dissolve a group: its member tracks splice back into the group's slot in
-   *  order; the group's own lanes (automation on its tf* params) die with it. */
+  /** Wrap the given tracks in a new 'switcher' rack: each becomes one of its
+   *  rows, in timeline order, and the rack lands in the first one's slot. Any
+   *  track kind may join - devices are switched in the chain, objects and
+   *  groups are switched for visibility. Returns the switcher's id, or null if
+   *  nothing rackable was selected. One set() = one undo step. */
+  wrapTracksInSwitcher: (trackIds: string[]) => string | null
+  /** Dissolve a group or a switcher: its member tracks splice back into the
+   *  container's slot in order; the container's own lanes (a group's tf*
+   *  automation, a switcher's MIDI lane) die with it. */
   ungroupTrack: (trackId: string) => void
   renameTrack: (trackId: string, name: string) => void
   toggleMute: (trackId: string) => void
@@ -1271,86 +1359,55 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       return { tracks, rootTrackIds }
     }),
 
-  groupTracks: (trackIds) => {
-    let newId: string | null = null
-    set((s) => {
-      const selected = new Set(trackIds)
-      // Timeline (DFS) order, so the group's children read in the order the
-      // user sees them, whatever order the selection was clicked in.
-      const ordered: string[] = []
-      const visit = (id: string) => {
-        const t = s.tracks[id]
-        if (!t) return
-        if (selected.has(id)) ordered.push(id)
-        for (const c of t.childIds ?? []) visit(c)
-      }
-      for (const rid of s.rootTrackIds) visit(rid)
-      const members = ordered.filter((id) => {
-        const t = s.tracks[id]!
-        // Lanes live only on their parent and audio is pinned - neither joins.
-        if (t.type === 'audio' || t.type === 'automation' || t.type === 'ability'
-          || t.type === 'envelope') return false
-        // Inside another selected track's subtree: rides along with its ancestor.
-        for (let cur = t.parentId; cur != null; cur = s.tracks[cur]?.parentId) {
-          if (selected.has(cur)) return false
-        }
-        return true
-      })
-      if (members.length === 0) return s
-      const first = s.tracks[members[0]]!
-      const parentId = first.parentId ?? null
-      const id = crypto.randomUUID()
-      const memberSet = new Set(members)
-      const tracks: Record<string, Track> = { ...s.tracks }
-      let rootTrackIds = [...s.rootTrackIds]
-      // The group's slot: where the first member sat, counted among the
-      // siblings that remain once every member is detached.
-      const siblings = parentId != null ? tracks[parentId]!.childIds : rootTrackIds
-      const firstAt = siblings.indexOf(members[0])
-      const insertAt = siblings
-        .slice(0, firstAt < 0 ? siblings.length : firstAt)
-        .filter((sid) => !memberSet.has(sid)).length
-      for (const mid of members) {
-        const m = tracks[mid]!
-        if (m.parentId != null) {
-          const op = tracks[m.parentId]
-          if (op) tracks[m.parentId] = { ...op, childIds: op.childIds.filter((c) => !memberSet.has(c)) }
-        } else {
-          rootTrackIds = rootTrackIds.filter((rid) => !memberSet.has(rid))
-        }
-        tracks[mid] = { ...m, parentId: id }
-      }
-      tracks[id] = {
-        id,
-        name: 'Group',
-        type: 'group',
-        instrumentId: '',
-        color: resolveNextTrackColor(s, parentId),
-        muted: false,
-        solo: false,
-        blocks: [],
-        parentId: parentId ?? undefined,
-        childIds: members,
-      }
-      if (parentId != null) {
-        const np = tracks[parentId]!
-        const childIds = np.childIds.filter((c) => !memberSet.has(c))
-        childIds.splice(Math.min(insertAt, childIds.length), 0, id)
-        tracks[parentId] = { ...np, childIds }
-      } else {
-        const min = audioPinnedCount(tracks, rootTrackIds)
-        rootTrackIds.splice(Math.max(min, Math.min(insertAt, rootTrackIds.length)), 0, id)
-      }
-      newId = id
-      return { tracks, rootTrackIds }
-    })
-    return newId
-  },
+  groupTracks: (trackIds) => wrapSelection(set, trackIds, {
+    // Lanes live only on their parent and audio is pinned - neither joins.
+    eligible: (t) => t.type !== 'audio' && t.type !== 'automation'
+      && t.type !== 'ability' && t.type !== 'envelope',
+    build: (id, parentId, members, color) => ({
+      id,
+      name: 'Group',
+      type: 'group',
+      instrumentId: '',
+      color,
+      muted: false,
+      solo: false,
+      blocks: [],
+      parentId: parentId ?? undefined,
+      childIds: members,
+    }),
+  }),
+
+  wrapTracksInSwitcher: (trackIds) => wrapSelection(set, trackIds, {
+    // A rack is generic: devices, objects, groups and nested racks all make
+    // rows. Only the lanes that live on their parent, and audio, stay out -
+    // the same exclusions grouping makes.
+    eligible: (t) => t.type !== 'audio' && t.type !== 'automation'
+      && t.type !== 'ability' && t.type !== 'envelope',
+    build: (id, parentId, members, color) => ({
+      id,
+      name: 'Switcher',
+      type: 'switcher',
+      instrumentId: '',
+      color,
+      muted: false,
+      solo: false,
+      blocks: [],
+      parentId: parentId ?? undefined,
+      childIds: members,
+      params: { [SWITCHER_MODE_PARAM.key]: SWITCHER_MODE_PARAM.default },
+      // Seeded here so the pitches are explicit in the document from the first
+      // save; `orderedSwitcherBindings` self-heals anything that goes stale
+      // later, exactly as the scene bindings do.
+      switcherBindings: seedSwitcherBindings(members),
+    }),
+  }),
 
   ungroupTrack: (trackId) =>
     set((s) => {
       const g = s.tracks[trackId]
-      if (!g || g.type !== 'group') return s
+      // Switchers dissolve the same way groups do - the members splice back
+      // into the container's slot and the container's own lane dies with it.
+      if (!g || (g.type !== 'group' && g.type !== 'switcher')) return s
       const parentId = g.parentId ?? null
       // Members splice back where the group was; the group's own lanes are
       // meaningless without it and are deleted, subtrees included.
