@@ -14,6 +14,20 @@ export interface Note {
   durationBeats: number
   pitch: number
   velocity: number
+  /** LYRIC CLIP notes only — a Text Display note at `PITCH_LYRIC_CLIP`, whose
+   *  span owns a phrase instead of singing one (core/visual/lyricClips.ts).
+   *  Storing the phrase ON the note is what makes clips ordinary notes: every
+   *  roll gesture (draw, drag, resize, marquee, copy/paste, delete, undo)
+   *  applies to them with no bespoke code, and the note's own id IS the clip
+   *  id, so the clip editor and sidecar address it unchanged. */
+  lyric?: LyricNotePayload
+}
+
+/** The phrase a lyric-clip note owns. Split from `LyricClip` because the note
+ *  already carries the timing and identity — this is only the payload. */
+export interface LyricNotePayload {
+  words: string[]
+  layout: LyricClipLayout
 }
 
 export interface Block {
@@ -387,9 +401,11 @@ export interface Track {
   switcherBindings?: Array<{ pitch: number; childTrackId: string }>
   /** Mover/splitter param values, keyed by the definition's param keys. */
   inputValues?: Record<string, number>
-  /** Text-Display-only: the lyric clips that own this track's words
-   *  (core/visual/lyricClips.ts resolves notes against them). */
-  lyricClips?: LyricClip[]
+  // (Text Display's lyric clips used to live here as a track-level array in
+  // ABSOLUTE beats. Since schema v16 they are ordinary notes at
+  // `PITCH_LYRIC_CLIP` inside the track's blocks — see Note.lyric — so the
+  // roll's gestures apply to them for free. `LyricClip` survives as the
+  // DERIVED shape the engine and the panels read, via `clipsFromNotes`.)
   /** Text-Display-only: the style lanes its piano-roll rows wear (pitch picks
    *  the lane; absent = the default lane set). */
   styleLanes?: StyleLane[]

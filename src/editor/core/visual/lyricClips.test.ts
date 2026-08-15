@@ -10,6 +10,11 @@ import {
   resolveLyricWords,
   clipSlotOffset,
   sortedClips,
+  clipsFromNotes,
+  trackLyricClips,
+  isLyricClipNote,
+  PITCH_LYRIC_CLIP,
+  MAX_STYLE_LANES,
 } from './lyricClips'
 import type { LyricClip } from '../../types'
 
@@ -122,4 +127,70 @@ test('grid seats fill row-major, centered; circle starts at the top', () => {
   assert.ok(Math.abs(right.x - 1) < 1e-9 && Math.abs(right.y) < 1e-9)
   assert.equal(clipSlotOffset({ kind: 'stack' }, 0, 4), null)
   assert.equal(clipSlotOffset({ kind: 'one' }, 0, 1), null)
+})
+
+
+// ── Clips as notes (schema v16) ──────────────────────────────────────────────
+
+const clipNote = (id: string, startBeat: number, durationBeats: number, words: string[]) =>
+  ({ id, pitch: PITCH_LYRIC_CLIP, startBeat, durationBeats, velocity: 100,
+     lyric: { words, layout: { kind: 'one' as const } } })
+
+test('the clip pitch sits outside every style lane, so a clip never sings', () => {
+  // The whole no-special-casing story rests on this: word notes are selected by
+  // laneIndexForPitch, and it must reject the clip row at the maximum lane count.
+  assert.equal(PITCH_LYRIC_CLIP, STYLE_PITCH_TOP + 1)
+  assert.equal(laneIndexForPitch(PITCH_LYRIC_CLIP, MAX_STYLE_LANES), -1)
+  assert.ok(isLyricClipNote({ pitch: PITCH_LYRIC_CLIP }))
+  assert.ok(!isLyricClipNote({ pitch: STYLE_PITCH_TOP }))
+})
+
+test('clipsFromNotes reads only clip notes, and defaults a bare one to empty', () => {
+  const notes = [
+    { id: 'w1', pitch: 58, startBeat: 0, durationBeats: 1, velocity: 100 },
+    clipNote('c1', 0, 4, ['HELLO', 'THERE']),
+    { id: 'c2', pitch: PITCH_LYRIC_CLIP, startBeat: 8, durationBeats: 2, velocity: 100 },
+  ]
+  const clips = clipsFromNotes(notes)
+  assert.deepEqual(clips.map((c) => c.id), ['c1', 'c2'])
+  assert.deepEqual(clips[0].words, ['HELLO', 'THERE'])
+  // A clip note drawn on the grid carries no payload yet - it must read as an
+  // empty phrase rather than throwing or vanishing.
+  assert.deepEqual(clips[1].words, [])
+  assert.deepEqual(clips[1].layout, { kind: 'one' })
+})
+
+test('trackLyricClips lifts block-relative clips into absolute beats, sorted', () => {
+  const clips = trackLyricClips([
+    { startBar: 4, notes: [clipNote('late', 2, 4, ['B'])] },
+    { startBar: 0, notes: [clipNote('early', 1, 4, ['A'])] },
+  ], 4)
+  assert.deepEqual(clips.map((c) => c.id), ['early', 'late'])
+  assert.equal(clips[0].startBeat, 1)   // bar 0 + 1
+  assert.equal(clips[1].startBeat, 18)  // bar 4 (=16 beats) + 2
+})
+
+test('a resolved (absolute-beat) note stream feeds the same reader', () => {
+  // The engine hands over ResolvedNotes, which carry `beat` rather than
+  // `startBeat`; both shapes must land on the same clip.
+  const clips = clipsFromNotes([
+    { id: 'c1', pitch: PITCH_LYRIC_CLIP, beat: 12, durationBeats: 4,
+      lyric: { words: ['X'], layout: { kind: 'one' } } },
+  ])
+  assert.equal(clips[0].startBeat, 12)
+  assert.deepEqual(clips[0].words, ['X'])
+})
+
+test('words bind to clips derived from notes exactly as before', () => {
+  // End to end: the clips a note stream declares drive resolveLyricWords with
+  // no change to the binding rules.
+  const clips = trackLyricClips([{ startBar: 0, notes: [
+    clipNote('c1', 0, 4, ['ONE', 'TWO']),
+    clipNote('c2', 4, 4, ['THREE']),
+  ] }], 4)
+  const res = resolveLyricWords(
+    [{ beat: 0, pitch: 58 }, { beat: 1, pitch: 58 }, { beat: 4, pitch: 58 }, { beat: 5, pitch: 58 }],
+    clips, 5,
+  )
+  assert.deepEqual(res.map((r) => r.entry?.text ?? null), ['ONE', 'TWO', 'THREE', null])
 })

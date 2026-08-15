@@ -21,7 +21,7 @@ import type { ProjectDocument } from '../../persistence/types'
 import { upgradeDocument } from '../../persistence/upgrade'
 import { useVideoStore } from './VideoStore'
 import { songEndBars, trimLoopsToSongEnd } from './songEnd'
-import { clipsFromPlacedWords, laneIndexForPitch, MAX_STYLE_LANES, resolveStyleLanes } from '../core/visual/lyricClips'
+import { clipsFromNotes, clipsFromPlacedWords, emptyLyricPayload, isLyricClipNote, laneIndexForPitch, MAX_STYLE_LANES, PITCH_LYRIC_CLIP, resolveStyleLanes, trackLyricClips } from '../core/visual/lyricClips'
 import type { LyricClip, StyleLane } from '../types'
 
 export const MIN_BPM = 20
@@ -602,9 +602,8 @@ export interface ProjectState {
   addLyricClip: (trackId: string, clip: Omit<LyricClip, 'id'>) => void
   updateLyricClip: (trackId: string, clipId: string, updates: Partial<Omit<LyricClip, 'id'>>) => void
   removeLyricClip: (trackId: string, clipId: string) => void
-  /** Alt-drag duplicate: copy a clip in place and return the copy's id (the
-   *  gesture then drags the copy). */
-  duplicateLyricClip: (trackId: string, clipId: string) => string | null
+  // (No duplicate action: alt-drag on a clip is the note gesture's own
+  // duplicate, like every other note.)
   /** Rewrite ONE word in place (the note-editing path). Writes through to the
    *  clip's words, padding if a starved note's slot is past the end. */
   setLyricClipWord: (trackId: string, clipId: string, wordIndex: number, word: string) => void
@@ -688,6 +687,76 @@ function sceneEffectsPatch(
   return sceneId === s.activeSceneId
     ? { scenes, ...viewForScene(scenes, sceneId, s.audioTracks, s.audioRootTrackIds) }
     : { scenes }
+}
+
+// ── Lyric clips ─────────────────────────────────────────────────────────────
+// A lyric clip IS a note at PITCH_LYRIC_CLIP (see core/visual/lyricClips.ts), so
+// these actions speak the caller's `LyricClip` vocabulary (ABSOLUTE beats, the
+// clip's own id) while storing block-relative notes. Everything else about
+// clips - dragging, resizing, boxing, copying, deleting - is the roll's note
+// gestures and needs no action at all.
+
+/** The block a clip at `absBeat` belongs in: the one whose span contains it,
+ *  else the nearest by start. Clips may overflow their block (notes always
+ *  could), so a phrase past every block still lands somewhere sensible rather
+ *  than being dropped. */
+function lyricHostBlock(track: Track, absBeat: number, beatsPerBar: number): Block | null {
+  if (track.blocks.length === 0) return null
+  let nearest = track.blocks[0]
+  let nearestGap = Infinity
+  for (const b of track.blocks) {
+    const start = b.startBar * beatsPerBar
+    const end = start + b.durationBars * beatsPerBar
+    if (absBeat >= start - 1e-6 && absBeat < end - 1e-6) return b
+    const gap = absBeat < start ? start - absBeat : absBeat - end
+    if (gap < nearestGap) { nearestGap = gap; nearest = b }
+  }
+  return nearest
+}
+
+function findLyricClipNote(track: Track, clipId: string): { block: Block; note: Note } | null {
+  for (const block of track.blocks) {
+    const note = block.notes.find((n) => n.id === clipId && isLyricClipNote(n))
+    if (note) return { block, note }
+  }
+  return null
+}
+
+/** Build the clip note for an absolute-beat clip, relative to its host block. */
+function lyricClipNote(clip: Omit<LyricClip, 'id'>, id: string, host: Block, beatsPerBar: number): Note {
+  return {
+    id,
+    pitch: PITCH_LYRIC_CLIP,
+    startBeat: clip.startBeat - host.startBar * beatsPerBar,
+    durationBeats: clip.durationBeats,
+    velocity: 100,
+    lyric: { words: [...clip.words], layout: { ...clip.layout } },
+  }
+}
+
+/** Clip notes for a block that starts at `blockStartBeat` (absolute). Used by
+ *  the transcription/template paths, which think in absolute-beat clips and
+ *  then lay them into the block they just built. Keeps each clip's own id. */
+function lyricClipNotes(clips: readonly LyricClip[], blockStartBeat: number): Note[] {
+  return clips.map((c) => ({
+    id: c.id,
+    pitch: PITCH_LYRIC_CLIP,
+    startBeat: c.startBeat - blockStartBeat,
+    durationBeats: c.durationBeats,
+    velocity: 100,
+    lyric: { words: [...c.words], layout: { ...c.layout } },
+  }))
+}
+
+function writeTrackBlockNotes(s: ProjectState, trackId: string, blockId: string, notes: Note[]) {
+  const t = s.tracks[trackId]
+  if (!t) return s
+  return {
+    tracks: {
+      ...s.tracks,
+      [trackId]: { ...t, blocks: t.blocks.map((b) => (b.id === blockId ? { ...b, notes } : b)) },
+    },
+  }
 }
 
 export function sceneSnapshot(state: ProjectState, sceneId: string) {
@@ -1822,48 +1891,48 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     set((s) => {
       const t = s.tracks[trackId]
       if (!t || t.instrumentId !== 'textDisplay') return s
-      const next: LyricClip = { ...clip, id: crypto.randomUUID() }
-      return { tracks: { ...s.tracks, [trackId]: { ...t, lyricClips: [...(t.lyricClips ?? []), next] } } }
+      const host = lyricHostBlock(t, clip.startBeat, s.beatsPerBar)
+      if (!host) return s
+      const note = lyricClipNote(clip, crypto.randomUUID(), host, s.beatsPerBar)
+      return writeTrackBlockNotes(s, trackId, host.id, [...host.notes, note])
     }),
 
   updateLyricClip: (trackId, clipId, updates) =>
     set((s) => {
       const t = s.tracks[trackId]
-      if (!t?.lyricClips) return s
-      const lyricClips = t.lyricClips.map((c) => (c.id === clipId ? { ...c, ...updates } : c))
-      return { tracks: { ...s.tracks, [trackId]: { ...t, lyricClips } } }
+      const found = t && findLyricClipNote(t, clipId)
+      if (!t || !found) return s
+      const { block, note } = found
+      const next: Note = { ...note, lyric: { ...(note.lyric ?? emptyLyricPayload()) } }
+      // startBeat arrives ABSOLUTE (the action's LyricClip vocabulary); the note
+      // stores it block-relative like every other note.
+      if (updates.startBeat !== undefined) next.startBeat = updates.startBeat - block.startBar * s.beatsPerBar
+      if (updates.durationBeats !== undefined) next.durationBeats = updates.durationBeats
+      if (updates.words !== undefined) next.lyric!.words = [...updates.words]
+      if (updates.layout !== undefined) next.lyric!.layout = { ...updates.layout }
+      return writeTrackBlockNotes(s, trackId, block.id, block.notes.map((n) => (n.id === clipId ? next : n)))
     }),
 
   removeLyricClip: (trackId, clipId) =>
     set((s) => {
       const t = s.tracks[trackId]
-      if (!t?.lyricClips) return s
-      return { tracks: { ...s.tracks, [trackId]: { ...t, lyricClips: t.lyricClips.filter((c) => c.id !== clipId) } } }
+      const found = t && findLyricClipNote(t, clipId)
+      if (!t || !found) return s
+      const { block } = found
+      return writeTrackBlockNotes(s, trackId, block.id, block.notes.filter((n) => n.id !== clipId))
     }),
-
-  duplicateLyricClip: (trackId, clipId) => {
-    let newId: string | null = null
-    set((s) => {
-      const t = s.tracks[trackId]
-      const src = t?.lyricClips?.find((c) => c.id === clipId)
-      if (!t || !src) return s
-      newId = crypto.randomUUID()
-      const copy: LyricClip = { ...src, id: newId, words: [...src.words], layout: { ...src.layout } }
-      return { tracks: { ...s.tracks, [trackId]: { ...t, lyricClips: [...t.lyricClips!, copy] } } }
-    })
-    return newId
-  },
 
   setLyricClipWord: (trackId, clipId, wordIndex, word) =>
     set((s) => {
       const t = s.tracks[trackId]
-      const clip = t?.lyricClips?.find((c) => c.id === clipId)
-      if (!t || !clip || wordIndex < 0) return s
-      const words = [...clip.words]
+      const found = t && findLyricClipNote(t, clipId)
+      if (!t || !found || wordIndex < 0) return s
+      const { block, note } = found
+      const words = [...(note.lyric?.words ?? [])]
       while (words.length <= wordIndex) words.push('')
       words[wordIndex] = word
-      const lyricClips = t.lyricClips!.map((c) => (c.id === clipId ? { ...c, words } : c))
-      return { tracks: { ...s.tracks, [trackId]: { ...t, lyricClips } } }
+      const next: Note = { ...note, lyric: { ...(note.lyric ?? emptyLyricPayload()), words } }
+      return writeTrackBlockNotes(s, trackId, block.id, block.notes.map((n) => (n.id === clipId ? next : n)))
     }),
 
   sliceLyricsIntoClips: (trackId, text, startBeat = 0) =>
@@ -1873,14 +1942,25 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
       if (lines.length === 0) return s
       const barBeats = s.beatsPerBar
-      const lyricClips: LyricClip[] = lines.map((line, i) => ({
-        id: crypto.randomUUID(),
-        startBeat: startBeat + i * barBeats,
-        durationBeats: barBeats,
-        words: line.split(/\s+/),
-        layout: t.lyricClips?.[0]?.layout ?? { kind: 'one' },
-      }))
-      return { tracks: { ...s.tracks, [trackId]: { ...t, lyricClips } } }
+      const layout = clipsFromNotes(t.blocks.flatMap((b) => b.notes))[0]?.layout ?? { kind: 'one' as const }
+      // Replaces the existing phrases: drop every clip note first, then lay the
+      // new ones down a bar apart. Word notes are untouched.
+      const cleared = t.blocks.map((b) => ({ ...b, notes: b.notes.filter((n) => !isLyricClipNote(n)) }))
+      const blocks = cleared.map((b) => ({ ...b }))
+      for (let i = 0; i < lines.length; i++) {
+        const absBeat = startBeat + i * barBeats
+        const host = lyricHostBlock({ ...t, blocks }, absBeat, barBeats)
+        if (!host) break
+        const note = lyricClipNote(
+          { startBeat: absBeat, durationBeats: barBeats, words: lines[i].split(/\s+/), layout },
+          crypto.randomUUID(),
+          host,
+          barBeats,
+        )
+        const idx = blocks.findIndex((b) => b.id === host.id)
+        blocks[idx] = { ...blocks[idx], notes: [...blocks[idx].notes, note] }
+      }
+      return { tracks: { ...s.tracks, [trackId]: { ...t, blocks } } }
     }),
 
   updateStyleLane: (trackId, index, updates) =>
@@ -2266,7 +2346,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       // The style's arrangement survives a refill: existing clips' layout is
       // carried onto the rebuilt ones.
       const existingTrack = existingId ? s.tracks[existingId] : undefined
-      const carriedLayout = existingTrack?.lyricClips?.[0]?.layout ?? { kind: 'one' as const }
+      const carriedLayout = trackLyricClips(existingTrack?.blocks ?? [], s.beatsPerBar)[0]?.layout ?? { kind: 'one' as const }
       const lyricClips = clipsFromPlacedWords(placed).map((c) => ({ ...c, layout: carriedLayout }))
       // Stack arrangements keep their 1-frame zoom flashes on the card
       // boundaries - which are now simply the clips' starts.
@@ -2293,6 +2373,8 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
             velocity: 100,
           })),
           ...flashNotes,
+          // The phrases ride in the same block as the words they feed.
+          ...lyricClipNotes(lyricClips, 0),
         ],
       }
       // Grow (never shrink) the project if the lyrics overrun, like MIDI import.
@@ -2347,7 +2429,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         resultId = existingId
         const updated: Track = {
           ...existing,
-          lyricClips,
           lyricTiming: timing ?? existing.lyricTiming,
           // A refill arrives word-per-note, so the grouping resets with it -
           // a stale 'lines' flag would desync the next rebuild from the sheet.
@@ -2367,7 +2448,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         color: resolveNextTrackColor(s),
         muted: false,
         solo: false,
-        lyricClips,
         lyricTiming: timing,
         lyricGrouping: 'words',
         blocks: [block],
@@ -2404,7 +2484,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       // Lines grouping: each placed unit IS a line, shown whole on one note -
       // its clip carries the line as a single !...! grouped entry. Words
       // grouping re-cuts lines from the placed words. Layout carries over.
-      const carriedLayout = t.lyricClips?.[0]?.layout ?? { kind: 'one' as const }
+      const carriedLayout = trackLyricClips(t.blocks, s.beatsPerBar)[0]?.layout ?? { kind: 'one' as const }
       const lyricClips = (grouping === 'lines'
         ? placed.map((w, i) => ({
             id: crypto.randomUUID(),
@@ -2437,6 +2517,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
             velocity: 100,
           })),
           ...flashNotes,
+          ...lyricClipNotes(lyricClips, 0),
         ],
       }
       return {
@@ -2445,7 +2526,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
           [trackId]: {
             ...t,
             lyricGrouping: grouping,
-            lyricClips,
             blocks: [block],
           },
         },
@@ -2518,8 +2598,10 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         // The project's WORDS survive; the template's ARRANGEMENT wins - its
         // lead clip's layout restyles every carried clip, the same way its
         // style lanes restyle the notes.
-        const carriedLayout = tplLyrics.lyricClips?.[0]?.layout ?? { kind: 'one' as const }
-        let lyricClips = (existing.lyricClips?.length ? existing.lyricClips : tplLyrics.lyricClips ?? [])
+        const tplClips = trackLyricClips(tplLyrics.blocks, s.beatsPerBar)
+        const existingClips = trackLyricClips(existing.blocks, s.beatsPerBar)
+        const carriedLayout = tplClips[0]?.layout ?? { kind: 'one' as const }
+        let lyricClips = (existingClips.length ? existingClips : tplClips)
           .map((c) => ({ ...c, id: crypto.randomUUID(), layout: carriedLayout }))
         let blocks = existing.blocks.length > 0 ? existing.blocks : tplLyrics.blocks
         // Particle-words styles (wormhole) open on a "-" lead-in: a dash word
@@ -2589,9 +2671,26 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
           }
         }
 
+        // The carried phrases are notes, so they are written INTO the block
+        // rather than beside it: strip whatever clip notes came along with the
+        // source blocks, then lay the resolved set into the first one (clips
+        // were track-level before v16, so gathering them there is the faithful
+        // translation of "the track's clips").
+        if (blocks.length > 0) {
+          blocks = [
+            {
+              ...blocks[0],
+              notes: [
+                ...blocks[0].notes.filter((n) => !isLyricClipNote(n)),
+                ...lyricClipNotes(lyricClips, blocks[0].startBar * s.beatsPerBar),
+              ],
+            },
+            ...blocks.slice(1).map((b) => ({ ...b, notes: b.notes.filter((n) => !isLyricClipNote(n)) })),
+          ]
+        }
+
         cloned[templateLyricsId] = {
           ...tplLyrics,
-          lyricClips,
           blocks,
           ...(existing.lyricTiming ? { lyricTiming: existing.lyricTiming } : {}),
         }
@@ -2826,7 +2925,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         }
         // Clip beats derive from the sung seconds too, so they rescale with
         // the notes (layout carried, like the transcription refill).
-        const carriedLayout = t.lyricClips?.[0]?.layout ?? { kind: 'one' as const }
+        const carriedLayout = trackLyricClips(t.blocks, s.beatsPerBar)[0]?.layout ?? { kind: 'one' as const }
         const lyricClips = (t.lyricGrouping === 'lines'
           ? words.map((w, i) => ({
               id: crypto.randomUUID(),
@@ -2838,7 +2937,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
           : clipsFromPlacedWords(words)
         ).map((c) => ({ ...c, layout: carriedLayout }))
         if (tracks === s.tracks) tracks = { ...s.tracks }
-        tracks[id] = { ...t, blocks: [block], lyricClips }
+        tracks[id] = { ...t, blocks: [{ ...block, notes: [...block.notes, ...lyricClipNotes(lyricClips, 0)] }] }
         totalBars = Math.max(totalBars, durationBars)
       }
       return tracks === s.tracks ? { bpm: next } : { bpm: next, tracks, totalBars }

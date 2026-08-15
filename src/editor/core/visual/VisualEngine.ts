@@ -251,12 +251,11 @@ export function syncParams(input: ProjectState | ProjectSnapshot) {
         if (inst && env.key !== undefined) env.fxBase = inst.settings[env.key] ?? env.fxBase
       }
     }
-    // Lyric clips and style lanes are document fields; the store's immutable
-    // updates hand the resolved object a fresh array identity on any edit, so
-    // a paused frame repaints through the frame signature with no work here.
-    if (obj.lyricClips !== sceneTracks[obj.trackId]?.lyricClips && sceneTracks[obj.trackId]) {
-      obj.lyricClips = sceneTracks[obj.trackId].lyricClips
-    }
+    // Style lanes are a document field; the store's immutable updates hand the
+    // resolved object a fresh array identity on any edit, so a paused frame
+    // repaints through the frame signature with no work here. (Lyric CLIPS are
+    // notes now, so they arrive through the structural re-resolve like every
+    // other note edit and need no fast-path sync.)
     if (obj.styleLanes !== sceneTracks[obj.trackId]?.styleLanes && sceneTracks[obj.trackId]) {
       obj.styleLanes = sceneTracks[obj.trackId].styleLanes
     }

@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Mic, Plus, X } from 'lucide-react'
 import { track as trackEvent } from '../../analytics/analytics'
 import { ensureFont } from '../core/visual/fonts'
 import { isNumberParam } from '../instruments/types'
 import { useProjectStore } from '../store/ProjectStore'
-import { MAX_STYLE_LANES, resolveStyleLanes, styleLanePitch } from '../core/visual/lyricClips'
+import { MAX_STYLE_LANES, resolveStyleLanes, styleLanePitch, trackLyricClips } from '../core/visual/lyricClips'
 import type { LyricClipLayout, LyricLayoutKind, StyleLaneFx } from '../types'
 import { placeTranscription } from '../utils/lyricPlacement'
 import { firstAudioBlock, transcribeActiveSong, type TranscribePhase } from '../utils/transcribeSong'
@@ -321,7 +321,15 @@ function GrowingTextarea({ value, onChange, ariaLabel }: { value: string; onChan
  *  panel's list AND shown alone in the piano roll's sidecar when a clip is
  *  selected in the sections strip. */
 export function LyricClipEditorCard({ trackId, clipId }: { trackId: string; clipId: string }) {
-  const clip = useProjectStore((s) => s.tracks[trackId]?.lyricClips?.find((c) => c.id === clipId))
+  // Clips are derived from the track's clip NOTES, so subscribe to the track
+  // slice (stable across foreign edits) and derive - a selector returning a
+  // freshly built clip would hand zustand a new object every render.
+  const trackSlice = useProjectStore((s) => s.tracks[trackId])
+  const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
+  const clip = useMemo(
+    () => (trackSlice ? trackLyricClips(trackSlice.blocks, beatsPerBar).find((c) => c.id === clipId) : undefined),
+    [trackSlice, beatsPerBar, clipId],
+  )
   const updateLyricClip = useProjectStore((s) => s.updateLyricClip)
   if (!clip) return null
   const setLayout = (layout: LyricClipLayout) => updateLyricClip(trackId, clip.id, { layout })
@@ -373,8 +381,12 @@ export function LyricClipEditorCard({ trackId, clipId }: { trackId: string; clip
 }
 
 function LyricClipsSection({ trackId }: { trackId: string }) {
-  const clips = useProjectStore((s) => s.tracks[trackId]?.lyricClips)
+  const trackSlice = useProjectStore((s) => s.tracks[trackId])
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
+  const clips = useMemo(
+    () => (trackSlice ? trackLyricClips(trackSlice.blocks, beatsPerBar) : undefined),
+    [trackSlice, beatsPerBar],
+  )
   const addLyricClip = useProjectStore((s) => s.addLyricClip)
   const updateLyricClip = useProjectStore((s) => s.updateLyricClip)
   const removeLyricClip = useProjectStore((s) => s.removeLyricClip)

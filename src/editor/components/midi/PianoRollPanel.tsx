@@ -27,7 +27,7 @@ import { automationMode } from '../../core/visual/automation'
 import { resolveDeclaredMidiRows } from './resolveDeclaredRows'
 import { EmptyRollBlank } from './EmptyRollBlank'
 import { VIM_ACCENT, type VimKeyRegime } from './vim/types'
-import { laneIndexForPitch, resolveLyricWords, resolveStyleLanes } from '../../core/visual/lyricClips'
+import { isLyricClipNote, laneIndexForPitch, PITCH_LYRIC_CLIP, resolveLyricWords, resolveStyleLanes, trackLyricClips } from '../../core/visual/lyricClips'
 import { LyricClipEditorCard, StyleLaneEditorCard } from '../../userInterfaceRenderers/TextDisplayUserInterface'
 import type { AutomationMode, Block, InterpolationMode, Track } from '../../types'
 
@@ -365,7 +365,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   // Director rows are labelled with scene names; this string fingerprint keeps
   // them fresh without subscribing to the scenes record itself (whose identity
   // changes on every track edit anywhere).
-  const sceneNamesKey = useProjectStore((s) => s.sceneOrder.map((id) => s.scenes[id]?.name).join(' '))
+  const sceneNamesKey = useProjectStore((s) => s.sceneOrder.map((id) => s.scenes[id]?.name).join('\u0000'))
   // Declared rows read the wider project (mover chains, scenes) but must not
   // subscribe to it: recompute only when the edited track itself changes. A
   // sibling chain edit can in principle change a mover lane's prior copy count
@@ -386,6 +386,8 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [automation, trigger, track, bpm, beatsPerBar, totalBars, sceneNamesKey])
   const defRows = declaredRows?.rows
+  // A Text Display roll grows one extra row of its own (Lyric clips, below).
+  const isTextRoll = !automation && !trigger && track?.type === 'base' && track.instrumentId === 'textDisplay'
   const resolvedRows = automation
     ? automation.kind === 'toggle'
       ? generateToggleRows(notes.map((n) => n.pitch), trackColor)
@@ -410,7 +412,21 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
             trackColor,
           )
         : defRows
-          ? generateInstrumentRows(defRows, declaredRows.strict ? [] : notes.map((n) => n.pitch), trackColor)
+          ? generateInstrumentRows(
+              defRows,
+              // On a TEXT roll the clip pitch is deliberately withheld: phrases
+              // are notes on a pitch no instrument declares, so the "unmapped
+              // pitch" rescue row would build a SECOND row for it beside the
+              // Lyric clips row unshifted below - two rows sharing one pitch,
+              // which React keys by pitch (duplicate keys, and clip notes drawn
+              // on whichever row won). Every other instrument keeps the rescue.
+              declaredRows.strict
+                ? []
+                : isTextRoll
+                  ? notes.map((n) => n.pitch).filter((p) => p !== PITCH_LYRIC_CLIP)
+                  : notes.map((n) => n.pitch),
+              trackColor,
+            )
           : noteColor
             ? generateRows(noteColor)
             : generateRows(trackColor)
@@ -418,10 +434,11 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   // arm above yields zero rows) swaps the grid for the blank state below.
   const rowsAreEmpty = resolvedRows.length === 0
   const rows = resolvedRows
-  // Text tracks: the LYRIC CLIPS row sits above the style lanes - a real row
-  // (standard height, striping, gutter), whose contents are the clips.
-  if (!automation && !trigger && track?.type === 'base' && track.instrumentId === 'textDisplay') {
-    rows.unshift({ pitch: 1000, label: 'Lyric clips', color: trackColor, clipRow: true })
+  // Text tracks: the LYRIC CLIPS row sits above the style lanes. It is an
+  // ordinary note row at the clip pitch - the phrases on it ARE notes, so the
+  // grid draws them and the note gestures edit them with no special casing.
+  if (isTextRoll) {
+    rows.unshift({ pitch: PITCH_LYRIC_CLIP, label: 'Lyric clips', color: trackColor })
   }
   // What the note keys MEAN on these rows. A value lane's rows are param
   // values, not pitches, so the keys spread across the range instead of sitting
@@ -467,9 +484,15 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
       }
     }
     stream.sort((a, b) => a.beat - b.beat)
-    const resolved = resolveLyricWords(stream, textTrack.lyricClips, laneCount)
+    const resolved = resolveLyricWords(stream, trackLyricClips(textTrack.blocks, beatsPerBar), laneCount)
     const map: Record<string, string> = {}
     stream.forEach((n, i) => { map[n.id] = resolved[i].entry?.text ?? '∅' })
+    // A CLIP note wears its whole phrase, through the very same note-label
+    // channel a word note uses - which is also what makes double-click retype
+    // the phrase (see onNoteWordEdit).
+    for (const n of notes) {
+      if (isLyricClipNote(n)) map[n.id] = n.lyric?.words.join(' ') ?? ''
+    }
     return map
   }, [textTrack, beatsPerBar, notes, block.id, block.startBar])
   // The roll's sidecar subject: a style lane (click a gutter row) or a lyric
@@ -477,37 +500,28 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   // whichever was picked last; picking it again closes.
   const [sidecar, setSidecar] = useState<{ kind: 'lane'; index: number } | { kind: 'clip'; clipId: string } | null>(null)
   useEffect(() => { setSidecar(null) }, [trackId])
-  // The selected clip answers the standard editing keys: Delete/Backspace
-  // removes it, Escape deselects. Typing contexts are exempt, like the note
-  // editor's own delete handling.
-  const sidecarRef = useRef(sidecar)
-  sidecarRef.current = sidecar
+  // A clip is a note now, so Delete/Escape on it are the note editor's own
+  // keys - there is nothing to bind here. All the sidecar owes is to close
+  // when its subject stops existing (deleted, or undone away).
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const sc = sidecarRef.current
-      if (!sc || sc.kind !== 'clip') return
-      const t = e.target as HTMLElement | null
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        e.preventDefault()
-        useProjectStore.getState().removeLyricClip(trackId, sc.clipId)
-        setSidecar(null)
-      } else if (e.key === 'Escape') {
-        setSidecar(null)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [trackId])
+    if (sidecar?.kind !== 'clip' || !textTrack) return
+    const alive = textTrack.blocks.some((b) => b.notes.some((n) => n.id === sidecar.clipId && isLyricClipNote(n)))
+    if (!alive) setSidecar(null)
+  }, [sidecar, textTrack])
   const setLyricClipWord = useProjectStore((s) => s.setLyricClipWord)
   const updateLyricClip = useProjectStore((s) => s.updateLyricClip)
-  const duplicateLyricClip = useProjectStore((s) => s.duplicateLyricClip)
-  const removeLyricClipAction = useProjectStore((s) => s.removeLyricClip)
   const onNoteWordEdit = useMemo(() => {
     if (!textTrack) return undefined
     return (noteId: string, word: string) => {
       const trimmed = word.trim()
       if (!trimmed) return
+      // A clip note IS the phrase, so retyping it rewrites its own words - no
+      // slot binding to chase.
+      const clipNote = textTrack.blocks.flatMap((b) => b.notes).find((n) => n.id === noteId && isLyricClipNote(n))
+      if (clipNote) {
+        updateLyricClip(trackId, noteId, { words: trimmed.split(/\s+/).filter(Boolean) })
+        return
+      }
       // Re-run the binding to find WHICH clip slot this note owns, then write
       // the word back into the clip - the single visible home of the text.
       const laneCount = resolveStyleLanes(textTrack.styleLanes).length
@@ -523,9 +537,9 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
       stream.sort((a, b) => a.beat - b.beat)
       const idx = stream.findIndex((n) => n.id === noteId)
       if (idx < 0) return
-      const resolved = resolveLyricWords(stream, textTrack.lyricClips, laneCount)
+      const clips = trackLyricClips(textTrack.blocks, beatsPerBar)
+      const resolved = resolveLyricWords(stream, clips, laneCount)
       const r = resolved[idx]
-      const clips = [...(textTrack.lyricClips ?? [])].sort((a, b) => a.startBeat - b.startBeat)
       const clip = clips[r.clipIndex]
       if (!clip) return
       // slotIndex counts ENTRIES (syllables included); wordIndex the panel
@@ -536,7 +550,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
         : clip.words.length
       setLyricClipWord(trackId, clip.id, wordIndex, trimmed)
     }
-  }, [textTrack, beatsPerBar, setLyricClipWord, trackId])
+  }, [textTrack, beatsPerBar, setLyricClipWord, updateLyricClip, trackId])
 
   // On open: scroll horizontally to just before the block starts, and vertically
   // to the block's first note (the earliest by time), or C4 if the block is empty.
@@ -767,13 +781,11 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
         onNoteWordEdit={onNoteWordEdit}
         onLaneRowClick={textTrack ? (i) => setSidecar((cur) => (cur?.kind === 'lane' && cur.index === i ? null : { kind: 'lane', index: i })) : undefined}
         activeLaneIndex={sidecar?.kind === 'lane' ? sidecar.index : null}
-        lyricClips={textTrack?.lyricClips}
-        onClipChange={textTrack ? (clipId, updates) => updateLyricClip(trackId, clipId, updates) : undefined}
-        onClipDuplicate={textTrack ? (clipId) => duplicateLyricClip(trackId, clipId) : undefined}
-        onClipDelete={textTrack ? (clipIds) => { for (const id of clipIds) removeLyricClipAction(trackId, id) } : undefined}
-        onClipClick={textTrack ? (clipId) => setSidecar({ kind: 'clip', clipId }) : undefined}
-        activeClipId={sidecar?.kind === 'clip' ? sidecar.clipId : null}
         onNoteSelect={textTrack ? (note) => {
+          // Touching a CLIP note opens its phrase editor, exactly as touching a
+          // word note focuses its style lane - one gesture, two subjects, and no
+          // separate clip-click path to keep in step.
+          if (isLyricClipNote(note)) { setSidecar({ kind: 'clip', clipId: note.id }); return }
           const i = laneIndexForPitch(note.pitch, resolveStyleLanes(textTrack.styleLanes).length)
           if (i >= 0) setSidecar({ kind: 'lane', index: i })
         } : undefined}

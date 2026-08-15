@@ -1,15 +1,22 @@
-import type { LyricClip, LyricClipLayout, StyleLane } from '../../types'
+import type { LyricClip, LyricClipLayout, LyricNotePayload, StyleLane } from '../../types'
 
 /**
  * Lyric clips + style lanes: how a Text Display track gets its words and looks.
  *
  * The 2026-08 text/MIDI redesign (reference mock: text-midi-v5): the instrument
- * itself holds NO text. Words live in `Track.lyricClips` - timeline spans that
- * each own one phrase - and a note takes the next unclaimed word from the clip
- * its beat falls inside. Note PITCH picks a `StyleLane` (font/color/size/fx),
- * so height styles the word. Both bindings are local: pasting or moving notes
- * can never shift words outside their own clip, and copying notes copies
- * rhythm + style, never word ordinals.
+ * itself holds NO text. Words live in lyric CLIPS - timeline spans that each
+ * own one phrase - and a note takes the next unclaimed word from the clip its
+ * beat falls inside. Note PITCH picks a `StyleLane` (font/color/size/fx), so
+ * height styles the word. Word binding is local: pasting or moving WORD notes
+ * can never shift words outside their own clip.
+ *
+ * A clip is itself a NOTE (schema v16), at `PITCH_LYRIC_CLIP`, carrying its
+ * phrase in `Note.lyric`. That is the whole reason the piano roll has no clip
+ * gesture code: clips are drawn, dragged, resized, boxed, copied, pasted and
+ * deleted by the note gestures that already existed, and a clip rides its
+ * block like any note. (Consequence, chosen deliberately: copying a region now
+ * copies its clips WITH their words - selecting a phrase and its notes and
+ * pasting them elsewhere reproduces the whole phrase, which is the point.)
  *
  * Everything here is a pure function of (clips, lanes, note stream) - the one
  * rule. This module has NO three/react imports so instrument tests can load it
@@ -26,6 +33,81 @@ export const MAX_STYLE_LANES = 8
 /** Punctuation rows, kept from the pre-clip instrument (frozen pitches). */
 export const PITCH_BASS_POP = 47
 export const PITCH_ZOOM_FLASH = 46
+
+/**
+ * The row lyric CLIPS live on. Since schema v16 a clip is an ordinary Note at
+ * this pitch carrying a `lyric` payload, rather than a track-level array — so
+ * every roll gesture (draw, drag, resize, marquee, copy/paste, delete, undo)
+ * works on clips with no bespoke code, and a clip rides its block the way a
+ * note does.
+ *
+ * FROZEN, like the lane pitches: projects store it. It sits one above
+ * STYLE_PITCH_TOP so it can never collide with a style lane (which occupy
+ * STYLE_PITCH_TOP down to STYLE_PITCH_TOP - MAX_STYLE_LANES + 1) — which is
+ * also why `laneIndexForPitch` already rejects it, and therefore why a clip
+ * note can never be mistaken for a word note.
+ */
+export const PITCH_LYRIC_CLIP = STYLE_PITCH_TOP + 1
+
+export const isLyricClipNote = (note: { pitch: number }) => note.pitch === PITCH_LYRIC_CLIP
+
+/** The default phrase payload a freshly drawn clip note carries. */
+export function emptyLyricPayload(): LyricNotePayload {
+  return { words: [], layout: { kind: 'one' } }
+}
+
+/**
+ * The clips a note stream declares, in the `LyricClip` shape every consumer
+ * already reads. Beats pass straight through, so feeding this the ENGINE's
+ * flattened notes yields absolute-beat clips (loop repeats included, each
+ * tiled copy its own clip) while feeding it one block's notes yields
+ * block-relative ones — the caller's frame of reference wins, exactly as it
+ * does for notes.
+ */
+export function clipsFromNotes(notes: readonly LyricClipSource[]): LyricClip[] {
+  const clips: LyricClip[] = []
+  for (const n of notes) {
+    if (!isLyricClipNote(n)) continue
+    clips.push({
+      id: n.id ?? '',
+      startBeat: n.startBeat ?? n.beat ?? 0,
+      durationBeats: n.durationBeats,
+      words: n.lyric?.words ?? [],
+      layout: n.lyric?.layout ?? { kind: 'one' },
+    })
+  }
+  return clips
+}
+
+/**
+ * A track's clips in ABSOLUTE project beats, sorted — the vocabulary the
+ * panels, the store actions and the tests speak, since a clip's identity and
+ * timing are how a human refers to it. The ENGINE deliberately does not use
+ * this: it derives clips from the FLATTENED stream instead, so a looped block's
+ * repeats each become their own clip.
+ */
+export function trackLyricClips(
+  blocks: readonly { startBar: number; notes: readonly LyricClipSource[] }[],
+  beatsPerBar: number,
+): LyricClip[] {
+  const clips: LyricClip[] = []
+  for (const b of blocks) {
+    const offset = b.startBar * beatsPerBar
+    for (const c of clipsFromNotes(b.notes)) clips.push({ ...c, startBeat: c.startBeat + offset })
+  }
+  return sortedClips(clips)
+}
+
+/** Either note shape: an authoring `Note` (`startBeat`, block-relative) or a
+ *  resolved one (`beat`, absolute). The engine hands over the latter. */
+export interface LyricClipSource {
+  id?: string
+  pitch: number
+  durationBeats: number
+  startBeat?: number
+  beat?: number
+  lyric?: LyricNotePayload
+}
 
 export const styleLanePitch = (index: number) => STYLE_PITCH_TOP - index
 

@@ -5,7 +5,7 @@ import { useUIStore } from '../../store/UIStore'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { computeRulerGrid } from '../rulerGrid'
 import { midiEditorChrome, midiNoteColor, midiRowLabelColor } from '../../utils/midiEditorPalette'
-import type { Block, LyricClip, Note } from '../../types'
+import type { Block, Note } from '../../types'
 import { useNoteGestures } from './useNoteGestures'
 import { useMidiBlockGestures } from './useMidiBlockGestures'
 import { loopLengthBeats, tileLoopNotes } from '../../core/visual/noteFlatten'
@@ -60,23 +60,9 @@ export interface MidiEditorProps {
   onLaneRowClick?: (laneIndex: number) => void
   /** The lane whose sidecar is open - its gutter row reads as pressed. */
   activeLaneIndex?: number | null
-  /** Text tracks: the track's lyric clips, drawn as a sections strip pinned
-   *  under the ruler (absolute beats). Drag ↔ to move; double-click to edit
-   *  the words in place. */
-  lyricClips?: LyricClip[]
-  onClipChange?: (clipId: string, updates: Partial<Omit<LyricClip, 'id'>>) => void
-  /** Alt-drag: duplicate the clip in place, return the copy's id - the drag
-   *  then moves the copy (same gesture the notes have). */
-  onClipDuplicate?: (clipId: string) => string | null
-  /** Click (without dragging) selects a clip - the host swaps its sidecar to
-   *  the clip's editor. */
-  onClipClick?: (clipId: string) => void
-  activeClipId?: string | null
   /** Fires on any note press - the host follows the note's pitch back to its
    *  style lane, so touching a note anywhere re-focuses that row's editor. */
   onNoteSelect?: (note: Note) => void
-  /** Marquee/group delete: remove these clips (Delete with clips selected). */
-  onClipDelete?: (clipIds: string[]) => void
   /** midi vim: the roll's modal keyboard editor. Off, the grid behaves exactly
    *  as it did before the mode existed. See ./vim. */
   vimEnabled?: boolean
@@ -106,12 +92,6 @@ export function MidiEditor({
   onNoteWordEdit,
   onLaneRowClick,
   activeLaneIndex,
-  lyricClips,
-  onClipChange,
-  onClipDuplicate,
-  onClipClick,
-  onClipDelete,
-  activeClipId,
   onNoteSelect,
   onNotesChange,
   onCommit,
@@ -132,15 +112,6 @@ export function MidiEditor({
 }: MidiEditorProps) {
   // Inline word editing (text tracks): which note is being retyped.
   const [wordEdit, setWordEdit] = useState<{ noteId: string; value: string } | null>(null)
-  // Lyric-clip strip: inline words editing + the horizontal move drag.
-  const [clipEdit, setClipEdit] = useState<{ clipId: string; value: string } | null>(null)
-  const clipDragRef = useRef<{ clipId: string; mode: 'move' | 'resize-l' | 'resize-r'; startX: number; startBeat: number; durationBeats: number; moved: boolean } | null>(null)
-  // Clips selected by the notes' own marquee (they live on the same grid, so
-  // one box selects both). Group note-drags carry them along; Delete removes
-  // them together with the boxed notes.
-  const [selectedClipIds, setSelectedClipIds] = useState<Set<string>>(new Set())
-  const clipGroupOriginsRef = useRef<Map<string, number> | null>(null)
-  const prevDragTypeRef = useRef<string>('none')
   const containerRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const dragGuideRef = useRef<HTMLDivElement>(null)
@@ -263,65 +234,6 @@ export function MidiEditor({
     accent: VIM_ACCENT,
     onCursorSet: vimApi.setCursorFromPointer,
   }), [vimOn, vimApi, quantize, rows, vimRegime, beatsPerBar])
-
-  // One grid, one selection: while the notes' marquee runs, box the clip row
-  // too; while a note GROUP drags, boxed clips ride the same beat delta.
-  useEffect(() => {
-    const prev = prevDragTypeRef.current
-    prevDragTypeRef.current = dragState.type
-    if (!lyricClips) return
-    const clipRowIndex = rows.findIndex((r) => r.clipRow)
-    if (dragState.type === 'marquee') {
-      const x0 = Math.min(dragState.startX, dragState.currentX)
-      const x1 = Math.max(dragState.startX, dragState.currentX)
-      const y0 = Math.min(dragState.startY, dragState.currentY)
-      const y1 = Math.max(dragState.startY, dragState.currentY)
-      const rowTop = clipRowIndex >= 0 ? rowIndexToY(clipRowIndex, rowHeight) : -1
-      const next = new Set<string>()
-      if (clipRowIndex >= 0 && y1 >= rowTop && y0 <= rowTop + rowHeight) {
-        for (const c of lyricClips) {
-          const l = beatToX(c.startBeat, pixelsPerBeat)
-          const r = beatToX(c.startBeat + c.durationBeats, pixelsPerBeat)
-          if (r >= x0 && l <= x1) next.add(c.id)
-        }
-      }
-      setSelectedClipIds((cur) => {
-        if (cur.size === next.size && [...cur].every((id) => next.has(id))) return cur
-        return next
-      })
-    } else if (dragState.type === 'moving' && onClipChange && selectedClipIds.size > 0) {
-      if (prev !== 'moving' || !clipGroupOriginsRef.current) {
-        clipGroupOriginsRef.current = new Map(
-          lyricClips.filter((c) => selectedClipIds.has(c.id)).map((c) => [c.id, c.startBeat]),
-        )
-      }
-      const delta = (dragState.currentX - dragState.startX) / pixelsPerBeat
-      const snap = (b: number) => (quantize > 0 ? Math.round(b / quantize) * quantize : b)
-      for (const [id, s0] of clipGroupOriginsRef.current) {
-        onClipChange(id, { startBeat: Math.max(0, snap(s0 + delta)) })
-      }
-    } else if (dragState.type === 'none') {
-      clipGroupOriginsRef.current = null
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dragState, lyricClips, rows, rowHeight, pixelsPerBeat, quantize])
-
-  // Delete removes boxed clips together with the boxed notes (the notes' own
-  // key handler runs independently on the same press).
-  useEffect(() => {
-    if (!onClipDelete) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Delete' && e.key !== 'Backspace') return
-      if (selectedClipIds.size === 0) return
-      const t = e.target as HTMLElement | null
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
-      onClipDelete([...selectedClipIds])
-      setSelectedClipIds(new Set())
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [selectedClipIds, onClipDelete])
-
 
   // Block move/resize via the ruler clip header (separate from note gestures).
   const { handleHeaderPointerDown, handleHeaderPointerMove, handleResizePointerDown } = useMidiBlockGestures({
@@ -900,121 +812,45 @@ export function MidiEditor({
             )
           })}
 
-          {/* Lyric clips (text tracks): the clip row is a real row - standard
-              height, striping and gutter - and the clips are note-style rects
-              on it with the note gestures that make sense for them: drag to
-              move, edges to resize, click to select, double-click to edit. */}
-          {lyricClips && (() => {
-            const clipRowIndex = rows.findIndex((r) => r.clipRow)
-            if (clipRowIndex < 0) return null
-            const y = rowIndexToY(clipRowIndex, rowHeight) + 2
-            const h = rowHeight - 4
-            const EDGE = 8
-            return [...lyricClips].sort((a, b) => a.startBeat - b.startBeat).map((clip) => {
-              const left = Math.round(beatToX(clip.startBeat, pixelsPerBeat))
-              const right = Math.round(beatToX(clip.startBeat + clip.durationBeats, pixelsPerBeat))
-              const w = Math.max(right - left - 1, 16)
-              const editing = clipEdit?.clipId === clip.id
-              const active = clip.id === activeClipId || selectedClipIds.has(clip.id)
-              const snap = (b: number) => (quantize > 0 ? Math.round(b / quantize) * quantize : b)
+          {/* Drag ghosts: the footprint each dragged note LEFT. Read from the
+              gesture's captured origins, which are frozen for the whole drag,
+              so the ghost stays put while the live notes move and the
+              displacement stays readable. The note's own fill, just
+              transparent, so it reads as the same note left behind. Drawn
+              before the notes so the real ones always sit on top. */}
+          {(dragState.type === 'moving' || dragState.type === 'resizing' || dragState.type === 'resizing-left') &&
+            dragState.originalStartBeats && [...dragState.originalStartBeats].map(([noteId, startBeat]) => {
+              // A move captures pitches, a resize captures durations; whichever
+              // the gesture leaves untouched is invariant, so the live note is
+              // the honest source for it.
+              const live = allNotes.find((n) => n.id === noteId)
+              const pitch = dragState.originalPitches?.get(noteId) ?? live?.pitch
+              const durationBeats = dragState.originalDurations?.get(noteId) ?? live?.durationBeats
+              if (pitch === undefined || durationBeats === undefined) return null
+              const rowIndex = pitchToRowIndex(pitch)
+              if (rowIndex === -1) return null
+              const ghostColor = midiNoteColor(rows[rowIndex].color, live?.velocity ?? 100)
+              const left = Math.round(blockStartPx + beatToX(startBeat, pixelsPerBeat))
+              const right = Math.round(blockStartPx + beatToX(startBeat + durationBeats, pixelsPerBeat))
               return (
                 <div
-                  key={clip.id}
-                  title={editing ? undefined : `${clip.words.join(' ')} - drag to move, edges resize, double-click to edit`}
-                  onPointerDown={onClipChange && !editing ? (e) => {
-                    e.stopPropagation()
-                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                    const inLeft = e.clientX - rect.left < EDGE
-                    const inRight = rect.right - e.clientX < EDGE
-                    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId) } catch { /* synthetic */ }
-                    // Alt-drag = duplicate in place and drag the COPY, same as
-                    // the notes' alt-drag. The captured element stays the
-                    // original; the copy renders beside it and follows the
-                    // store updates the move streams out.
-                    let dragClipId = clip.id
-                    if (e.altKey && onClipDuplicate && !inLeft && !inRight) {
-                      dragClipId = onClipDuplicate(clip.id) ?? clip.id
-                    }
-                    clipDragRef.current = {
-                      clipId: dragClipId,
-                      mode: inLeft ? 'resize-l' : inRight ? 'resize-r' : 'move',
-                      startX: e.clientX,
-                      startBeat: clip.startBeat,
-                      durationBeats: clip.durationBeats,
-                      moved: false,
-                    }
-                  } : undefined}
-                  onPointerMove={onClipChange && !editing ? (e) => {
-                    const d = clipDragRef.current
-                    if (!d) {
-                      // Hover affordance: the cursor says which gesture this x means.
-                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                      const el = e.currentTarget as HTMLElement
-                      el.style.cursor = e.clientX - rect.left < EDGE || rect.right - e.clientX < EDGE ? 'ew-resize' : 'grab'
-                      return
-                    }
-                    // The drag record owns the gesture (it may be moving an
-                    // alt-copy while THIS element keeps the pointer capture).
-                    const dBeats = (e.clientX - d.startX) / pixelsPerBeat
-                    if (d.mode === 'move') {
-                      const next = Math.max(0, snap(d.startBeat + dBeats))
-                      d.moved = d.moved || next !== d.startBeat
-                      onClipChange(d.clipId, { startBeat: next })
-                    } else if (d.mode === 'resize-l') {
-                      const nextStart = Math.max(0, Math.min(snap(d.startBeat + dBeats), d.startBeat + d.durationBeats - Math.max(quantize, 0.25)))
-                      d.moved = d.moved || nextStart !== d.startBeat
-                      onClipChange(d.clipId, { startBeat: nextStart, durationBeats: d.startBeat + d.durationBeats - nextStart })
-                    } else {
-                      const nextDur = Math.max(Math.max(quantize, 0.25), snap(d.durationBeats + dBeats))
-                      d.moved = d.moved || nextDur !== d.durationBeats
-                      onClipChange(d.clipId, { durationBeats: nextDur })
-                    }
-                  } : undefined}
-                  onPointerUp={() => {
-                    const d = clipDragRef.current
-                    clipDragRef.current = null
-                    if (d && !d.moved && onClipClick) onClipClick(d.clipId)
-                  }}
-                  onDoubleClick={onClipChange ? (e) => { e.stopPropagation(); setClipEdit({ clipId: clip.id, value: clip.words.join(' ') }) } : undefined}
+                  key={`drag-ghost-${noteId}`}
                   style={{
                     position: 'absolute',
                     left,
-                    top: y,
-                    width: w,
-                    height: h,
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '0 6px',
+                    top: rowIndexToY(rowIndex, rowHeight) + 2,
+                    width: Math.max(right - left - 1, 8),
+                    height: rowHeight - 4,
                     borderRadius: 3,
-                    backgroundColor: active ? `${trackColor}3d` : `${trackColor}1c`,
-                    border: `1px solid ${active ? trackColor : `${trackColor}66`}`,
-                    color: active ? '#ffffff' : `${trackColor}e6`,
-                    fontSize: Math.min(11, h - 6),
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    zIndex: 6,
+                    backgroundColor: ghostColor,
+                    opacity: 0.55,
+                    pointerEvents: 'none',
+                    zIndex: 4,
                   }}
-                >
-                  {editing ? (
-                    <input
-                      autoFocus
-                      value={clipEdit.value}
-                      onChange={(e) => setClipEdit({ clipId: clip.id, value: e.target.value })}
-                      onBlur={() => { onClipChange?.(clip.id, { words: clipEdit.value.split(/\s+/).filter(Boolean) }); setClipEdit(null) }}
-                      onKeyDown={(e) => {
-                        e.stopPropagation()
-                        if (e.key === 'Enter') { onClipChange?.(clip.id, { words: clipEdit.value.split(/\s+/).filter(Boolean) }); setClipEdit(null) }
-                        if (e.key === 'Escape') setClipEdit(null)
-                      }}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      aria-label="Clip words"
-                      style={{ position: 'absolute', inset: 0, width: '100%', background: 'rgba(10,12,16,0.95)', color: '#fff', border: `1px solid ${trackColor}`, borderRadius: 3, fontSize: 11, padding: '0 5px', outline: 'none' }}
-                    />
-                  ) : clip.words.join(' ')}
-                </div>
+                />
               )
-            })
-          })()}
+            })}
+
           {/* Notes */}
           {allNotes.map((note) => {
             const rowIndex = pitchToRowIndex(note.pitch)

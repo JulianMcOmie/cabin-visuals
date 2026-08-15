@@ -36,6 +36,7 @@ import { orderedSwitcherBindings } from '../switcherBindings'
 import { identitySV } from './stateVector'
 import { flattenTrackNotes as flattenTrackNotesRaw } from './noteFlatten'
 import { isSceneTrackId } from '../sceneTrack'
+import { clipsFromNotes, isLyricClipNote } from './lyricClips'
 
 /** The slice of the project the resolver reads. ProjectStore's state satisfies it
  *  structurally, so the engine never imports the store's internals. */
@@ -1144,6 +1145,13 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
         resolveAutomations(track, def, p),
         p,
       )
+      // Lyric CLIPS are notes at PITCH_LYRIC_CLIP (see core/visual/lyricClips.ts).
+      // Splitting them out here means the instrument's `notes` stay exactly the
+      // performance notes they always were — a clip must never register as note
+      // energy or activity — while the clips arrive already flattened, so a
+      // looped block tiles its phrases and a moved block carries them.
+      const flatNotes = flattenTrackNotes(track, p)
+      const hasLyricClipNotes = flatNotes.some(isLyricClipNote)
       base = {
         trackId: id,
         instrumentId: track.instrumentId,
@@ -1152,9 +1160,9 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
         params: track.params ?? {},
         stringParams: track.stringParams ?? {},
         localTransform: def?.localTransform,
-        notes: flattenTrackNotes(track, p),
+        notes: hasLyricClipNotes ? flatNotes.filter((n) => !isLyricClipNote(n)) : flatNotes,
         abilityEvents: resolveAbilityEvents(track, p),
-        lyricClips: track.lyricClips,
+        lyricClips: hasLyricClipNotes ? clipsFromNotes(flatNotes) : undefined,
         styleLanes: track.styleLanes,
         automations: overlay,
         effectAutomations: resolveEffectAutomations(track, p),

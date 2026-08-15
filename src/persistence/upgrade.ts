@@ -1,6 +1,16 @@
 import type { ProjectDocument } from './types'
 import { emptyDocument } from './types'
-import type { Scene, Track, AudioBlock, EffectInstance, VideoPad } from '../editor/types'
+import type { Scene, Track, AudioBlock, EffectInstance, LyricClipLayout, Note, VideoPad } from '../editor/types'
+
+/** A v16 lyric clip: a track-level span in absolute beats, before UPGRADES[16]
+ *  turned it into a note. Declared here because the live type is gone. */
+interface LegacyLyricClip {
+  id: string
+  startBeat: number
+  durationBeats: number
+  words?: string[]
+  layout?: LyricClipLayout
+}
 import type { AudioClip } from '../editor/store/AudioStore'
 
 // What shipped steps give scenes that predate the backgroundColor field.
@@ -11,7 +21,7 @@ import type { AudioClip } from '../editor/store/AudioStore'
 const LEGACY_SCENE_BACKGROUND = '#000000'
 
 /** Bump when the document shape changes, and append the matching step below. */
-export const CURRENT_VERSION = 16
+export const CURRENT_VERSION = 17
 
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
@@ -562,6 +572,10 @@ UPGRADES[14] = (doc) => {
       delete stringParams.text
       delete stringParams.color
 
+      // The cast is load-bearing, not laziness: this step's OUTPUT is a v15
+      // document, and a v15 track carries `lyricClips` as a track field. The
+      // live `Track` stopped having it at v16 (clips became notes), and a
+      // shipped step may never be rewritten to chase that — v16 migrates it.
       tracks[trackId] = {
         ...(track as unknown as Track),
         params,
@@ -575,7 +589,7 @@ UPGRADES[14] = (doc) => {
           words,
           layout,
         }],
-      }
+      } as unknown as Track
     }
     // Second pass: copy everything else, dropping the dead formation lanes and
     // any orphaned ones on non-text parents.
@@ -611,6 +625,89 @@ UPGRADES[15] = (doc) => {
   const scenes: Record<string, Scene> = {}
   for (const [sceneId, scene] of Object.entries(rest.scenes ?? {})) {
     scenes[sceneId] = scene.isMain ? { ...scene, name: 'Composite' } : scene
+  }
+  return { ...rest, scenes }
+}
+
+// ── v16 → v17 ────────────────────────────────────────────────────────────────
+// Lyric clips become NOTES. A v16 clip was a track-level span in ABSOLUTE beats
+// (`track.lyricClips`); a v17 clip is an ordinary note at pitch 61 inside a
+// block, carrying its phrase in `note.lyric`. That is what makes the piano
+// roll's own gestures - draw, drag, resize, marquee, copy/paste, delete, undo -
+// apply to clips with no bespoke code.
+//
+// TIMING IS PRESERVED EXACTLY: each clip goes into the block that contains its
+// start (else the nearest one) and keeps its absolute beat by storing the
+// difference as a block-relative startBeat. A phrase that reaches past its
+// block's end is left overflowing rather than trimmed or moved - the flattener
+// deliberately never culls or truncates a clip note, so it keeps working. A
+// text track with no block at all gets one covering its phrases, since a note
+// has nowhere else to live. Constants are inlined: a shipped step is frozen and
+// must not chase the live modules.
+UPGRADES[16] = (doc) => {
+  const PITCH_LYRIC_CLIP = 61
+  const rest = doc as { scenes?: Record<string, Scene>; beatsPerBar?: number } & Record<string, unknown>
+  const beatsPerBar = rest.beatsPerBar ?? 4
+  const scenes: Record<string, Scene> = {}
+  for (const [sceneId, scene] of Object.entries(rest.scenes ?? {})) {
+    const tracks: Record<string, Track> = {}
+    for (const [trackId, raw] of Object.entries(scene.tracks)) {
+      const track = raw as Track & { lyricClips?: LegacyLyricClip[] }
+      const clips = track.lyricClips
+      if (!clips || clips.length === 0) {
+        if (track.lyricClips) {
+          const { lyricClips: _dropped, ...withoutClips } = track
+          tracks[trackId] = withoutClips as Track
+        } else {
+          tracks[trackId] = track
+        }
+        continue
+      }
+
+      // No block to live in: make one spanning the phrases, starting at bar 0
+      // so every clip's absolute beat survives as-is.
+      let blocks = track.blocks ?? []
+      if (blocks.length === 0) {
+        const end = Math.max(...clips.map((c) => c.startBeat + c.durationBeats))
+        blocks = [{
+          id: crypto.randomUUID(),
+          startBar: 0,
+          durationBars: Math.max(1, Math.ceil(end / beatsPerBar)),
+          loop: false,
+          notes: [],
+        }]
+      }
+
+      const extra = new Map<string, Note[]>()
+      for (const clip of clips) {
+        let host = blocks[0]
+        let nearestGap = Infinity
+        for (const b of blocks) {
+          const start = b.startBar * beatsPerBar
+          const end = start + b.durationBars * beatsPerBar
+          if (clip.startBeat >= start - 1e-6 && clip.startBeat < end - 1e-6) { host = b; nearestGap = -1; break }
+          const gap = clip.startBeat < start ? start - clip.startBeat : clip.startBeat - end
+          if (gap < nearestGap) { nearestGap = gap; host = b }
+        }
+        const list = extra.get(host.id) ?? []
+        list.push({
+          id: clip.id,
+          pitch: PITCH_LYRIC_CLIP,
+          startBeat: clip.startBeat - host.startBar * beatsPerBar,
+          durationBeats: clip.durationBeats,
+          velocity: 100,
+          lyric: { words: [...(clip.words ?? [])], layout: clip.layout ?? { kind: 'one' } },
+        })
+        extra.set(host.id, list)
+      }
+
+      const { lyricClips: _dropped, ...withoutClips } = track
+      tracks[trackId] = {
+        ...(withoutClips as Track),
+        blocks: blocks.map((b) => (extra.has(b.id) ? { ...b, notes: [...b.notes, ...extra.get(b.id)!] } : b)),
+      }
+    }
+    scenes[sceneId] = { ...scene, tracks }
   }
   return { ...rest, scenes }
 }

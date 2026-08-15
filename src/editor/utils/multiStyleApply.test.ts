@@ -6,6 +6,7 @@ import type { Track } from '../types'
 import { useProjectStore } from '../store/ProjectStore'
 import { getTemplate } from '../../templates'
 import { applyLyricStyles } from './multiStyleApply'
+import { trackLyricClips } from '../core/visual/lyricClips'
 
 // The lyric flow's N-style apply: one scene per picked look over the same
 // words, plus a Scene Switcher cycling between them for the length of the
@@ -62,8 +63,8 @@ test('three picked looks become three named scenes and a cycling switcher', () =
     const lyricsId = scene.rootTrackIds.find((tid) => scene.tracks[tid]?.name === 'Lyrics')
     assert.ok(lyricsId, `scene ${i} has a Lyrics track`)
     const lyrics = scene.tracks[lyricsId]
-    // Post-v15: the words live on the track's lyric clips, not a text param.
-    const clipWords = (lyrics.lyricClips ?? []).map((c) => c.words.join(' ')).join(' ')
+    // Post-v16: the words live on the track's lyric-clip NOTES, not a text param.
+    const clipWords = trackLyricClips(lyrics.blocks, 4).map((c) => c.words.join(' ')).join(' ')
     assert.match(clipWords, /real/)
     assert.match(clipWords, /words/)
     assert.equal(lyrics.lyricTiming?.length, TIMING.length)

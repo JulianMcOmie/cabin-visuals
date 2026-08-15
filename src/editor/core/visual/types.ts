@@ -4,7 +4,7 @@
 
 import type { Matrix4 } from 'three'
 import type { LocalTransform, TransformCtx } from '../../instruments/types'
-import type { AdsrEnvelope, LyricClip, PhotoPad, StyleLane, VideoPad } from '../../types'
+import type { AdsrEnvelope, LyricClip, LyricNotePayload, PhotoPad, StyleLane, VideoPad } from '../../types'
 import type { AutomationLane } from './automation'
 import type { MoverOrSplitter } from '../visualCopies/types'
 
@@ -84,6 +84,13 @@ export interface ResolvedNote {
   velocity: number
   /** Note length in beats. */
   durationBeats: number
+  /** The authoring note's id. Optional because hand-built fixtures and tests
+   *  construct ResolvedNotes directly; the flattener always sets it. Loop
+   *  repeats all carry the SOURCE note's id (nothing keys off it). */
+  id?: string
+  /** Lyric-clip notes only: the phrase this span owns, carried through the
+   *  flattener so the resolver can derive `lyricClips` (see lyricClips.ts). */
+  lyric?: LyricNotePayload
 }
 
 /** A renderable object instance derived from a track. */
@@ -113,9 +120,10 @@ export interface ResolvedObject {
    *  instrument declares no abilities or none have been played. */
   abilityEvents: Map<string, ResolvedNote[]>
   /** Text-instrument-only: the track's lyric clips (word source) and style
-   *  lanes (pitch → look), by reference from the document - the store's
-   *  immutable updates give them fresh identity on any edit, which is what
-   *  repaints a paused frame (see instrumentFrame's signature). */
+   *  lanes (pitch → look). Clips are DERIVED from the clip-pitch notes at
+   *  resolve (`clipsFromNotes`) and so are absent from `notes` above; the
+   *  fresh array a re-resolve mints is what repaints a paused frame (see
+   *  instrumentFrame's signature), and a cache hit rightly keeps the old one. */
   lyricClips?: LyricClip[]
   styleLanes?: StyleLane[]
   /** Automation lanes (from `automation` child tracks) driving this object's params

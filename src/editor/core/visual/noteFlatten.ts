@@ -1,5 +1,6 @@
 import type { Block, Note, Track } from '../../types'
 import type { ResolvedNote } from './types'
+import { isLyricClipNote } from './lyricClips'
 
 /** Hard ceiling on notes emitted per block, so a tiny pattern stretched across a
  *  huge block can never hang the resolve. */
@@ -74,25 +75,35 @@ export function flattenBlocks(blocks: Block[], beatsPerBar: number, totalBars?: 
       }
       for (const t of tiled) {
         notes.push({
+          id: t.note.id,
           beat: blockStartBeat + t.startBeat,
           blockStartBeat,
           blockEndBeat,
           pitch: t.note.pitch,
           velocity: t.note.velocity,
           durationBeats: t.durationBeats,
+          ...(t.note.lyric ? { lyric: t.note.lyric } : {}),
         })
       }
     } else {
       for (const note of block.notes) {
         const beat = blockStartBeat + note.startBeat
-        if (beat < blockStartBeat || beat >= blockEndBeat) continue
+        // A LYRIC CLIP note is a phrase span, not a performance event, so the
+        // block's edges neither cull nor truncate it: clips were block-independent
+        // before they became notes (schema v16), and a phrase that reaches past
+        // its block must keep working rather than going silently inert. It still
+        // RIDES the block - its beat is block-relative like any note.
+        const isClip = isLyricClipNote(note)
+        if (!isClip && (beat < blockStartBeat || beat >= blockEndBeat)) continue
         notes.push({
+          id: note.id,
           beat,
           blockStartBeat,
           blockEndBeat,
           pitch: note.pitch,
           velocity: note.velocity,
-          durationBeats: Math.min(note.durationBeats, Math.max(0, blockEndBeat - beat)),
+          durationBeats: isClip ? note.durationBeats : Math.min(note.durationBeats, Math.max(0, blockEndBeat - beat)),
+          ...(note.lyric ? { lyric: note.lyric } : {}),
         })
       }
     }
