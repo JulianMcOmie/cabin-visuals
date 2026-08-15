@@ -88,10 +88,21 @@ export const APPROACH_COLOR = '#5cc8ff'
 export const RADIAL_MOTION_COLOR = '#8b7bff'
 
 // ── Spread through the gaps ─────────────────────────────────────────────────
-/** Hue 18°. */
-export const FORCE_FIELD_PUSH_COLOR = '#ff767f'
-/** Hue 35°. */
-export const GRADIENT_COLORIZER_COLOR = '#ff7b5a'
+// The warm stretch between the two immovable anchors Impact Pulse (2°) and
+// Meteor Impact (51°), respaced at ~12.2° when Riso Duotone joined: the wheel
+// was full (its widest gap was 17°, whose midpoint sits 8.5° from each
+// neighbour and fails the 11° floor), so this is the rebalance the file's
+// "adding one" note prescribes. Only spread entries moved - Force Field 18→26,
+// Gradient 35→39 - and both stayed within a few degrees of where they were.
+/**
+ * Riso Duotone's fluoro pink. Hue 14° - the closest the palette can get to
+ * Pantone 806U, the ink the device ships with, without crowding Impact Pulse.
+ */
+export const RISO_DUOTONE_COLOR = '#ff7587'
+/** Hue 26°. */
+export const FORCE_FIELD_PUSH_COLOR = '#ff786e'
+/** Hue 39°. */
+export const GRADIENT_COLORIZER_COLOR = '#ff7c50'
 // Hue ~86° is deliberately left free for the COLORIZER, which is the one
 // definition that does not take a fixed colour from this file: its subject IS
 // a colour the user picked, so it declares `{ param: 'color' }` and wears its
