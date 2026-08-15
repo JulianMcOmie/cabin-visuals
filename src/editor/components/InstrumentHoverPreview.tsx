@@ -1266,6 +1266,13 @@ type PreviewTarget = {
 let currentPreview: PreviewTarget | null = null
 const previewListeners = new Set<() => void>()
 
+/** Dismiss the popup only if it is showing this project track — a deleted
+ *  row unmounts without ever getting a mouseleave, so its unmount calls this
+ *  (unconditional clearing would kill a neighbor row's preview instead). */
+export function clearInstrumentPreviewFor(projectTrackId: string): void {
+  if (currentPreview?.projectTrackId === projectTrackId) setInstrumentPreview(null)
+}
+
 export function setInstrumentPreview(target: PreviewTarget | null): void {
   currentPreview = target && canPreview(target.item) ? target : null
   previewListeners.forEach((l) => l())

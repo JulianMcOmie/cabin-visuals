@@ -12,7 +12,7 @@ import { resolveTrackDisplayColor } from '../../utils/trackDisplayColor'
 import { midiSelectionSpill } from '../../utils/colors'
 import { selectTrack, selectTrackRange, shouldSuppressTrackSelect, toggleTrackInSelection } from '../../utils/selection'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
-import { canPreview, setInstrumentPreview } from '../InstrumentHoverPreview'
+import { canPreview, clearInstrumentPreviewFor, setInstrumentPreview } from '../InstrumentHoverPreview'
 import { flattenBlocks } from '../../core/visual/noteFlatten'
 import { resolveDeclaredMidiRows } from '../midi/resolveDeclaredRows'
 import type { InstrumentItem } from '../LeftSidebar'
@@ -185,7 +185,12 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
     if (previewTimer.current) clearTimeout(previewTimer.current)
     setInstrumentPreview(null)
   }
-  useEffect(() => () => { if (previewTimer.current) clearTimeout(previewTimer.current) }, [])
+  // Deleting the row skips mouseleave entirely, so unmount also dismisses a
+  // preview this row put up (and only its own - see clearInstrumentPreviewFor).
+  useEffect(() => () => {
+    if (previewTimer.current) clearTimeout(previewTimer.current)
+    clearInstrumentPreviewFor(track.id)
+  }, [track.id])
   const hasChildren = track.childIds.length > 0
   // The row's own identity: its definition's declared color for a mover /
   // splitter / colorizer, the instrument's for an object, else its hue cycle.
