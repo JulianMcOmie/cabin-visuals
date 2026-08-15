@@ -549,7 +549,7 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
     { key: 'rows', label: 'Rows', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 3 },
     { key: 'columns', label: 'Columns', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 3 },
     { key: 'depth', label: 'Depth', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 1 },
-    { key: 'spacing', label: 'Spacing', min: 0, max: 4, step: 0.1, default: 1 },
+    { key: 'spacing', label: 'Spacing', min: 0, max: 40, step: 0.1, default: 1 },
     SPLITTER_SIZE_PARAM,
     {
       key: 'columnsMode',
@@ -581,9 +581,9 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
       ],
       default: 0,
     },
-    { key: 'columnsRadius', label: 'Columns radius', min: 0, max: 10, step: 0.1, default: 2, showIf: 'columnsMode=1' },
-    { key: 'rowsRadius', label: 'Rows radius', min: 0, max: 10, step: 0.1, default: 2, showIf: 'rowsMode=1' },
-    { key: 'depthRadius', label: 'Depth radius', min: 0, max: 10, step: 0.1, default: 2, showIf: 'depthMode=1' },
+    { key: 'columnsRadius', label: 'Columns radius', min: 0, max: 20, step: 0.1, default: 2, showIf: 'columnsMode=1' },
+    { key: 'rowsRadius', label: 'Rows radius', min: 0, max: 20, step: 0.1, default: 2, showIf: 'rowsMode=1' },
+    { key: 'depthRadius', label: 'Depth radius', min: 0, max: 20, step: 0.1, default: 2, showIf: 'depthMode=1' },
     {
       key: 'plane',
       label: 'Axes',
