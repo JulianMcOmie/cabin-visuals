@@ -26,11 +26,20 @@ import { track } from '../../analytics/analytics'
  *   ExportDialog, which can no longer be reached by anyone. Both are left in
  *   place deliberately: deleting this component restores them.
  */
+// Dev-only bypass so /editor can be previewed and smoke-tested without an
+// account: NEXT_PUBLIC_DISABLE_SIGNUP_GATE=1 in .env.local, then restart the
+// dev server (NEXT_PUBLIC_ vars inline at build time). The NODE_ENV guard is
+// what keeps the flag harmless if it ever leaks into a deployed environment -
+// production builds keep the gate no matter what the env says.
+const GATE_DISABLED =
+  process.env.NODE_ENV === 'development' &&
+  process.env.NEXT_PUBLIC_DISABLE_SIGNUP_GATE === '1'
+
 export function EditorSignupGate() {
   const { user, loading, isAnonymous } = useAuth()
   // An anonymous session is signed in for persistence only - it is not an
   // account, so it meets the gate like anyone else.
-  const open = !loading && !(user && !isAnonymous)
+  const open = !GATE_DISABLED && !loading && !(user && !isAnonymous)
 
   // Once per mount, not once per render: `open` settles a tick after auth
   // resolves and would otherwise log on every re-render of the shell.
