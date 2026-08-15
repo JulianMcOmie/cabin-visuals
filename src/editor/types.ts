@@ -102,7 +102,12 @@ export interface StyleLane {
 }
 
 export type SceneId = string
-export const DEFAULT_SCENE_BACKGROUND = '#000000'
+// The Cabin accent (globals.css --accent): separates the borderless viewport
+// from the near-black editor chrome, where a #000000 default read as pure
+// void. NEW documents only — the shipped persistence upgrades pin their own
+// '#000000' so old projects authored on black keep their look (see
+// persistence/upgrade.ts).
+export const DEFAULT_SCENE_BACKGROUND = '#45c6ff'
 
 export type SceneGradientKind = 'linear' | 'mirror' | 'radial'
 

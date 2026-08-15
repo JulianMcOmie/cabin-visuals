@@ -25,8 +25,10 @@ function baseTrack(overrides: Partial<Track>): Track {
 test('sole color param drives the display color (auto-detect)', () => {
   const stored = baseTrack({ stringParams: { baseColor: '#ff2200' } })
   assert.equal(resolveTrackDisplayColor(stored), '#ff2200')
-  // No stored value → the param's declared default
-  assert.equal(resolveTrackDisplayColor(baseTrack({})), '#5757db')
+  // No stored value → the param's declared default, but the cube's off-white
+  // default is achromatic (hue says nothing), so the achromatic guard drops
+  // the row to its cycle color instead of going monochrome.
+  assert.equal(resolveTrackDisplayColor(baseTrack({})), CYCLE_COLOR)
 })
 
 test('fixed identityColor wins for instruments without a color param', () => {

@@ -595,11 +595,11 @@ function VisualPanel({
     const live = glide ? boxRef.current?.getBoundingClientRect() : null
     const start = live ? { width: live.width, height: live.height } : fitAspectBox(cw, ch, from)
     const end = fitAspectBox(cw, ch, aspect)
-    // The box is border-box sized over a 1px border, so its inner box - what
-    // the r3f root fills at rest - is 2px smaller on each axis.
+    // The box is borderless, so its inner box - what the r3f root fills at
+    // rest - is the box itself.
     const pin = {
-      width: Math.max(0, Math.max(start.width, end.width) - 2),
-      height: Math.max(0, Math.max(start.height, end.height) - 2),
+      width: Math.max(0, Math.max(start.width, end.width)),
+      height: Math.max(0, Math.max(start.height, end.height)),
     }
     setGlide({ ...start, moving: false, pin })
     const raf = requestAnimationFrame(() => setGlide({ ...end, moving: true, pin }))
@@ -638,7 +638,7 @@ function VisualPanel({
           See src/editor/CLAUDE.md. */}
       <div
         ref={boxRef}
-        className={`relative overflow-clip ${isFullscreen ? '' : 'rounded-[6px] border border-[rgba(255,255,255,0.07)]'} ${glide?.moving ? 'aspect-glide-anim' : ''}`}
+        className={`relative overflow-clip ${glide?.moving ? 'aspect-glide-anim' : ''}`}
         style={boxStyle}
       >
         <Scene previewSceneId={previewSceneId} sourceCanvasRef={sourceCanvasRef} />

@@ -124,7 +124,8 @@ export function setPreviewTimeOverride(sec: number | null): void {
 // brightness lever those previews have - lifted a step above the first
 // electric pass on purpose.
 const PREVIEW_COLOR_REMAP: Record<string, string> = {
-  '#5757db': '#8f80ff', // cube + basic-shapes indigo → electric violet
+  '#5757db': '#8f80ff', // basic-shapes indigo → electric violet
+  '#e4f0fa': '#f2faff', // cube icy off-white → lifted ice white
   '#ff5470': '#ff6580', // overlap base pink → hotter rose
   '#d4a843': '#ffd25c', // neon-polar gold → brighter amber
 }

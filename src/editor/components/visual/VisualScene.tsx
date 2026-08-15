@@ -124,6 +124,11 @@ void main() {
   gl_FragColor = vec4(srgbToLinear(mix(colorFrom, colorTo, clamp(t, 0.0, 1.0))), 1.0);
 }`
 
+// Side of the square target an EMPTY scene's backdrop paints into (a scene
+// with objects renders at composite scale). Backdrops are low-frequency, so
+// LinearFilter upscaling from 128px is invisible on screen.
+const EMPTY_BACKDROP_TARGET_SIZE = 128
+
 /** The scene's enabled backdrop gradient, or null when it wears a flat color
  * or exports with alpha (same precedence as sceneBackdropMode). */
 function activeBackdropGradient(scene: Scene | undefined): SceneGradient | null {
@@ -842,6 +847,23 @@ export function VisualScene() {
     prevMountedRef.current = new Map()
   }, [])
 
+  // A scene with no objects mounts no runtime, but a composition layer may
+  // still show it - a fresh scene previewed before its first track lands, a
+  // switcher row bound to a not-yet-built scene. Skipping the layer outright
+  // (the old behavior) dropped the scene's BACKDROP with it, so an empty
+  // scene rendered as Main's background instead of its own until the first
+  // track arrived. Each such scene gets a small backdrop-only target, cleared
+  // and gradient-painted per frame exactly like a real scene target. Small is
+  // enough: a backdrop is low-frequency, so LinearFilter upscaling is
+  // invisible (the gradient shader's `resolution` uniform stays the CSS size,
+  // and its math is ratio-only). HalfFloatType matches the mounted targets so
+  // dark colors keep their linear-light precision through the shared grade.
+  const emptyBackdropTargetsRef = useRef(new Map<string, WebGLRenderTarget>())
+  useEffect(() => () => {
+    for (const target of emptyBackdropTargetsRef.current.values()) target.dispose()
+    emptyBackdropTargetsRef.current.clear()
+  }, [])
+
   useEffect(() => () => {
     for (const mesh of compositor.meshes) {
       mesh.geometry.dispose()
@@ -907,9 +929,38 @@ export function VisualScene() {
       const layers = getCompositionLayers()
       const requested = new Set(layers.map((layer) => layer.sceneId))
 
+      // Backdrop-only targets track exactly the requested-but-unmounted set:
+      // an entry whose scene mounted (first track landed) or fell out of the
+      // request is disposed here.
+      const emptyBackdrops = emptyBackdropTargetsRef.current
+      for (const [sceneId, target] of emptyBackdrops) {
+        if (!requested.has(sceneId) || mounted.has(sceneId)) {
+          target.dispose()
+          emptyBackdrops.delete(sceneId)
+        }
+      }
+
       for (const sceneId of requested) {
         const runtime = mounted.get(sceneId)
-        if (!runtime) continue
+        if (!runtime) {
+          // Empty scene: no objects to draw, but its backdrop still composes.
+          let target = emptyBackdrops.get(sceneId)
+          if (!target) {
+            target = new WebGLRenderTarget(EMPTY_BACKDROP_TARGET_SIZE, EMPTY_BACKDROP_TARGET_SIZE, {
+              minFilter: LinearFilter,
+              magFilter: LinearFilter,
+              type: HalfFloatType,
+            })
+            emptyBackdrops.set(sceneId, target)
+          }
+          const projectScene = useProjectStore.getState().scenes[sceneId]
+          gl.setRenderTarget(target)
+          gl.setClearColor(projectScene?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, projectScene?.backgroundTransparent ? 0 : 1)
+          gl.clear(true, true, true)
+          const emptyGradient = activeBackdropGradient(projectScene)
+          if (emptyGradient) paintBackdropGradient(emptyGradient)
+          continue
+        }
         const projectScene = useProjectStore.getState().scenes[sceneId]
         gl.setRenderTarget(runtime.target)
         gl.setClearColor(projectScene?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, projectScene?.backgroundTransparent ? 0 : 1)
@@ -1059,10 +1110,12 @@ export function VisualScene() {
         const layer = layers[i]
         mesh.visible = !!layer
         if (!layer) return
+        // An unmounted (empty) scene's layer composes its backdrop-only target.
         const runtime = mounted.get(layer.sceneId)
-        mesh.visible = !!runtime
-        if (!runtime) return
-        applyCompositorLayer(mesh, layer, i, runtime.outputTexture, layerAspect)
+        const texture = runtime?.outputTexture ?? emptyBackdrops.get(layer.sceneId)?.texture
+        mesh.visible = !!texture
+        if (!texture) return
+        applyCompositorLayer(mesh, layer, i, texture, layerAspect)
       })
 
       const project = useProjectStore.getState()

@@ -57,7 +57,7 @@ test('older v5 documents without a selected scene fall back to the first visual 
 test('scene background color defaults, edits, duplicates, and persists with the scene', () => {
   hydrate(emptyDocument())
   const sceneId = useProjectStore.getState().activeSceneId
-  assert.equal(useProjectStore.getState().scenes[sceneId].backgroundColor, '#000000')
+  assert.equal(useProjectStore.getState().scenes[sceneId].backgroundColor, '#45c6ff')
 
   useProjectStore.getState().setSceneBackgroundColor(sceneId, '#123456')
   useProjectStore.getState().setSceneBackgroundTransparent(sceneId, true)

@@ -1,7 +1,14 @@
 import type { ProjectDocument } from './types'
 import { emptyDocument } from './types'
-import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type AudioBlock, type EffectInstance, type VideoPad } from '../editor/types'
+import type { Scene, Track, AudioBlock, EffectInstance, VideoPad } from '../editor/types'
 import type { AudioClip } from '../editor/store/AudioStore'
+
+// What shipped steps give scenes that predate the backgroundColor field.
+// Deliberately NOT the app's DEFAULT_SCENE_BACKGROUND: these steps are frozen,
+// and old projects were authored against a renderer that cleared to black -
+// following the app default when it later changed (black → the Cabin accent,
+// 2026-08-15) would repaint every legacy project on its next load.
+const LEGACY_SCENE_BACKGROUND = '#000000'
 
 /** Bump when the document shape changes, and append the matching step below. */
 export const CURRENT_VERSION = 15
@@ -127,8 +134,8 @@ UPGRADES[4] = (doc) => {
   const mainId = crypto.randomUUID()
   const firstSceneId = crypto.randomUUID()
   const scenes: Record<string, Scene> = {
-    [mainId]: { id: mainId, name: 'Main', isMain: true, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: {}, rootTrackIds: [] },
-    [firstSceneId]: { id: firstSceneId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: visualTracks, rootTrackIds },
+    [mainId]: { id: mainId, name: 'Main', isMain: true, backgroundColor: LEGACY_SCENE_BACKGROUND, backgroundTransparent: false, tracks: {}, rootTrackIds: [] },
+    [firstSceneId]: { id: firstSceneId, name: 'Scene 1', isMain: false, backgroundColor: LEGACY_SCENE_BACKGROUND, backgroundTransparent: false, tracks: visualTracks, rootTrackIds },
   }
   const project = { ...rest }
   delete project.tracks
@@ -150,7 +157,7 @@ UPGRADES[5] = (doc) => {
   const rest = doc as { scenes?: Record<string, Omit<Scene, 'backgroundColor'> & { backgroundColor?: string }> } & Record<string, unknown>
   const scenes: Record<string, Scene> = {}
   for (const [id, scene] of Object.entries(rest.scenes ?? {})) {
-    scenes[id] = { ...scene, backgroundColor: scene.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false }
+    scenes[id] = { ...scene, backgroundColor: scene.backgroundColor ?? LEGACY_SCENE_BACKGROUND, backgroundTransparent: false }
   }
   return { ...rest, scenes }
 }

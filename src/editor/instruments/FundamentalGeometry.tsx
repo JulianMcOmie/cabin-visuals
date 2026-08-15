@@ -19,7 +19,11 @@ import {
   type MeshPhysicalMaterial,
 } from 'three'
 
-export const DEFAULT_FUNDAMENTAL_COLOR = '#5757db'
+// Cool off-white — an icy tint of the accent family: reads clean against the
+// default ice-blue scene backdrop (DEFAULT_SCENE_BACKGROUND) without
+// competing with it, and stays on the brand's blue axis where a warm paper
+// white drifted yellow.
+export const DEFAULT_FUNDAMENTAL_COLOR = '#e4f0fa'
 
 // The vocabulary is APPEND-ONLY: tracks store the id string, so new solids go
 // at the end and the original six never move or rename.
