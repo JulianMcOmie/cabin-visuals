@@ -69,6 +69,7 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
     const tint = colorShift.tint
     const tintAmount = colorShift.tintAmount
     const tintPerceptual = colorShift.tintPerceptual ?? false
+    const huePerceptual = colorShift.huePerceptual ?? false
     let i = 0
     let dirty = false
     const put = (v: unknown) => {
@@ -102,6 +103,10 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
     // flipping the Colorizer's MIX while paused has to repaint like any other
     // colorShift field.
     put(tintPerceptual)
+    // Same reason for the hue: which circle it turns on changes the rendered
+    // color at a fixed beat, so flipping a Hue Rotate's MODE while paused has
+    // to repaint.
+    put(huePerceptual)
     put(visualCopy?.opacity ?? 1)
     put(state.abilityEvents)
     put(state.videoPads)

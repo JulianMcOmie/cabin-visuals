@@ -121,12 +121,20 @@ export const GRADIENT_COLORIZER_COLOR = '#ff7c50'
  * reopened the 86-150 band and ~200-210 - see MOVER_COLOR.)
  */
 export const SYMMETRY_COLOR = '#fdb97d'
+// The Colorizer's reserved 86° → Waypoints (120°, immovable) stretch, respaced
+// at ~11.5° when Hue Rotate joined: Symmetric Rotation had taken the middle of
+// what was then a 34° window, and two entries only fit either side of it by
+// moving the one that could move. The reserved slot counts as a fixed
+// neighbour, which is why the arithmetic starts at 86 and not at the Mover's
+// 73°.
+/** Symmetric Rotation's twist ochre. Hue 98°. */
+export const SYMMETRIC_ROTATION_COLOR = '#e1c429'
 /**
- * Symmetric Rotation's twist ochre. Hue 103° - the middle of the one WIDE gap
- * the wheel still had, between the Colorizer's unclaimed 86° and Waypoints'
- * 120°, sitting 17° clear of each. Nothing was moved to fit it.
+ * Hue 109°. Arbitrary within its window, on the Cosine Palette's reasoning: a
+ * device whose subject is every hue at once has no one hue to stand for it,
+ * and a computed `{ param }` identity has no user-picked colour to follow.
  */
-export const SYMMETRIC_ROTATION_COLOR = '#d8c830'
+export const HUE_ROTATE_COLOR = '#cdcc39'
 /** Hue 135° - the middle of the band the mover consolidation reopened. */
 export const LINE_COLOR = '#95db6c'
 /** Hue 150°. */

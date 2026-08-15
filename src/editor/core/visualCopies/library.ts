@@ -13,6 +13,7 @@ import { noteColorizer } from './colorizer'
 import { gradientColorizer } from './gradientColorizer'
 import { cosinePaletteColorizer } from './cosinePalette'
 import { risoDuotoneColorizer } from './risoDuotone'
+import { hueRotateColorizer } from './hueRotate'
 import { forceFieldPushMover } from './forceFieldPush'
 import { meteorImpactMover } from './meteorImpact'
 import { impactScatterMover } from './impactScatter'
@@ -716,6 +717,7 @@ export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   gradientColorizer,
   cosinePaletteColorizer,
   risoDuotoneColorizer,
+  hueRotateColorizer,
   radialSplitter,
   lineSplitter,
   symmetrySplitter,

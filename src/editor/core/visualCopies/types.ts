@@ -81,6 +81,23 @@ export interface VisualCopy {
      * rather than accumulates.
      */
     tintPerceptual?: boolean
+    /**
+     * Turn `hue` in OKLCH rather than in HSL. OPTIONAL, defaulting to false -
+     * `Color.offsetHSL` is what every definition written before this field did,
+     * and existing saves keep looking the way they were authored.
+     *
+     * HSL's hue circle is not perceptual: its yellows are far lighter than its
+     * blues at the same nominal lightness, so a hue sweep in HSL PULSES in
+     * brightness twice a turn, and an object's lit form flattens out every time
+     * the sweep passes through yellow. OKLCH holds lightness and chroma while
+     * only the hue turns, so the object keeps its shading - which is what makes
+     * a rotation safe to automate across a whole turn rather than nudge.
+     *
+     * Only the hue turn changes. `saturation` and `lightness` still ride on top
+     * in three's own HSL units, because they are offsets someone dialled in
+     * against that scale.
+     */
+    huePerceptual?: boolean
   }
 }
 

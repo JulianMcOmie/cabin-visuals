@@ -176,3 +176,39 @@ export function mixOklabLinearRgb(target: LinearRgb, other: LinearRgb, t: number
     target,
   )
 }
+
+/**
+ * Turn `target`'s hue by `turns` of the wheel (1 = full circle) in OKLCH, in
+ * place, holding lightness and chroma exactly.
+ *
+ * The perceptual counterpart to `Color.offsetHSL`'s hue argument. HSL's circle
+ * is a geometric construction on the RGB cube, not a perceptual one: its yellow
+ * is far lighter than its blue at the same nominal lightness, so sweeping the
+ * hue makes an object PULSE in brightness twice a turn and flattens its shading
+ * every time it passes through yellow. Here the rotation is a rotation of the
+ * (a, b) plane at fixed L and radius, so only the hue moves.
+ *
+ * The chroma an in-gamut color already has can leave the sRGB gamut once turned
+ * (the solid is not a cylinder - saturated blues reach much further from the
+ * neutral axis than saturated yellows), so this holds chroma and lets
+ * `oklabToLinearRgb`'s clamp handle the overshoot. Clipping a channel there
+ * desaturates rather than shifting hue, which is the failure everyone prefers.
+ *
+ * Achromatic input has no hue to turn and comes out unchanged - a grey object
+ * under a hue rotation is a no-op, not a bug.
+ *
+ * Input and result are LINEAR sRGB, matching three.js `Color`.
+ */
+export function rotateHueOklabLinearRgb(target: LinearRgb, turns: number): void {
+  if (!turns) return
+  linearRgbToOklab(target.r, target.g, target.b, labA)
+  const radians = turns * Math.PI * 2
+  const cos = Math.cos(radians)
+  const sin = Math.sin(radians)
+  oklabToLinearRgb(
+    labA[0],
+    labA[1] * cos - labA[2] * sin,
+    labA[1] * sin + labA[2] * cos,
+    target,
+  )
+}

@@ -1,6 +1,6 @@
 import { createContext } from 'react'
 import { Color } from 'three'
-import { mixOklabLinearRgb } from '../../utils/oklch'
+import { mixOklabLinearRgb, rotateHueOklabLinearRgb } from '../../utils/oklch'
 import type { VisualCopy } from '../visualCopies/types'
 
 export interface InstrumentColorParam {
@@ -64,7 +64,16 @@ export function applyColorShiftToInstrumentParams(
       if (shift.tintPerceptual) mixOklabLinearRgb(scratchColor, scratchTint, tintMix)
       else scratchColor.lerp(scratchTint, tintMix)
     }
-    scratchColor.offsetHSL(shift.hue, shift.saturation, shift.lightness)
+    // `huePerceptual` turns the hue in OKLCH first and leaves offsetHSL only
+    // the saturation and lightness offsets - those are dialled in against HSL's
+    // own scale, so they keep reading it. See the field's note in visualCopies/
+    // types.ts for why an HSL hue sweep pulses in brightness.
+    if (shift.huePerceptual) {
+      rotateHueOklabLinearRgb(scratchColor, shift.hue)
+      scratchColor.offsetHSL(0, shift.saturation, shift.lightness)
+    } else {
+      scratchColor.offsetHSL(shift.hue, shift.saturation, shift.lightness)
+    }
     output[param.key] = `#${scratchColor.getHexString()}`
   }
   return output
