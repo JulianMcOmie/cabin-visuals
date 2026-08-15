@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { isSceneTrackId } from '../../core/sceneTrack'
 import { normalizeFundamentalGeometry, type FundamentalGeometryId } from '../../instruments/FundamentalGeometry'
+import { WIREFRAME_DEFAULT_SHAPE, WIREFRAME_SHAPES } from '../../instruments/wireframeCore'
 import type { Track } from '../../types'
 
 /**
@@ -29,8 +30,8 @@ import type { Track } from '../../types'
 
 const G = {
   // ─── Object instruments ────────────────────────────────────────────────────
-  // (3D Shape has no entry here on purpose - it resolves through SOLIDS below,
-  // by the geometry the track is set to.)
+  // (3D Shape and Wireframe have no entry here on purpose - both resolve by
+  // the shape their own picker is on, through SOLIDS / WIRE_SHAPES below.)
   kaleidoSolid: (
     <>
       <circle cx="8" cy="8" r="5.4" />
@@ -249,12 +250,8 @@ const G = {
       <path d="M11.4 2.4 9.2 13.6" strokeWidth="2.6" strokeOpacity="0.45" />
     </>
   ),
-  wireframe: (
-    <>
-      <path d="M8 2.4 13 5.2v5.6L8 13.6 3 10.8V5.2Z" />
-      <path d="M3 5.2 13 10.8M13 5.2 3 10.8M8 2.4v11.2" strokeOpacity="0.6" />
-    </>
-  ),
+  // (Wireframe has no fixed entry either - it resolves through WIRE_SHAPES /
+  // SOLIDS by the shape its picker is on.)
   cameraControl: (
     <>
       <rect x="2" y="4.6" width="8.4" height="6.8" rx="1.2" />
@@ -647,6 +644,58 @@ const SOLIDS: Record<FundamentalGeometryId, ReactNode> = {
   ),
 }
 
+/**
+ * Wireframe follows its SHAPE picker the same way 3D Shape follows its
+ * geometry. Its vocabulary is a superset of the solids on one side (flat
+ * polygons) and a different family on the other (the `cool` curves), so only
+ * the shapes SOLIDS has no entry for are drawn here - the ten it shares
+ * (cube, sphere, torus, cone, cylinder, the platonics, torus knot) resolve to
+ * the same marks, because a torus is a torus whichever instrument draws it.
+ * The two rows are still told apart by colour, which is the whole split the
+ * icon rests on: shape says WHAT, colour says WHICH.
+ *
+ * Keyed by id rather than index on purpose - `WIREFRAME_SHAPES` is
+ * append-only and a track stores the INDEX, so resolving by id means a
+ * reorder could never silently repaint every row with the wrong mark.
+ */
+const WIRE_SHAPES: Record<string, ReactNode> = {
+  circle: <circle cx="8" cy="8" r="5.6" />,
+  triangle: <path d="M8 2.2 14 12.8H2Z" />,
+  square: <rect x="2.6" y="2.6" width="10.8" height="10.8" rx="0.6" />,
+  pentagon: <path d="M8 2 14 6.4l-2.3 7.2H4.3L2 6.4Z" />,
+  hexagon: <path d="M8 2.2l5 2.9v5.8l-5 2.9-5-2.9V5.1Z" />,
+  star: <path d="M8 1.9 9.8 6.2l4.6.4-3.5 3 1.1 4.5L8 11.7l-4 2.4 1.1-4.5-3.5-3 4.6-.4Z" />,
+  // A superellipse: square proportions, corners eased almost to a circle -
+  // it must not resolve to either neighbour at 15px.
+  squircle: <path d="M8 2.4c4.2 0 5.6 1.4 5.6 5.6s-1.4 5.6-5.6 5.6S2.4 12.2 2.4 8 3.8 2.4 8 2.4Z" />,
+  // A lemniscate: the half-twist made visible as the crossing. A ring with a
+  // twist drawn INSIDE it reads as a torus at 15px - the crossing has to be
+  // the silhouette, not a detail within it.
+  mobius: <path d="M8 8C6.8 6 5.8 5 4.6 5a3 3 0 0 0 0 6c1.2 0 2.2-1 3.4-3s2.2-3 3.4-3a3 3 0 0 1 0 6c-1.2 0-2.2-1-3.4-3Z" />,
+  spiral: <path d="M8 8a1.4 1.4 0 1 1 1.9 1.3A3.2 3.2 0 1 1 5.4 5.6 5.2 5.2 0 1 1 13 12.4" />,
+  helix: (
+    <>
+      <path d="M4.4 3.2q7.2 1.8 0 3.6t0 3.6t0 3.2" />
+      <path d="M11.6 3.2q-7.2 1.8 0 3.6t0 3.6t0 3.2" strokeOpacity="0.5" />
+    </>
+  ),
+  // The woven two-frequency figure, as the four-petal rosette it traces - a
+  // shape nothing else in the set has (Hopf's crossed ellipses are full ovals,
+  // not petals meeting at a centre).
+  lissajous: (
+    <>
+      <path d="M8 2.4q4.2 3.4 0 11.2-4.2-7.8 0-11.2Z" />
+      <path d="M2.4 8q3.4-4.2 11.2 0-7.8 4.2-11.2 0Z" strokeOpacity="0.75" />
+    </>
+  ),
+  gem: (
+    <>
+      <path d="M4.4 3.2h7.2l2.2 3.4L8 13.4 2.2 6.6Z" />
+      <path d="M2.2 6.6h11.6M4.4 3.2 8 6.6l3.6-3.4M8 6.6v6.8" strokeOpacity="0.55" />
+    </>
+  ),
+}
+
 /** Aliases: ids that share a mark with one already drawn above. */
 const ALIAS: Record<string, keyof typeof G> = {
   // The 2026-08 mover consolidation retired these ids from the registry, but a
@@ -668,6 +717,21 @@ const FAMILY: Record<string, keyof typeof G> = {
   splitter: 'radial',
   colorizer: 'hueRotate',
   parentGate: 'bypass',
+}
+
+/**
+ * The mark for a Wireframe track's current shape.
+ *
+ * The stored value is an INDEX into `WIREFRAME_SHAPES`, so it is clamped the
+ * same way the instrument clamps it (`Math.round`, then into range) rather
+ * than trusted - a stale or out-of-range index must land on a real shape, not
+ * on `undefined`, exactly as the rendered object does.
+ */
+function wireframeShapeGlyph(shapeIndex: number | undefined): ReactNode {
+  const raw = shapeIndex ?? WIREFRAME_DEFAULT_SHAPE
+  const i = Math.max(0, Math.min(WIREFRAME_SHAPES.length - 1, Math.round(raw)))
+  const id = WIREFRAME_SHAPES[i].id
+  return WIRE_SHAPES[id] ?? SOLIDS[id as FundamentalGeometryId] ?? G.unknown
 }
 
 function glyphFor(id: string | undefined): ReactNode | undefined {
@@ -719,6 +783,9 @@ export function trackGlyph(track: Track, isCompositionTrack = false): ReactNode 
       // track changes, which a geometry edit is.
       if (track.instrumentId === 'cube') {
         return SOLIDS[normalizeFundamentalGeometry(track.stringParams?.geometry)]
+      }
+      if (track.instrumentId === 'wireframe') {
+        return wireframeShapeGlyph(track.params?.shape)
       }
       // A composition track is `base` with an instrumentId naming a director
       // def, so the instrument registry has no mark for it.
