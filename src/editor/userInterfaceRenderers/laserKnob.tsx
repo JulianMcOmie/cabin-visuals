@@ -29,7 +29,7 @@ export function formatKnobValue(value: number, step: number): string {
 
 export function LaserKnob({
   value, min, max, step, defaultValue, curve = 1, label, ariaLabel, accent,
-  large = false, bipolar = false, suffix, format, onChange,
+  large = false, bipolar = false, disabled = false, suffix, format, title, onChange,
 }: {
   value: number
   min: number
@@ -53,9 +53,18 @@ export function LaserKnob({
    * visible - a half-lit ring for zero reads as half ON, which is a lie.
    */
   bipolar?: boolean
+  /**
+   * The knob still SHOWS its value but no longer takes input - for a value the
+   * panel derives from something else (an INT automation lane's row count), so
+   * the reading stays visible instead of the control vanishing and the row
+   * re-flowing. Say why in `title`.
+   */
+  disabled?: boolean
   /** Appended to the readout (e.g. 'b' for beats). */
   suffix?: string
   format?: (value: number) => string
+  /** Overrides the default drag hint - what a disabled knob owes the user. */
+  title?: string
   onChange: (value: number) => void
 }) {
   const dragRef = useRef<{ y: number; norm: number } | null>(null)
@@ -82,6 +91,7 @@ export function LaserKnob({
   }
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (disabled) return
     event.preventDefault()
     // Capture can throw for exotic/synthetic pointers; the drag still works
     // through the move/up handlers on the element itself.
@@ -100,6 +110,7 @@ export function LaserKnob({
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (disabled) return
     if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
     event.preventDefault()
     const direction = event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1
@@ -111,22 +122,23 @@ export function LaserKnob({
   }
 
   return (
-    <div className="flex min-w-0 flex-col items-center">
+    <div className={`flex min-w-0 flex-col items-center ${disabled ? 'opacity-45' : ''}`}>
       <div
         role="slider"
-        tabIndex={0}
+        tabIndex={disabled ? -1 : 0}
         aria-label={ariaLabel ?? label}
         aria-valuemin={min}
         aria-valuemax={max}
         aria-valuenow={value}
-        title="Drag vertically · double-click to reset"
+        aria-disabled={disabled || undefined}
+        title={title ?? 'Drag vertically · double-click to reset'}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        onDoubleClick={() => onChange(defaultValue)}
+        onDoubleClick={() => { if (!disabled) onChange(defaultValue) }}
         onKeyDown={onKeyDown}
-        className={`relative ${large ? 'h-[52px] w-[52px]' : 'h-11 w-11'} cursor-ns-resize touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/50`}
+        className={`relative ${large ? 'h-[52px] w-[52px]' : 'h-11 w-11'} ${disabled ? 'cursor-default' : 'cursor-ns-resize'} touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/50`}
       >
         {/* Emission is sold by exponential falloff: a wide soft accent bloom, a
             tight whiter bloom, then the white-hot core - all copies of the same

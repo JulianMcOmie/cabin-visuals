@@ -1,5 +1,5 @@
 import type { MidiRow } from './types'
-import { AUTOMATION_PITCH_MIN, AUTOMATION_PITCH_MAX, automationTopPitch, pitchToValue, pitchToValueRanged, type AutomationRange } from '../../core/trackTypes'
+import { AUTOMATION_PITCH_MIN, AUTOMATION_PITCH_MAX, automationIntegerGrid, automationRowCount, automationValueBounds, pitchToValue, pitchToValueRanged, type AutomationRange } from '../../core/trackTypes'
 import { midiNoteBaseColor, midiValueColor } from '../../utils/midiEditorPalette'
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
@@ -226,6 +226,10 @@ function formatValueCompact(value: number, rowStep: number): string {
  * is the max, bottom the min). Notes at in-between pitches remain fully valid to
  * the engine; any pitch outside the sampled set gets a dimmed extra row labelled
  * with its own value so no note can silently vanish from the editor.
+ *
+ * A lane carrying a row COUNT - or INT, which derives one row per whole number
+ * of its range - shows every one of its rows instead of sampling, so what you
+ * see is exactly what the lane can say.
  */
 export function generateValueRows(
   paramMin: number,
@@ -236,16 +240,21 @@ export function generateValueRows(
   range?: AutomationRange,
 ): MidiRow[] {
   const valueAt = (pitch: number) => pitchToValueRanged(range, pitch, paramMin, paramMax)
-  const topPitch = automationTopPitch(range)
-  const pitchSpan = topPitch - AUTOMATION_PITCH_MIN
-  const rowStep = range?.integer ? 1 : Math.abs(valueAt(topPitch) - valueAt(AUTOMATION_PITCH_MIN)) / Math.max(1, VALUE_ROW_STEPS)
+  const pitchSpan = automationRowCount(range, paramMin, paramMax) - 1
+  const topPitch = AUTOMATION_PITCH_MIN + pitchSpan
+  // An INT lane's step IS its label precision (whole numbers, so no decimals).
+  const bounds = automationValueBounds(range, paramMin, paramMax)
+  const rowStep = range?.integer
+    ? automationIntegerGrid(bounds.min, bounds.max).step
+    : Math.abs(valueAt(topPitch) - valueAt(AUTOMATION_PITCH_MIN)) / Math.max(1, VALUE_ROW_STEPS)
   const fmt = formatValue ?? ((v: number) => formatValueCompact(v, rowStep))
   const rows: MidiRow[] = []
   const known = new Set<number>()
 
-  // An explicit row COUNT shows every row (that IS the ask); the classic
-  // full-span lane keeps its 13 readable samples.
-  const steps = range?.rows ? pitchSpan : VALUE_ROW_STEPS
+  // An explicit row COUNT - or the count INT derives from the value range -
+  // shows every row (that IS the ask); the classic full-span lane keeps its 13
+  // readable samples.
+  const steps = range?.rows || range?.integer ? pitchSpan : VALUE_ROW_STEPS
   for (let k = steps; k >= 0; k--) {
     const pitch = Math.round(AUTOMATION_PITCH_MIN + (steps > 0 ? (k / steps) * pitchSpan : 0))
     if (known.has(pitch)) continue // guard: a narrow span could round two samples together

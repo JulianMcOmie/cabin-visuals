@@ -52,7 +52,7 @@ import {
 } from '../core/visual/automation'
 import { LaserKnob } from './laserKnob'
 import { hexToHsv, hsvToHex, towardWhite, withAlpha } from './colorWheel'
-import { AUTOMATION_MAX_ROWS, type AutomationRange, type AutomationSpreadCurve } from '../core/trackTypes'
+import { AUTOMATION_MAX_ROWS, automationIntegerGrid, automationRowCount, type AutomationRange, type AutomationSpreadCurve } from '../core/trackTypes'
 import type { AutomationMode, InterpolationMode } from '../types'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
@@ -820,7 +820,13 @@ const SPREAD_OPTIONS: { value: AutomationSpreadCurve; label: string; title: stri
 
 /** The lane's row-spread console: value sub-range, row count, integer snap and
  *  the spread curve. Emits a NORMALIZED config - defaults collapse to absence,
- *  so an untouched lane stays on the frozen historical mapping. */
+ *  so an untouched lane stays on the frozen historical mapping.
+ *
+ *  Two things the knobs say that the param defs don't: MIN/MAX travel one full
+ *  param span PAST each end (a lane is allowed to aim past what the instrument
+ *  declares - see automationValueBounds), and under INT the row count and the
+ *  spread curve are DERIVED, not chosen: the rows are the whole numbers of the
+ *  range, evenly stepped from min to max, so both controls stand down. */
 function RangeConsole({ bounds, range, accent, onRange }: {
   bounds: { min: number; max: number }
   range: AutomationRange | undefined
@@ -829,10 +835,19 @@ function RangeConsole({ bounds, range, accent, onRange }: {
 }) {
   const lo = range?.min ?? bounds.min
   const hi = range?.max ?? bounds.max
-  const rows = range?.rows ?? AUTOMATION_MAX_ROWS
   const integer = range?.integer ?? false
+  // Under INT the knob shows what the range works out to; off it, what was set.
+  const rows = integer
+    ? automationRowCount(range, bounds.min, bounds.max)
+    : range?.rows ?? AUTOMATION_MAX_ROWS
+  const intStep = integer ? automationIntegerGrid(lo, hi).step : 1
   const curve = range?.curve ?? 'linear'
   const step = integer ? 1 : Math.max(0.01, Number(((bounds.max - bounds.min) / 200).toPrecision(2)))
+  // Headroom: one param span beyond each end (a degenerate 0-span param still
+  // gets a usable throw). AMOUNT lifts the ceiling further at playback.
+  const paramSpan = Math.max(Math.abs(bounds.max - bounds.min), Math.abs(bounds.max), 1)
+  const knobMin = bounds.min - paramSpan
+  const knobMax = bounds.max + paramSpan
 
   const emit = (next: AutomationRange) => {
     const cleaned: AutomationRange = {}
@@ -849,9 +864,9 @@ function RangeConsole({ bounds, range, accent, onRange }: {
       <div className="flex items-center justify-between">
         <span className="font-mono text-[8px] uppercase tracking-[0.14em] text-white/35">Rows · Range</span>
         <button
-          onClick={() => emit({ min: lo, max: hi, rows, integer: !integer, curve })}
+          onClick={() => emit({ min: lo, max: hi, rows: range?.rows, integer: !integer, curve })}
           aria-pressed={integer}
-          title="Snap every row's value to a whole number"
+          title="Count the rows in whole numbers, one per step from min to max"
           className={`h-[18px] rounded-full px-2 font-mono text-[8px] font-semibold tracking-[0.1em] transition-colors cursor-pointer ${
             integer ? '' : 'border border-white/10 text-white/40 hover:text-white/70'
           }`}
@@ -862,34 +877,43 @@ function RangeConsole({ bounds, range, accent, onRange }: {
       </div>
       <div className="flex items-end gap-4">
         <LaserKnob
-          value={lo} min={bounds.min} max={bounds.max} step={step} defaultValue={bounds.min}
+          value={lo} min={knobMin} max={knobMax} step={step} defaultValue={bounds.min}
           label="MIN" ariaLabel="Bottom row's value" accent={accent}
-          onChange={(v) => emit({ min: Math.min(v, hi), max: hi, rows, integer, curve })}
+          onChange={(v) => emit({ min: Math.min(v, hi), max: hi, rows: range?.rows, integer, curve })}
         />
         <LaserKnob
-          value={hi} min={bounds.min} max={bounds.max} step={step} defaultValue={bounds.max}
+          value={hi} min={knobMin} max={knobMax} step={step} defaultValue={bounds.max}
           label="MAX" ariaLabel="Top row's value" accent={accent}
-          onChange={(v) => emit({ min: lo, max: Math.max(v, lo), rows, integer, curve })}
+          onChange={(v) => emit({ min: lo, max: Math.max(v, lo), rows: range?.rows, integer, curve })}
         />
         <LaserKnob
           value={rows} min={2} max={AUTOMATION_MAX_ROWS} step={1} defaultValue={AUTOMATION_MAX_ROWS}
           label="ROWS" ariaLabel="Number of rows" accent={accent}
+          disabled={integer}
+          title={integer
+            ? `INT counts by ${intStep === 1 ? 'ones' : intStep} · ${rows} rows`
+            : 'Drag vertically · double-click to reset'}
           onChange={(v) => emit({ min: lo, max: hi, rows: v, integer, curve })}
         />
         <div
           role="radiogroup"
           aria-label="Row spread curve"
-          className="ml-auto flex gap-[2px] rounded-[7px] border border-white/[0.07] bg-black/30 p-[2px]"
+          className={`ml-auto flex gap-[2px] rounded-[7px] border border-white/[0.07] bg-black/30 p-[2px] ${
+            integer ? 'pointer-events-none opacity-35' : ''
+          }`}
         >
           {SPREAD_OPTIONS.map((option) => {
-            const active = option.value === curve
+            // INT's rows are the whole numbers themselves - evenly stepped by
+            // construction - so the spread reads (and stays) LIN while it's on.
+            const active = integer ? option.value === 'linear' : option.value === curve
             return (
               <button
                 key={option.value}
                 role="radio"
                 aria-checked={active}
-                title={option.title}
-                onClick={() => emit({ min: lo, max: hi, rows, integer, curve: option.value })}
+                aria-disabled={integer}
+                title={integer ? 'Whole-number rows are evenly spread' : option.title}
+                onClick={() => emit({ min: lo, max: hi, rows: range?.rows, integer, curve: option.value })}
                 className={`h-[20px] cursor-pointer rounded-[5px] px-1.5 text-[8px] font-semibold tracking-[0.08em] transition-colors ${
                   active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
                 }`}

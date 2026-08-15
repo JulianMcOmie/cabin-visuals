@@ -12,7 +12,8 @@ import type {
 import { DEFAULT_ADSR } from './adsr'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
-import { automationAmount, automationLaneValueBounds, extractBurstGates, extractCycleGates, extractKeyframes, extractNoiseGates, sampleAutomationLane } from './automation'
+import { automationAmount, automationLaneValueBounds, automationOutputBounds, extractBurstGates, extractCycleGates, extractKeyframes, extractNoiseGates, sampleAutomationLane, type NoiseConfig } from './automation'
+import { automationValueBounds, type AutomationRange } from '../trackTypes'
 import { isNumberParam, type ObjectInstrumentDef, type ParamDef } from '../../instruments/types'
 import { SPATIAL_TRANSFORM_PARAM_DEFS, TRANSFORM_PARAM_DEFS, transformDefault, withTransformParams } from '../transform'
 import { SPATIAL_TF_PARAMS, tfAutomationChainEntry } from './tfAutomationChain'
@@ -67,6 +68,27 @@ function flattenTrackNotes(track: Track, p: ProjectSnapshot): ResolvedNote[] {
  *  (its note pitch → the param's [min,max]); the engine samples them per frame.
  *  Children with no target param or an unknown param are skipped. Muted
  *  automation children are ignored (a quick disable); solo pools per parent. */
+/**
+ * Noise's deviation is a fraction of the lane's span, and AMOUNT scales it along
+ * with the centers. A boosted lane's bounds already carry the amount in their
+ * span (automationOutputBounds), so the stored `range` is re-based onto them:
+ * the wobble comes out the same size it always did (nominal span × range ×
+ * amount) while the CLAMP is the boosted one. A no-op at amount 1.
+ */
+function scaledNoise(
+  cfg: NoiseConfig,
+  range: AutomationRange | undefined,
+  paramMin: number,
+  paramMax: number,
+  amount: number,
+  bounds: { min: number; max: number },
+): NoiseConfig {
+  const nominal = automationValueBounds(range, paramMin, paramMax)
+  const effSpan = bounds.max - bounds.min
+  const factor = amount * (effSpan > 0 ? (nominal.max - nominal.min) / effSpan : 1)
+  return factor === 1 ? cfg : { ...cfg, range: cfg.range * factor }
+}
+
 export function resolveAutomationLanes(track: Track, params: ParamDef[], p: ProjectSnapshot): ResolvedAutomation[] {
   const out: ResolvedAutomation[] = []
   // Per-parent solo pool among this track's automation children.
@@ -85,6 +107,11 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     // The lane's output gain, applied at extraction so every consumer of the
     // resolved lane (engine, hover preview, paramAtBeat) agrees on the values.
     const amount = automationAmount(child)
+    // How far this lane may travel: its own value bounds (already possibly past
+    // the param's own), widened when AMOUNT boosts. Sampling clamps to these, so
+    // a boosted burst/noise/cycle reaches into the headroom instead of piling up
+    // against the param's max.
+    const bounds = automationOutputBounds(child.automationRange, pdef.min, pdef.max, amount)
     // Burst mode: the notes become ADSR bursts aimed at their own pitch-value,
     // travelling from whatever value sits underneath (hence `base`).
     if (child.burst) {
@@ -95,8 +122,8 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
         keyframes: [],
         burst: child.burst,
         bursts: extractBurstGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount, child.automationRange),
-        min: pdef.min,
-        max: pdef.max,
+        min: bounds.min,
+        max: bounds.max,
         base: pdef.default,
       })
       continue
@@ -110,10 +137,10 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
         sourceTrackId: child.id,
         mode: 'linear',
         keyframes: [],
-        noise: amount === 1 ? child.noise : { ...child.noise, range: child.noise.range * amount },
+        noise: scaledNoise(child.noise, child.automationRange, pdef.min, pdef.max, amount, bounds),
         gates: extractNoiseGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount, child.automationRange),
-        min: pdef.min,
-        max: pdef.max,
+        min: bounds.min,
+        max: bounds.max,
       })
       continue
     }
@@ -127,8 +154,8 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
         keyframes: [],
         cycle: child.cycle,
         cycles: extractCycleGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount, child.automationRange),
-        min: pdef.min,
-        max: pdef.max,
+        min: bounds.min,
+        max: bounds.max,
       })
       continue
     }
@@ -202,6 +229,11 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
     // against a 0.5 threshold, and a gain there would just be a surprise
     // off-switch.
     const amount = target.key === 'enabled' ? 1 : automationAmount(child)
+    // The lane's reach, exactly as on an instrument-param lane (its own bounds,
+    // widened by a boosting amount). 'enabled' keeps the raw 0/1 span.
+    const bounds = target.key === 'enabled'
+      ? { min, max }
+      : automationOutputBounds(child.automationRange, min, max, amount)
     // Burst mode: each note fires the ADSR from the stored setting toward its own
     // pitch-value. The 0/1 'enabled' pseudo-param has no range to travel through,
     // so it stays a keyframe lane whatever the track says.
@@ -213,8 +245,8 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
         keyframes: [],
         burst: child.burst,
         bursts: extractBurstGates(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount, child.automationRange),
-        min,
-        max,
+        min: bounds.min,
+        max: bounds.max,
         base,
       })
       continue
@@ -229,8 +261,8 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
         keyframes: [],
         cycle: child.cycle,
         cycles: extractCycleGates(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount, child.automationRange),
-        min,
-        max,
+        min: bounds.min,
+        max: bounds.max,
         base,
       })
       continue

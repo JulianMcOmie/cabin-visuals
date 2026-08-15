@@ -1,5 +1,5 @@
 import type { AdsrEnvelope, AutomationMode, Block, InterpolationMode, Track } from '../../types'
-import { pitchToValueRanged, type AutomationRange } from '../trackTypes'
+import { automationValueBounds, pitchToValueRanged, type AutomationRange } from '../trackTypes'
 import { adsrGateGain, type AdsrGate } from './adsr'
 import { flattenBlocks } from './noteFlatten'
 
@@ -12,13 +12,14 @@ export interface AutomationKeyframe {
 // ── Amount (lane output gain) ────────────────────────────────────────────────
 // A whole-lane multiplier applied at extraction, whatever the mode: keyframe
 // values, noise centers (resolve.ts scales the deviation to match) and burst
-// targets all scale by it, then clamp back to the param's range. It is a GAIN
-// on what the notes say, not a remap of the pitch rows - the piano roll's row
-// labels keep meaning "the value at 100%".
+// targets all scale by it, then clamp back to the lane's own bounds. It is a
+// GAIN on what the notes say, not a remap of the pitch rows - the piano roll's
+// row labels keep meaning "the value at 100%".
 
-/** The amount fader's top: 10 = the lane can boost what its notes wrote tenfold
- *  (values still clamp back to the param's range, so this is headroom for lanes
- *  written low, not a way to escape a param's bounds). */
+/** The amount fader's top: 10 = the lane can boost what its notes wrote tenfold.
+ *  A BOOST lifts the ceiling with it (automationOutputBounds), so cranking the
+ *  fader genuinely pushes past what the instrument declares instead of piling
+ *  up against the param's max. */
 export const AUTOMATION_AMOUNT_MAX = 10
 export const DEFAULT_AUTOMATION_AMOUNT = 1
 
@@ -28,10 +29,31 @@ export function automationAmount(track: Pick<Track, 'automationAmount'>): number
   return Math.max(0, track.automationAmount ?? DEFAULT_AUTOMATION_AMOUNT)
 }
 
+/**
+ * The bounds a lane's OUTPUT may occupy: its own value bounds (the range
+ * config's min/max, which may already sit outside the param's), widened by a
+ * boosting amount - amount 3 on a 0..2 lane reaches 6. Attenuation (amount < 1)
+ * doesn't narrow them: scaling toward zero needs no help, and narrowing would
+ * fight a lane whose min is above zero.
+ *
+ * This is the one place that decides how far a lane may travel, so extraction
+ * (below) and sampling (resolve.ts hands these to the lane as min/max) agree.
+ */
+export function automationOutputBounds(
+  range: AutomationRange | undefined,
+  paramMin: number,
+  paramMax: number,
+  amount: number,
+): { min: number; max: number } {
+  const { min, max } = automationValueBounds(range, paramMin, paramMax)
+  if (amount <= 1) return { min, max }
+  return { min: Math.min(min, min * amount), max: Math.max(max, max * amount) }
+}
+
 /** Apply the lane's amount to one pitch-derived value. */
-function scaleValue(value: number, amount: number, paramMin: number, paramMax: number): number {
+function scaleValue(value: number, amount: number, bounds: { min: number; max: number }): number {
   if (amount === 1) return value
-  return Math.max(paramMin, Math.min(paramMax, value * amount))
+  return Math.max(bounds.min, Math.min(bounds.max, value * amount))
 }
 
 /** Flatten an automation track's blocks into value keyframes (absolute beats, sorted).
@@ -46,9 +68,10 @@ export function extractKeyframes(
   amount = 1,
   range?: AutomationRange,
 ): AutomationKeyframe[] {
+  const bounds = automationOutputBounds(range, paramMin, paramMax, amount)
   return flattenBlocks(blocks, beatsPerBar, totalBars).map((note) => ({
     beat: note.beat,
-    value: scaleValue(pitchToValueRanged(range, note.pitch, paramMin, paramMax), amount, paramMin, paramMax),
+    value: scaleValue(pitchToValueRanged(range, note.pitch, paramMin, paramMax), amount, bounds),
   }))
 }
 
@@ -98,10 +121,11 @@ export function extractNoiseGates(
   amount = 1,
   range?: AutomationRange,
 ): NoiseGate[] {
+  const bounds = automationOutputBounds(range, paramMin, paramMax, amount)
   return flattenBlocks(blocks, beatsPerBar, totalBars).map((note) => ({
     beat: note.beat,
     endBeat: note.beat + note.durationBeats,
-    center: scaleValue(pitchToValueRanged(range, note.pitch, paramMin, paramMax), amount, paramMin, paramMax),
+    center: scaleValue(pitchToValueRanged(range, note.pitch, paramMin, paramMax), amount, bounds),
     amp: Math.max(0, Math.min(1, (note.velocity ?? 100) / 127)),
   }))
 }
@@ -223,11 +247,12 @@ export function extractBurstGates(
   amount = 1,
   range?: AutomationRange,
 ): BurstGate[] {
+  const bounds = automationOutputBounds(range, paramMin, paramMax, amount)
   return flattenBlocks(blocks, beatsPerBar, totalBars).map((note) => ({
     beat: note.beat,
     durationBeats: note.durationBeats,
     velocity: note.velocity ?? 100,
-    value: scaleValue(pitchToValueRanged(range, note.pitch, paramMin, paramMax), amount, paramMin, paramMax),
+    value: scaleValue(pitchToValueRanged(range, note.pitch, paramMin, paramMax), amount, bounds),
   }))
 }
 
@@ -443,11 +468,12 @@ export function extractCycleGates(
   amount = 1,
   range?: AutomationRange,
 ): CycleGate[] {
+  const bounds = automationOutputBounds(range, paramMin, paramMax, amount)
   const gates = flattenBlocks(blocks, beatsPerBar, totalBars)
     .map((note) => ({
       beat: note.beat,
       endBeat: note.beat + note.durationBeats,
-      value: scaleValue(pitchToValueRanged(range, note.pitch, paramMin, paramMax), amount, paramMin, paramMax),
+      value: scaleValue(pitchToValueRanged(range, note.pitch, paramMin, paramMax), amount, bounds),
     }))
     .sort((a, b) => a.beat - b.beat || a.value - b.value)
   return gates.filter((g, i) => i === gates.length - 1 || gates[i + 1].beat !== g.beat)

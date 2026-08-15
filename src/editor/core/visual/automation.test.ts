@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { pitchToValue, pitchToValueRanged } from '../trackTypes'
+import { AUTOMATION_MAX_ROWS, automationRowCount, pitchToValue, pitchToValueRanged } from '../trackTypes'
 import {
   DEFAULT_BURST_BEZIER,
   DEFAULT_BURST_SPRING,
   automationAmount,
+  automationOutputBounds,
   automationLaneValueBounds,
   extractBurstGates,
   extractKeyframes,
@@ -130,16 +131,17 @@ function pitchBlock(...pitches: number[]): Block[] {
   }]
 }
 
-test('amount: scales every extractor\'s values, clamped back to the param range', () => {
+test('amount: scales every extractor\'s values, and a BOOST lifts the ceiling with it', () => {
   const blocks = pitchBlock(84, 60) // → max, midpoint of [0, 10]
 
   // Keyframes: values are true multiples of what the notes wrote…
   const half = extractKeyframes(blocks, 4, 0, 10, undefined, 0.5)
   close(half[0].value, 5)
   close(half[1].value, 2.5)
-  // …and a boost clamps at the range's top instead of escaping it.
+  // …and a boost travels PAST the param's own max - that is what the gain is
+  // for; the ceiling rises with the amount (automationOutputBounds).
   const boosted = extractKeyframes(blocks, 4, 0, 10, undefined, 2)
-  close(boosted[0].value, 10)
+  close(boosted[0].value, 20)
   close(boosted[1].value, 10)
   // Default amount is the identity.
   close(extractKeyframes(blocks, 4, 0, 10)[1].value, 5)
@@ -149,9 +151,10 @@ test('amount: scales every extractor\'s values, clamped back to the param range'
   // Burst gates scale the value each burst aims for.
   close(extractBurstGates(blocks, 4, 0, 10, undefined, 0.5)[0].value, 5)
 
-  // A negative-min range clamps at its floor, not at zero.
-  const negative = extractKeyframes(pitchBlock(36), 4, -4, 4, undefined, 2)
-  close(negative[0].value, -4)
+  // Attenuation pulls a negative value toward zero, never past the floor.
+  close(extractKeyframes(pitchBlock(36), 4, -4, 4, undefined, 0.5)[0].value, -2)
+  // A boosted floor sinks with the amount, symmetrically with the ceiling.
+  close(extractKeyframes(pitchBlock(36), 4, -4, 4, undefined, 2)[0].value, -8)
 })
 
 test('automationAmount: absent → 1, negative documents are floored at 0', () => {
@@ -300,6 +303,62 @@ test('ranged mapping: sub-range, row count, integer snap, spread curve', () => {
   // Extraction threads the config: a top-of-5-rows note lands on the max.
   const kfs = extractKeyframes(pitchBlock(40), 4, 0, 8, undefined, 1, rows5)
   close(kfs[0].value, 8)
+})
+
+/** Every row of a lane's config, bottom (pitch 36) to top. */
+function rowValues(range: Parameters<typeof pitchToValueRanged>[0], min: number, max: number): number[] {
+  const rows = automationRowCount(range, min, max)
+  return Array.from({ length: rows }, (_, k) => pitchToValueRanged(range, 36 + k, min, max))
+}
+
+test('rows are even, and the bottom/top rows ARE the min/max', () => {
+  for (const [rows, min, max] of [[5, 0, 10], [7, 1, 12], [2, -4, 4], [13, 0, 1]] as const) {
+    const values = rowValues({ rows }, min, max)
+    assert.equal(values.length, rows)
+    close(values[0], min, 'bottom row is the min')
+    close(values[values.length - 1], max, 'top row is the max')
+    const step = (max - min) / (rows - 1)
+    values.forEach((v, k) => close(v, min + k * step, `row ${k} of ${rows}`))
+  }
+})
+
+test('INT counts up in whole numbers: the row COUNT is derived, never a rounding of one', () => {
+  // A 1..12 count param: twelve rows, one per copy, no repeats. (The old
+  // round-on-top-of-a-spread mapping labelled two neighbouring rows "7".)
+  assert.deepEqual(rowValues({ integer: true }, 1, 12), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+  // Counting up from zero where the param starts there.
+  assert.deepEqual(rowValues({ integer: true }, 0, 3), [0, 1, 2, 3])
+  // An explicit ROWS count and a spread curve stand down under INT - the whole
+  // numbers ARE the rows, evenly stepped by construction.
+  assert.deepEqual(rowValues({ integer: true, rows: 5, curve: 'fineLow' }, 0, 4), [0, 1, 2, 3, 4])
+  // A sub-range counts within itself.
+  assert.deepEqual(rowValues({ integer: true, min: 2, max: 6 }, 0, 10), [2, 3, 4, 5, 6])
+})
+
+test('INT past the pitch rows: the step widens to the narrowest whole one that still lands on both ends', () => {
+  const rotation = rowValues({ integer: true }, -360, 360)
+  assert.equal(rotation.length, AUTOMATION_MAX_ROWS)
+  close(rotation[0], -360)
+  close(rotation[rotation.length - 1], 360)
+  rotation.forEach((v, k) => close(v, -360 + k * 15, `degree row ${k}`))
+  // Fractional ends round INWARD, so the grid never invents a value the lane's
+  // range doesn't hold.
+  assert.deepEqual(rowValues({ integer: true, min: 0.4, max: 3.2 }, 0, 10), [1, 2, 3])
+})
+
+test('a lane may aim PAST the param\'s own bounds, and AMOUNT lifts the ceiling with it', () => {
+  // The range config is the law, not the param def: a lane pointed past the
+  // instrument's max reaches it.
+  close(pitchToValueRanged({ min: -5, max: 25 }, 84, 0, 10), 25)
+  close(pitchToValueRanged({ min: -5, max: 25 }, 36, 0, 10), -5)
+  assert.deepEqual(automationOutputBounds(undefined, 0, 10, 1), { min: 0, max: 10 })
+  // A boost widens the reach; attenuation leaves it alone (scaling toward zero
+  // needs no headroom, and narrowing would fight a lane whose min is above 0).
+  assert.deepEqual(automationOutputBounds(undefined, 0, 10, 3), { min: 0, max: 30 })
+  assert.deepEqual(automationOutputBounds(undefined, 0, 10, 0.5), { min: 0, max: 10 })
+  assert.deepEqual(automationOutputBounds(undefined, -4, 4, 2), { min: -8, max: 8 })
+  // Both together: a lane aimed high AND boosted.
+  assert.deepEqual(automationOutputBounds({ max: 20 }, 0, 10, 2), { min: 0, max: 40 })
 })
 
 // ── Cycle mode ───────────────────────────────────────────────────────────────

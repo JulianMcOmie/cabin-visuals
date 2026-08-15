@@ -84,20 +84,48 @@ keyframes, as it always has.
 
 **ROW SPREAD** (`Track.automationRange`, absent = the frozen historical mapping):
 a lane may reshape how its pitch rows spread onto values - a value SUB-range
-(`min`/`max` inside the param's own bounds), a row COUNT (`rows` 2..49, rows fill
-upward from pitch 36 and the top row IS the max), INTEGER snapping, and a spread
-`curve` ('linear' | 'fineLow' | 'fineHigh' | 'sCurve'). `pitchToValueRanged`
-(core/trackTypes.ts) is the one mapping both the engine (extraction in
-resolve.ts) and the editor (generateValueRows' labels) read, so a note can never
-mean different things in the roll and in playback. The panel's Rows·Range
-console emits a NORMALIZED config - defaults collapse to absence.
+(`min`/`max`), a row COUNT (`rows` 2..49, rows fill upward from pitch 36 and the
+top row IS the max), INTEGER counting, and a spread `curve` ('linear' | 'fineLow'
+| 'fineHigh' | 'sCurve'). `pitchToValueRanged` (core/trackTypes.ts) is the one
+mapping both the engine (extraction in resolve.ts) and the editor
+(generateValueRows' labels) read, so a note can never mean different things in
+the roll and in playback. The panel's Rows·Range console emits a NORMALIZED
+config - defaults collapse to absence.
+
+Two invariants the rows keep, and the reason the INT arm is shaped the way it is:
+**the bottom row is the min, the top row is the max, and the steps between them
+are even.** INT used to be a `Math.round` on top of whatever spread the rows
+already had, which broke both — a 1..12 count lane labelled two neighbouring rows
+"7", and five rows over 0..10 stepped 3-2-3-2. So INT now DERIVES the count
+(`automationIntegerGrid` / `automationRowCount`): the rows are the whole numbers
+of the range, counting up from the min, and `rows` + `curve` stand down while
+it's on (the panel greys them). A span too wide for the 49 pitch rows widens the
+step to the narrowest whole number that still lands exactly on both ends
+(-360..360 counts by 15); a span with no such divisor keeps the narrowest fitting
+step and spends its LAST row on the max, one short gap being the price of the top
+row still being the max. **This reinterprets existing INT lanes' pitches** — the
+config shape is unchanged, so there's no upgrade step; the feature was five days
+old and demonstrably wrong when it changed (2026-08-14).
+
+**A lane may aim PAST the param's own bounds.** `automationValueBounds` returns
+the range config's min/max *unclamped* by the param def — the panel's MIN/MAX
+knobs travel one full param span beyond each end — and the clamps that used to
+read `pdef.min/max` (the pitch mapping, the amount gain, and the lane's
+`min`/`max` that sampling clamps noise/cycle/burst to) all read the lane's own
+bounds now.
 
 **AMOUNT** (`Track.automationAmount`, default 1, 0..`AUTOMATION_AMOUNT_MAX`) is a
 whole-lane output gain, mode-independent: applied at EXTRACTION in resolve.ts (the
 one choke point every consumer shares), it multiplies keyframe values, noise centers
-+ deviation (`range` is scaled alongside), and burst target values, each clamped back
-to the param's range. It deliberately does NOT touch `fx:` `enabled` lanes — that's a
-0/1 switch read against a 0.5 threshold, and a gain there is just a surprise
++ deviation, and burst target values. A BOOST lifts the ceiling with it
+(`automationOutputBounds`: amount 3 on a 0..2 lane reaches 6) — cranking the fader
+has to actually go somewhere, and clamping back to the param's max made it a no-op
+past `max/amount`. Attenuation (< 1) doesn't narrow the bounds; scaling toward zero
+needs no headroom, and narrowing would fight a lane whose min is above zero. Noise's
+deviation is a fraction of that span, so `scaledNoise` (resolve.ts) re-bases the
+stored `range` onto the boosted span — the wobble scales exactly once, and amount 1
+is bit-identical to before. It deliberately does NOT touch `fx:` `enabled` lanes —
+that's a 0/1 switch read against a 0.5 threshold, and a gain there is just a surprise
 off-switch. Neutral (1) is stored as field absence (`setTrackAutomationAmount`).
 
 ## instrumentFrame.ts — the per-frame entry point for instruments
