@@ -50,6 +50,16 @@ function CreateCta({ children }: { children?: ReactNode }) {
   )
 }
 
+/** Pointer/focus wiring for a ripple origin. Keyboard focus arms the effect
+ *  too, so it is not mouse-only; CreateCta renders a Link or a button
+ *  depending on auth, so the handlers live on the wrapper. */
+const armRipples = (setHot: (hot: boolean) => void) => ({
+  onPointerEnter: () => setHot(true),
+  onPointerLeave: () => setHot(false),
+  onFocus: () => setHot(true),
+  onBlur: () => setHot(false),
+})
+
 const FEATURES = [
   {
     title: "Compose",
@@ -70,10 +80,12 @@ const FEATURES = [
  *  Swap covers via ACTIVE_LANDING in ./index.tsx. */
 export function LandingEditorial() {
   const { user } = useAuth()
-  // Hovering (or focusing) the hero CTA arms the polar ripples, which radiate
-  // from it.
-  const [ctaHot, setCtaHot] = useState(false)
-  const ctaRef = useRef<HTMLDivElement>(null)
+  // Hovering (or focusing) a CTA arms the polar ripples radiating from it.
+  // Both CTAs get their own field; they never share a clipping box.
+  const [heroHot, setHeroHot] = useState(false)
+  const heroCtaRef = useRef<HTMLDivElement>(null)
+  const [closingHot, setClosingHot] = useState(false)
+  const closingCtaRef = useRef<HTMLDivElement>(null)
 
   return (
     <EditorialSkin className="flex min-h-screen flex-col font-sans">
@@ -120,7 +132,7 @@ export function LandingEditorial() {
             slice them off while they were still bright. Both sections are
             `relative` so they paint above the canvas. */}
         <div className="relative overflow-hidden">
-          <PolarRipples active={ctaHot} originRef={ctaRef} />
+          <PolarRipples active={heroHot} originRef={heroCtaRef} />
 
           {/* Hero */}
           <section className="relative flex flex-col items-center px-6 pt-16 pb-16 text-center sm:pt-24 sm:pb-[100px]">
@@ -131,17 +143,10 @@ export function LandingEditorial() {
             <p className="m-0 mt-8 max-w-[480px] text-[20px] leading-[1.6] text-[var(--lp-text-muted)]">
               The best workstation for music-synced visuals.
             </p>
-            {/* The ripples' origin. Keyboard focus arms them too, so the effect
-                is not mouse-only; CreateCta renders a Link or a button depending
-                on auth, so both the ref and the handlers live on the wrapper. */}
-            <div
-              ref={ctaRef}
-              className="mt-11"
-              onPointerEnter={() => setCtaHot(true)}
-              onPointerLeave={() => setCtaHot(false)}
-              onFocus={() => setCtaHot(true)}
-              onBlur={() => setCtaHot(false)}
-            >
+            {/* The ripples' origin: they are born as this element's own
+                outline, so the ref has to sit on a wrapper that hugs the
+                button rather than on a full-width block. */}
+            <div ref={heroCtaRef} className="mt-11" {...armRipples(setHeroHot)}>
               <CreateCta />
             </div>
           </section>
@@ -183,8 +188,9 @@ export function LandingEditorial() {
           ))}
         </section>
 
-        {/* Showcase */}
-        <section className="mx-auto w-full max-w-[1100px] px-6 pb-20 sm:pb-[120px]">
+        {/* Showcase. The gap below it belongs to the closing CTA's padding
+            instead, so that CTA's clipping box reaches up into it. */}
+        <section className="mx-auto w-full max-w-[1100px] px-6">
           <p className={`${EYEBROW_CLASSES} text-center`}>Made with Cabin</p>
           <div className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2">
             {VISUAL_EXAMPLES.map((visual) => (
@@ -205,15 +211,31 @@ export function LandingEditorial() {
           </div>
         </section>
 
-        {/* Closing CTA */}
-        <section className="flex flex-col items-center px-6 pb-24 text-center sm:pb-[140px]">
-          <h2 className="m-0 text-[36px] font-normal leading-tight [font-family:var(--lp-font-display)] [text-wrap:balance] sm:text-[56px]">
-            Your music deserves visuals.
-          </h2>
-          <div className="mt-10">
-            <CreateCta>Start creating</CreateCta>
-          </div>
-        </section>
+        {/* Closing CTA — the same field as the hero, on its own clipping box.
+            Unlike the hero there is nowhere to put slack below the origin (the
+            footer is next), so the canvas is masked at both ends: the rings
+            would otherwise still be near full alpha when the box cut them, and
+            draw a hard line across the page. */}
+        <div className="relative overflow-hidden">
+          <PolarRipples
+            active={closingHot}
+            originRef={closingCtaRef}
+            // Fixed-width fades rather than percentages: the band has to stay
+            // clear of the button (the section is only ~166px tall below it,
+            // and a percentage stop put the fade 48px under the CTA, dimming
+            // the newborn rings that carry the echo). 72px is enough for a
+            // ring to dim on its way out.
+            className="[mask-image:linear-gradient(to_bottom,transparent_0px,#000_72px,#000_calc(100%_-_72px),transparent_100%)]"
+          />
+          <section className="relative flex flex-col items-center px-6 pt-20 pb-24 text-center sm:pt-[120px] sm:pb-[140px]">
+            <h2 className="m-0 text-[36px] font-normal leading-tight [font-family:var(--lp-font-display)] [text-wrap:balance] sm:text-[56px]">
+              Your music deserves visuals.
+            </h2>
+            <div ref={closingCtaRef} className="mt-10" {...armRipples(setClosingHot)}>
+              <CreateCta>Start creating</CreateCta>
+            </div>
+          </section>
+        </div>
       </main>
 
       {/* Footer */}

@@ -3,9 +3,14 @@
 import { useEffect, useRef, type RefObject } from "react"
 
 /**
- * Ambient eye candy behind the hero CTA: concentric rings radiating from the
- * BUTTON, each one a polar curve whose lobe count and point sharpness morph as
- * it travels — circle, rose, five-point star, thirteen-point flower.
+ * Ambient eye candy behind a CTA: concentric rings radiating from the BUTTON,
+ * each one a polar curve whose lobe count and point sharpness morph as it
+ * travels — pill, rose, five-point star, thirteen-point flower.
+ *
+ * **The base curve is a stadium, not a circle**, measured off the button
+ * itself: a ring is born as that exact outline and the field reads as the CTA
+ * echoing outward. See capsuleRadius and ELONGATION for how the pill relaxes
+ * as it grows, and SHAPE_RAMP for why the polar wobble has to fade IN.
  *
  * It runs all the time. At rest the field is slow, sparse, nearly transparent
  * and barely varies; hovering (or focusing) the CTA ramps every one of those
@@ -86,7 +91,50 @@ const MAX_RINGS = 32 // safety net; the parameters never ask for more than ~12
 const LOBES_MID = 7.5
 const LOBES_SWING = 5.5
 
+// How much of a growing ring's radius also goes into its STRAIGHT section. At 0
+// the stadium's flat sides stay the button's length and the shape is round
+// again within a couple of hundred pixels — the echo is over before it is read.
+// At 1 the ring is a self-similar copy of the button forever, which at full
+// reach is a 4:1 letterbox that leaves the top and bottom of the box empty.
+// Halfway keeps a visible waist at every size while the aspect relaxes toward
+// a soft oval.
+const ELONGATION = 0.5
+
+// Fraction of a ring's life spent growing into its polar wobble. A ring is born
+// as the button's outline exactly (mix 0) — applying the lobes at birth would
+// hatch a star on top of the button and lose the echo entirely — and is fully
+// morphed by the time it clears the surrounding text. Long enough that the
+// two or three rings closest in read as clean pills, not just the newborn one:
+// that near band is where the echo is actually legible.
+const SHAPE_RAMP = 0.3
+
+// Fallbacks for the origin's own geometry, used only if the CTA has not
+// mounted: a circle at roughly the button's corner radius.
+const FALLBACK_PILL_R = 26
+
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
+
+/**
+ * Distance from the centre of a stadium (a segment of half-length `halfLen` on
+ * the x axis, dilated by `r`) to its outline in direction `theta` — the pill
+ * written as a polar function so it can be modulated exactly like the circle it
+ * replaces.
+ *
+ * Two cases, split on whether the perpendicular foot lands on the straight
+ * section or past its end: the flat side is a horizontal line at distance `r`,
+ * and beyond it the ray meets one of the end-cap circles at (±halfLen, 0).
+ */
+function capsuleRadius(theta: number, halfLen: number, r: number): number {
+  if (halfLen <= 0) return r
+  const c = Math.abs(Math.cos(theta))
+  const s = Math.abs(Math.sin(theta))
+  // Flat side. (Also the only branch that can see s === 0, and it cannot: the
+  // test fails there, so the division is safe.)
+  if (r * c <= halfLen * s) return r / s
+  // End cap. The discriminant is positive whenever that test fails, so the
+  // clamp is belt-and-braces for the exactly-tangent case.
+  return halfLen * c + Math.sqrt(Math.max(0, r * r - halfLen * halfLen * s * s))
+}
 
 /**
  * Interpolate a duration by its RATE. Lifetimes and spawn intervals are stored
@@ -137,11 +185,16 @@ function polarRadius(theta: number, t: number, variation: number): number {
 export function PolarRipples({
   active,
   originRef,
+  className = "",
 }: {
   active: boolean
-  /** What the rings radiate from — the CTA. Falls back to the centre of the
-   *  clipping box if it is not mounted yet. */
+  /** What the rings radiate from, and whose outline they are born as — the
+   *  CTA. Falls back to a circle at the centre of the clipping box if it is
+   *  not mounted yet. */
   originRef?: RefObject<HTMLElement | null>
+  /** Extra canvas classes. A box with no room below the origin wants a
+   *  `mask-image` fade here, or the rings are cut off mid-flight. */
+  className?: string
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const activeRef = useRef(active)
@@ -159,6 +212,10 @@ export function PolarRipples({
     let height = 0
     let originX = 0
     let originY = 0
+    // The button's own stadium: corner radius, and half the length of the
+    // straight run between the two caps.
+    let pillR = FALLBACK_PILL_R
+    let pillL = 0
     // Measured on resize rather than per frame: one layout read per layout
     // change instead of sixty a second, and it keeps the origin still while the
     // button does its 2px hover lift.
@@ -173,6 +230,8 @@ export function PolarRipples({
       const origin = originRef?.current?.getBoundingClientRect()
       originX = origin ? origin.left + origin.width / 2 - rect.left : width / 2
       originY = origin ? origin.top + origin.height / 2 - rect.top : height / 2
+      pillR = origin ? origin.height / 2 : FALLBACK_PILL_R
+      pillL = origin ? Math.max(0, origin.width / 2 - pillR) : 0
     }
     resize()
     const sizeObserver = new ResizeObserver(resize)
@@ -244,30 +303,43 @@ export function PolarRipples({
       // Distance to the furthest corner FROM THE ORIGIN, not from the box
       // centre — an off-centre origin has a long side, and sizing to the box
       // would leave rings stopping short in mid-air on it. The 1.23 restores
-      // the old travel-to-corner ratio once polarRadius' own 0.5 scale and its
-      // ~1.3 peak are folded in.
+      // the old travel-to-corner ratio once polarRadius' ~1.3 peak is folded
+      // in; halving it is what the ring's radius used to be scaled by.
       const reach =
         Math.max(
           Math.hypot(cx, cy),
           Math.hypot(width - cx, cy),
           Math.hypot(cx, height - cy),
           Math.hypot(width - cx, height - cy),
-        ) * 1.23
+        ) * 0.615
 
       ctx.lineCap = "round"
       ctx.lineJoin = "round"
       for (const ring of rings) {
         const p = ring.progress
-        const radius = reach * Math.pow(p, 0.86)
+        // A ring starts life AT the button's own outline and dilates from
+        // there, so the innermost ring is always a copy of the CTA rather than
+        // a dot appearing in the middle of it.
+        const capR = lerp(pillR, reach, Math.pow(p, 0.86))
+        const capL = pillL + (capR - pillR) * ELONGATION
+        const shapeMix = Math.min(1, p / SHAPE_RAMP)
         // In fast, out slow — a ring should read as arriving, then dissolving.
-        const alpha = Math.min(1, p / 0.06) * Math.pow(1 - p, 1.5) * alphaScale
+        // The fade-in is only there to stop a ring popping into existence, and
+        // now that one is born ON the button's edge there is nothing to hide:
+        // at the old 0.06 the whole pill phase happened at single-digit alpha
+        // and the echo was invisible.
+        const alpha = Math.min(1, p / 0.02) * Math.pow(1 - p, 1.5) * alphaScale
         if (alpha <= 0.004) continue
 
         const shapeTime = morphClock - p * MORPH_SPAN
         ctx.beginPath()
         for (let s = 0; s <= SEGMENTS; s++) {
           const theta = (s / SEGMENTS) * Math.PI * 2
-          const r = radius * polarRadius(theta, shapeTime, variation) * 0.5
+          // The polar curve modulates the pill instead of replacing it: keep
+          // only its DEVIATION from unit radius, faded in over the ring's first
+          // moments.
+          const wobble = 1 + (polarRadius(theta, shapeTime, variation) - 1) * shapeMix
+          const r = capsuleRadius(theta, capL, capR) * wobble
           const x = cx + Math.cos(theta) * r
           const y = cy + Math.sin(theta) * r
           if (s === 0) ctx.moveTo(x, y)
@@ -307,5 +379,11 @@ export function PolarRipples({
     }
   }, [originRef])
 
-  return <canvas ref={canvasRef} aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full" />
+  return (
+    <canvas
+      ref={canvasRef}
+      aria-hidden="true"
+      className={`pointer-events-none absolute inset-0 h-full w-full ${className}`}
+    />
+  )
 }
