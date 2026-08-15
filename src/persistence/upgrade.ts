@@ -11,7 +11,7 @@ import type { AudioClip } from '../editor/store/AudioStore'
 const LEGACY_SCENE_BACKGROUND = '#000000'
 
 /** Bump when the document shape changes, and append the matching step below. */
-export const CURRENT_VERSION = 15
+export const CURRENT_VERSION = 16
 
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
@@ -597,6 +597,20 @@ UPGRADES[14] = (doc) => {
       tracks,
       rootTrackIds: scene.rootTrackIds.filter((id) => !dropped.has(id)),
     }
+  }
+  return { ...rest, scenes }
+}
+
+// ── v15 → v16 ────────────────────────────────────────────────────────────────
+// The Main scene is called "Composite" now - the name says what it does (it
+// composes the other scenes into the final frame) instead of leaning on the
+// user already knowing what "Main" means. isMain scenes were never
+// user-renamable, so renaming unconditionally loses nothing anyone typed.
+UPGRADES[15] = (doc) => {
+  const rest = doc as { scenes?: Record<string, Scene> } & Record<string, unknown>
+  const scenes: Record<string, Scene> = {}
+  for (const [sceneId, scene] of Object.entries(rest.scenes ?? {})) {
+    scenes[sceneId] = scene.isMain ? { ...scene, name: 'Composite' } : scene
   }
   return { ...rest, scenes }
 }

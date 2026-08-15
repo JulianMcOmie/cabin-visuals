@@ -127,7 +127,7 @@ const DIRECTOR_ICON_COLORS: Record<string, string> = {
 const DIRECTOR_INSTRUMENTS = withKind('director', listCompositionInstruments().map((d) => ({
   id: d.id,
   name: d.name,
-  description: DIRECTOR_DESCRIPTIONS[d.id] ?? `Renders scene sources into Main with the ${d.name} layout.`,
+  description: DIRECTOR_DESCRIPTIONS[d.id] ?? `Renders scene sources into the Composite with the ${d.name} layout.`,
   icon: <Sparkles size={12} className={DIRECTOR_ICON_COLORS[d.id] ?? 'text-indigo-400'} />,
 })))
 
@@ -752,7 +752,7 @@ function TemplatesTab() {
   if (activeIsMain) {
     return (
       <p className="px-3 pt-3 text-[11px] leading-relaxed text-[var(--text-muted)]">
-        Templates apply inside a visual scene - switch off Main to use one.
+        Templates apply inside a visual scene - switch off the Composite to use one.
       </p>
     )
   }

@@ -192,7 +192,7 @@ export function doc(opts: {
     beatsPerBar: opts.beatsPerBar ?? 4,
     totalBars: opts.totalBars ?? 16,
     scenes: {
-      [mainId]: { id: mainId, name: 'Main', isMain: true, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: {}, rootTrackIds: [] },
+      [mainId]: { id: mainId, name: 'Composite', isMain: true, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: {}, rootTrackIds: [] },
       [sceneId]: { id: sceneId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks, rootTrackIds },
     },
     sceneOrder: [mainId, sceneId],

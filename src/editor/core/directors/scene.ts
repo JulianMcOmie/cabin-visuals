@@ -48,7 +48,7 @@ export const sceneDirector: CompositionInstrumentDef = {
   // One row, and its label is the scene the picker already shows - listing it
   // under the settings would say nothing the panel doesn't.
   hideMidiRowsInSettings: true,
-  panelSummary: 'Scene renders one scene into Main, full-frame.',
+  panelSummary: 'Scene renders one scene into the Composite, full-frame.',
   sceneChoiceNote:
     'With no notes on the track this scene shows for the whole timeline. Draw notes on its row to make it show only while one is held.',
   midiRows(track, scenes, sceneOrder): MidiRowDef[] {

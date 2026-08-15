@@ -889,12 +889,31 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
   const [aspectOpen, setAspectOpen] = useState(false)
   const previewQuality = useUIStore((s) => s.previewQuality)
   const setPreviewQuality = useUIStore((s) => s.setPreviewQuality)
+  const canvasView = useUIStore((s) => s.canvasView)
+  const setCanvasView = useUIStore((s) => s.setCanvasView)
+  // The chip names the scene the canvas is showing. String-valued selector on
+  // purpose (never the scenes record - its identity changes on every edit).
+  const viewedSceneName = useProjectStore((s) => {
+    const id = canvasView === 'main'
+      ? s.sceneOrder.find((sid) => s.scenes[sid]?.isMain) ?? s.activeSceneId
+      : s.activeSceneId
+    return s.scenes[id]?.name ?? 'Scene'
+  })
 
   return (
-    <div className="relative hidden md:flex h-12 flex-shrink-0 items-center justify-center select-none px-4">
-      {/* Preview aspect + draft resolution, bottom-left under the canvas. */}
-      <div className="absolute left-4 flex items-center gap-1.5">
-        <div className="relative">
+    // THREE REAL COLUMNS, not a centered band with absolutely-positioned
+    // clusters beside it. The old layout let the left cluster grow silently
+    // under the centered transport (nothing could see the collision), and the
+    // View chip's scene name was enough to reach it. Equal `flex-1` side
+    // columns keep the transport EXACTLY centered - the thing you aim a mouse
+    // at never moves - while `min-w-0` makes the chips shrink/collapse inside
+    // their own column instead of overlapping anything.
+    // The strip is the @container the chips collapse against; see the ladder
+    // on Quality/View below.
+    <div className="@container relative hidden md:flex h-12 flex-shrink-0 items-center gap-3 select-none px-4">
+      {/* Preview aspect + draft resolution + canvas view, bottom-left. */}
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <div className="relative flex-shrink-0">
           <button
             onClick={() => setAspectOpen((v) => !v)}
             title="Preview aspect ratio - see the visual as an export at that shape would compose it"
@@ -933,9 +952,20 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
             setPreviewQuality(PREVIEW_QUALITIES[(index + 1) % PREVIEW_QUALITIES.length])
           }}
           title="Fast Preview - trades sharpness for smoother playback. Auto softens only while playing. Export always renders final quality."
-          className="group flex h-7 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2.5 font-mono text-[9px] uppercase tracking-wide transition-colors cursor-pointer"
+          className="group flex h-7 flex-shrink-0 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2.5 font-mono text-[9px] uppercase tracking-wide transition-colors cursor-pointer"
         >
-          <span className={previewQuality === 'final' ? 'text-[var(--text-muted)]' : 'text-[var(--accent-muted)]'}>
+          {/* The field name is the first thing to go when the strip narrows -
+              the VALUE is the payload, and the same collapse order the library
+              header uses. 800px is MEASURED, not guessed: the left cluster's
+              natural width with both labels is 331px, the side columns are
+              (content-box - 120 transport - 24 gaps) / 2, so labels only fit
+              from ~806px up. Set it lower and the scene NAME starts truncating
+              while the labels still show - values collapsing before labels,
+              which is backwards. Re-measure if a chip, the font, or the
+              transport's width changes. Literal variant strings on purpose:
+              Tailwind extracts classes by scanning source text, so a threshold
+              built from a constant would silently generate no CSS. */}
+          <span className={`hidden @[800px]:inline ${previewQuality === 'final' ? 'text-[var(--text-muted)]' : 'text-[var(--accent-muted)]'}`}>
             Quality
           </span>
           <span
@@ -948,6 +978,41 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
             {PREVIEW_QUALITY_LABELS[previewQuality]}
           </span>
         </button>
+        {/* Canvas view: the Composite scene's final frame (the deliverable,
+            the resting default) or the scene being edited. Same anatomy as
+            Quality - field name inside the chip, value lit while off the
+            default - and the value is the viewed scene's own NAME, so the chip
+            doubles as the "what am I looking at" readout (there is no eye on
+            the scene tabs any more). */}
+        {/* The tooltip is the only place the control still names itself once
+            the label collapses, so it opens with "Canvas view". Both halves
+            state what a mode SHOWS - never what it leaves out: "the Composite
+            doesn't show your scene edits" invites the reader to distrust the
+            picture, when the honest framing is that each mode shows a
+            different true thing. */}
+        <button
+          onClick={() => setCanvasView(canvasView === 'main' ? 'scene' : 'main')}
+          title={canvasView === 'main'
+            ? 'Canvas view - showing the Composite: your scenes composed into the final frame. Click to show the scene you are editing.'
+            : `Canvas view - showing ${viewedSceneName}, the scene you are editing. Click to show the Composite's final frame.`}
+          className="group flex h-7 min-w-0 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2.5 font-mono text-[9px] uppercase tracking-wide transition-colors cursor-pointer"
+        >
+          <span className={`hidden @[800px]:inline ${canvasView === 'main' ? 'text-[var(--text-muted)]' : 'text-[var(--accent-muted)]'}`}>
+            View
+          </span>
+          {/* The name is user-authored and unbounded, so it is the one chip
+              part that can be squeezed: it keeps a generous cap while there is
+              room and truncates rather than pushing the cluster wider. */}
+          <span
+            className={`max-w-16 truncate @[560px]:max-w-24 @[800px]:max-w-40 ${
+              canvasView === 'main'
+                ? 'text-[var(--text-3)] transition-colors group-hover:text-[var(--text)]'
+                : 'text-[var(--accent)]'
+            }`}
+          >
+            {viewedSceneName}
+          </span>
+        </button>
       </div>
       {/* Transport band - a continuous elevated strip matching the
           display's height and radius. Segment highlights run flush to the
@@ -957,7 +1022,7 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
           goes green while playing; loop goes the looped-region blue
           (LOOP_REGION_ENABLED_COLOR) while enabled. Custom glyphs - see
           TransportIcons. */}
-      <div className="flex h-9 items-center gap-2">
+      <div className="flex h-9 flex-shrink-0 items-center gap-2">
         <button
           onClick={isPlaying ? pause : reset}
           title={isPlaying ? 'Pause (Space)' : 'Return to start (Enter)'}
@@ -991,7 +1056,7 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
           Monitoring speed sits beside it: the two things that set how fast the
           playhead moves read as one corner (the tempo is the document, the
           speed is only the lens - see PlaybackRateControl). */}
-      <div className="absolute right-4 flex h-9 items-center gap-2.5">
+      <div className="flex h-9 min-w-0 flex-1 items-center justify-end gap-2.5">
         <PlaybackRateControl />
         <BpmControl />
       </div>
@@ -1292,20 +1357,18 @@ export default function EditorApp() {
   // store (nothing else should have to coordinate with it).
   const conflicted = useSaveStatus((s) => s.status === 'conflict')
   const modalOpen = useUIStore((s) => s.modalOpen) || conflicted
-  // null = no explicit viewing choice yet: the canvas shows Main (the final
-  // director composition). Only the scene tabs' right-click "View this scene"
-  // sets a concrete id; switching which scene you EDIT never touches it.
-  const [previewSceneId, setPreviewSceneId] = useState<string | null>(null)
-  // Project hydration and scene deletion can invalidate a local preview id.
-  // Falling back to Main keeps the canvas live without writing an ephemeral
-  // viewing choice into the project document. Subscribed as a primitive
-  // (never the scenes record, whose identity changes on every track edit):
-  // this is the editor ROOT, and a whole-record selector here re-renders the
-  // entire shell on every pointermove of a drag.
+  // The canvas view is a two-state toggle (the VIEW chip in TransportStrip):
+  // 'main' holds on the final director composition, 'scene' follows whichever
+  // scene is being edited. Derived to a scene id here, never stored as one -
+  // so scene deletion/hydration can't strand the canvas on a dead id.
+  // Subscribed as a primitive (never the scenes record, whose identity changes
+  // on every track edit): this is the editor ROOT, and a whole-record selector
+  // here re-renders the entire shell on every pointermove of a drag.
+  const canvasView = useUIStore((s) => s.canvasView)
   const resolvedPreviewSceneId = useProjectStore((s) =>
-    previewSceneId && s.scenes[previewSceneId]
-      ? previewSceneId
-      : s.sceneOrder.find((id) => s.scenes[id]?.isMain) ?? s.activeSceneId
+    canvasView === 'main'
+      ? s.sceneOrder.find((id) => s.scenes[id]?.isMain) ?? s.activeSceneId
+      : s.activeSceneId
   )
 
   return (
@@ -1457,7 +1520,7 @@ export default function EditorApp() {
         </div>
 
         {/* Tracks / Piano Roll - full width, running under the library (4a). */}
-        <SceneTabs previewSceneId={resolvedPreviewSceneId} onPreviewSceneChange={setPreviewSceneId} />
+        <SceneTabs />
         {/* timeline-glass-scope makes --bg-timeline (the lanes + ruler
             strip) slightly translucent. Label rows and blocks keep their
             opaque chrome. */}

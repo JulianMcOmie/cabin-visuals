@@ -52,8 +52,8 @@ export function CompositionSettingsPanel({ track }: { track: Track }) {
       <p className="mb-4 text-[11px] leading-relaxed text-[var(--text-2)]">
         {def?.panelSummary
           ?? (def?.targetsSingleScene
-            ? `${def?.name ?? 'This director'} renders one scene into Main. Its MIDI rows choose which pieces of that scene are visible.`
-            : `${def?.name ?? 'Unknown director'} renders scene sources into Main. Its MIDI rows choose the scene inputs.`)}
+            ? `${def?.name ?? 'This director'} renders one scene into the Composite. Its MIDI rows choose which pieces of that scene are visible.`
+            : `${def?.name ?? 'Unknown director'} renders scene sources into the Composite. Its MIDI rows choose the scene inputs.`)}
       </p>
       <ParamControl
         param={COMPOSITION_OPACITY_PARAM}

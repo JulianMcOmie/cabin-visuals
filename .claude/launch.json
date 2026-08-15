@@ -141,6 +141,12 @@
       "port": 3071
     },
     {
+      "name": "scene-view-3069",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3069", "npm", "run", "dev", "--", "--port", "3069"],
+      "port": 3069
+    },
+    {
       "name": "track-drag-3065",
       "runtimeExecutable": "env",
       "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3065", "npm", "run", "dev", "--", "--port", "3065"],

@@ -45,6 +45,9 @@ export function previewQualityScale(quality: PreviewQuality, isPlaying: boolean)
   return PREVIEW_QUALITY_SCALE[quality]
 }
 
+/** What the 3D canvas shows: the Composite's final frame, or the scene being edited. */
+export type CanvasView = 'main' | 'scene'
+
 interface UIState {
   selectedTrackId: string | null;
   setSelectedTrackId: (id: string | null) => void;
@@ -93,6 +96,13 @@ interface UIState {
   // renders (export, preview capture) always render at 'final' regardless.
   previewQuality: PreviewQuality
   setPreviewQuality: (quality: PreviewQuality) => void
+
+  // What the 3D canvas shows: 'main' holds on the Composite scene's final
+  // director composition (the deliverable - the resting default), 'scene' follows
+  // whichever scene is being edited so edits are always visible. Session
+  // state on purpose: an ephemeral viewing choice, never part of the document.
+  canvasView: CanvasView
+  setCanvasView: (view: CanvasView) => void
 
   // Width of the frozen track-label column (drag its right edge to resize).
   tracksLabelWidth: number
@@ -225,6 +235,8 @@ export const useUIStore = create<UIState>((set) => ({
 
   previewQuality: 'final',
   setPreviewQuality: (quality) => set({ previewQuality: quality }),
+  canvasView: 'main',
+  setCanvasView: (view) => set({ canvasView: view }),
 
   tracksLabelWidth: TRACK_LABEL_WIDTH,
   setTracksLabelWidth: (px) =>

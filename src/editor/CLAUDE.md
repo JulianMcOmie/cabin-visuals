@@ -6,7 +6,7 @@ Everything inside the `/editor` route. `App.tsx` is the shell (client-only, dyna
 
 `types.ts` is THE document schema — what gets persisted, undone, and resolved. The engine's derived types live in `core/visual/types.ts`; dependency points engine → document only.
 
-- **Scene**: a self-contained track forest (`tracks` record + `rootTrackIds`) with a backdrop: a flat color, a two-stop gradient (`backgroundGradient`, optional field), or transparency. `sceneBackdropMode()` in types.ts resolves which one the scene wears; `ProjectStore.setSceneBackdropMode` switches atomically (one undo step) and the gradient's setup survives leaving the mode. The **Main scene** (`isMain`) is special: it holds *composition-instrument* tracks — ordinary `base` tracks whose `instrumentId` names a def in `core/directors` — that compose the other scenes into the final frame instead of rendering objects.
+- **Scene**: a self-contained track forest (`tracks` record + `rootTrackIds`) with a backdrop: a flat color, a two-stop gradient (`backgroundGradient`, optional field), or transparency. `sceneBackdropMode()` in types.ts resolves which one the scene wears; `ProjectStore.setSceneBackdropMode` switches atomically (one undo step) and the gradient's setup survives leaving the mode. The **Composite scene** (`isMain` — named "Main" before schema v16, and still `isMain`/`'main'` in code: the rename was user-facing copy only) is special: it holds *composition-instrument* tracks — ordinary `base` tracks whose `instrumentId` names a def in `core/directors` — that compose the other scenes into the final frame instead of rendering objects.
 - **Track** is a tagged union via `type: TrackType`:
   - `base` — an object instrument (`instrumentId`, `params` numeric / `stringParams` string-valued, `effects`, canonical transform under reserved `tf*` param keys). `paramsByInstrument` is the wardrobe stash for in-place instrument swaps: every instrument the track has worn keeps its last params/stringParams there, so swapping A→B→A is lossless (`setTrackInstrument`; tf* keys ride the live params through swaps and never enter the stash).
   - `automation` — child lane keyframing a parent numeric param. **Value is encoded in note PITCH** (`core/trackTypes.ts`: pitch 36–84 maps linearly onto the param's [min,max]); `targetParam` picks what. Four MODES pick how (see `core/visual/CLAUDE.md`): `interpolation` curves between keyframes, `noise` gates seeded-random wander, `burst` fires an ADSR from the value underneath toward each note's own value, `cycle` stretches a user motion curve between each pair of note onsets (the earlier note's value scales it). Mode is implied by which config exists — set it through `setAutomationMode`, which keeps them exclusive in one undo step. `automationAmount` is a mode-independent output gain on the whole lane (see core/visual/CLAUDE.md; neutral 1 is stored as absence). For lanes targeting the spatial `tf*` params, the lane's POSITION among mover/splitter siblings is semantic: above a splitter it animates each copy in place (the splitter duplicates the animated object), below the whole chain it moves the finished formation as one — see the weave step in core/visual/CLAUDE.md. Lanes may be dragged between parents: a target the new parent can't take is defaulted by `remapAutomationTarget`, with the displaced original kept in `previousTargetParam` so dragging back restores it (a deliberate retarget forgets it).
@@ -95,6 +95,35 @@ Stores → `store/CLAUDE.md` · engines → `core/*/CLAUDE.md` · UI → `compon
   nothing focusable lives inside a text span), and in the embedded Browser pane r3f's
   `<Canvas>` wrapper reports ~19px because the pane's starved ResizeObserver leaves the
   canvas at its intrinsic 300×150; that one is the environment, not the app.
+- **Which scene the canvas shows (App.tsx `TransportStrip` + `UIStore.canvasView`)**: a
+  two-state toggle, not a free-floating pointer. `'main'` (the default) holds the canvas on
+  the **Composite** scene — the `isMain` scene, renamed from "Main" in schema v16 — and
+  `'scene'` follows whichever scene is being edited. App resolves it to a scene id per
+  render (`canvasView === 'main' ? the isMain scene : activeSceneId`) and never stores an
+  id, so a deleted scene or a fresh hydrate cannot strand the canvas on a dead one.
+  Session-only state: an ephemeral viewing choice never belongs in the document.
+  The chip's VALUE is the viewed scene's own NAME, which is why **the scene tabs carry no
+  eye any more** — the readout and the control are one thing. Predecessors, so they don't
+  get reinvented: v1 was a second row of scene names beside the canvas; v2 (commit
+  `9061ff3`) was an eye moved only by the scene tab's right-click "View this scene", which
+  was undiscoverable and made "edit scene B while watching Main" the silent default.
+- **The transport strip is three real flex columns** (`flex-1 min-w-0` chips · `flex-shrink-0`
+  transport · `flex-1 min-w-0` tempo), NOT a centered band with `absolute left-4`/`right-4`
+  clusters beside it. Equal side weights keep the transport exactly centered (verified 0px
+  off-centre at every width) while making overlap structurally impossible — the old absolute
+  clusters could not see the transport, so the left cluster silently grew *under* the play
+  button once the View chip carried a scene name. Chips collapse against the strip as an
+  `@container`: field names (`QUALITY`, `VIEW`) drop first at `@[800px]`, the scene name's
+  cap tightens below that (`max-w-40` → `max-w-24` → `max-w-16`), values last — the library
+  header's collapse order, for the same reason. **800px is measured, not guessed**: the left
+  cluster's natural width with both labels is 331px and each side column gets
+  `(content-box − 120 transport − 24 gaps) / 2`, so labels only fit from ~806px of
+  content-box up; a lower threshold truncates the NAME while the labels still show, which is
+  the collapse order backwards. A container query measures **content-box**, so it fires 32px
+  below the strip's layout width (`px-4` both sides). Re-measure if a chip, the UI font, or
+  the transport's width changes. Thresholds must be literal strings in the class attribute —
+  Tailwind extracts classes by scanning source text, so `@[${CONST}px]:inline` silently
+  generates no CSS.
 - `useVerticalSplit.ts` — the timeline/piano-roll divider.
 - `utils/` — pure helpers: `selection.ts` (track select), `edgeResize.ts` (shared block-edge drag), `snapStep.ts`, `oklch.ts` + `trackColors.ts` (hue-cycled track colors), `trackTags.ts`, `zoomAroundBeat.ts`, `multiStyleApply.ts` (lyric style switching), `midiEditorPalette.ts`.
 - `hooks/` — transport-facing hooks: `usePlayback` (wires PlaybackEngine callbacks), `usePlayhead` (RAF playhead px), `useScrub`, `useTransportKeys` (space/enter/F), `useUndoRedoKeys`, `useProjectPersistence` (load + autosave lifecycle), `useAnonymousAdoption` (anon → signed-in project handoff).

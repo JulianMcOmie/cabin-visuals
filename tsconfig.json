@@ -50,6 +50,7 @@
     ".next-build-3066/types/**/*.ts",
     ".next-build-3067/types/**/*.ts",
     ".next-build-3068/types/**/*.ts",
+    ".next-build-3071/types/**/*.ts",
     ".next-build-bypass/types/**/*.ts",
     ".next-build-check/types/**/*.ts",
     ".next-build-commit/types/**/*.ts",
@@ -77,11 +78,12 @@
     ".next-isolated-3066/types/**/*.ts",
     ".next-isolated-3067/types/**/*.ts",
     ".next-isolated-3068/types/**/*.ts",
+    ".next-isolated-3069/types/**/*.ts",
     ".next-isolated-3071/types/**/*.ts",
     ".next-isolated/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-build-3071/types/**/*.ts"
+    ".next-build-3069/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"
