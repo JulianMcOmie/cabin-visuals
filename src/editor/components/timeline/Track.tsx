@@ -6,7 +6,7 @@ import { useTimeStore } from '../../store/TimeStore'
 import { Block } from './Block'
 import { AudioBlock } from './AudioBlock'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
-import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
+import { BRACKET_CORNER_RADIUS_PX, INDENT_PX, LABEL_BASE_PX, rowIndentPx } from './trackDrop'
 import type { RowGuide } from './trackTree'
 import { resolveTrackDisplayColor } from '../../utils/trackDisplayColor'
 import { midiSelectionSpill } from '../../utils/colors'
@@ -30,8 +30,6 @@ const OPACITY_FADER_SPEC = { min: 0, max: 1, step: 0.01, snaps: [0, 0.5, 1], sna
 // toggle's resulting state (painted, not flipped - sweeps stay predictable).
 // Module-level on purpose: one stroke spans many Track instances.
 let msPaint: { kind: 'mute' | 'solo'; value: boolean } | null = null
-
-const BRACKET_CORNER_RADIUS_PX = 6
 
 // Tag badges under the name need a second text line; only rows the user has
 // deliberately made tall (default height is 44) get one.
@@ -216,6 +214,24 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
   // Its row-state surface follows that same corner instead of covering the curve.
   const isFirstChild = guides?.[guides.length - 1]?.curve === true
 
+  // This row's bracket region: it starts at its parent's bracket line and, once it
+  // has visible children, continues down the indent gap beside them.
+  const regionLeft = rowIndentPx(depth)
+  // Where this row's OWN children bracket - the x its bottom line bends down at.
+  const childBracketLeft = rowIndentPx(depth + 1)
+  // A nest-into highlight must wear that same bent outline: top/left/right on the
+  // row, and a bottom line only where the chrome would draw one. A row with visible
+  // children has none - its outline turns the corner at the child bracket and runs
+  // down beside the children (the two spans below), so a straight full-width bottom
+  // border would cut through the region the drop is actually offering.
+  const wrapsChildren = descendantRows > 0
+  const dropOutline = [
+    'inset 0 1px 0 0 var(--accent)',
+    'inset 1px 0 0 0 var(--accent)',
+    'inset -1px 0 0 0 var(--accent)',
+    ...(wrapsChildren ? [] : ['inset 0 -1px 0 0 var(--accent)']),
+  ].join(', ')
+
   return (
     <div
       style={{
@@ -271,7 +287,11 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
         }}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onLabelContextMenu?.(e, track.id) }}
         style={{ width: labelWidth, paddingLeft: LABEL_BASE_PX + depth * INDENT_PX }}
-        className="sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 pr-3 border-r border-r-[var(--timeline-row-line,var(--border))]"
+        className={`sticky left-0 flex-shrink-0 flex items-center gap-2 pr-3 border-r border-r-[var(--timeline-row-line,var(--border))] ${
+          // Rows all sit at z-20, so later ones (this row's children) paint over it.
+          // The nest-into outline has to reach past them to draw the bend.
+          dropInto ? 'z-[25]' : 'z-20'
+        }`}
       >
         {/* Row-state background, scoped to this row's own region: a child row's
             colour starts at its bracket line, never bleeding into a parent's
@@ -280,11 +300,11 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
             bracket region while a child's highlight stops at the divider. */}
         <div
           className={`pointer-events-none absolute inset-y-0 right-0 transition-colors duration-100 ${isFirstChild ? 'rounded-tl-md' : ''} ${
-            dropInto ? 'bg-[rgba(53,167,230,0.25)] ring-1 ring-inset ring-[var(--accent)]' : isSelected ? 'bg-[var(--bg-elevated)]' : 'bg-[var(--bg-track-row)]'
+            dropInto ? 'bg-[rgba(53,167,230,0.25)]' : isSelected ? 'bg-[var(--bg-elevated)]' : 'bg-[var(--bg-track-row)]'
           }`}
-          style={{ left: depth === 0 ? 0 : LABEL_BASE_PX + (depth - 1) * INDENT_PX }}
+          style={{ left: regionLeft, boxShadow: dropInto ? dropOutline : undefined }}
         >
-          {descendantRows > 0 && (
+          {wrapsChildren && (
             <span
               className="absolute left-0 top-full bg-inherit"
               style={{
@@ -292,12 +312,35 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
                 // parent's strip always underpaints that radius - selected or
                 // not - so the fill meets the curved divider without leaving
                 // a bare notch.
-                width: (depth === 0 ? LABEL_BASE_PX : INDENT_PX) + BRACKET_CORNER_RADIUS_PX,
+                width: childBracketLeft - regionLeft + BRACKET_CORNER_RADIUS_PX,
                 height: descendantRows * rowHeight,
               }}
             />
           )}
         </div>
+        {/* The nest-into outline's bent half, drawn over the children's own chrome
+            (hence the raised z on the label): the row's bottom line turns the corner
+            at the child bracket and runs down beside the children - the very corner
+            the first child's guide draws - and the region's left edge closes it off
+            under the last one. Without this the blue border cut straight across the
+            row while its fill continued past it, beside the children. */}
+        {dropInto && wrapsChildren && (
+          <>
+            <span
+              className="pointer-events-none absolute right-0 rounded-tl-md border-l border-t border-[var(--accent)]"
+              style={{ left: childBracketLeft, top: '100%', height: descendantRows * rowHeight }}
+            />
+            <span
+              className="pointer-events-none absolute border-b border-l border-[var(--accent)]"
+              style={{
+                left: regionLeft,
+                top: '100%',
+                width: childBracketLeft - regionLeft,
+                height: descendantRows * rowHeight,
+              }}
+            />
+          </>
+        )}
         {/* Logic-style hierarchy brackets: each ancestor's border drops down the
             label past its children; on the first child it curves in from the
             divider above. Extends 1px above the row to paint over the previous

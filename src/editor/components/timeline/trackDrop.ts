@@ -6,6 +6,21 @@ import { audioPinnedCount } from '../../store/ProjectStore'
 export const INDENT_PX = 16
 /** The label's base left padding (matches `pl-3` ≈ 12px), where depth 0 sits. */
 export const LABEL_BASE_PX = 12
+/** Radius of the bracket corner where a parent's outline bends around its first
+ *  child (Track's `rounded-tl-md`). Shared so the drop indicators bend the same. */
+export const BRACKET_CORNER_RADIUS_PX = 6
+
+/**
+ * Left edge (px, from the label column's left) of a row at `depth` - its bracket
+ * line, i.e. the x its PARENT's bracket occupies. THE convention for every
+ * horizontal line in the label column: a row's background strip starts here, the
+ * divider below a row starts at the *next* row's value, and the first child's
+ * curve bends down at it. Drop indicators use it too, so the insertion line and
+ * the nest highlight sit exactly where the real chrome will draw the row.
+ */
+export function rowIndentPx(depth: number): number {
+  return depth <= 0 ? 0 : LABEL_BASE_PX + (depth - 1) * INDENT_PX
+}
 
 /** Where a dragged/new track would land, plus the indicator to draw for it. Shared by
  *  the in-timeline nest-drag and the library drag so both behave identically. */
@@ -13,8 +28,11 @@ export interface DropTarget {
   parentId: string | null
   /** Index among the new siblings; undefined = append (used when nesting into). */
   index: number | undefined
-  /** Sibling-drop insertion line (content-space px); null when nesting into a row. */
-  line: { top: number; left: number } | null
+  /** Sibling-drop insertion line (content-space px); null when nesting into a row.
+   *  `left` is the landing depth's `rowIndentPx`, and `curve` marks a drop that
+   *  becomes the row above's FIRST CHILD - where the real divider is the bracket
+   *  corner bending down, not a straight line, so the indicator bends too. */
+  line: { top: number; left: number; curve: boolean } | null
   /** The row being nested into (highlighted); null for a sibling drop. */
   intoId: string | null
 }
@@ -126,7 +144,15 @@ function resolveBoundaryDrop(args: DropArgs, boundary: number): DropTarget | nul
         top = Math.max(top, pin * rowHeight)
       }
     }
-    return { parentId: at.parentId, index, line: { top, left: depth * INDENT_PX }, intoId: null }
+    // The line lands on a real row boundary, so it wears that boundary's own
+    // geometry: the next row's indent, bending down at the bracket when the drop
+    // would make the row above a parent (see rowIndentPx / Track's guide curve).
+    return {
+      parentId: at.parentId,
+      index,
+      line: { top, left: rowIndentPx(depth), curve: !!prev && depth === prev.depth + 1 },
+      intoId: null,
+    }
   }
   return null
 }

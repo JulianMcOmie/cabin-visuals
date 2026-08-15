@@ -17,7 +17,7 @@ import { useTrackGestures } from './useTrackGestures'
 import { useTrackCopyDrag } from './useTrackCopyDrag'
 import { useTrackNestDrag } from './useTrackNestDrag'
 import { flattenVisualRows, rowGuidesOf } from './trackTree'
-import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
+import { BRACKET_CORNER_RADIUS_PX, rowIndentPx } from './trackDrop'
 import { deselectTrack, selectNewTrack } from '../../utils/selection'
 import { startEdgeResize } from '../../utils/edgeResize'
 import {
@@ -520,7 +520,7 @@ export function TimelineArea() {
               const nextDepth = visualRows[i + 1]?.depth
               const dividerInset = isLast || nextDepth === undefined || nextDepth > row.depth
                 ? null
-                : nextDepth > 0 ? LABEL_BASE_PX + (nextDepth - 1) * INDENT_PX : 0
+                : rowIndentPx(nextDepth)
               // Visible rows in this track's subtree - its background strip beside
               // the children spans exactly these rows.
               let descendantRows = 0
@@ -604,14 +604,25 @@ export function TimelineArea() {
             )}
 
             {/* Shared drop insertion line (nest-drag + library drag). Content-space,
-                full width so it stays visible through horizontal scroll; indented to
-                the target depth. Nesting *into* a row shows that row's highlight. */}
+                full width so it stays visible through horizontal scroll; it starts at
+                the landing depth's bracket, exactly where the real row divider will,
+                and bends down at that bracket when the drop nests under the row above
+                (the divider there is the first child's curve, not a straight line).
+                Nesting *into* a row shows that row's highlight instead. */}
             {trackDrop?.line && (
               <div
                 className="absolute z-30 pointer-events-none"
                 style={{ top: trackDrop.line.top - 1, left: 0, right: 0, height: 2 }}
               >
-                <div className="h-full bg-[var(--accent)]" style={{ marginLeft: trackDrop.line.left }} />
+                <div
+                  className={`border-t-2 border-[var(--accent)] ${
+                    trackDrop.line.curve ? 'rounded-tl-md border-l-2' : ''
+                  }`}
+                  style={{
+                    marginLeft: trackDrop.line.left,
+                    height: trackDrop.line.curve ? 2 + BRACKET_CORNER_RADIUS_PX : 2,
+                  }}
+                />
               </div>
             )}
             {/* Empty space below the tracks. The label-column portion belongs to the

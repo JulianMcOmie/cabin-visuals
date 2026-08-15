@@ -95,8 +95,10 @@ interface UIState {
   // library instrument being dragged in (which is owned by a sibling component, so the
   // indicator is bridged here for the timeline to render). null = no drag in progress.
   // `activeId` is the row being moved (dimmed); only set for an existing-track drag.
-  trackDrop: { activeId?: string; line: { top: number; left: number } | null; intoId: string | null } | null
-  setTrackDrop: (v: { activeId?: string; line: { top: number; left: number } | null; intoId: string | null } | null) => void
+  // `line.curve` = the drop makes the row above a parent, so the indicator bends
+  // around the would-be child like the label column's bracket does (trackDrop.ts).
+  trackDrop: { activeId?: string; line: { top: number; left: number; curve?: boolean } | null; intoId: string | null } | null
+  setTrackDrop: (v: { activeId?: string; line: { top: number; left: number; curve?: boolean } | null; intoId: string | null } | null) => void
 
   // True while an effect is being dragged from the library - the Track Editor uses it
   // to switch to its Effects tab and highlight the drop zone.

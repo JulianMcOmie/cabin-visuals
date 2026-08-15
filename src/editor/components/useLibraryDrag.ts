@@ -108,7 +108,16 @@ export function useLibraryDrag() {
           })
         }
       }
-      if (drop && item.kind === 'director') drop = { ...drop, parentId: null, intoId: null }
+      // A composition instrument always lands at the root, so its indicator must
+      // say root: an indented (or bending) line would promise a nest it won't do.
+      if (drop && item.kind === 'director') {
+        drop = {
+          ...drop,
+          parentId: null,
+          intoId: null,
+          line: drop.line ? { ...drop.line, left: 0, curve: false } : drop.line,
+        }
+      }
       target = drop ? { parentId: drop.parentId, index: drop.index } : null
       useUIStore.getState().setTrackDrop(drop ? { line: drop.line, intoId: drop.intoId } : null)
     }
