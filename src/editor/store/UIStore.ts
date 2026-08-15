@@ -20,15 +20,29 @@ export const MIDI_ROW_HEIGHT_MAX = 56
  * export renders; the others buy playback smoothness by rendering fewer pixels.
  * The ORDER of this array is the cycle order of the toolbar control.
  */
-export const PREVIEW_QUALITIES = ['final', 'fast', 'fastest'] as const
+export const PREVIEW_QUALITIES = ['final', 'auto', 'fast', 'fastest'] as const
 export type PreviewQuality = (typeof PREVIEW_QUALITIES)[number]
 
 /** Linear resolution factor each level renders the canvas pipeline at. Fragment
- *  cost is the SQUARE of this, so 'fastest' is ~16× less pixel work. */
+ *  cost is the SQUARE of this, so 'fastest' is ~16× less pixel work.
+ *  'auto' is listed at its PLAYING scale; `previewQualityScale` below is what
+ *  callers should read, since auto's whole point is that it depends on the
+ *  transport. */
 export const PREVIEW_QUALITY_SCALE: Record<PreviewQuality, number> = {
   final: 1,
+  auto: 0.5,
   fast: 0.5,
   fastest: 0.25,
+}
+
+/** The scale to render at right now. AUTO softens the picture only while the
+ *  transport runs - motion hides the resolution drop, and the paused frame is
+ *  the one you actually scrutinise (and the one a preview capture grabs), so
+ *  it snaps back to full the moment playback stops. Every other level is a
+ *  fixed choice and ignores the transport. */
+export function previewQualityScale(quality: PreviewQuality, isPlaying: boolean): number {
+  if (quality === 'auto') return isPlaying ? PREVIEW_QUALITY_SCALE.auto : 1
+  return PREVIEW_QUALITY_SCALE[quality]
 }
 
 interface UIState {

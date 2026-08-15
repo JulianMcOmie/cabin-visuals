@@ -1,10 +1,20 @@
-import { useRef } from 'react'
+import { createContext, useContext, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Color, Matrix4 } from 'three'
 import { getObjectState, getVisualCopies } from './VisualEngine'
 import { applyColorShiftToColor } from './instrumentColor'
+import { getBeatOverride } from './beatOverride'
+import { composePostMoverScale, evaluatePostMoverScale } from './postMoverScale'
+import { useTimeStore } from '../../store/TimeStore'
 import type { ObjectState } from './types'
 import type { VisualCopy } from '../visualCopies/types'
+import type { EffectInstance } from '../../types'
+
+/** The track's Scale effect instances, provided by InstancedObjectRenderer so
+ *  composeCopyMatrix can lift them outside the copy transform exactly like the
+ *  per-copy path does (postMoverScale.ts). Scale is the ONE effect the
+ *  instanced path admits - anything else still falls back per copy. */
+export const InstancedScaleContext = createContext<readonly EffectInstance[]>([])
 
 /**
  * The instanced counterpart of useInstrumentFrame: ONE mount per track drives
@@ -29,9 +39,9 @@ import type { VisualCopy } from '../visualCopies/types'
 export interface InstancedCopyFrame {
   state: ObjectState
   copies: readonly VisualCopy[]
-  /** `world × copyTransform × meshScale` for copy i - the exact matrix the
-   *  per-copy path's placement group wears (postMoverScale absent by
-   *  construction: tracks with effects fall back to the per-copy path). */
+  /** `world × scaleEffect × copyTransform × meshScale` for copy i - the exact
+   *  matrix the per-copy path's placement group wears (Scale effects arrive
+   *  through InstancedScaleContext; every other effect falls back per copy). */
   composeCopyMatrix(i: number, out: Matrix4): Matrix4
   /** `state.opacity × copy.opacity`, 0 while blacked out. Instances at ≤0.001
    *  must be hidden, not faded - the ghost-wall depth artifact. */
@@ -49,10 +59,19 @@ export function useInstancedCopyFrame(
 ): void {
   const frameRef = useRef<InstancedCopyFrame | null>(null)
   const scratchTint = useRef(new Color()).current
+  const scaleInstances = useContext(InstancedScaleContext)
+  const effectScaleRef = useRef(1)
   useFrame(() => {
     const state = getObjectState(trackId)
     if (!state) return
     const copies = getVisualCopies(trackId)
+    // Same beat source as ObjectRenderer's scale evaluation: the REAL playhead
+    // (or export override), not the object's warped beat.
+    effectScaleRef.current = scaleInstances.length === 0 ? 1 : evaluatePostMoverScale(
+      scaleInstances,
+      state.effectOverrides,
+      getBeatOverride() ?? useTimeStore.getState().currentBeat,
+    )
     let frame = frameRef.current
     if (!frame) {
       frame = {
@@ -60,9 +79,7 @@ export function useInstancedCopyFrame(
         copies,
         composeCopyMatrix(i, out) {
           const f = frameRef.current as InstancedCopyFrame
-          out.copy(f.state.world)
-          const copy = f.copies[i]
-          if (copy) out.multiply(copy.transform)
+          composePostMoverScale(f.state.world, f.copies[i]?.transform, effectScaleRef.current, out)
           const s = f.state.meshScale
           if (s !== 1) out.multiply(_scale.makeScale(s, s, s))
           return out

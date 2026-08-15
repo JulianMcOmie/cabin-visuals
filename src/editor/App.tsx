@@ -15,6 +15,7 @@ import { PREVIEW_QUALITIES, useUIStore, type PreviewQuality } from './store/UISt
 import { VisualScene } from './components/visual/VisualScene'
 import { ExportDriver } from './components/visual/ExportDriver'
 import { RenderGovernor } from './components/visual/RenderGovernor'
+import { DevRenderStats } from './components/visual/DevRenderStats'
 import { VisualBeatSync } from './core/visual/VisualBeatSync'
 import { getCompositionLayers, getMountedRenderScenes, getObjectState, getVisualCopies, getVisualCopyCount, setEditorPreviewSceneId } from './core/visual/VisualEngine'
 import { track } from '../analytics/analytics'
@@ -162,6 +163,7 @@ function Scene({
       <ExportDriver />
       <RenderGovernor />
       {process.env.NODE_ENV === 'development' && <DevThreeHook />}
+      {process.env.NODE_ENV === 'development' && <DevRenderStats />}
       {/* Suspense: instruments may load assets through useLoader. */}
       <Suspense fallback={null}>
         <VisualScene />
@@ -850,6 +852,7 @@ const VIEW_ASPECTS: ViewAspect[] = ['fill', ...ASPECT_RATIO_IDS]
 // the resolution each one renders at - see UIStore.PREVIEW_QUALITY_SCALE).
 const PREVIEW_QUALITY_LABELS: Record<PreviewQuality, string> = {
   final: 'Final',
+  auto: 'Auto',
   fast: 'Fast',
   fastest: 'Fastest',
 }
@@ -929,7 +932,7 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
             const index = PREVIEW_QUALITIES.indexOf(previewQuality)
             setPreviewQuality(PREVIEW_QUALITIES[(index + 1) % PREVIEW_QUALITIES.length])
           }}
-          title="Fast Preview - trades sharpness for smoother playback. Export always renders final quality."
+          title="Fast Preview - trades sharpness for smoother playback. Auto softens only while playing. Export always renders final quality."
           className="group flex h-7 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2.5 font-mono text-[9px] uppercase tracking-wide transition-colors cursor-pointer"
         >
           <span className={previewQuality === 'final' ? 'text-[var(--text-muted)]' : 'text-[var(--accent-muted)]'}>

@@ -44,7 +44,7 @@ import { MAX_DIVISIONS as CROP_MAX_DIVISIONS } from '../../core/directors/crop'
 import { getBeatOverride } from '../../core/visual/beatOverride'
 import { isExportPinned, subscribeExportPinned } from '../../core/export/frameDriver'
 import { useTimeStore } from '../../store/TimeStore'
-import { PREVIEW_QUALITY_SCALE, useUIStore } from '../../store/UIStore'
+import { previewQualityScale, useUIStore } from '../../store/UIStore'
 
 RectAreaLightUniformsLib.init()
 
@@ -56,6 +56,10 @@ interface MountedScene {
   invertTarget: WebGLRenderTarget
   filterTargets: [WebGLRenderTarget, WebGLRenderTarget]
   outputTexture: Texture
+  /** True while invertTarget is known to hold transparent black - lets the
+   *  render loop skip the target switch + clear + render for the common case
+   *  of a scene with no final-invert objects (see the pass gating below). */
+  invertBlank: boolean
 }
 
 interface PartitionUniforms {
@@ -595,8 +599,11 @@ export function VisualScene() {
   // capture) must be full-size regardless of the preference, so the scale
   // stands down for the pin's duration.
   const previewQuality = useUIStore((s) => s.previewQuality)
+  // AUTO reads the transport: full res paused, half while playing (the resize
+  // effect below re-sizes the targets and invalidates on the change).
+  const isPlaying = useTimeStore((s) => s.isPlaying)
   const exportPinned = useSyncExternalStore(subscribeExportPinned, isExportPinned, () => false)
-  const targetScale = exportPinned ? 1 : PREVIEW_QUALITY_SCALE[previewQuality]
+  const targetScale = exportPinned ? 1 : previewQualityScale(previewQuality, isPlaying)
   const environment = useMemo(() => {
     const room = new RoomEnvironment()
     const pmrem = new PMREMGenerator(gl)
@@ -642,6 +649,9 @@ export function VisualScene() {
           new WebGLRenderTarget(width, height, options),
         ],
         outputTexture: target.texture,
+        // False until the first empty-pass clear: a fresh target's contents are
+        // undefined, so the skip below must clear once before it may skip.
+        invertBlank: false,
       })
     }
     return map
@@ -777,6 +787,8 @@ export function VisualScene() {
     for (const runtime of mounted.values()) {
       runtime.target.setSize(width, height)
       runtime.invertTarget.setSize(width, height)
+      // setSize discards contents: the empty-pass skip must re-clear once.
+      runtime.invertBlank = false
       runtime.filterTargets.forEach((target) => target.setSize(width, height))
     }
     compositor.compositeTarget.setSize(width, height)
@@ -904,6 +916,23 @@ export function VisualScene() {
     return finalInvert ? 'I' : onTop ? 'F' : 'B'
   }).join(''))
 
+  // Which scenes actually have objects in the front / final-invert passes.
+  // Most scenes have neither, and unconditionally rendering those passes cost
+  // a depth clear + full pass (front) and a target switch + clear + render
+  // (invert) per scene per frame - pure overhead the loop below skips.
+  const passPresence = useMemo(() => {
+    const m = new Map<string, { front: boolean; invert: boolean }>()
+    for (let i = 0; i < objects.length; i++) {
+      const k = placementKey[i]
+      if (k === 'B') continue
+      const e = m.get(objects[i].sceneId) ?? { front: false, invert: false }
+      if (k === 'F') e.front = true
+      else e.invert = true
+      m.set(objects[i].sceneId, e)
+    }
+    return m
+  }, [objects, placementKey])
+
   useFrame(() => {
     const previous = gl.getRenderTarget()
     const previousAutoClear = gl.autoClear
@@ -968,8 +997,11 @@ export function VisualScene() {
         const sceneGradient = activeBackdropGradient(projectScene)
         if (sceneGradient) paintBackdropGradient(sceneGradient)
         gl.render(runtime.base, camera)
-        gl.clearDepth()
-        gl.render(runtime.front, camera)
+        const presence = passPresence.get(sceneId)
+        if (presence?.front) {
+          gl.clearDepth()
+          gl.render(runtime.front, camera)
+        }
 
         // Scene-wide color filters are ordinary scene tracks whose held notes
         // choose post-process modes. Multiple tracks chain in resolved order.
@@ -1089,11 +1121,21 @@ export function VisualScene() {
         runtime.outputTexture = filteredTexture
 
         // Final-invert text is isolated as a transparent mask. It is applied only
-        // after every requested scene layer has been composited below.
-        gl.setRenderTarget(runtime.invertTarget)
-        gl.setClearColor(0x000000, 0)
-        gl.clear(true, true, true)
-        gl.render(runtime.invert, camera)
+        // after every requested scene layer has been composited below. With no
+        // invert objects the target just needs to BE transparent black: clear it
+        // once and skip the whole block until an invert object appears.
+        if (presence?.invert) {
+          gl.setRenderTarget(runtime.invertTarget)
+          gl.setClearColor(0x000000, 0)
+          gl.clear(true, true, true)
+          gl.render(runtime.invert, camera)
+          runtime.invertBlank = false
+        } else if (!runtime.invertBlank) {
+          gl.setRenderTarget(runtime.invertTarget)
+          gl.setClearColor(0x000000, 0)
+          gl.clear(true, true, true)
+          runtime.invertBlank = true
+        }
       }
 
       while (compositor.meshes.length < layers.length) {
@@ -1152,25 +1194,31 @@ export function VisualScene() {
       gl.clear(true, true, true)
       gl.render(compositor.filterScene, compositor.filterCam)
 
-      while (compositor.invertMeshes.length < layers.length) {
-        const material = makeCompositorMaterial(true)
-        const geometry = makeCompositorGeometry()
-        setPartitionGeometry(geometry)
-        const mesh = new Mesh(geometry, material)
-        mesh.frustumCulled = false
-        compositor.invertMeshes.push(mesh)
-        compositor.invertScene.add(mesh)
+      // The invert overlay is a fullscreen pass per layer over the finished
+      // frame; with no invert objects anywhere it composites blank textures,
+      // so skip it outright (the common case).
+      const anyInvert = layers.some((layer) => passPresence.get(layer.sceneId)?.invert)
+      if (anyInvert) {
+        while (compositor.invertMeshes.length < layers.length) {
+          const material = makeCompositorMaterial(true)
+          const geometry = makeCompositorGeometry()
+          setPartitionGeometry(geometry)
+          const mesh = new Mesh(geometry, material)
+          mesh.frustumCulled = false
+          compositor.invertMeshes.push(mesh)
+          compositor.invertScene.add(mesh)
+        }
+        compositor.invertMeshes.forEach((mesh, i) => {
+          const layer = layers[i]
+          mesh.visible = !!layer
+          if (!layer) return
+          const runtime = mounted.get(layer.sceneId)
+          mesh.visible = !!runtime
+          if (!runtime) return
+          applyCompositorLayer(mesh, layer, i, runtime.invertTarget.texture, layerAspect)
+        })
+        gl.render(compositor.invertScene, compositor.cam)
       }
-      compositor.invertMeshes.forEach((mesh, i) => {
-        const layer = layers[i]
-        mesh.visible = !!layer
-        if (!layer) return
-        const runtime = mounted.get(layer.sceneId)
-        mesh.visible = !!runtime
-        if (!runtime) return
-        applyCompositorLayer(mesh, layer, i, runtime.invertTarget.texture, layerAspect)
-      })
-      gl.render(compositor.invertScene, compositor.cam)
     } finally {
       gl.setRenderTarget(previous)
       gl.toneMapping = previousToneMapping

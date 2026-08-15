@@ -101,6 +101,16 @@ Shared helpers: `shapes.tsx` (circle/triangle), `specInstrument.tsx` (spec-drive
 
 ## A param that shapes GEOMETRY is built in the frame callback, not declared
 
+**One mounted mesh, not one per option.** Cube used to mount all twelve
+fundamental solids and toggle `visible` — twelve materials and eleven dead
+scene-graph nodes *per copy* once a splitter multiplies the track. It now mounts
+ONE `FundamentalMesh` with no declarative geometry and swaps
+`mesh.geometry = buildFundamentalGeometry(id, tube, sides)` whenever the id or
+its shaping param moves (cached against the last build; dispose the old one, and
+the survivor in a `useEffect` cleanup). `buildFundamentalGeometry` must stay in
+step with the JSX `Geometry` switch — same constructors, same args — or the two
+render paths tessellate differently.
+
 Cube's TUBE (torus family) and SIDES (prism/cone) change constructor args, and the
 component never re-renders on a param edit — `state.params` only reaches the frame
 callback. Declaring `<torusGeometry args={...}>` from a param therefore renders the

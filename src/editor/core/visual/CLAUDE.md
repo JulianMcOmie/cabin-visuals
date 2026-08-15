@@ -183,6 +183,14 @@ reference port. Facts that cost time to establish:
   defines (fires for ShaderMaterial too). Include the chunks, call
   `getInstancedMatrix()` / `getColorTexture()` — `createInstancedPosterMaterial`
   in instruments/posterShading.ts is the reference.
+- **Scale effects DO ride the instanced path** (the one effect that does): they
+  are a per-track scalar the placement math already lifts outside the copy
+  transform, so `InstancedObjectRenderer` filters the track's own instances and
+  hands them down `InstancedScaleContext` for `composeCopyMatrix` to compose via
+  `composePostMoverScale` — same order, same beat source (real playhead / export
+  override, not the object's warped beat) as ObjectRenderer. Any OTHER own
+  effect, or any effect on a group ancestor, still falls back per copy. Scale is
+  the most common effect, so falling back on it would have gutted the fast path.
 - **Per-copy colorShift on shared materials reaches DIFFUSE only** (instance
   color): gloss emissive and the unlit-gloss surface carry the track's own
   color, not the copy's. Documented fidelity trade; the poster path is fully

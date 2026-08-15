@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { BoxGeometry, Color, Euler, Group, Matrix4, Mesh, MeshPhysicalMaterial, Quaternion, Vector3, type BufferGeometry } from 'three'
+import { BoxGeometry, Color, Euler, Group, Matrix4, Mesh, MeshPhysicalMaterial, Quaternion, Vector3 } from 'three'
 import { InstancedMesh2 } from '@three.ez/instanced-mesh'
 import { cubeSpinRotation } from '../core/visual/cubeSpin'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
@@ -9,7 +9,6 @@ import {
   DEFAULT_FUNDAMENTAL_COLOR,
   DEFAULT_SIDES,
   DEFAULT_TUBE_FRACTION,
-  FUNDAMENTAL_GEOMETRIES,
   FUNDAMENTAL_MATERIAL_PROPS,
   FundamentalMesh,
   MAX_SIDES,
@@ -18,8 +17,6 @@ import {
   TUBED_GEOMETRIES,
   applyFundamentalSurface,
   buildFundamentalGeometry,
-  buildSidedGeometry,
-  buildTubedGeometry,
   normalizeFundamentalGeometry,
   normalizeSides,
   type FundamentalGeometryId,
@@ -156,51 +153,42 @@ function cubeBaseHex(state: ObjectState, scratch: Color): string {
 // appearance (color/emissive/surface toggles) plus its signature Shatter ability.
 export function Cube({ trackId }: { trackId: string }) {
   const spinRef = useRef<Group>(null)
-  const meshRefs = useRef<Partial<Record<FundamentalGeometryId, Mesh | null>>>({})
+  const meshRef = useRef<Mesh | null>(null)
   const fragRefs = useRef<(Mesh | null)[]>([])
-  // The torus family's geometry follows the TUBE param and the prism/cone
-  // family the SIDES param, so those are built here (imperatively, only when
-  // the value moves) rather than declared - the component never re-renders on
-  // a param edit. We own these builds; `value` is whichever param drives the id.
-  const paramBuilt = useRef<Partial<Record<FundamentalGeometryId, { value: number; geometry: BufferGeometry }>>>({})
+  // ONE mounted mesh whose geometry follows the GEOMETRY / TUBE / SIDES params
+  // imperatively (the component never re-renders on a param edit). It used to
+  // be twelve mounted meshes with eleven hidden - twelve materials and eleven
+  // dead scene-graph nodes per COPY once a splitter multiplies the track - and
+  // the instanced path already proved the single-live-geometry shape.
+  const built = useRef<{ id: FundamentalGeometryId | null; value: number }>({ id: null, value: 0 })
   const tint = useRef(new Color()).current
   // The Matte finish's poster surface (shared with the Overlap instruments) -
-  // one instance swapped onto whichever solid is visible; each mesh's own
-  // physical material is remembered so Gloss can take it back.
+  // swapped onto the mesh; its own physical material is remembered so Gloss
+  // can take it back.
   const posterMaterial = useMemo(() => createPosterMaterial(), [])
   const glossMaterials = useRef(new WeakMap<Mesh, Mesh['material']>()).current
 
   useEffect(() => () => {
-    for (const entry of Object.values(paramBuilt.current)) entry?.geometry.dispose()
+    // The imperative geometry is invisible to r3f's auto-dispose.
+    meshRef.current?.geometry.dispose()
     posterMaterial.dispose()
   }, [posterMaterial])
 
   useInstrumentFrame(trackId, (state) => {
     if (!spinRef.current) return false
     const geometry = normalizeFundamentalGeometry(state.stringParams.geometry)
-    const mesh = meshRefs.current[geometry]
+    const mesh = meshRef.current
     if (!mesh) return false
-    for (const option of FUNDAMENTAL_GEOMETRIES) {
-      const candidate = meshRefs.current[option.id]
-      if (candidate) candidate.visible = option.id === geometry
-    }
-    // Keep the selected param-shaped solid's geometry in step with its param:
-    // TUBE for the torus family, SIDES for the prism/cone family.
-    if (geometry === 'torus' || geometry === 'torusKnot' || geometry === 'prism' || geometry === 'cone') {
-      const isTubed = geometry === 'torus' || geometry === 'torusKnot'
-      const value = isTubed
-        ? state.params.tube ?? paramDefault(cubeInstrument, 'tube')
-        : normalizeSides(state.params.sides ?? paramDefault(cubeInstrument, 'sides'))
-      const built = paramBuilt.current[geometry]
-      if (!built || Math.abs(built.value - value) > 1e-4) {
-        const next = isTubed
-          ? buildTubedGeometry(geometry, value)
-          : buildSidedGeometry(geometry, value)
-        // First build replaces the mesh's default empty BufferGeometry.
-        mesh.geometry.dispose()
-        mesh.geometry = next
-        paramBuilt.current[geometry] = { value, geometry: next }
-      }
+    // Keep the solid's geometry in step with its params: the id picks the
+    // solid, TUBE drives the torus family, SIDES the prism/cone family.
+    const tube = state.params.tube ?? paramDefault(cubeInstrument, 'tube')
+    const sides = normalizeSides(state.params.sides ?? paramDefault(cubeInstrument, 'sides'))
+    const paramValue = TUBED_GEOMETRIES.has(geometry) ? tube : SIDED_GEOMETRIES.has(geometry) ? sides : 0
+    if (built.current.id !== geometry || Math.abs(built.current.value - paramValue) > 1e-4) {
+      // First build replaces the mesh's default empty BufferGeometry.
+      mesh.geometry.dispose()
+      mesh.geometry = buildFundamentalGeometry(geometry, tube, sides)
+      built.current = { id: geometry, value: paramValue }
     }
     const spinSpeed = state.params.spinSpeed ?? paramDefault(cubeInstrument, 'spinSpeed')
     spinRef.current.rotation.set(...cubeSpinRotation(state.beat, spinSpeed))
@@ -256,16 +244,9 @@ export function Cube({ trackId }: { trackId: string }) {
 
   return (
     <group ref={spinRef}>
-      {FUNDAMENTAL_GEOMETRIES.map(({ id }) => (
-        <FundamentalMesh
-          key={id}
-          // Tubed and sided solids omit the declarative geometry: the frame
-          // callback above owns theirs, rebuilt from the TUBE / SIDES params.
-          geometry={TUBED_GEOMETRIES.has(id) || SIDED_GEOMETRIES.has(id) ? undefined : id}
-          visible={id === 'cube'}
-          meshRef={(mesh) => { meshRefs.current[id] = mesh }}
-        />
-      ))}
+      {/* No declarative geometry: the frame callback owns it for EVERY solid
+          now, rebuilt from the GEOMETRY / TUBE / SIDES params. */}
+      <FundamentalMesh meshRef={meshRef} />
       {CORNERS.map((_, i) => (
         <mesh key={i} ref={(el) => { fragRefs.current[i] = el }} visible={false} castShadow receiveShadow>
           <boxGeometry args={[1.6, 1.6, 1.6]} />
