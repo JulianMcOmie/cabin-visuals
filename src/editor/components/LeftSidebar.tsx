@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Check, ChevronLeft, ChevronRight, Plus, Sparkles, Repeat } from 'lucide-react'
+import { ArrowLeftRight, Check, ChevronLeft, ChevronRight, Plus, Sparkles, Repeat } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
 import { useLoopBlockDrag } from './useLoopBlockDrag'
 import { LOOP_PATTERNS, type LoopPattern } from './loops'
@@ -932,6 +932,10 @@ export function LeftSidebar() {
   const [loopHover, setLoopHover] = useState<{ pattern: LoopPattern; left: number; top: number } | null>(null)
   // Over a valid drop slot → show a "+" on the ghost to signal "release to add".
   const droppable = useUIStore((s) => !!s.trackDrop && (s.trackDrop.line != null || s.trackDrop.intoId != null))
+  // The swap-in-place target's current name, for the ghost's "Replace X" text.
+  // Selected as a STRING so the per-pointermove trackDrop identity churn during
+  // a drag doesn't re-render the whole library while hovering one row.
+  const replaceOldName = useUIStore((s) => s.trackDrop?.replace?.oldName ?? null)
   // Double-click converts the selected track to the item (no-op if nothing selected).
   const setTrackInstrument = useProjectStore((s) => s.setTrackInstrument)
   const setTrackMover = useProjectStore((s) => s.setTrackMover)
@@ -1068,7 +1072,14 @@ export function LeftSidebar() {
           className="fixed z-[120] pointer-events-none flex items-center gap-1.5 px-3 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-xs font-medium text-[var(--text)] shadow-lg shadow-black/40"
           style={{ left: 0, top: 0, height: 28, transform: 'translate(-50%, -50%)' }}
         >
-          {droppable && <Plus size={13} className="text-[var(--accent)]" strokeWidth={2.5} />}
+          {replaceOldName ? (
+            <>
+              <ArrowLeftRight size={13} className="text-[var(--accent)]" strokeWidth={2.5} />
+              <span className="text-[var(--text-3)]">Replace {replaceOldName} —</span>
+            </>
+          ) : (
+            droppable && <Plus size={13} className="text-[var(--accent)]" strokeWidth={2.5} />
+          )}
           {ghostName}
         </div>
       )}

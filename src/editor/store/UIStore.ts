@@ -104,8 +104,21 @@ interface UIState {
   // `activeId` is the row being moved (its content ghosts); only set for an
   // existing-track drag. `line` is always a straight rule at the landing depth's
   // bracket - see trackDrop.ts for why it never bends around a would-be child.
-  trackDrop: { activeId?: string; line: { top: number; left: number } | null; intoId: string | null } | null
-  setTrackDrop: (v: { activeId?: string; line: { top: number; left: number } | null; intoId: string | null } | null) => void
+  // `replace` is the library drag's swap-in-place target (an instrument card over an
+  // instrument row's middle band): the row previews the incoming instrument in `color`
+  // and the drag ghost names the swap via `oldName`. Never set by the nest-drag.
+  trackDrop: {
+    activeId?: string
+    line: { top: number; left: number } | null
+    intoId: string | null
+    replace?: { trackId: string; oldName: string; name: string; color: string } | null
+  } | null
+  setTrackDrop: (v: {
+    activeId?: string
+    line: { top: number; left: number } | null
+    intoId: string | null
+    replace?: { trackId: string; oldName: string; name: string; color: string } | null
+  } | null) => void
 
   // True while an effect is being dragged from the library - the Track Editor uses it
   // to switch to its Effects tab and highlight the drop zone.

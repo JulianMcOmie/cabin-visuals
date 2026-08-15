@@ -70,6 +70,12 @@ interface TrackProps {
   dimmed?: boolean
   /** This row is the live nest-into target (highlight it). */
   dropInto?: boolean
+  /** This row is a library drag's swap-in-place target: preview the FUTURE row -
+   *  the incoming instrument's name and its post-swap display color on the name,
+   *  blocks, and a whole-row wash - so the drop shows exactly what it commits.
+   *  Only the one targeted row receives this; undefined stays referentially
+   *  stable for every other row (the memo contract). */
+  replacePreview?: { name: string; color: string }
   /** Begin an Alt copy-drag from this track's label. */
   onCopyDragStart?: (e: ReactPointerEvent, trackId: string) => void
   /** Begin a drag-to-nest from this track's label. */
@@ -84,7 +90,7 @@ interface TrackProps {
  *  store's per-track immutability, `guides` via TimelineArea's rowsKey memo,
  *  handlers via useCallback - and the row's own store subscriptions all
  *  select primitives. */
-export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, pickupPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, depth = 0, guides, dividerInset, descendantRows = 0, liftOffset, dimmed, dropInto, onCopyDragStart, onNestDragStart, onLabelContextMenu }: TrackProps) {
+export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, pickupPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, depth = 0, guides, dividerInset, descendantRows = 0, liftOffset, dimmed, dropInto, replacePreview, onCopyDragStart, onNestDragStart, onLabelContextMenu }: TrackProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   // Audio lanes only need this for the selection spill's geometry (an audio
   // block's width is derived from its trimmed seconds at the current tempo).
@@ -195,7 +201,9 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
   // The row's own identity: its definition's declared color for a mover /
   // splitter / colorizer, the instrument's for an object, else its hue cycle.
   // Derived purely from the `track` prop, so no store subscription is needed.
-  const blockColor = resolveTrackDisplayColor(track)
+  // A live replace-drop previews the post-swap identity instead, so the row
+  // (name, blocks, wash) shows the future the drop commits.
+  const blockColor = replacePreview?.color ?? resolveTrackDisplayColor(track)
   // Recomputed only when THIS track changes, and the pitch array keeps its
   // identity (it is a prop of every memoized Block and a dep of their activity
   // effects). Mover-lane rows technically also depend on sibling chains for
@@ -419,7 +427,7 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
               title="Double-click to rename"
               className="text-[11px] font-medium truncate text-[var(--text)]"
             >
-              {track.name}
+              {replacePreview?.name ?? track.name}
             </span>
           )}
           {hasChildren && (
@@ -669,6 +677,21 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
         )}
         </div>
       </div>
+      {/* Replace-drop preview: a whole-row wash + inset hairline in the incoming
+          instrument's post-swap color, over label and lane alike (the swap
+          changes the whole row, so the state reads row-wide - unlike the
+          nest-into highlight, which is the label's). Above the sticky label
+          (z-20) so the hairline runs unbroken across the seam. */}
+      {replacePreview && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-30"
+          style={{
+            background: `color-mix(in srgb, ${replacePreview.color} 13%, transparent)`,
+            boxShadow: `inset 0 0 0 1px ${replacePreview.color}`,
+          }}
+        />
+      )}
     </div>
   )
 })

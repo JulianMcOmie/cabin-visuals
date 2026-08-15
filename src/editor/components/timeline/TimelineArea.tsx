@@ -554,6 +554,7 @@ export function TimelineArea() {
                   liftOffset={dragActive ? (dragHasTarget && dragGapRow != null && i >= dragGapRow ? dragRowHeight : 0) : undefined}
                   dimmed={trackDrop?.activeId === row.id}
                   dropInto={trackDrop?.intoId === row.id}
+                  replacePreview={trackDrop?.replace?.trackId === row.id ? trackDrop.replace : undefined}
                   onCopyDragStart={startTrackCopyDrag}
                   onNestDragStart={startNestDrag}
                   onLabelContextMenu={handleLabelContextMenu}

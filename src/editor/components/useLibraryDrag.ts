@@ -6,6 +6,7 @@ import { getInstrument } from '../instruments'
 import { flattenVisualRows } from './timeline/trackTree'
 import { selectNewTrack } from '../utils/selection'
 import { computeDropTarget } from './timeline/trackDrop'
+import { resolveTrackDisplayColor } from '../utils/trackDisplayColor'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
 import { seedSceneBindings } from '../core/directors/sceneBindings'
@@ -65,7 +66,16 @@ export function useLibraryDrag() {
     const startX = e.clientX
     const startY = e.clientY
     let started = false
-    let target: { parentId: string | null; index: number | undefined } | null = null
+    let target:
+      | { mode: 'add'; parentId: string | null; index: number | undefined }
+      | { mode: 'replace'; trackId: string }
+      | null = null
+    // Instrument-kind cards (everything that converts via setTrackInstrument on
+    // double-click) REPLACE when dropped on an instrument row's middle band;
+    // mover/splitter/colorizer/switcher cards keep the nest behavior there
+    // (a switcher WRAPS on double-click, so a swap would misread its intent).
+    const isInstrumentCard =
+      item.kind !== 'mover' && item.kind !== 'splitter' && item.kind !== 'colorizer' && item.kind !== 'switcher'
 
     // The ghost is centered on the cursor (translate(-50%,-50%) in the markup), so
     // left/top track the cursor directly rather than trailing it.
@@ -116,9 +126,29 @@ export function useLibraryDrag() {
           })
         }
       }
+      // An instrument card over an instrument row's middle band swaps that track's
+      // instrument in place instead of nesting under it (nesting is still reachable
+      // via the boundary line at a deeper indent). The row previews the FUTURE: the
+      // color shown is what the track will wear after the swap - its wardrobe stash
+      // for this instrument if it has worn it before, else the instrument's identity.
+      let replace: { trackId: string; oldName: string; name: string; color: string } | null = null
+      if (drop && drop.intoId && isInstrumentCard) {
+        const t = useProjectStore.getState().tracks[drop.intoId]
+        if (t && t.type === 'base' && t.instrumentId !== item.id) {
+          const stashed = t.paramsByInstrument?.[item.id]
+          const color = resolveTrackDisplayColor({
+            ...t,
+            instrumentId: item.id,
+            params: stashed?.params ?? {},
+            stringParams: stashed?.stringParams ?? {},
+          })
+          replace = { trackId: t.id, oldName: t.name, name: item.name, color }
+          drop = { ...drop, intoId: null }
+        }
+      }
       // A composition instrument always lands at the root, so its indicator must
       // say root: an indented line would promise a nest it won't do.
-      if (drop && item.kind === 'director') {
+      if (drop && !replace && item.kind === 'director') {
         drop = {
           ...drop,
           parentId: null,
@@ -126,8 +156,12 @@ export function useLibraryDrag() {
           line: drop.line ? { ...drop.line, left: 0 } : drop.line,
         }
       }
-      target = drop ? { parentId: drop.parentId, index: drop.index } : null
-      useUIStore.getState().setTrackDrop(drop ? { line: drop.line, intoId: drop.intoId } : null)
+      target = replace
+        ? { mode: 'replace', trackId: replace.trackId }
+        : drop
+          ? { mode: 'add', parentId: drop.parentId, index: drop.index }
+          : null
+      useUIStore.getState().setTrackDrop(drop ? { line: drop.line, intoId: drop.intoId, replace } : null)
     }
 
     const onUp = () => {
@@ -137,7 +171,12 @@ export function useLibraryDrag() {
       useUIStore.getState().setTrackDrop(null)
       useUIStore.getState().setLibraryDragging(false)
       setGhostName(null)
-      if (target) {
+      if (target?.mode === 'replace') {
+        // Swap in place - the store's wardrobe semantics keep the outgoing
+        // instrument's settings for a later swap back.
+        useProjectStore.getState().setTrackInstrument(target.trackId, item.id, item.name)
+        selectNewTrack(target.trackId)
+      } else if (target) {
         const track = makeTrack(item, target.parentId)
         useProjectStore.getState().addTrack(track, target.index)
         selectNewTrack(track.id)

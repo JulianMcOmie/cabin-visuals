@@ -254,6 +254,11 @@ export interface Track {
   /** String-valued instrument params (color / string types), kept apart from the numeric
    *  `params` so the engine's numeric paths stay untouched. */
   stringParams?: Record<string, string>
+  /** Wardrobe stash for in-place instrument swaps (setTrackInstrument): each
+   *  instrument this track has worn keeps its last params/stringParams here, so
+   *  swapping back restores them exactly. The canonical `tf*` transform keys are
+   *  instrument-independent and ride the live `params` instead - never stashed. */
+  paramsByInstrument?: Record<string, { params?: Record<string, number>; stringParams?: Record<string, string> }>
   /** Set ONLY on the transcribed Lyrics track: sung-seconds word timing that
    *  its note beats are re-derived from on BPM changes. */
   lyricTiming?: LyricTimingWord[]

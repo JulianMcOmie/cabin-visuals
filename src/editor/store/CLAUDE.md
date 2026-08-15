@@ -18,6 +18,14 @@ Conventions baked into actions:
   (correctly keyed) row map. If that warning names TimelineArea, suspect malformed track ids,
   not the map.
 - `songEnd.ts` — derived song-end bar + loop trimming on shrink.
+- `setTrackInstrument` swaps a track's instrument IN PLACE with wardrobe semantics:
+  the outgoing instrument's params/stringParams are stashed under its id in
+  `track.paramsByInstrument` and restored exactly on a later swap back — never a
+  reset. The canonical `tf*` transform keys are instrument-independent, so they
+  ride the live `params` through every swap and are filtered OUT of the stash
+  (filter by `TRANSFORM_PARAM_DEFS` keys, not a `'tf'` prefix guess). Blocks,
+  effects, children, targets, color are untouched. Colocated
+  `setTrackInstrument.test.ts` pins the round trip.
 
 **Adding a data field**: it's automatically undoable (HistoryStore) and persisted (serialize) via generic field picking — but add it to `persistence/types.ts` `ProjectDocument`, and default it on hydrate for older saves (see `viewAspect` precedent). Fields excluded from snapshots: the flattened view (`tracks`, `rootTrackIds`, `activeSceneId` is normalized on restore).
 

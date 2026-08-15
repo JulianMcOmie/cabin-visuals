@@ -5,6 +5,7 @@ import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 // Capability checks only. core/directors is React-free; the store must NEVER
 // import instruments/index (components import stores - instant cycle).
 import { compositionDef, isCompositionTrack } from '../core/directors'
+import { TRANSFORM_PARAM_DEFS } from '../core/transform'
 import { seedSceneBindings } from '../core/directors/sceneBindings'
 import { seedSwitcherBindings } from '../core/switcherBindings'
 import { SWITCHER_MODE_PARAM } from '../core/visualCopies/switcher'
@@ -1504,20 +1505,34 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       }
     }),
 
-  // Swap a track's instrument (double-click in the library). Params are instrument-
-  // specific, so they reset to the new instrument's defaults rather than carrying
-  // stale keys across; the track is renamed to match (tracks are named after their
-  // instrument), unless a name isn't supplied.
+  // Swap a track's instrument in place (library double-click or drag-onto-row).
+  // Wardrobe semantics: the outgoing instrument's own params/stringParams are
+  // stashed under its id in paramsByInstrument and restored exactly if the track
+  // ever swaps back - so A→B→A is lossless, not a reset. The canonical tf*
+  // transform is instrument-independent and rides the live params through every
+  // swap instead of entering the stash. First time an instrument is worn it
+  // starts at its defaults. The track is renamed to match (tracks are named
+  // after their instrument), unless a name isn't supplied.
   setTrackInstrument: (trackId, instrumentId, name) =>
     set((s) => {
       const track = s.tracks[trackId]
       if (!track || track.instrumentId === instrumentId) return s
+      const tfKeys = new Set<string>(TRANSFORM_PARAM_DEFS.map((p) => p.key))
+      const live = Object.entries(track.params ?? {})
+      const tfParams = Object.fromEntries(live.filter(([k]) => tfKeys.has(k)))
+      const ownParams = Object.fromEntries(live.filter(([k]) => !tfKeys.has(k)))
+      const stash = { ...(track.paramsByInstrument ?? {}) }
+      if (track.instrumentId) {
+        stash[track.instrumentId] = { params: ownParams, stringParams: track.stringParams ?? {} }
+      }
+      const restored = stash[instrumentId]
       const base: Track = {
         ...track,
         type: 'base',
         instrumentId,
-        params: {},
-        stringParams: {},
+        params: { ...(restored?.params ?? {}), ...tfParams },
+        stringParams: { ...(restored?.stringParams ?? {}) },
+        paramsByInstrument: stash,
         moverId: undefined,
         splitterId: undefined,
         inputValues: undefined,
