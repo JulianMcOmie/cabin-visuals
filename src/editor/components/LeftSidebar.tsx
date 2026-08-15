@@ -478,8 +478,8 @@ interface LibraryFolder {
 
 // ——— Folder assignments ———
 // Items are defined once in the arrays above; the folders claim them here by
-// id. Anything no folder claims falls through to Unsorted, so a newly added
-// instrument is never invisible - it just waits there until it's given a home.
+// id. Every item must be claimed by a folder below - an unclaimed id renders
+// nowhere, so filing a new instrument into a folder is part of adding it.
 // (Modulators are retired from the library - movers replace them; their code
 // stays until existing projects are migrated off ports.)
 
@@ -504,24 +504,13 @@ const IMPULSE_IDS = ['impactWarp', 'cameraControl', 'meteorImpact', 'forceFieldP
 // Orbit sits here rather than beside Camera in Impulse for the same reason:
 // holding a row to swing the rig is the held shape, not a strike that decays.
 const RUMBLE_IDS = ['bassRipple', 'waveTerrain', 'strobe', 'cameraOrbit']
-const UTILITY_IDS = ['video', 'photo', 'textDisplay']
+const UTILITY_IDS = ['video', 'photo', 'textDisplay', 'oscilloscope']
 const COLOR_IDS = [...COLORIZER_INSTRUMENTS.map((i) => i.id), 'colorFilters']
 
 const IMPACT_IDS = [...IMPULSE_IDS, ...RUMBLE_IDS]
 // Everything else that moves lives under Motion - the compound movers at its
 // top level, the single-behavior ones in its Extras subfolder.
 const MOTION_ITEMS = MOVER_INSTRUMENTS.filter((m) => !IMPACT_IDS.includes(m.id))
-
-const CLAIMED_IDS = new Set([
-  ...IMPACT_IDS,
-  ...UTILITY_IDS,
-  ...COLOR_IDS,
-  ...OBJECT_INSTRUMENTS.map((i) => i.id),
-  ...INSTRUMENT_FOLDER_IDS,
-  ...MOTION_ITEMS.map((i) => i.id),
-  ...SPLITTER_INSTRUMENTS.map((i) => i.id),
-])
-const UNSORTED_ITEMS = SCENE_ITEM_POOL.filter((i) => !CLAIMED_IDS.has(i.id))
 
 // The scene library's root, in shelf order. Extras folders keep holding
 // exactly what they held before the folder pass - demoted, never deleted -
@@ -557,8 +546,7 @@ const SCENE_FOLDERS: LibraryFolder[] = [
   { id: 'objects', title: 'Objects', description: 'Object instruments are visual objects that render in the 3D scene - for example, cubes or spheres.', items: OBJECT_INSTRUMENTS },
   { id: 'instruments', title: 'Instruments', description: 'Played rather than posed: every note spawns its own short-lived event instead of changing a standing shape.', items: INSTRUMENT_FOLDER_ITEMS },
   { id: 'color', title: 'Color', description: 'Recoloring: the Colorizer flashes its objects toward a picked color; Color Filters remap the whole scene.', items: pick(COLOR_IDS) },
-  { id: 'utility', title: 'Utility', description: 'Full-frame media and text - video clips, photos, and word display.', items: pick(UTILITY_IDS) },
-  { id: 'unsorted', title: 'Unsorted', description: 'Not yet filed into a folder above - fully working, just awaiting a home.', items: UNSORTED_ITEMS },
+  { id: 'utility', title: 'Utility', description: 'Full-frame media and readouts - video clips, photos, word display, and the audio waveform.', items: pick(UTILITY_IDS) },
   { id: 'extras', title: 'Extras', description: 'The back catalog: older object instruments, all still fully working - just outside the curated folders above.', items: EXTRA_INSTRUMENTS },
 ]
 
