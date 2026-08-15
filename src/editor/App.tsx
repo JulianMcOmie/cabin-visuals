@@ -907,7 +907,7 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
   // say. In Current the chip reads the MODE, so the panel is the one place the
   // scene's actual name appears.
   const canvasViewNote = canvasView === 'main'
-    ? 'Rendering the Composite: your scenes composed into the final frame.'
+    ? 'Rendering the Composite: all scenes composed into the final frame.'
     : `Rendering ${viewedSceneName}, the scene you are editing.`
 
   return (
