@@ -6,6 +6,7 @@ import { EditorDialog } from './EditorDialog'
 import { SignupCard } from './SignupCard'
 import { useAuth } from '../../persistence/hooks/useAuth'
 import { track } from '../../analytics/analytics'
+import { DEV_GATES_OFF } from '../devGates'
 
 /**
  * The editor is for people with accounts. Anyone without one meets this card
@@ -20,17 +21,16 @@ import { track } from '../../analytics/analytics'
  * sign up, or log in.
  *
  * Consequences worth knowing before you change this:
- * - `/editor` is no longer usable signed out, so the no-login smoke-test path
- *   is gone. Sign in first, or the gate is all you will see.
  * - It supersedes the guest-cap prompt on /projects and the export gate inside
  *   ExportDialog, which can no longer be reached by anyone. Both are left in
  *   place deliberately: deleting this component restores them.
  */
+
 export function EditorSignupGate() {
   const { user, loading, isAnonymous } = useAuth()
   // An anonymous session is signed in for persistence only - it is not an
   // account, so it meets the gate like anyone else.
-  const open = !loading && !(user && !isAnonymous)
+  const open = !DEV_GATES_OFF && !loading && !(user && !isAnonymous)
 
   // Once per mount, not once per render: `open` settles a tick after auth
   // resolves and would otherwise log on every re-render of the shell.

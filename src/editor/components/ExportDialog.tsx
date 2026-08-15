@@ -10,6 +10,8 @@ import { SignupCard } from './SignupCard'
 import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
 import { useTimeStore } from '../store/TimeStore'
+import { DEV_GATES_OFF } from '../devGates'
+import { getPlaybackEngine } from '../core/playback'
 import { runExport } from '../core/export/exportEngine'
 import { downloadBlob } from '../core/export/mux'
 import { getFrameDriver } from '../core/export/frameDriver'
@@ -28,7 +30,7 @@ type Phase =
    *  disabled button. */
   | { kind: 'gate' }
   | { kind: 'running'; frame: number; total: number; startedAt: number }
-  | { kind: 'done'; fileName: string; blob: Blob }
+  | { kind: 'done'; fileName: string; blob: Blob; poster: string | null }
   | { kind: 'error'; message: string }
 
 /** The project's name as a safe default filename (no path/reserved characters). */
@@ -87,15 +89,18 @@ function loadSavedSettings(isPro: boolean): ExportSettings {
 // ── The monitor ──────────────────────────────────────────────────────────────
 
 /**
- * A 2d mirror of the live WebGL canvas, repainted on rAF while `live`. During
- * an export the same canvas renders the encode frames, so the mirror becomes a
- * true render monitor with no extra plumbing; when painting stops (complete),
- * the last frame simply stays put.
+ * A 2d mirror of the live WebGL canvas, repainted on rAF. During an export the
+ * same canvas renders the encode frames, so the mirror becomes a true render
+ * monitor with no extra plumbing.
+ *
+ * It cannot serve the COMPLETE screen: that is a different subtree, so React
+ * mounts a fresh (blank) canvas there, and by then the driver is unpinned and
+ * the frame gone. The receipt shows a still captured during the encode instead
+ * (`poster` off ExportResult).
  */
-function MonitorCanvas({ live, className = '' }: { live: boolean; className?: string }) {
+function MonitorCanvas({ className = '' }: { className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
-    if (!live) return
     const canvas = ref.current
     const ctx = canvas?.getContext('2d')
     if (!canvas || !ctx) return
@@ -116,7 +121,7 @@ function MonitorCanvas({ live, className = '' }: { live: boolean; className?: st
     }
     raf = requestAnimationFrame(paint)
     return () => cancelAnimationFrame(raf)
-  }, [live])
+  }, [])
   return <canvas ref={ref} width={1280} height={720} className={`block w-full ${className}`} style={{ aspectRatio: '16 / 9' }} />
 }
 
@@ -316,12 +321,22 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
 
   const start = async () => {
     // No account: the render is ready, but the file (and the project) need a
-    // home first. Show the invitation instead of a dead click.
-    if (!canExport) {
+    // home first. Show the invitation instead of a dead click. (A dev server
+    // walks straight past it - see devGates.)
+    if (!canExport && !DEV_GATES_OFF) {
       track('export_gate_shown')
       setPhase({ kind: 'gate' })
       return
     }
+    // Playback and the encode share ONE canvas: a running transport spends
+    // frames on the editor's view of a beat the export isn't at (and plays
+    // audio at a modal nobody is listening through), which only slows the
+    // render down. Stop it before the first frame.
+    if (useTimeStore.getState().isPlaying) {
+      getPlaybackEngine().pause()
+      useTimeStore.getState().setIsPlaying(false)
+    }
+
     const { bpm, beatsPerBar, totalBars, tracks, rootTrackIds } = useProjectStore.getState()
     const audioTracks = rootTrackIds.map((id) => tracks[id]).filter((t) => t?.type === 'audio')
     const tiered = isPro ? { ...settings, watermark: false } : clampToFreeTier(settings)
@@ -346,7 +361,7 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
     abortRef.current = ctrl
     setPhase({ kind: 'running', frame: 0, total: 1, startedAt: performance.now() })
     try {
-      const { blob } = await runExport(
+      const { blob, poster } = await runExport(
         effective,
         { bpm, beatsPerBar, totalBars, audioTracks, range },
         {
@@ -356,7 +371,7 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
         },
       )
       if (blob) {
-        setPhase({ kind: 'done', fileName: effective.fileName, blob })
+        setPhase({ kind: 'done', fileName: effective.fileName, blob, poster })
         // The receipt screen is the retry path when the browser blocks this.
         downloadBlob(blob, effective.fileName)
       } else {
@@ -411,7 +426,7 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
           <div className="flex gap-6">
             <div className="min-w-0 flex-1">
               <div className={`relative overflow-hidden rounded-[10px] border ${running ? 'border-[rgba(69,198,255,0.4)]' : 'border-[rgba(255,255,255,0.08)]'}`}>
-                <MonitorCanvas live />
+                <MonitorCanvas />
                 {/* 9:16 shows the live center-crop: bright column, dimmed sides.
                     The guides SWEEP in from the frame edges to the crop, on the
                     viewport's aspect-glide curve - same switch, same motion, so
@@ -601,9 +616,19 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
         {/* ── Complete: the receipt ── */}
         {phase.kind === 'done' && (
           <div className="flex flex-col gap-4">
-            <div className="overflow-hidden rounded-[10px] border border-[rgba(255,255,255,0.08)]">
-              <MonitorCanvas live={false} />
-            </div>
+            {/* A real frame of the file that just landed - captured mid-encode,
+                letterboxed in the monitor's own 16:9 box so a 9:16 export
+                stands in its column exactly as it did while rendering. */}
+            {phase.poster && (
+              <div className="overflow-hidden rounded-[10px] border border-[rgba(255,255,255,0.08)] bg-[#08090d]">
+                <img
+                  src={phase.poster}
+                  alt=""
+                  className="block w-full object-contain"
+                  style={{ aspectRatio: '16 / 9' }}
+                />
+              </div>
+            )}
             {rangeNote && <p className="text-[11px] leading-snug text-[var(--text-muted)]">{rangeNote}</p>}
             <div className="flex items-center justify-between gap-4">
               <span className="flex min-w-0 items-center gap-2.5">
@@ -691,7 +716,7 @@ function RunningView({
     <div className="flex flex-col gap-3">
       {/* The render monitor: the live canvas IS encoding these frames. */}
       <div className="overflow-hidden rounded-[10px] border border-[rgba(69,198,255,0.4)] shadow-[0_0_30px_rgba(69,198,255,0.15)]">
-        <MonitorCanvas live />
+        <MonitorCanvas />
       </div>
 
       {vertical ? (

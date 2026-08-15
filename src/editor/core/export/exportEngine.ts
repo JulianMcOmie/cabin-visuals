@@ -100,6 +100,32 @@ export interface ExportResult {
   /** null = aborted (no file). */
   blob: Blob | null
   frameCount: number
+  /** A still of a real encoded frame (data URL) for the completion screen;
+   *  null when the export was aborted before reaching it, or capture failed. */
+  poster: string | null
+}
+
+// The completion screen's still. Grabbed INSIDE the frame sink - the same task
+// as the render, where the GL surface still holds the frame (exactly the
+// property encodeFrame relies on), and from the same source that gets encoded,
+// so the receipt shows the output including its watermark. Downscaled onto a
+// 2d canvas first: the receipt shows it at ~700px, and a full-resolution PNG
+// data URL would be megabytes of string held in React state.
+const POSTER_MAX_EDGE = 960
+
+function captureStill(src: HTMLCanvasElement): string | null {
+  try {
+    const scale = Math.min(1, POSTER_MAX_EDGE / Math.max(src.width, src.height))
+    const still = document.createElement('canvas')
+    still.width = Math.max(1, Math.round(src.width * scale))
+    still.height = Math.max(1, Math.round(src.height * scale))
+    const ctx = still.getContext('2d')
+    if (!ctx) return null
+    ctx.drawImage(src, 0, 0, still.width, still.height)
+    return still.toDataURL('image/jpeg', 0.86)
+  } catch {
+    return null // a still is a nicety - never fail an export over it
+  }
 }
 
 /**
@@ -137,7 +163,7 @@ export async function runExport(
     settings.includeAudio && project.audioTracks?.length
       ? await renderAudioTrack(project.audioTracks, project.bpm, project.beatsPerBar, timebase.durationSec, timebase.startBeat)
       : null
-  if (hooks.signal?.aborted) return { blob: null, frameCount: timebase.frameCount }
+  if (hooks.signal?.aborted) return { blob: null, frameCount: timebase.frameCount, poster: null }
 
   const writer = new Mp4Writer({
     width: settings.width,
@@ -163,22 +189,30 @@ export async function runExport(
 
   const watermark = settings.watermark ? createWatermarkCompositor(settings.width, settings.height) : null
 
+  // The still comes from the MIDDLE of the range: a first or last frame lands
+  // on whatever silence brackets the music and is often an empty scene.
+  const posterFrame = Math.floor(timebase.frameCount / 2)
+  let poster: string | null = null
+
   driver.pin(settings.width, settings.height)
   try {
     const completed = await walkFrames(
       timebase,
       settings.fps,
-      (i, _beat, d) =>
-        video.encodeFrame(watermark ? watermark.compose(d.getCanvas()) : d.getCanvas(), i, settings.fps),
+      (i, _beat, d) => {
+        const source = watermark ? watermark.compose(d.getCanvas()) : d.getCanvas()
+        if (i === posterFrame) poster = captureStill(source)
+        return video.encodeFrame(source, i, settings.fps)
+      },
       hooks,
     )
     if (!completed) {
       video.dispose()
-      return { blob: null, frameCount: timebase.frameCount }
+      return { blob: null, frameCount: timebase.frameCount, poster: null }
     }
     await video.flush()
     if (audioBuffer) await encodeAudioIntoWriter(audioBuffer, writer)
-    return { blob: writer.finalize(), frameCount: timebase.frameCount }
+    return { blob: writer.finalize(), frameCount: timebase.frameCount, poster }
   } catch (err) {
     video.dispose()
     throw err
