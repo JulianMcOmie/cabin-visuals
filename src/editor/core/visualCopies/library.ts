@@ -5,7 +5,7 @@
 
 import { Matrix4, Vector3 } from 'three'
 import type { MidiRowDef } from '../../instruments/types'
-import { AUTOMATION_PITCH_MAX, AUTOMATION_PITCH_MIN, pitchToValue } from '../trackTypes'
+import { cycleValueAt, extractValueGates, valueLaneRows } from './valueLane'
 import type { MoverOrSplitterDefinition } from './definitions'
 import type { VisualCopy } from './types'
 import { moverDefinition } from './mover'
@@ -203,16 +203,7 @@ export function radialSweepFraction(index: number, count: number, sweepDegrees: 
 
 // Rows span the automation pitch range top-down (top row = full radius,
 // bottom = 0) so the roll reads like an automation lane's value rows.
-const RADIAL_VALUE_ROWS: MidiRowDef[] = Array.from(
-  { length: AUTOMATION_PITCH_MAX - AUTOMATION_PITCH_MIN + 1 },
-  (_, index) => {
-    const pitch = AUTOMATION_PITCH_MAX - index
-    return {
-      pitch,
-      label: `R ${pitchToValue(pitch, RADIAL_RADIUS_MIN, RADIAL_RADIUS_MAX).toFixed(1)}`,
-    }
-  },
-)
+const RADIAL_VALUE_ROWS: MidiRowDef[] = valueLaneRows('R', RADIAL_RADIUS_MIN, RADIAL_RADIUS_MAX)
 
 export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
   id: 'radial',
@@ -290,40 +281,12 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
           : null
       return { rotation, faceFix, radiusFactor: Math.pow(growth, slot), rise: rise * slot }
     })
-    // Cycle gates: sorted onsets with pitch-mapped radii; simultaneous onsets
-    // can't divide time, so chords collapse to one boundary keeping the
-    // largest radius (the sort puts it last in the beat group) - the same
-    // rules as extractCycleGates in core/visual/automation.ts.
-    const gates = notes
-      .filter((note) => note.pitch >= AUTOMATION_PITCH_MIN && note.pitch <= AUTOMATION_PITCH_MAX)
-      .map((note) => ({
-        beat: note.beat,
-        value: pitchToValue(note.pitch, RADIAL_RADIUS_MIN, RADIAL_RADIUS_MAX),
-      }))
-      .sort((a, b) => a.beat - b.beat || a.value - b.value)
-      .filter((gate, index, all) => index === all.length - 1 || all[index + 1].beat !== gate.beat)
-    const radiusAt = (beat: number): number => {
-      const n = gates.length
-      if (n < 2 || beat < gates[0].beat || beat >= gates[n - 1].beat) return settings.radius
-      // Largest i with gates[i].beat <= beat (guaranteed 0 <= i < n-1 by the guards).
-      let lo = 0
-      let hi = n - 1
-      while (lo < hi) {
-        const mid = (lo + hi + 1) >> 1
-        if (gates[mid].beat <= beat) lo = mid
-        else hi = mid - 1
-      }
-      const a = gates[lo]
-      const b = gates[lo + 1]
-      const u = (beat - a.beat) / (b.beat - a.beat)
-      // The cycle-automation default swell in closed form: with control points
-      // at (1/3, 4/3) and (2/3, 4/3) the bezier's x(t) = t exactly, and y
-      // reduces to 4u(1-u) - symmetric, 0 at both onsets, peak r mid-cycle.
-      return 4 * u * (1 - u) * a.value
-    }
+    // The shared value-lane grammar (valueLane.ts): pitch-mapped cycle gates,
+    // radius swelling 0 -> r -> 0 between onsets, resting at the knob outside.
+    const gates = extractValueGates(notes, RADIAL_RADIUS_MIN, RADIAL_RADIUS_MAX)
     return {
       apply(visualCopy, { beat }) {
-        const radius = radiusAt(beat)
+        const radius = cycleValueAt(gates, beat, settings.radius)
         // Size composes AFTER the translation - R · T(radius) · S(size) - so
         // it scales each copy about its own center and the ring radius stays
         // exactly the sampled radius, whatever the size. (The shared splitter
@@ -377,8 +340,8 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
 // camera's shrink out (that apparent-size treatment belongs to the dedicated
 // depth splitters - see duplicateTrail).
 //
-// The MIDI lane is the shared slot mute map (Grid's convention): one row per
-// copy, a held note hides that copy; animation beyond that belongs to
+// The MIDI lane is the shared slot mute map (Polyhedron's convention): one row
+// per copy, a held note hides that copy; animation beyond that belongs to
 // automation lanes on the knobs.
 
 export interface LineSettings {
@@ -475,6 +438,19 @@ export const lineSplitter: MoverOrSplitterDefinition<LineSettings> = {
 // composed AFTER every offset, so it grows each copy about its own center and
 // spacing/radius stay exactly what their knobs say - the two are independent
 // axes of the layout, which is the whole point of having both.
+//
+// The MIDI lane is a VALUE lane on SPACING (Radial's radius grammar,
+// valueLane.ts): a note's pitch names a spacing through the automation 36-84
+// encoding and the lattice swells 0 -> s -> 0 between onsets on the cycle
+// default's closed form, resting at the SPACING knob outside the span - so an
+// empty lane is exactly the knob, and notes breathe the whole lattice. The
+// rows are DETENTS, every 6th pitch, so the roll shows 9 rows over 0-4 in 0.5
+// steps (bottom row = exactly 0, a full collapse) instead of Radial's 49; any
+// pitch dragged between detents still decodes through the same encoding. Only
+// the LINEAR offsets scale - ring radii keep their own knobs - and spacing is
+// floored at 0, matching the knob's own floor. The per-cell mute map retired
+// in favor of this (2026-08); old mute notes (pitch 96 up) fall out of the
+// value span and no-op, so those saves degrade to the knob.
 
 export interface GridSettings {
   rows: number
@@ -500,6 +476,11 @@ export interface GridSettings {
 }
 
 const GRID_MAX_DIMENSION = 32
+const GRID_SPACING_MIN = 0
+const GRID_SPACING_MAX = 4
+// 9 detent rows over 0-4: every 6th pitch of the 36-84 span lands exactly on
+// a 0.5 step, endpoints included (84 = 4.0 down to 36 = 0.0).
+const GRID_VALUE_ROWS: MidiRowDef[] = valueLaneRows('S', GRID_SPACING_MIN, GRID_SPACING_MAX, 6)
 const GRID_PLANES: [0 | 1 | 2, 0 | 1 | 2][] = [
   [0, 1],
   [0, 2],
@@ -609,12 +590,7 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
       default: 0,
     },
   ],
-  midiRows: (settings) => {
-    const rows = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.rows)))
-    const columns = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.columns)))
-    const depth = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.depth ?? 1)))
-    return splitterMidiRows(rows * columns * depth, 'cell', 'cells')
-  },
+  midiRows: () => GRID_VALUE_ROWS,
   strictMidiRows: true,
   resolve({ settings, notes }) {
     const rows = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.rows)))
@@ -623,8 +599,9 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
     const [horizontalAxis, verticalAxis] = GRID_PLANES[settings.plane] ?? GRID_PLANES[0]
     const normalAxis = (3 - horizontalAxis - verticalAxis) as 0 | 1 | 2
     const size = splitterSize(settings.size)
-    // One record per dimension, in composition order. `offset` keeps the exact
-    // legacy centering (rows grow downward from the top, layer 0 is the front).
+    // One record per dimension, in composition order. `unitOffset` keeps the
+    // exact legacy centering (rows grow downward from the top, layer 0 is the
+    // front) at spacing 1; the sampled spacing scales it per frame.
     const dimensions = [
       {
         count: columns,
@@ -632,7 +609,7 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
         radius: Math.max(0, settings.columnsRadius ?? 0),
         offsetAxis: horizontalAxis,
         rotationAxis: normalAxis,
-        offset: (index: number) => (index - (columns - 1) / 2) * settings.spacing,
+        unitOffset: (index: number) => index - (columns - 1) / 2,
       },
       {
         count: rows,
@@ -640,7 +617,7 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
         radius: Math.max(0, settings.rowsRadius ?? 0),
         offsetAxis: verticalAxis,
         rotationAxis: horizontalAxis,
-        offset: (index: number) => ((rows - 1) / 2 - index) * settings.spacing,
+        unitOffset: (index: number) => (rows - 1) / 2 - index,
       },
       {
         count: depth,
@@ -648,9 +625,13 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
         radius: Math.max(0, settings.depthRadius ?? 0),
         offsetAxis: normalAxis,
         rotationAxis: verticalAxis,
-        offset: (index: number) => ((depth - 1) / 2 - index) * settings.spacing,
+        unitOffset: (index: number) => (depth - 1) / 2 - index,
       },
     ]
+    // Everything except the linear translation is beat-independent, so each
+    // cell precomputes a unit lattice vector (the spacing's coefficient) plus
+    // the circular steps and SIZE folded into one tail matrix: the per-frame
+    // cell is T(spacing * unit) * tail.
     const cells = gridCellOrder3(rows, columns, depth, settings.indexing).map(([row, column, layer]) => {
       const indices = [column, row, layer]
       // Grid is a layout, not a fit-to-frame operation: adding rows/columns
@@ -658,27 +639,39 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
       // (scaled only by the SIZE knob, which is applied last so it never feeds
       // back into the offsets). Linear offsets sum in world axes, outside the
       // circular steps.
-      const translation = new Vector3()
+      const unit = new Vector3()
       for (let d = 0; d < 3; d++) {
         const dim = dimensions[d]
-        if (!dim.circular) translation.addScaledVector(GRID_AXIS_VECTORS[dim.offsetAxis], dim.offset(indices[d]))
+        if (!dim.circular) unit.addScaledVector(GRID_AXIS_VECTORS[dim.offsetAxis], dim.unitOffset(indices[d]))
       }
-      const cell = new Matrix4().makeTranslation(translation.x, translation.y, translation.z)
+      const tail = new Matrix4()
       for (let d = 0; d < 3; d++) {
         const dim = dimensions[d]
         if (!dim.circular) continue
         const arm = GRID_AXIS_VECTORS[dim.offsetAxis].clone().multiplyScalar(dim.radius)
-        cell
+        tail
           .multiply(new Matrix4().makeRotationAxis(GRID_AXIS_VECTORS[dim.rotationAxis], (indices[d] / dim.count) * Math.PI * 2))
           .multiply(new Matrix4().makeTranslation(arm.x, arm.y, arm.z))
       }
-      return applySplitterSize(cell, size)
+      return { unit, tail: applySplitterSize(tail, size) }
     })
+    // The value lane: notes name spacings, the lattice breathes between
+    // onsets, the knob (floored at 0) holds outside the span. Only the linear
+    // offsets scale - ring radii are their own knobs.
+    const gates = extractValueGates(notes, GRID_SPACING_MIN, GRID_SPACING_MAX)
+    const restingSpacing = Math.max(0, settings.spacing ?? 1)
     return {
       apply(visualCopy, { beat }) {
-        return cells.map((cell, slot) => ({
-          transform: visualCopy.transform.clone().multiply(cell),
-          opacity: noteDisablesSplitterSlot(notes, beat, slot, cells.length) ? 0 : visualCopy.opacity,
+        const spacing = cycleValueAt(gates, beat, restingSpacing)
+        return cells.map((cell) => ({
+          transform: visualCopy.transform.clone()
+            .multiply(new Matrix4().makeTranslation(
+              cell.unit.x * spacing,
+              cell.unit.y * spacing,
+              cell.unit.z * spacing,
+            ))
+            .multiply(cell.tail),
+          opacity: visualCopy.opacity,
           colorShift: { ...visualCopy.colorShift },
         }))
       },

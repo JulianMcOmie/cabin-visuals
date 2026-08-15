@@ -22,8 +22,8 @@ const settings = (overrides: Partial<GridSettings> = {}): GridSettings => ({
   ...overrides,
 })
 
-function note(pitch: number, durationBeats = 1): ResolvedNote {
-  return { beat: 0, blockStartBeat: 0, blockEndBeat: 16, pitch, velocity: 1, durationBeats }
+function note(beat: number, pitch: number, durationBeats = 1): ResolvedNote {
+  return { beat, blockStartBeat: 0, blockEndBeat: 16, pitch, velocity: 1, durationBeats }
 }
 
 function resolveGrid(overrides: Partial<GridSettings> = {}, notes: ResolvedNote[] = [], beat = 0) {
@@ -117,32 +117,69 @@ test('grid preserves an incoming non-unit scale', () => {
   for (const copy of copies) assert.deepEqual(scale(copy), [2, 3, 4])
 })
 
-test('grid MIDI rows disable cells only while their notes are held', () => {
-  const rows = gridSplitter.midiRows!(settings({ rows: 2, columns: 2 }))
-  assert.deepEqual(rows.map((row) => row.label), [
-    'Disable cell 1',
-    'Disable cell 2',
-    'Disable cell 3',
-    'Disable cell 4',
-  ])
+test('the MIDI lane is a value lane: 9 spacing detent rows over 0-4, bottom = exactly 0', () => {
+  const rows = gridSplitter.midiRows!(settings())
+  assert.equal(rows.length, 9) // every 6th pitch of the 36..84 span
+  assert.deepEqual(rows[0], { pitch: 84, label: 'S 4.0' })
+  assert.deepEqual(rows[4], { pitch: 60, label: 'S 2.0' })
+  assert.deepEqual(rows[8], { pitch: 36, label: 'S 0.0' })
   assert.equal(gridSplitter.strictMidiRows, true)
-
-  const held = resolveGrid({ rows: 2, columns: 2 }, [note(rows[1].pitch)], 0.5)
-  const released = resolveGrid({ rows: 2, columns: 2 }, [note(rows[1].pitch)], 1)
-  assert.deepEqual(held.map((copy) => copy.opacity), [1, 0, 1, 1])
-  assert.deepEqual(released.map((copy) => copy.opacity), [1, 1, 1, 1])
 })
 
-test('large grids group every cell across the 128 available MIDI rows', () => {
-  const largeSettings = settings({ rows: 32, columns: 32 })
-  const rows = gridSplitter.midiRows!(largeSettings)
-  assert.equal(rows.length, 128)
-  assert.equal(rows[0].label, 'Disable cells 1–8')
-  assert.equal(rows[127].label, 'Disable cells 1017–1024')
+test('between onsets the spacing swells 0 -> s -> 0; outside the span it rests at the knob', () => {
+  // A 1x2 grid: the copies sit at +-spacing/2 on X, so their gap IS the spacing.
+  const resolved = gridSplitter.resolve({
+    settings: settings({ rows: 1, columns: 2, spacing: 1 }),
+    notes: [note(1, 84), note(3, 84)], // pitch 84 = spacing 4
+  })
+  const spacingAtBeat = (beat: number) => {
+    const copies = resolveVisualCopies([resolved], beat)
+    return Number((position(copies[1])[0] - position(copies[0])[0]).toFixed(10))
+  }
+  assert.equal(spacingAtBeat(0.5), 1, 'rests at the knob before the first onset')
+  assert.equal(spacingAtBeat(1), 0, 'collapsed on the onset')
+  assert.equal(spacingAtBeat(2), 4, 'peaks at the note value mid-cycle')
+  assert.equal(spacingAtBeat(1.5), 3, 'the symmetric swell: 4u(1-u) at u = 0.25')
+  assert.equal(spacingAtBeat(2.5), 3, '...and its mirror at u = 0.75')
+  assert.equal(spacingAtBeat(3), 1, 'rests again from the last onset on')
 
-  const copies = resolveGrid(largeSettings, [note(rows[127].pitch)], 0.5)
-  assert.equal(copies.filter((copy) => copy.opacity === 0).length, 8)
-  assert.deepEqual(copies.slice(-8).map((copy) => copy.opacity), Array(8).fill(0))
+  // A pitch between detents still decodes through the automation encoding:
+  // pitch 60 is the midpoint, spacing 2.
+  const half = gridSplitter.resolve({
+    settings: settings({ rows: 1, columns: 2, spacing: 0 }),
+    notes: [note(0, 60), note(2, 60)],
+  })
+  const copies = resolveVisualCopies([half], 1)
+  assert.equal(Number((position(copies[1])[0] - position(copies[0])[0]).toFixed(10)), 2)
+})
+
+test('the value lane scales only the linear lattice; ring radii and mute pitches are inert', () => {
+  // Circular columns keep their radius knob while the linear rows collapse to
+  // spacing 0 on the onset.
+  const ring = gridSplitter.resolve({
+    settings: settings({ rows: 2, columns: 4, columnsMode: 1, columnsRadius: 2, spacing: 1 }),
+    notes: [note(0, 84), note(2, 84)],
+  })
+  const collapsed = resolveVisualCopies([ring], 0)
+  for (const copy of collapsed) {
+    const [x, y] = position(copy)
+    assert.equal(Number(Math.hypot(x, y).toFixed(9)), 2, 'ring radius holds at the knob')
+  }
+  // The two linear rows coincide at spacing 0: each column's pair collapses.
+  for (let column = 0; column < 4; column++) {
+    assert.deepEqual(rounded([position(collapsed[column])]), rounded([position(collapsed[column + 4])]))
+  }
+
+  // The retired per-cell mute rows (pitch 96 up) fall outside the value span:
+  // old saves degrade to the knob spacing and nothing is hidden.
+  const legacy = resolveGrid({ rows: 2, columns: 2 }, [note(0, 127), note(2, 126)], 1)
+  assert.deepEqual(rounded(legacy.map(position)), [
+    [-0.5, 0.5, 0],
+    [0.5, 0.5, 0],
+    [-0.5, -0.5, 0],
+    [0.5, -0.5, 0],
+  ])
+  assert.deepEqual(legacy.map((copy) => copy.opacity), [1, 1, 1, 1])
 })
 
 test('grid indexing modes change downstream index order without changing cells', () => {
@@ -254,11 +291,3 @@ test('two circular dimensions nest into a torus that collapses to a sphere at ra
   }
 })
 
-test('MIDI rows cover rows x columns x depth cells', () => {
-  const rows = gridSplitter.midiRows!(settings({ rows: 2, columns: 2, depth: 2 }))
-  assert.equal(rows.length, 8)
-  assert.equal(rows[7].label, 'Disable cell 8')
-
-  const copies = resolveGrid({ rows: 2, columns: 2, depth: 2 }, [note(rows[4].pitch)], 0.5)
-  assert.deepEqual(copies.map((copy) => copy.opacity), [1, 1, 1, 1, 0, 1, 1, 1])
-})
