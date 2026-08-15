@@ -78,6 +78,11 @@ export interface MidiEditorProps {
 // The label gutter width lives in UIStore (midiLabelWidth) - drag its right edge to resize.
 const RULER_HEIGHT = 40
 const CANVAS_RIGHT_PADDING = 20
+// Scroll room under the last row, so the bottom note isn't pinned to the bottom
+// edge of the pane. A spacer BELOW the canvas rather than height on it: the grid
+// element is the coordinate space every gesture measures against, so padding it
+// would put pointer-reachable pixels past the last row.
+const CANVAS_BOTTOM_PADDING = 96
 
 export function MidiEditor({
   rows,
@@ -1050,6 +1055,10 @@ export function MidiEditor({
           </div>
         </div>
       </div>
+      {/* Transparent, and inert to the pointer so a press here still reaches the
+          scroll container's marquee handler like the empty space below a short
+          row list does. */}
+      <div style={{ height: CANVAS_BOTTOM_PADDING, pointerEvents: 'none' }} />
       </div>
     </div>
   )
