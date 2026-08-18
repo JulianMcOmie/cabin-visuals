@@ -26,6 +26,7 @@ import { useTimeStore } from '../store/TimeStore'
 import type { ObjectState, ResolvedNote, ResolvedObject } from '../core/visual/types'
 import type { LyricClip } from '../types'
 import { get2DPreview, Preview2D } from './InstrumentPreview2D'
+import { getCurrentPreview, subscribePreview } from './instrumentPreviewStore'
 import { useInstrumentClipUrl } from '../../components/instrumentClipUrl'
 import type { InstrumentItem } from './LeftSidebar'
 
@@ -233,19 +234,9 @@ export function PreviewBackdrop({ foreground }: { foreground: string }) {
   return null
 }
 
-// Instruments whose real render needs context a popup can't provide (uploads,
-// live audio, the scene camera, scenes to composite) get a bespoke canvas-2D
-// vignette instead (InstrumentPreview2D) - that covers the Main essentials and
-// every Director, so the whole library previews.
-export function canPreview(item: InstrumentItem): boolean {
-  if (get2DPreview(item.id)) return true
-  if (item.kind === 'object') return !!getInstrument(item.id)
-  if (item.kind === 'mover' || item.kind === 'splitter' || item.kind === 'colorizer') return !!getMoverOrSplitterDefinition(item.id)
-  // A rack has no object of its own: it previews as the thing it actually
-  // does, which is three solids taking the frame in turn (SwitcherPreview).
-  if (item.kind === 'switcher') return true
-  return false
-}
+// `canPreview` and the preview-target store live in instrumentPreviewStore.ts
+// (so setters don't drag this module in); re-exported here for older importers.
+export { canPreview, clearInstrumentPreviewFor, setInstrumentPreview } from './instrumentPreviewStore'
 
 // ── Object preview: the real instrument component on synthetic state ────────
 
@@ -1199,42 +1190,9 @@ function ProjectTrackPreview({ data, sync }: { data: ProjectPreviewData; sync?: 
 // paint moving content on its next frame. While no row is hovered the layer is
 // hidden and the frameloop is 'never', so the idle cost is one dormant context.
 
-type PreviewTarget = {
-  item: InstrumentItem
-  anchor: { left: number; top: number }
-  /** Track-row previews: the row's real notes + follow-the-transport sync. */
-  notes?: ResolvedNote[]
-  sync?: boolean
-  /** Mover/splitter rows: the track's stored settings. */
-  inputValues?: Record<string, number>
-  /** Timeline rows: preview the real project track (settings, notes, chain) -
-   *  falls back to the generic preview when it can't resolve to an object. */
-  projectTrackId?: string
-}
-
-let currentPreview: PreviewTarget | null = null
-const previewListeners = new Set<() => void>()
-
-/** Dismiss the popup only if it is showing this project track — a deleted
- *  row unmounts without ever getting a mouseleave, so its unmount calls this
- *  (unconditional clearing would kill a neighbor row's preview instead). */
-export function clearInstrumentPreviewFor(projectTrackId: string): void {
-  if (currentPreview?.projectTrackId === projectTrackId) setInstrumentPreview(null)
-}
-
-export function setInstrumentPreview(target: PreviewTarget | null): void {
-  currentPreview = target && canPreview(target.item) ? target : null
-  previewListeners.forEach((l) => l())
-}
-
-function subscribePreview(l: () => void): () => void {
-  previewListeners.add(l)
-  return () => previewListeners.delete(l)
-}
-
 /** Mounted once in the sidebar. */
 export function InstrumentPreviewLayer() {
-  const preview = useSyncExternalStore(subscribePreview, () => currentPreview, () => null)
+  const preview = useSyncExternalStore(subscribePreview, getCurrentPreview, () => null)
   const top = preview
     ? Math.max(8, Math.min(preview.anchor.top - 12, window.innerHeight - 148))
     : -9999

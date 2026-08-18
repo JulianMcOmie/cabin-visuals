@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react'
 import { useSearchParams } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { useInstantNavigation } from '../../components/instantNavigation'
 import { ArrowLeftRight, Check, ChevronLeft, ChevronRight, Plus, Sparkles, Repeat } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
@@ -11,7 +12,11 @@ import { useUIStore, type LibraryTabId } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
 import { listCompositionInstruments } from '../core/directors'
-import { canPreview, InstrumentCardPreview, InstrumentPreviewLayer } from './InstrumentHoverPreview'
+import { canPreview } from './instrumentPreviewStore'
+// The two preview components pull their own r3f Canvas + Bloom stack; they
+// load after first paint so the shell doesn't wait on them.
+const InstrumentCardPreview = dynamic(() => import('./InstrumentHoverPreview').then((m) => m.InstrumentCardPreview), { ssr: false })
+const InstrumentPreviewLayer = dynamic(() => import('./InstrumentHoverPreview').then((m) => m.InstrumentPreviewLayer), { ssr: false })
 import { TEMPLATES, LISTED_TEMPLATES, LYRIC_STYLES, isLyricTemplateId } from '../../templates'
 import { TemplatePreviewVideo } from '../../components/TemplatePreviewVideo'
 import { TemplateSlideshowPreview } from '../../components/TemplateSlideshowPreview'

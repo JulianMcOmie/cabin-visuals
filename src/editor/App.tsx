@@ -31,11 +31,16 @@ import { PlaybackRateControl } from './components/PlaybackRateControl'
 // Loaded on first open: the dialog drags the whole export engine (encoder,
 // muxer, audio render) behind it, none of which the editor needs until then.
 const ExportDialog = dynamic(() => import('./components/ExportDialog').then((m) => m.ExportDialog), { ssr: false })
-import { SaveToCloudDialog } from './components/SaveToCloudDialog'
+// Same treatment for the other interaction-gated surfaces: the save/signup
+// dialog, the piano roll (opens on block double-click, drags the whole roll
+// editor + vim layer), and the conflict dialog (only ever mounted while
+// autosave reports a conflict, gated at its render site).
+const SaveToCloudDialog = dynamic(() => import('./components/SaveToCloudDialog').then((m) => m.SaveToCloudDialog), { ssr: false })
+const PianoRollPanel = dynamic(() => import('./components/midi/PianoRollPanel').then((m) => m.PianoRollPanel), { ssr: false })
+const ConflictDialog = dynamic(() => import('./components/ConflictDialog').then((m) => m.ConflictDialog), { ssr: false })
 import { EditorSignupGate } from './components/EditorSignupGate'
 import { MediaFileDropLayer } from './components/MediaFileDropLayer'
 import { isExportSupported } from './core/export/support'
-import { PianoRollPanel } from './components/midi/PianoRollPanel'
 import { PreviewCaptureButton } from './components/PreviewCaptureButton'
 import { TimelineArea } from './components/timeline/TimelineArea'
 import { SceneTabs } from './components/SceneTabs'
@@ -47,7 +52,6 @@ import { useSceneTrackKeys } from './hooks/useSceneTrackKeys'
 import { useProjectPersistence } from './hooks/useProjectPersistence'
 import { useAnonymousAdoption } from './hooks/useAnonymousAdoption'
 import { useSaveStatus } from '../persistence/autosave'
-import { ConflictDialog } from './components/ConflictDialog'
 import * as projectStorage from '../persistence/projectStorage'
 import { usePlan } from '../billing/usePlan'
 import { useAuth } from '../persistence/hooks/useAuth'
@@ -1443,7 +1447,7 @@ export default function EditorApp() {
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text)]">
       {/* OS-file drops (audio/MIDI/video/photo) land anywhere in the editor. */}
       <MediaFileDropLayer />
-      <ConflictDialog />
+      {conflicted && <ConflictDialog />}
       {/* No account, no editor. Mounted at the root so every way in meets it. */}
       <EditorSignupGate />
       <Header
