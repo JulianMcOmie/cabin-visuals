@@ -465,14 +465,10 @@ export function TrackEditor() {
   const toggleSceneEffect = useProjectStore((s) => s.toggleSceneEffect)
   const reorderSceneEffect = useProjectStore((s) => s.reorderSceneEffect)
   const addSceneEffect = useProjectStore((s) => s.addSceneEffect)
-  const effectDragging = useUIStore((s) => s.effectDragging)
   // Effects picker menu anchor (viewport coords); null = closed.
   const [fxMenu, setFxMenu] = useState<{ x: number; y: number } | null>(null)
   const identity = panelIdentity(track, activeScene)
 
-  // Dragging an effect from the library flips this panel to its Effects tab so the
-  // drop zone is visible - the scene's chain when no track is selected.
-  useEffect(() => { if (effectDragging && (track || activeScene)) setTab('effects') }, [effectDragging, track, activeScene])
   useEffect(() => { if (!selectedTrackId) setTab('instrument') }, [activeSceneId, selectedTrackId])
   // Targets is a CONDITIONAL tab, so selecting a track that has none while it is
   // open would leave the panel showing a body with no tab lit.
@@ -952,15 +948,9 @@ export function TrackEditor() {
           const fxAccent = (track ? instrumentAccent(track) : null) ?? 'var(--accent)'
           return (
             <div
-              data-effects-drop
               onContextMenu={fx.canAdd ? (e) => { e.preventDefault(); setFxMenu({ x: e.clientX, y: e.clientY }) } : undefined}
-              className={`min-h-full rounded transition-colors ${effectDragging ? 'ring-2 ring-inset ring-[rgba(53,167,230,0.6)] bg-[rgba(53,167,230,0.05)]' : ''}`}
+              className="min-h-full rounded transition-colors"
             >
-              {fx.effects.length === 0 && effectDragging && (
-                <p className="text-xs text-[var(--text-muted)] text-center mt-8 mb-4">
-                  Drop to add effect
-                </p>
-              )}
               {fx.effects.map((inst, i) => {
                 const plugin = getEffect(inst.pluginId)
                 if (!plugin) return null

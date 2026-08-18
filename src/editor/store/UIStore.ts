@@ -144,11 +144,6 @@ interface UIState {
     replace?: { trackId: string; oldName: string; name: string; color: string } | null
   } | null) => void
 
-  // True while an effect is being dragged from the library - the Track Editor uses it
-  // to switch to its Effects tab and highlight the drop zone.
-  effectDragging: boolean
-  setEffectDragging: (v: boolean) => void
-
   // True while an instrument is being dragged from the library - the timeline uses it
   // to light up the track-label column as the drop zone.
   libraryDragging: boolean
@@ -257,9 +252,6 @@ export const useUIStore = create<UIState>((set) => ({
 
   trackDrop: null,
   setTrackDrop: (v) => set({ trackDrop: v }),
-
-  effectDragging: false,
-  setEffectDragging: (v) => set({ effectDragging: v }),
 
   libraryDragging: false,
   setLibraryDragging: (v) => set({ libraryDragging: v }),
