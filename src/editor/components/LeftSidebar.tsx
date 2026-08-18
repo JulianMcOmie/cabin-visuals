@@ -13,6 +13,7 @@ import { useProjectStore } from '../store/ProjectStore'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
 import { listCompositionInstruments } from '../core/directors'
 import { canPreview } from './instrumentPreviewStore'
+import { preloadInstrument } from '../instruments'
 // The two preview components pull their own r3f Canvas + Bloom stack; they
 // load after first paint so the shell doesn't wait on them.
 const InstrumentCardPreview = dynamic(() => import('./InstrumentHoverPreview').then((m) => m.InstrumentCardPreview), { ssr: false })
@@ -614,6 +615,9 @@ function ItemGrid({ items, onItemPointerDown, onItemDoubleClick }: { items: Inst
           data-instrument-id={item.id}
           onPointerDown={(e) => onItemPointerDown(e, item)}
           onDoubleClick={() => onItemDoubleClick(item)}
+          // Hovering a card is intent: fetch its (lazy) visual so a drop mounts
+          // it without a chunk round-trip. No-op for non-instrument items.
+          onPointerEnter={() => { void preloadInstrument(item.id) }}
           title={item.description}
           className="group min-w-0 cursor-default select-none overflow-hidden rounded-md"
         >

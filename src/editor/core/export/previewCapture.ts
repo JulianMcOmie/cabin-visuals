@@ -1,6 +1,7 @@
 import { useProjectStore } from '../../store/ProjectStore'
 import { useTimeStore } from '../../store/TimeStore'
 import { getFrameDriver } from './frameDriver'
+import { whenInstrumentsSettled } from '../../instruments/lazyInstrument'
 import { runExport } from './exportEngine'
 import { resolveExportRange, type ExportSettings } from './types'
 
@@ -32,7 +33,12 @@ async function waitUntilRenderable(timeoutMs = 20_000): Promise<boolean> {
     const driverReady = getFrameDriver() != null
     const scenes = useProjectStore.getState().scenes
     const hasVisualTracks = Object.values(scenes).some((s) => !s.isMain && Object.keys(s.tracks).length > 0)
-    if (driverReady && hasVisualTracks) return true
+    if (driverReady && hasVisualTracks) {
+      // Tracks are hydrated; now let their instrument chunks land and mount
+      // (runExport gates on this too - here it just keeps the wait honest).
+      await whenInstrumentsSettled()
+      return true
+    }
     await new Promise((r) => setTimeout(r, 100))
   }
   return false

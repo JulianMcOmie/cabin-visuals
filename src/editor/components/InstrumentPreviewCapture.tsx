@@ -16,6 +16,7 @@ import {
 } from './InstrumentHoverPreview'
 import { get2DPreview, Preview2D } from './InstrumentPreview2D'
 import { ALL_LIBRARY_ITEMS, type InstrumentItem } from './LeftSidebar'
+import { preloadInstrument } from '../instruments'
 import { Mp4Writer } from '../core/export/mux'
 import { videoCodec } from '../core/export/types'
 
@@ -103,6 +104,9 @@ export function InstrumentPreviewCapture() {
     window.__captureInstrumentPreview = async (id: string) => {
       const target = CAPTURABLE.find((i) => i.id === id)
       if (!target) return null
+      // The visual is a lazy chunk: have it in memory before the fresh canvas
+      // mounts it, so the warm-up loop below is warming the real component.
+      await preloadInstrument(id)
       glRef.current = null
       setItem(target)
       try {

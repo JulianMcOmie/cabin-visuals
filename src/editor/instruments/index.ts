@@ -46,6 +46,7 @@ import { cropMaskInstrument } from './Crop'
 import { midiRollInstrument } from './MidiRoll'
 import { wireframeInstrument } from './Wireframe'
 import type { ObjectInstrumentDef } from './types'
+import { preloadComponent } from './lazyInstrument'
 
 export type { ObjectInstrumentDef, ParamDef } from './types'
 
@@ -96,4 +97,29 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {
   return INSTRUMENTS[id]
+}
+
+// Components are lazy chunks (see lazyInstrument.ts): the def is metadata, the
+// visual arrives when fetched. Preloading from the project's track list means
+// the chunks are in memory before the scene mounts them, so first paint does
+// not suspend per instrument.
+const preloaded = new Set<string>()
+
+/** Start fetching one instrument's visual (idempotent, cheap once started). */
+export function preloadInstrument(id: string): Promise<void> {
+  const def = INSTRUMENTS[id]
+  if (!def) return Promise.resolve()
+  preloaded.add(id)
+  return Promise.all([preloadComponent(def.component), preloadComponent(def.instancedComponent)]).then(() => undefined)
+}
+
+/** Preload every instrument the project's tracks name. Called on every store
+ *  change, so it does the minimum: a Set test per track, a fetch per new id. */
+export function preloadProjectInstruments(scenes: Record<string, { tracks: Record<string, { instrumentId?: string }> }>): void {
+  for (const scene of Object.values(scenes)) {
+    for (const track of Object.values(scene.tracks)) {
+      const id = track.instrumentId
+      if (id && !preloaded.has(id) && INSTRUMENTS[id]) void preloadInstrument(id)
+    }
+  }
 }

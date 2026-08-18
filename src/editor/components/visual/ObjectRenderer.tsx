@@ -1,7 +1,8 @@
-import { useMemo, useRef } from 'react'
+import { Suspense, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Group, Matrix4 } from 'three'
 import { getInstrument } from '../../instruments'
+import { InstrumentPending } from '../../instruments/lazyInstrument'
 import { isFullFrameTrack } from '../../instruments/types'
 import { getObjectState, getVisualCopy } from '../../core/visual/VisualEngine'
 import { composeScreenAnchor } from '../../core/visual/screenAnchor'
@@ -173,9 +174,14 @@ export function ObjectRenderer({
 
   if (!def) return null
   const Component = def.component
+  // Per-object Suspense: the component is a lazy chunk (instruments/lazyInstrument.ts).
+  // One instrument's fetch must never blank the others, and the wrappers around
+  // this only traverse per frame, so a late-arriving mesh is picked up as it lands.
   const bare = (
     <InstrumentCopyContext.Provider value={instrumentCopyContext}>
-      <Component trackId={trackId} />
+      <Suspense fallback={<InstrumentPending />}>
+        <Component trackId={trackId} />
+      </Suspense>
     </InstrumentCopyContext.Provider>
   )
   const instrument = materialInstances.length > 0

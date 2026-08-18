@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { useTimeStore } from '../../store/TimeStore'
 import { useProjectStore } from '../../store/ProjectStore'
+import { preloadProjectInstruments } from '../../instruments'
 import { setProject, syncParams, computeAtBeat, getMountedRenderScenes } from './VisualEngine'
 import { getBeatOverride } from './beatOverride'
 import { PauseCanary } from './pauseCanary'
@@ -36,10 +37,14 @@ export function VisualBeatSync() {
   })
 
   useEffect(() => {
+    preloadProjectInstruments(useProjectStore.getState().scenes)
     setProject(useProjectStore.getState())
     let timer: ReturnType<typeof setTimeout> | null = null
     const unsub = useProjectStore.subscribe((s) => {
       syncParams(s)
+      // Instrument chunks: start fetching the moment a track names one, ahead
+      // of the debounced resolve that mounts it (a Set test per track).
+      preloadProjectInstruments(s.scenes)
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => setProject(s), 80)
     })

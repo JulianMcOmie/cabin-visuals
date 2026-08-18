@@ -13,6 +13,7 @@ import { encoderProducesMuxableChunks } from './support'
 import { renderAudioTrack, encodeAudioIntoWriter, willRenderAudio, EXPORT_AUDIO_SAMPLE_RATE } from './audioRender'
 import { createWatermarkCompositor } from './watermark'
 import { framePreparers } from './framePreparers'
+import { whenInstrumentsSettled } from '../../instruments/lazyInstrument'
 
 export interface WalkHooks {
   /** Called about once a second of output (every `fps` frames) and once at the end. */
@@ -145,6 +146,12 @@ export async function runExport(
   }
 
   const timebase = makeTimebase(project.bpm, project.beatsPerBar, project.totalBars, settings.fps, project.range)
+
+  // Instrument visuals are lazy chunks; an object whose chunk is still on the
+  // wire renders its Suspense fallback, i.e. nothing. Every mounted object must
+  // be drawing before frame 0 is captured. (Bounded: it resolves regardless
+  // after a few seconds rather than wedge the export.)
+  await whenInstrumentsSettled()
 
   // Audio renders CONCURRENTLY with the frame walk. The muxer only needs to
   // know at construction whether the file has an audio track and at what
