@@ -2,6 +2,7 @@ import type { Block } from '../../types'
 import {
   evaluateMidiActivity,
   midiActivityTriggersForBlock,
+  MIDI_ACTIVITY_MAX_AGE_BEATS,
   type MidiActivityTrigger,
 } from '../../core/visual/midiActivity'
 
@@ -68,6 +69,11 @@ export function registerMidiActivityBlock(
 // the cleared state stays truthful without re-sweeping.
 let idleCleared = false
 
+const ZERO = (0).toFixed(4)
+// One reusable single-element array for the per-note evaluation.
+const singleTrigger: MidiActivityTrigger[] = [{ beat: 0, velocity: 0 }]
+const SINGLE_TRIGGER = (t: MidiActivityTrigger) => { singleTrigger[0] = t; return singleTrigger }
+
 /** Called by TimelineArea's shared playhead RAF; this never re-renders React.
  *  An inactive transport explicitly clears every block instead of leaving the
  *  envelope frozen at the stopped or scrubbed beat. */
@@ -90,7 +96,13 @@ export function updateMidiActivityAtBeat(beat: number, isPlaying: boolean): void
     }
 
     for (const note of block.notes) {
-      const activity = (live ? evaluateMidiActivity([note.trigger], beat) : 0).toFixed(4)
+      // Cheap numeric reject first: a note whose onset is in the future, or
+      // older than the envelope, is exactly 0 - no array, no toFixed. Only
+      // notes inside the ~1.8-beat window pay for the evaluation. (This runs
+      // per NOTE per frame across the whole project while playing.)
+      const age = beat - note.trigger.beat
+      const inWindow = live && age >= 0 && age <= MIDI_ACTIVITY_MAX_AGE_BEATS
+      const activity = inWindow ? evaluateMidiActivity(SINGLE_TRIGGER(note.trigger), beat).toFixed(4) : ZERO
       if (note.lastActivity === activity) continue
       note.element.style.setProperty('--midi-note-activity', activity)
       note.lastActivity = activity

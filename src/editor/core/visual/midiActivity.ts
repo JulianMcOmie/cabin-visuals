@@ -12,7 +12,7 @@ export interface MidiActivityTrigger {
 // rounded tail that lets nearby notes overlap into one musical pulse.
 export const MIDI_ACTIVITY_ATTACK_BEATS = 0.04
 export const MIDI_ACTIVITY_DECAY_BEATS = 0.7
-const MIDI_ACTIVITY_MAX_AGE_BEATS = 1.8
+export const MIDI_ACTIVITY_MAX_AGE_BEATS = 1.8
 const MIDI_ACTIVITY_COMPRESSION = 0.72
 const MIDI_ACTIVITY_TRIGGER_CAP = 4096
 
