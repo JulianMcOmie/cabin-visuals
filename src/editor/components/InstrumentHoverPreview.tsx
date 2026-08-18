@@ -1341,14 +1341,21 @@ function useClipLoadSlot(wanted: boolean): { ready: boolean; done: () => void } 
  * their lightweight ordinary canvases; the hover POPUP stays live. */
 export function InstrumentCardPreview({ item }: { item: InstrumentItem }) {
   const hostRef = useRef<HTMLDivElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
   const [nearViewport, setNearViewport] = useState(false)
+  // Once a card has been near the viewport its <video> STAYS mounted for the
+  // life of the card, merely paused while scrolled away. Unmounting on every
+  // scroll-out (the previous behaviour) re-fetched the clip and spun up a fresh
+  // decoder on every scroll-back, which is exactly the "loads for a moment,
+  // then judders" the library used to have while browsing.
+  const [everNear, setEverNear] = useState(false)
   const [clipFailed, setClipFailed] = useState(false)
   const draw2d = get2DPreview(item.id)
   // undefined = manifest still resolving; hold the card empty instead of
   // mounting a live View that the arriving clip would immediately replace.
   const clipUrl = useInstrumentClipUrl(item.id)
   const clip = draw2d ? null : clipUrl
-  const wantClip = nearViewport && !draw2d && !!clip && !clipFailed
+  const wantClip = everNear && !draw2d && !!clip && !clipFailed
   const clipSlot = useClipLoadSlot(wantClip)
 
   useEffect(() => {
@@ -1356,21 +1363,34 @@ export function InstrumentCardPreview({ item }: { item: InstrumentItem }) {
     if (!host) return
     if (typeof IntersectionObserver === 'undefined') {
       setNearViewport(true)
+      setEverNear(true)
       return
     }
     const observer = new IntersectionObserver(
-      ([entry]) => setNearViewport(entry.isIntersecting),
+      ([entry]) => {
+        setNearViewport(entry.isIntersecting)
+        if (entry.isIntersecting) setEverNear(true)
+      },
       { rootMargin: '128px 0px' },
     )
     observer.observe(host)
     return () => observer.disconnect()
   }, [])
 
+  // Pause offscreen, resume when back - the element itself is kept.
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    if (nearViewport) void video.play().catch(() => {})
+    else video.pause()
+  }, [nearViewport, clipSlot.ready])
+
   return (
     <div ref={hostRef} className="absolute inset-0">
       {nearViewport && draw2d && <Preview2D draw={draw2d} />}
       {wantClip && clipSlot.ready && (
         <video
+          ref={videoRef}
           src={clip!}
           autoPlay
           loop

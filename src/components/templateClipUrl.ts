@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createManifestLoader } from './clipManifest'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 export const TEMPLATE_CLIP_BASE = `${SUPABASE_URL}/storage/v1/object/public/template-previews`
@@ -13,18 +14,9 @@ export const TEMPLATE_CLIP_BASE = `${SUPABASE_URL}/storage/v1/object/public/temp
 // The capture script already uploads a manifest of id -> content hash next to
 // the clips. Appending that hash to the URL turns each regeneration into a new
 // URL, so updated clips actually reach people while unchanged ones stay
-// cached. The manifest itself is fetched once per session and explicitly
-// uncached - it is a couple hundred bytes, and a stale one would defeat the
-// whole scheme.
-let manifest: Promise<Record<string, string>> | null = null
-function loadManifest(): Promise<Record<string, string>> {
-  if (!manifest) {
-    manifest = fetch(`${TEMPLATE_CLIP_BASE}/manifest.json`, { cache: 'no-store' })
-      .then((response) => (response.ok ? response.json() : {}))
-      .catch(() => ({}))
-  }
-  return manifest
-}
+// cached. Loading + localStorage strategy: clipManifest.ts.
+const manifest = createManifestLoader(`${TEMPLATE_CLIP_BASE}/manifest.json`, 'cabin.templateClipManifest')
+if (SUPABASE_URL) manifest.warm()
 
 /**
  * The versioned clip URL for a template, or null while it is still unknown
@@ -37,7 +29,7 @@ export function useTemplateClipUrl(id: string): string | null {
   useEffect(() => {
     if (!SUPABASE_URL) return
     let live = true
-    void loadManifest().then((versions) => {
+    void manifest.load().then((versions) => {
       if (!live) return
       const version = versions[id]
       setUrl(`${TEMPLATE_CLIP_BASE}/${id}.mp4${version ? `?v=${version}` : ''}`)

@@ -1,25 +1,21 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createManifestLoader } from './clipManifest'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 export const INSTRUMENT_CLIP_BASE = `${SUPABASE_URL}/storage/v1/object/public/instrument-previews`
 
 // Same scheme as templateClipUrl: stable per-id paths (`<id>.mp4`) in a public
-// bucket, with an uncached manifest (id -> capture version) appended to each
-// URL so regenerated clips bust caches while unchanged ones stay cached. One
-// difference: here the manifest is also the EXISTENCE record - not every
-// library item has a clip (new instruments land before their capture runs), and
-// an id absent from the manifest means "keep the live preview", not "404".
-let manifest: Promise<Record<string, string>> | null = null
-function loadManifest(): Promise<Record<string, string>> {
-  if (!manifest) {
-    manifest = fetch(`${INSTRUMENT_CLIP_BASE}/manifest.json`, { cache: 'no-store' })
-      .then((response) => (response.ok ? response.json() : {}))
-      .catch(() => ({}))
-  }
-  return manifest
-}
+// bucket, with a manifest (id -> capture version) appended to each URL so
+// regenerated clips bust caches while unchanged ones stay cached (loading +
+// localStorage strategy in clipManifest.ts). One difference: here the manifest
+// is also the EXISTENCE record - not every library item has a clip (new
+// instruments land before their capture runs), and an id absent from the
+// manifest means "keep the live preview", not "404".
+const manifest = createManifestLoader(`${INSTRUMENT_CLIP_BASE}/manifest.json`, 'cabin.instrumentClipManifest')
+// Fetch starts as soon as the editor bundle evaluates, not at first card mount.
+if (SUPABASE_URL) manifest.warm()
 
 /**
  * The instrument's preview clip URL. Three states on purpose:
@@ -33,7 +29,7 @@ export function useInstrumentClipUrl(id: string): string | null | undefined {
   useEffect(() => {
     if (!SUPABASE_URL) return
     let live = true
-    void loadManifest().then((versions) => {
+    void manifest.load().then((versions) => {
       if (!live) return
       const version = versions[id]
       setUrl(version ? `${INSTRUMENT_CLIP_BASE}/${id}.mp4?v=${version}` : null)
