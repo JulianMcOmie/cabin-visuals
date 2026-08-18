@@ -80,6 +80,7 @@ export function TimelineArea() {
   const playheadRef = useRef<HTMLDivElement>(null)
   const playheadHeadRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const scClientSizeRef = useRef<{ width: number; height: number } | null>(null)
   const rulerContentRef = useRef<HTMLDivElement>(null)
   const clipRef = useRef<HTMLDivElement>(null)
   const blockDragGuideRef = useRef<HTMLDivElement>(null)
@@ -271,6 +272,10 @@ export function TimelineArea() {
     const sc = scrollRef.current
     if (!sc) return
     const measure = () => {
+      // Cached for the playhead RAF below, which used to read clientWidth /
+      // clientHeight every frame - a forced layout whenever any style was
+      // dirty that frame.
+      scClientSizeRef.current = { width: sc.clientWidth, height: sc.clientHeight }
       setLaneViewportWidthPx(Math.max(0, sc.clientWidth - labelWidth - PLAYHEAD_TRIANGLE_HALF))
     }
     measure()
@@ -312,8 +317,14 @@ export function TimelineArea() {
     // scrollbars) so the line never draws over them.
     if (sc && clipRef.current) {
       const lw = useUIStore.getState().tracksLabelWidth
-      clipRef.current.style.width = `${Math.max(0, sc.clientWidth - lw - PLAYHEAD_TRIANGLE_HALF)}px`
-      clipRef.current.style.height = `${sc.clientHeight}px`
+      const size = scClientSizeRef.current
+      const cw = size ? size.width : sc.clientWidth
+      const ch = size ? size.height : sc.clientHeight
+      const nextW = `${Math.max(0, cw - lw - PLAYHEAD_TRIANGLE_HALF)}px`
+      const nextH = `${ch}px`
+      // Style writes only when the value moved (a write per frame dirties layout).
+      if (clipRef.current.style.width !== nextW) clipRef.current.style.width = nextW
+      if (clipRef.current.style.height !== nextH) clipRef.current.style.height = nextH
     }
     // Ruler triangle is positioned in content space INSIDE the ruler's pickup-
     // shifted wrapper (so beatX stays musical). The lane line lives in a
