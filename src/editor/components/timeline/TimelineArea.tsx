@@ -331,7 +331,11 @@ export function TimelineArea() {
     // viewport-space overlay, so offset by the pickup and the scroll itself.
     if (playheadHeadRef.current) playheadHeadRef.current.style.transform = `translateX(${beatX}px)`
     if (playheadRef.current) {
-      const sl = sc?.scrollLeft ?? 0
+      // The scroll handler mirrors scrollLeft into horizontalZoomRef; reading
+      // the DOM property here forced a synchronous layout EVERY FRAME while
+      // the note-glow sweep had just dirtied thousands of style vars - on a
+      // dense project that was ~40% of playback's main-thread time.
+      const sl = horizontalZoomRef.current.scrollLeft
       playheadRef.current.style.transform = `translateX(${beatX + pickupPx - sl}px)`
     }
   })

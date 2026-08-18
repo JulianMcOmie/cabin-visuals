@@ -10,7 +10,7 @@ await page.addInitScript(() => {
   window.__glFrames = 0
   const orig = CanvasRenderingContext2D.prototype.drawImage
   CanvasRenderingContext2D.prototype.drawImage = function (...args) {
-    if (this.canvas.width === 128 && this.canvas.height === 72) window.__bleedDraws++
+    if (this.canvas.width === 192 && this.canvas.height === 108) window.__bleedDraws++
     return orig.apply(this, args)
   }
 })

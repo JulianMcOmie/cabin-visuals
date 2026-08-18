@@ -74,6 +74,13 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   // getSceneBackdrop rides along because a scene colorizer's whole effect is a
   // clear colour - there is no object state to read it off (core/sceneTrack.ts).
   ;(window as unknown as Record<string, unknown>).__cabinVisual = { getVisualCopies, getVisualCopyCount, getMountedRenderScenes, getCompositionLayers, getObjectState, getSceneBackdrop }
+  // Load a saved document into the in-memory editor (perf probes replay real
+  // projects through this; runs the same upgrade path a cloud open does).
+  ;(window as unknown as Record<string, unknown>).__cabinHydrate = async (doc: unknown, name?: string) => {
+    const [{ hydrate }, { upgradeDocument }] = await Promise.all([import('../persistence/serialize'), import('../persistence/upgrade')])
+    hydrate(upgradeDocument(doc))
+    if (name) useUIStore.getState().setProjectName(name)
+  }
 }
 
 // Sidebar toggles glide (Material 3 emphasized-decelerate - the .panel-toggle-anim
@@ -250,7 +257,13 @@ function VisualAmbientBleed({ sourceCanvasRef }: { sourceCanvasRef: RefObject<HT
     }
   }, [sourceCanvasRef])
 
-  return <canvas ref={bleedCanvasRef} width={128} height={72} aria-hidden className="visual-ambient-bleed" />
+  // 192×108, not 128×72: Chromium only GPU-accelerates a 2D canvas above
+  // ~16.5k pixels (128×129). Below that the canvas is CPU-backed and each
+  // drawImage from the WebGL canvas is a full framebuffer READBACK ("GPU stall
+  // due to ReadPixels") - a CPU profile of a real project showed it as the
+  // largest single per-frame cost. Above the threshold the copy stays on the
+  // GPU. Under an 80px blur the extra pixels are invisible.
+  return <canvas ref={bleedCanvasRef} width={192} height={108} aria-hidden className="visual-ambient-bleed" />
 }
 
 // The visual panel: the canvas plus fullscreen (button or F) and an aspect

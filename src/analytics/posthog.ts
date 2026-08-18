@@ -47,6 +47,14 @@ export function loadPostHog(): Promise<PostHog | null> {
       capture_pageview: 'history_change',
       capture_pageleave: true,
     })
+    // Session replay costs the EDITOR dearly: rrweb's mutation observer
+    // watches thousands of per-frame style writes (note glows, playhead),
+    // and its canvas capture ("Record canvas" in the PostHog project settings
+    // - a REMOTE toggle, not client config) ran createImageBitmap + drawImage
+    // on the WebGL canvas every snapshot - together ~half the main thread
+    // during playback in a CPU profile of a real project. Recording is
+    // therefore paused for the whole /editor route (syncSessionRecording);
+    // marketing/projects/auth pages still record.
     instance = posthog
     return instance
   })()
@@ -58,4 +66,14 @@ export function loadPostHog(): Promise<PostHog | null> {
 export function withPostHog(fn: (ph: PostHog) => void): void {
   if (instance) { fn(instance); return }
   void loadPostHog().then((ph) => { if (ph) fn(ph) })
+}
+
+/** Pause replay inside the editor, resume everywhere else. Called on every
+ *  route change by AnalyticsIdentify (which is mounted in the root layout). */
+export function syncSessionRecording(pathname: string): void {
+  withPostHog((ph) => {
+    const inEditor = pathname.startsWith('/editor')
+    if (inEditor) ph.stopSessionRecording()
+    else if (!ph.sessionRecordingStarted()) ph.startSessionRecording()
+  })
 }
