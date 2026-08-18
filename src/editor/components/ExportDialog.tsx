@@ -20,6 +20,7 @@ import { useScrub } from '../hooks/useScrub'
 import { resolveTrackIdentityColor } from '../utils/trackDisplayColor'
 import { clampToFreeTier, defaultBitrate, defaultSettings, exportAspectChoices, resolveExportRange, resolutionsFor, type ExportAspect, type ExportRateControl, type ExportSettings } from '../core/export/types'
 import { aspectRatioValue } from '../core/aspectRatios'
+import { formatMinSec } from '../utils/time'
 
 const SETTINGS_KEY = 'cabin.exportSettings'
 
@@ -411,7 +412,7 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
   const previewRange = resolveExportRange(settings, beatsPerBar, totalBars, loopRegion)
   const previewBeats = previewRange ? previewRange.endBeat - previewRange.startBeat : totalBars * beatsPerBar
   const previewSec = (previewBeats * 60) / bpm
-  const duration = `${Math.floor(previewSec / 60)}:${String(Math.floor(previewSec % 60)).padStart(2, '0')}`
+  const duration = formatMinSec(previewSec)
 
   const loopFractions = settings.rangeMode === 'loop' && loopRegion
     ? { start: Math.max(0, loopRegion.startBeat / totalBeats), end: Math.min(1, loopRegion.endBeat / totalBeats) }

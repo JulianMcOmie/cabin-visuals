@@ -19,6 +19,7 @@ import { DevRenderStats } from './components/visual/DevRenderStats'
 import { VisualBeatSync } from './core/visual/VisualBeatSync'
 import { getCompositionLayers, getMountedRenderScenes, getObjectState, getSceneBackdrop, getVisualCopies, getVisualCopyCount, setEditorPreviewSceneId } from './core/visual/VisualEngine'
 import { track } from '../analytics/analytics'
+import { formatMinSec } from './utils/time'
 // Tutorial is disabled in the UI - see the commented mount below.
 // import { TutorialOverlay } from './components/TutorialOverlay'
 import { LeftSidebar } from './components/LeftSidebar'
@@ -288,10 +289,7 @@ function CanvasTransportBar({
     onEnd: onScrubEnd,
   })
 
-  const fmtTime = (beat: number) => {
-    const sec = Math.max(0, (beat * 60) / Math.max(1, bpm))
-    return `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
-  }
+  const fmtTime = (beat: number) => formatMinSec((beat * 60) / Math.max(1, bpm))
   const frac = totalBeats > 0 ? Math.min(1, currentBeat / totalBeats) : 0
 
   return (

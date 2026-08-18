@@ -17,6 +17,7 @@ import { TemplateLyricPreview } from "./TemplateLyricPreview"
 import type { ProjectPreview } from "../persistence/projectStorage"
 import { track } from "../analytics/analytics"
 import { midiBlockPalette } from "../editor/utils/colors"
+import { formatMinSec } from "../editor/utils/time"
 import { EditorDialog } from "../editor/components/EditorDialog"
 import { SignupCard } from "../editor/components/SignupCard"
 
@@ -140,9 +141,7 @@ function ProjectCard({
 // project IS (a 15s loop vs a full song) at a glance.
 const formatDuration = (seconds?: number): string => {
   if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return '--:--'
-  const m = Math.floor(seconds / 60)
-  const sec = Math.floor(seconds % 60)
-  return `${m}:${sec.toString().padStart(2, '0')}`
+  return formatMinSec(seconds)
 }
 
 interface ProfileData {
