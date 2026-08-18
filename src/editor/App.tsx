@@ -17,7 +17,7 @@ import { ExportDriver } from './components/visual/ExportDriver'
 import { RenderGovernor } from './components/visual/RenderGovernor'
 import { DevRenderStats } from './components/visual/DevRenderStats'
 import { VisualBeatSync } from './core/visual/VisualBeatSync'
-import { getCompositionLayers, getMountedRenderScenes, getObjectState, getSceneBackdrop, getVisualCopies, getVisualCopyCount, setEditorPreviewSceneId } from './core/visual/VisualEngine'
+import { getCompositionLayers, getMountedRenderScenes, getObjectState, getSceneBackdrop, getVisualCopies, getVisualCopyCount, setEditorPreviewSceneId, subscribeObjects } from './core/visual/VisualEngine'
 import { track } from '../analytics/analytics'
 import { formatMinSec } from './utils/time'
 // Tutorial is disabled in the UI - see the commented mount below.
@@ -159,7 +159,13 @@ function Scene({
   // paused). RenderGovernor requests single frames when an input changes.
   const isPlaying = useTimeStore((s) => s.isPlaying)
   return (
-    <Canvas className="visual-canvas-root" shadows="soft" frameloop={isPlaying ? 'always' : 'demand'} dpr={[1, 1.5]} camera={{ position: [0, 0, 5], fov: 55 }} gl={{ antialias: true }}>
+    // dpr 1 + no MSAA: every scene rasterizes into 1× (CSS-pixel) offscreen
+    // targets, and the ONLY thing drawn to the default framebuffer is the final
+    // fullscreen grade quad - so a 1.5× multisampled backbuffer just ran the
+    // heaviest fragment shader on 2.25× the pixels to bilinearly upscale a 1×
+    // image. This is also exactly what the export renders (ExportDriver pins
+    // dpr 1), so the preview now matches the file.
+    <Canvas className="visual-canvas-root" shadows="soft" frameloop={isPlaying ? 'always' : 'demand'} dpr={1} camera={{ position: [0, 0, 5], fov: 55 }} gl={{ antialias: false }}>
       <color attach="background" args={['#09090b']} />
       <CanvasSourceBridge sourceRef={sourceCanvasRef} />
       <PreviewSceneSync sceneId={previewSceneId} />
@@ -193,10 +199,18 @@ function VisualAmbientBleed({ sourceCanvasRef }: { sourceCanvasRef: RefObject<HT
 
     let frame = 0
     let lastPaint = 0
+    // The WebGL frame only changes while playing or for a beat after an edit /
+    // scrub / resolve (RenderGovernor's demand frames). Copying it - and so
+    // re-blurring the whole workspace layer - 15×/s while paused and idle was
+    // a permanent GPU tax for an image that never changed. `dirtyUntil` keeps
+    // painting for a short window after a change so the copy lands after r3f
+    // has actually rendered the new frame, then the loop parks itself.
+    let dirtyUntil = performance.now() + 500
     const paint = (now: number) => {
+      const active = useTimeStore.getState().isPlaying || now < dirtyUntil
       // 15fps is plenty once the 128px copy has passed through an 80px blur.
       // The WebGL scene itself remains on its existing render schedule.
-      if (now - lastPaint >= 1000 / 15) {
+      if (active && now - lastPaint >= 1000 / 15) {
         const source = sourceCanvasRef.current
         if (source?.width && source.height) {
           try {
@@ -208,10 +222,25 @@ function VisualAmbientBleed({ sourceCanvasRef }: { sourceCanvasRef: RefObject<HT
         }
         lastPaint = now
       }
-      frame = requestAnimationFrame(paint)
+      frame = active ? requestAnimationFrame(paint) : 0
+    }
+    const wake = () => {
+      dirtyUntil = performance.now() + 300
+      if (!frame) frame = requestAnimationFrame(paint)
     }
     frame = requestAnimationFrame(paint)
-    return () => cancelAnimationFrame(frame)
+    const unsubProject = useProjectStore.subscribe(wake)
+    const unsubGraph = subscribeObjects(wake)
+    const unsubTime = useTimeStore.subscribe(wake)
+    const resize = new ResizeObserver(wake)
+    if (sourceCanvasRef.current) resize.observe(sourceCanvasRef.current)
+    return () => {
+      if (frame) cancelAnimationFrame(frame)
+      unsubProject()
+      unsubGraph()
+      unsubTime()
+      resize.disconnect()
+    }
   }, [sourceCanvasRef])
 
   return <canvas ref={bleedCanvasRef} width={128} height={72} aria-hidden className="visual-ambient-bleed" />
