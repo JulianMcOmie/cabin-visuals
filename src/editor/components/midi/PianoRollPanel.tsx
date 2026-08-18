@@ -30,6 +30,7 @@ import { VIM_ACCENT, type VimKeyRegime } from './vim/types'
 import { isLyricClipNote, laneIndexForPitch, PITCH_LYRIC_CLIP, resolveLyricWords, resolveStyleLanes, trackLyricClips } from '../../core/visual/lyricClips'
 import { LyricClipEditorCard, StyleLaneEditorCard } from '../../userInterfaceRenderers/TextDisplayUserInterface'
 import type { AutomationMode, Block, InterpolationMode, Track } from '../../types'
+import type { MidiRow } from './types'
 
 /** Filled-track position for .slider-console inputs (drives the --fill var);
  *  `color` retints the filled portion (--slider-color) to the edited track. */
@@ -127,6 +128,27 @@ const INTERP_OPTIONS: { value: InterpolationMode; label: string }[] = [
 ]
 
 const DEFAULT_QUANTIZE: number | 'smart' = 'smart'
+
+/** Field-wise equality of two row lists (every MidiRow field is a primitive). */
+function sameRows(a: MidiRow[], b: MidiRow[]): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i], y = b[i]
+    if (x.pitch !== y.pitch || x.label !== y.label || x.color !== y.color || x.noteLabel !== y.noteLabel
+      || x.emphasized !== y.emphasized || x.fontFamily !== y.fontFamily || x.sizeScale !== y.sizeScale || x.laneIndex !== y.laneIndex) return false
+  }
+  return true
+}
+
+/** Returns the previously returned array whenever the new one is field-wise
+ *  identical, so a recomputation that changed nothing keeps its identity (and
+ *  everything memoized on `rows` downstream stays put). */
+function useStableRows(rows: MidiRow[]): MidiRow[] {
+  const ref = useRef(rows)
+  if (!sameRows(ref.current, rows)) ref.current = rows
+  return ref.current
+}
 
 // Minimum bars the editor timeline spans, so short projects still have room to
 // work past the block. Longer projects span their full length (TimeStore.totalBars).
@@ -362,6 +384,25 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const photoTrack = !automation && track?.type === 'base' && track.instrumentId === 'photo' ? track : null
   const videoClips = useVideoStore((s) => s.videoClips)
   const photoClips = usePhotoStore((s) => s.photoClips)
+  // Pad-bank row labels, memoized on the pads + the clip records they name so
+  // the row memo below doesn't rebuild on every render of the roll.
+  const isVideoRoll = !!videoTrack
+  const isPhotoRoll = !!photoTrack
+  const videoPads = videoTrack?.videoPads
+  const photoPads = photoTrack?.photoPads
+  const videoPadLabels = useMemo(() => (
+    isVideoRoll
+      ? (videoPads ?? []).map((pad, i) => {
+          const name = videoClips[pad.ref]?.fileName ?? `Clip ${i + 1}`
+          return pad.inPoint > 0 ? `${name} @ ${pad.inPoint.toFixed(1)}s` : name
+        })
+      : null
+  ), [isVideoRoll, videoPads, videoClips])
+  const photoPadLabels = useMemo(() => (
+    isPhotoRoll
+      ? (photoPads ?? []).map((pad, i) => photoClips[pad.ref]?.fileName ?? `Photo ${i + 1}`)
+      : null
+  ), [isPhotoRoll, photoPads, photoClips])
   // Director rows are labelled with scene names; this string fingerprint keeps
   // them fresh without subscribing to the scenes record itself (whose identity
   // changes on every track edit anywhere).
@@ -386,60 +427,78 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [automation, trigger, track, bpm, beatsPerBar, totalBars, sceneNamesKey])
   const defRows = declaredRows?.rows
+  const declaredStrict = declaredRows?.strict ?? false
   // A Text Display roll grows one extra row of its own (Lyric clips, below).
   const isTextRoll = !automation && !trigger && track?.type === 'base' && track.instrumentId === 'textDisplay'
-  const resolvedRows = automation
-    ? automation.kind === 'toggle'
-      ? generateToggleRows(notes.map((n) => n.pitch), trackColor)
-      : generateValueRows(automation.paramMin, automation.paramMax, notes.map((n) => n.pitch), trackColor, undefined, track.automationRange)
-    : trigger
-      ? generateTriggerRows(trigger.rowLabel, midiNoteBaseColor(noteColor ?? trackColor), notes.map((n) => n.pitch))
-      : videoTrack
-        ? generateVideoClipRows(
-            (videoTrack.videoPads ?? []).map((pad, i) => {
-              const name = videoClips[pad.ref]?.fileName ?? `Clip ${i + 1}`
-              return pad.inPoint > 0 ? `${name} @ ${pad.inPoint.toFixed(1)}s` : name
-            }),
-            VIDEO_BASE_PITCH,
-            notes.map((n) => n.pitch),
-            trackColor,
-          )
-        : photoTrack
-        ? generatePhotoRows(
-            (photoTrack.photoPads ?? []).map((pad, i) => photoClips[pad.ref]?.fileName ?? `Photo ${i + 1}`),
-            PHOTO_BASE_PITCH,
-            notes.map((n) => n.pitch),
-            trackColor,
-          )
-        : defRows
-          ? generateInstrumentRows(
-              defRows,
-              // On a TEXT roll the clip pitch is deliberately withheld: phrases
-              // are notes on a pitch no instrument declares, so the "unmapped
-              // pitch" rescue row would build a SECOND row for it beside the
-              // Lyric clips row unshifted below - two rows sharing one pitch,
-              // which React keys by pitch (duplicate keys, and clip notes drawn
-              // on whichever row won). Every other instrument keeps the rescue.
-              declaredRows.strict
-                ? []
-                : isTextRoll
-                  ? notes.map((n) => n.pitch).filter((p) => p !== PITCH_LYRIC_CLIP)
-                  : notes.map((n) => n.pitch),
-              trackColor,
-            )
-          : noteColor
-            ? generateRows(noteColor)
-            : generateRows(trackColor)
-  // An empty declared vocabulary (defRows === [] is truthy, so the instrument
-  // arm above yields zero rows) swaps the grid for the blank state below.
-  const rowsAreEmpty = resolvedRows.length === 0
-  const rows = resolvedRows
-  // Text tracks: the LYRIC CLIPS row sits above the style lanes. It is an
-  // ordinary note row at the clip pitch - the phrases on it ARE notes, so the
-  // grid draws them and the note gestures edit them with no special casing.
-  if (isTextRoll) {
-    rows.unshift({ pitch: PITCH_LYRIC_CLIP, label: 'Lyric clips', color: trackColor })
-  }
+  // The row generators read the notes ONLY for their pitches (the "unmapped
+  // pitch" rescue rows), and only as a set. This fingerprint is what the row
+  // memo keys on, so a drag that keeps every note on its row - the common
+  // per-pointermove case - hands MidiEditor the very same `rows` array, and
+  // everything downstream keyed on it (row labels, stripes, pitchToRowIndex,
+  // the vim key map) stays put.
+  const notePitchKey = useMemo(
+    () => Array.from(new Set(notes.map((n) => n.pitch))).sort((a, b) => a - b).join(','),
+    [notes],
+  )
+  const notePitches = useMemo(
+    () => (notePitchKey === '' ? [] : notePitchKey.split(',').map(Number)),
+    [notePitchKey],
+  )
+  // Rebuilt only when a real input moves. The identity matters as much as the
+  // cost: `rows` used to be a fresh array every render, which re-keyed every
+  // memo below it on every note-drag frame.
+  const automationKind = automation?.kind
+  const automationMin = automation?.paramMin
+  const automationMax = automation?.paramMax
+  const automationRange = track?.automationRange
+  const triggerRowLabel = trigger?.rowLabel
+  const computedRows = useMemo(() => {
+    const resolvedRows = automationKind !== undefined
+      ? automationKind === 'toggle'
+        ? generateToggleRows(notePitches, trackColor)
+        : generateValueRows(automationMin!, automationMax!, notePitches, trackColor, undefined, automationRange)
+      : triggerRowLabel !== undefined
+        ? generateTriggerRows(triggerRowLabel, midiNoteBaseColor(noteColor ?? trackColor), notePitches)
+        : videoPadLabels
+          ? generateVideoClipRows(videoPadLabels, VIDEO_BASE_PITCH, notePitches, trackColor)
+          : photoPadLabels
+          ? generatePhotoRows(photoPadLabels, PHOTO_BASE_PITCH, notePitches, trackColor)
+          : defRows
+            ? generateInstrumentRows(
+                defRows,
+                // On a TEXT roll the clip pitch is deliberately withheld: phrases
+                // are notes on a pitch no instrument declares, so the "unmapped
+                // pitch" rescue row would build a SECOND row for it beside the
+                // Lyric clips row unshifted below - two rows sharing one pitch,
+                // which React keys by pitch (duplicate keys, and clip notes drawn
+                // on whichever row won). Every other instrument keeps the rescue.
+                declaredStrict
+                  ? []
+                  : isTextRoll
+                    ? notePitches.filter((p) => p !== PITCH_LYRIC_CLIP)
+                    : notePitches,
+                trackColor,
+              )
+            : noteColor
+              ? generateRows(noteColor)
+              : generateRows(trackColor)
+    // An empty declared vocabulary (defRows === [] is truthy, so the instrument
+    // arm above yields zero rows) swaps the grid for the blank state below.
+    const rowsAreEmpty = resolvedRows.length === 0
+    // Text tracks: the LYRIC CLIPS row sits above the style lanes. It is an
+    // ordinary note row at the clip pitch - the phrases on it ARE notes, so the
+    // grid draws them and the note gestures edit them with no special casing.
+    if (isTextRoll) {
+      resolvedRows.unshift({ pitch: PITCH_LYRIC_CLIP, label: 'Lyric clips', color: trackColor })
+    }
+    return { rows: resolvedRows, rowsAreEmpty }
+  }, [automationKind, automationMin, automationMax, automationRange, triggerRowLabel, videoPadLabels, photoPadLabels, defRows, declaredStrict, isTextRoll, noteColor, trackColor, notePitches])
+  // A note moving onto a pitch no other note holds changes the fingerprint,
+  // but on a declared vocabulary (where that pitch is already a row) the
+  // generated rows come back equal - so hand out the PREVIOUS array whenever
+  // the new one says the same thing, and the roll's memos hold through the drag.
+  const rows = useStableRows(computedRows.rows)
+  const rowsAreEmpty = computedRows.rowsAreEmpty
   // What the note keys MEAN on these rows. A value lane's rows are param
   // values, not pitches, so the keys spread across the range instead of sitting
   // on sixteen adjacent rows; a declared vocabulary maps positionally; only the

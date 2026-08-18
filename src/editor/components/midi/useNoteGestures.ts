@@ -179,7 +179,7 @@ export function useNoteGestures({
   // Single ref holding the latest render's values, refreshed every render.
   // The window drag listeners live across many renders, so they read
   // everything through latest.current instead of their (stale) closures.
-  const latestValues = { notes, onNotesChange, onCommit, roundToNearestStep, snapSize, snapEnabled, pixelsPerBeat, blockStartBeat, blockDurationBeats, initialTotalBeats, rowHeight, rows, quantize, getNotesInMarquee }
+  const latestValues = { notes, selectedNoteIds, onNotesChange, onCommit, roundToNearestStep, snapSize, snapEnabled, pixelsPerBeat, blockStartBeat, blockDurationBeats, initialTotalBeats, rowHeight, rows, quantize, getNotesInMarquee }
   const latest = useRef(latestValues)
   latest.current = latestValues
 
@@ -571,13 +571,17 @@ export function useNoteGestures({
     beginGestureTracking('default')
   }, [selectedNoteIds, rowHeight, rows, pixelsPerBeat, roundDownToStep, snapEnabled, quantize, blockStartBeat, initialTotalBeats, setCursor, beginGestureTracking, gridRef, placeDragGuideAtBeat])
 
-  // Keyboard handler (capture phase so editor consumes Delete/Esc before the panel)
+  // Keyboard handler (capture phase so editor consumes Delete/Esc before the panel).
+  // Registered ONCE: it reads notes / selection / commit through `latest`, so a
+  // note drag (which changes `notes` on every pointermove) never tears the
+  // listener down and back up per frame.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
         return
       }
+      const { notes, selectedNoteIds, onCommit, blockStartBeat } = latest.current
 
       if ((e.metaKey || e.ctrlKey) && (e.key === 'c' || e.key === 'C')) {
         if (selectedNoteIds.size === 0) return
@@ -724,7 +728,7 @@ export function useNoteGestures({
 
     document.addEventListener('keydown', handleKeyDown, true)
     return () => document.removeEventListener('keydown', handleKeyDown, true)
-  }, [selectedNoteIds, notes, onCommit, blockStartBeat])
+  }, [])
 
   // Click on background deselects (if not dragging)
   const handleContainerClick = useCallback((e: React.MouseEvent) => {
