@@ -22,6 +22,7 @@ export function useAuth() {
   useEffect(() => {
     const supabase = getSupabase()
     let mounted = true
+    let validateTimer: number | null = null
 
     // Only pay the network cost once; later mounts already have the cache and
     // stay fresh through the subscription below.
@@ -44,11 +45,21 @@ export function useAuth() {
         resolvedOnce = true
         if (mounted) { setUser(cachedUser); setLoading(false) }
       })
-      supabase.auth.getUser().then(({ data }) => {
-        cachedUser = data.user
-        resolvedOnce = true
-        if (mounted) { setUser(data.user); setLoading(false) }
-      })
+      // The server check itself is DEFERRED off the critical path: while
+      // getUser's request is in flight it holds the auth lock, and every first
+      // data query on the page (project list, project load, signed URLs)
+      // resolves its token through that same lock - so an immediate getUser
+      // parked all of them behind a full auth round trip. A stale/revoked
+      // token in that window just makes those queries fail RLS, which the
+      // late correction below then reflects.
+      const validate = window.setTimeout(() => {
+        void supabase.auth.getUser().then(({ data }) => {
+          cachedUser = data.user
+          resolvedOnce = true
+          if (mounted) { setUser(data.user); setLoading(false) }
+        })
+      }, 1500)
+      validateTimer = validate
     }
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -59,6 +70,7 @@ export function useAuth() {
 
     return () => {
       mounted = false
+      if (validateTimer !== null) window.clearTimeout(validateTimer)
       sub.subscription.unsubscribe()
     }
   }, [])
