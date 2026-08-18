@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Check, Plus, X } from 'lucide-react'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
@@ -209,16 +209,21 @@ function EffectItem({
       {!collapsed && (
       <div className={`px-2.5 pt-2.5 pb-1 ${inst.enabled ? '' : 'opacity-50'}`}>
       {BespokeEffect ? (
-        <BespokeEffect
-          targetId={inst.id}
-          parameters={plugin.params
-            .filter((p) => typeof p.default === 'number')
-            .map((p) => ({
-              definition: p,
-              value: inst.settings[p.key] ?? (p.default as number),
-              setValue: (v: number | string) => { if (typeof v === 'number') onSetSetting(p.key, v) },
-            }))}
-        />
+        // Bespoke panels are React.lazy shells (userInterfaceRenderers/lazyPanel.ts);
+        // the boundary is per-render-site so a first-time load blanks only this
+        // device's body, never the rack.
+        <Suspense fallback={null}>
+          <BespokeEffect
+            targetId={inst.id}
+            parameters={plugin.params
+              .filter((p) => typeof p.default === 'number')
+              .map((p) => ({
+                definition: p,
+                value: inst.settings[p.key] ?? (p.default as number),
+                setValue: (v: number | string) => { if (typeof v === 'number') onSetSetting(p.key, v) },
+              }))}
+          />
+        </Suspense>
       ) : plugin.params.map((p) => (
         <ParamControl
           key={p.key}
@@ -577,7 +582,9 @@ export function TrackEditor() {
                     return (
                       <>
                         {BespokeMover ? (
-                          <BespokeMover targetId={track.id} parameters={moverParameters} />
+                          <Suspense fallback={null}>
+                            <BespokeMover targetId={track.id} parameters={moverParameters} />
+                          </Suspense>
                         ) : (
                           <>
                             <p className="text-[11px] text-zinc-500 mb-3">{
@@ -882,10 +889,12 @@ export function TrackEditor() {
                         {!UserInterfaceRenderer ? (
                           <p className="text-[11px] text-[var(--text-muted)]">No parameters</p>
                         ) : (
-                          <UserInterfaceRenderer
-                            targetId={track.id}
-                            parameters={userInterfaceParameters}
-                          />
+                          <Suspense fallback={null}>
+                            <UserInterfaceRenderer
+                              targetId={track.id}
+                              parameters={userInterfaceParameters}
+                            />
+                          </Suspense>
                         )}
                       </div>
                     </>
