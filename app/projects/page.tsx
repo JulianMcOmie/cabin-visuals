@@ -77,8 +77,11 @@ export default function ProjectsPage() {
     }
   }
 
+  // Keyed on the id, not the User object: useAuth hands out a new object when
+  // its server check lands, which used to fetch this twice per visit.
+  const userId = user?.id ?? null
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       setProfile(null)
       return
     }
@@ -87,13 +90,13 @@ export default function ProjectsPage() {
     supabase
       .from('profiles')
       .select('first_name, last_name')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .single()
       .then(({ data }) => {
         if (mounted) setProfile(data ?? null)
       })
     return () => { mounted = false }
-  }, [user])
+  }, [userId])
 
   // Sign-in-to-save phase 4: redeem work carried over from an anonymous session
   // into this (permanent) account. takeCarryover self-cleans and returns null
