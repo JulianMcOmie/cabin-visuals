@@ -405,7 +405,10 @@ export default function ProjectsDisplay({
             // Radix's trigger, since React delegates listeners from the root).
             <motion.div
               key={project.id}
-              layout
+              // `layout="position"` (not full `layout`): full layout animation
+              // measured every card's box on every state change in this
+              // component; position-only still slides survivors after a delete.
+              layout="position"
               initial={navigating ? false : { opacity: 0, y: 2 }}
               animate={entranceTarget}
               exit={{ opacity: 0, scale: 0.96 }}

@@ -74,7 +74,9 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
         background: hasLoopSections ? 'transparent' : active ? palette.selectedBody : palette.fill,
         boxShadow: active ? palette.selectedBloom : restingShadow,
         filter: activityFilter,
-        willChange: 'filter',
+        // No will-change: it promoted EVERY block to its own compositor layer
+        // (texture memory + per-scroll compositing for hundreds of blocks);
+        // only the handful near the playhead ever animate the filter.
       }}
       onPointerDown={(e) => onBlockPointerDown(e, trackId, block.id)}
       onPointerMove={(e) => {
@@ -120,7 +122,6 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
             opacity: 'var(--midi-activity-opacity, 0)',
             boxShadow: `inset 0 0 16px ${palette.outline}`,
             mixBlendMode: 'screen',
-            willChange: 'opacity',
           }}
         />
       )}

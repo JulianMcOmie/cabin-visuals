@@ -1125,10 +1125,15 @@ export function Preview2D({ draw }: { draw: Draw2D }) {
 
     let raf = 0
     let start = 0
+    let last = 0
     const loop = (ts: number) => {
-      if (!start) start = ts
-      draw(ctx, w, h, (ts - start) / 1000)
       raf = requestAnimationFrame(loop)
+      if (!start) start = ts
+      // ~30fps: a 100-230px vignette gains nothing from 60, and a folder can
+      // hold several of these running at once beside the real render.
+      if (ts - last < 30) return
+      last = ts
+      draw(ctx, w, h, (ts - start) / 1000)
     }
     raf = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(raf)
