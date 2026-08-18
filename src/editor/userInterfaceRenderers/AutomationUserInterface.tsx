@@ -30,7 +30,7 @@
 // and boost read at a glance. The curve and noise windows scale with it, so
 // the picture above always shows the values the lane will actually emit.
 
-import { useState, useRef, type JSX, type KeyboardEvent, type PointerEvent, type RefObject } from 'react'
+import { useMemo, useState, useRef, type JSX, type KeyboardEvent, type PointerEvent, type RefObject } from 'react'
 import { ChevronDown, ChevronRight, Dices } from 'lucide-react'
 import {
   AUTOMATION_AMOUNT_MAX,
@@ -1132,6 +1132,13 @@ export function AutomationUserInterface({
   // Where a full-height note lands after the amount fader. Boosts past 100%
   // pin at the top - that IS the clamp the engine applies, not a plot limit.
   const yAmountPeak = Y_BASE - clamp(amount, 0, 1) * Y_SPAN
+  // The force plot runs a 2048-step physics integration; only redo it when the
+  // force config or the amount actually change, not on every knob pointermove
+  // elsewhere in the panel.
+  const forceD = useMemo(
+    () => (mode === 'force' && force ? forcePath(force, PX0, PX1, 220, yAmountPeak) : ''),
+    [mode, force, yAmountPeak],
+  )
 
   return (
     // The lane fills its chassis: cancel the settings container's p-3 so the
@@ -1180,7 +1187,7 @@ export function AutomationUserInterface({
                 </g>
               )
             })}
-            <GlowPath d={forcePath(force, PX0, PX1, 220, yAmountPeak)} accent={accent} />
+            <GlowPath d={forceD} accent={accent} />
           </svg>
         </LaneWindow>
       ) : interpolation === 'spline' ? (
