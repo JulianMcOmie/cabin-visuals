@@ -248,7 +248,7 @@ export interface ActiveImpactWarp {
   seed: number
 }
 
-const clamp01 = (value: number) => Math.max(-1, Math.min(1, value))
+const clampSigned = (value: number) => Math.max(-1, Math.min(1, value))
 
 /**
  * Resolve one track's hit this frame.
@@ -314,7 +314,7 @@ export function resolveActiveImpactWarp(
   // die at a third of its travel, so it was never seen crossing the frame at all.
   const amount = style === IMPACT_STYLE_SHOCKWAVE
     ? gain * freshestVelocity * (1 - phase)
-    : clamp01(drive) * gain
+    : clampSigned(drive) * gain
   // Opposing shoves in a roll partially cancel; the length is clamped rather
   // than normalized so that cancellation is visible instead of being renormalized
   // back up to a full-strength shove in whatever direction survived.
