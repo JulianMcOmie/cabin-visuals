@@ -1033,7 +1033,7 @@ export function LeftSidebar() {
         </div>
       </div>
 
-      <div className={`timeline-scrollbar relative z-10 flex-1 overflow-y-auto ${tab === 'instruments' ? '' : 'pb-4'}`}>
+      <div data-library-scroll className={`timeline-scrollbar relative z-10 flex-1 overflow-y-auto ${tab === 'instruments' ? '' : 'pb-4'}`}>
         {tab === 'instruments' && (
           // Keyed: the scene/Main views are different folder trees rendered in
           // the same slot - remount so a drill-down path into one never

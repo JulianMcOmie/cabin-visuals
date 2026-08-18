@@ -1366,12 +1366,17 @@ export function InstrumentCardPreview({ item }: { item: InstrumentItem }) {
       setEverNear(true)
       return
     }
+    // Observe against the library's own scroll box: with no `root` the margin
+    // expands the VIEWPORT rect, but intersection is still clipped by the
+    // pane, so cards used to mount exactly at the pane edge with no lookahead.
+    // A generous margin starts a clip loading a screen before it arrives.
+    const root = host.closest<HTMLElement>('[data-library-scroll]')
     const observer = new IntersectionObserver(
       ([entry]) => {
         setNearViewport(entry.isIntersecting)
         if (entry.isIntersecting) setEverNear(true)
       },
-      { rootMargin: '128px 0px' },
+      { root, rootMargin: '400px 0px' },
     )
     observer.observe(host)
     return () => observer.disconnect()
