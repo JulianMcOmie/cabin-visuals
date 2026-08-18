@@ -44,6 +44,11 @@ function loadPhotoTexture(ref: string): Promise<Texture | null> {
     try {
       const url = await getPhotoPlayableUrl(ref)
       const texture = await new TextureLoader().loadAsync(url)
+      // `load` fires before the JPEG is decoded; without this the decode
+      // happens synchronously inside the first texImage2D - i.e. on the frame
+      // the photo first shows. decode() does it off-thread ahead of time.
+      const image = texture.image as HTMLImageElement | undefined
+      if (image && typeof image.decode === 'function') await image.decode().catch(() => {})
       texture.colorSpace = SRGBColorSpace
       texture.minFilter = LinearFilter
       texture.magFilter = LinearFilter
