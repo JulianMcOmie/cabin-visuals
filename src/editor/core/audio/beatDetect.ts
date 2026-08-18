@@ -24,10 +24,22 @@ const MAX_BPM = 200
 const FOLD_MIN = 85
 const FOLD_MAX = 180
 
+/** The raw material the detector needs - plain arrays, so the work can run in
+ *  a Worker (an AudioBuffer can't cross a postMessage). */
+export interface BeatDetectInput {
+  channels: Float32Array[]
+  sampleRate: number
+}
+
 /** Onset envelope: half-wave-rectified RMS difference per hop. */
-function onsetEnvelope(buffer: AudioBuffer): { env: Float32Array; fps: number } {
-  const n = buffer.length
-  const chs = Array.from({ length: buffer.numberOfChannels }, (_, c) => buffer.getChannelData(c))
+function onsetEnvelope({ channels: chs, sampleRate }: BeatDetectInput): { env: Float32Array; fps: number } {
+  const n = chs[0]?.length ?? 0
+  // Mono mixdown once, up front - the old per-sample inner loop over the
+  // channel array was the bulk of the detector's main-thread time.
+  const mono = new Float32Array(n)
+  const inv = 1 / Math.max(1, chs.length)
+  for (const ch of chs) for (let i = 0; i < n; i++) mono[i] += ch[i]
+  if (chs.length > 1) for (let i = 0; i < n; i++) mono[i] *= inv
   const frames = Math.max(0, Math.floor((n - FRAME) / HOP))
   const env = new Float32Array(frames)
   let prev = 0
@@ -35,16 +47,14 @@ function onsetEnvelope(buffer: AudioBuffer): { env: Float32Array; fps: number } 
     const start = f * HOP
     let sum = 0
     for (let i = start; i < start + FRAME; i++) {
-      let s = 0
-      for (const ch of chs) s += ch[i]
-      s /= chs.length
+      const s = mono[i]
       sum += s * s
     }
     const rms = Math.sqrt(sum / FRAME)
     env[f] = Math.max(0, rms - prev)
     prev = rms
   }
-  return { env, fps: buffer.sampleRate / HOP }
+  return { env, fps: sampleRate / HOP }
 }
 
 /** Autocorrelation of the envelope at a given integer lag. */
@@ -76,7 +86,15 @@ function combSum(env: Float32Array, period: number, phase: number): number {
 }
 
 export function detectBeats(buffer: AudioBuffer): BeatDetection | null {
-  const { env, fps } = onsetEnvelope(buffer)
+  return detectBeatsFromChannels({
+    channels: Array.from({ length: buffer.numberOfChannels }, (_, c) => buffer.getChannelData(c)),
+    sampleRate: buffer.sampleRate,
+  })
+}
+
+/** The detector proper, over plain channel arrays (Worker-friendly). */
+export function detectBeatsFromChannels(input: BeatDetectInput): BeatDetection | null {
+  const { env, fps } = onsetEnvelope(input)
   // Need a handful of bars of material to say anything (≈8s at 120bpm).
   if (env.length < fps * 8) return null
 
