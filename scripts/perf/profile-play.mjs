@@ -9,6 +9,8 @@ import { readFileSync } from 'fs'
 const [file, secsArg, ...flags] = process.argv.slice(2)
 const secs = Number(secsArg ?? 8)
 const paused = flags.includes('--paused')
+const drag = flags.includes('--drag')
+const scrub = flags.includes('--scrub')
 const BASE = process.env.BASE ?? 'http://localhost:3050'
 const proj = JSON.parse(readFileSync(file, 'utf8'))
 
@@ -28,9 +30,24 @@ await cdp.send('Profiler.setSamplingInterval', { interval: 250 })
 await page.evaluate(() => { window.__frames = []; window.__lt = []; let last = performance.now(); const tick = () => { const n = performance.now(); window.__frames.push(n - last); last = n; requestAnimationFrame(tick) }; requestAnimationFrame(tick); new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__lt.push(e.duration) }).observe({ type: 'longtask' }) })
 if (!paused) await page.evaluate(() => { window.__cabinStores.time.getState().setCurrentBeat(0) })
 await cdp.send('Profiler.start')
-if (!paused) await page.keyboard.press('Space')
-await page.waitForTimeout(secs * 1000)
-if (!paused) await page.keyboard.press('Space')
+if (drag) {
+  // Drag the first block back and forth for `secs` seconds (paused transport).
+  const el = page.locator('[data-block-id]').first()
+  const box = await el.boundingBox()
+  await page.mouse.move(box.x + 20, box.y + box.height / 2); await page.mouse.down()
+  const t0 = Date.now(); let i = 0
+  while (Date.now() - t0 < secs * 1000) { await page.mouse.move(box.x + 20 + 120 * Math.sin(i / 8), box.y + box.height / 2 + 30 * Math.sin(i / 13)); i++; await page.waitForTimeout(8) }
+  await page.mouse.up()
+} else if (scrub) {
+  const t0 = Date.now(); let i = 0
+  while (Date.now() - t0 < secs * 1000) { await page.evaluate((b) => window.__cabinStores.time.getState().setCurrentBeat(b), (i % 64) / 4); i++; await page.waitForTimeout(16) }
+} else if (!paused) {
+  await page.keyboard.press('Space')
+  await page.waitForTimeout(secs * 1000)
+  await page.keyboard.press('Space')
+} else {
+  await page.waitForTimeout(secs * 1000)
+}
 const { profile } = await cdp.send('Profiler.stop')
 const stats = await page.evaluate(() => { const f = window.__frames.slice().sort((a, b) => a - b); return { frames: f.length, p50: f[Math.floor(f.length * 0.5)]?.toFixed(1), p95: f[Math.floor(f.length * 0.95)]?.toFixed(1), max: f[f.length - 1]?.toFixed(1), longTasks: window.__lt.length, longTaskMs: window.__lt.reduce((a, b) => a + b, 0).toFixed(0) } })
 console.log('frames:', stats)

@@ -156,6 +156,31 @@ export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOpti
   const abortRef = useRef<AbortController | null>(null)
   const [marqueeRect, setMarqueeRect] = useState<MarqueeRect | null>(null)
 
+  // Lane / guide-host left edges, measured once per gesture and refreshed
+  // whenever the timeline scrolls or resizes. Measuring on every pointermove
+  // (right after the move's store write dirtied layout) forced two full
+  // layouts of the timeline per move - a visible chunk of drag cost on a
+  // dense project.
+  const edgeCacheRef = useRef<{ laneLeft: number; hostLeft: number } | null>(null)
+  useEffect(() => {
+    const invalidate = () => { edgeCacheRef.current = null }
+    window.addEventListener('scroll', invalidate, true)
+    window.addEventListener('resize', invalidate)
+    return () => {
+      window.removeEventListener('scroll', invalidate, true)
+      window.removeEventListener('resize', invalidate)
+    }
+  }, [])
+  const measureEdges = useCallback(() => {
+    const cached = edgeCacheRef.current
+    if (cached) return cached
+    const laneLeft = laneRef.current?.getBoundingClientRect().left ?? 0
+    const hostLeft = dragGuideRef.current?.parentElement?.getBoundingClientRect().left ?? 0
+    const next = { laneLeft, hostLeft }
+    edgeCacheRef.current = next
+    return next
+  }, [laneRef, dragGuideRef])
+
   const placeDragGuideAtClientX = useCallback((clientX: number | null) => {
     const guide = dragGuideRef.current
     if (!guide) return
@@ -163,16 +188,15 @@ export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOpti
       guide.style.visibility = 'hidden'
       return
     }
-    const hostLeft = guide.parentElement?.getBoundingClientRect().left ?? 0
+    const { hostLeft } = measureEdges()
     guide.style.transform = `translateX(${clientX - hostLeft}px)`
     guide.style.visibility = 'visible'
-  }, [dragGuideRef])
+  }, [dragGuideRef, measureEdges])
 
   const placeDragGuideAtBar = useCallback((bar: number, barWidthPx: number) => {
-    const laneR = laneRef.current?.getBoundingClientRect()
-    if (!laneR) return
-    placeDragGuideAtClientX(laneR.left + bar * barWidthPx)
-  }, [laneRef, placeDragGuideAtClientX])
+    if (!laneRef.current) return
+    placeDragGuideAtClientX(measureEdges().laneLeft + bar * barWidthPx)
+  }, [laneRef, placeDragGuideAtClientX, measureEdges])
 
   // Snap a bar position to the zoom-aware step (move, resize, and the draw
   // gesture's growing edge all come through here): beats when zoomed in,
@@ -432,6 +456,7 @@ export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOpti
     // Let right-click fall through to the lane (block drawing) instead of moving.
     if (e.button !== 0) return
     e.stopPropagation()
+    edgeCacheRef.current = null // fresh measurement per gesture
 
     // Shift toggles selection without starting a drag. preventDefault keeps the
     // shift-click from extending the browser's DOM text selection across the app.

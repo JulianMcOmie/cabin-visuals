@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { memo, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Group, Matrix4 } from 'three'
 import { getInstrument } from '../../instruments'
@@ -44,7 +44,11 @@ function perStateOnce(state: object, key: string, compute: () => string): string
   return value
 }
 
-export function ObjectRenderer({
+// memo with a by-value check on maskSourceIds: VisualScene re-renders on every
+// structural publish (a debounced re-resolve fires ~12×/s during a block
+// drag), and without this every copy - and every INSTRUMENT component under
+// it - re-rendered each time, though nothing about it had changed.
+export const ObjectRenderer = memo(function ObjectRenderer({
   sceneId,
   trackId,
   instrumentId,
@@ -105,21 +109,26 @@ export function ObjectRenderer({
     }
     return ids.sort().join(',')
   }))
-  const shaderInstances = plugins.filter(
-    (p) => (p.enabled || fxEnabledAutomated.includes(p.id)) && getEffect(p.pluginId)?.category === 'shader',
-  )
-  const scaleInstances = plugins.filter((plugin) => plugin.pluginId === 'scale')
-  // Material effects generate the target's SURFACE and deform effects move its
-  // VERTICES, so both must sit innermost - closest to the meshes - and both apply
-  // on the full-frame and normal paths. They share one wrapper because they share
-  // one `onBeforeCompile` hook: two patchers wrapping the same material would
-  // compile differently depending on which mounted first.
-  // Kept mounted while an automated 'enabled' is off, same as shader instances.
-  const materialInstances = plugins.filter((p) => {
-    if (!p.enabled && !fxEnabledAutomated.includes(p.id)) return false
-    const category = getEffect(p.pluginId)?.category
-    return category === 'material' || category === 'deform'
-  })
+  // Memoized: fresh arrays here meant fresh props for every wrapper below on
+  // each render, defeating their own bail-outs.
+  const { shaderInstances, scaleInstances, materialInstances } = useMemo(() => ({
+    shaderInstances: plugins.filter(
+      (p) => (p.enabled || fxEnabledAutomated.includes(p.id)) && getEffect(p.pluginId)?.category === 'shader',
+    ),
+    scaleInstances: plugins.filter((plugin) => plugin.pluginId === 'scale'),
+    // Material effects generate the target's SURFACE and deform effects move
+    // its VERTICES, so both must sit innermost - closest to the meshes - and
+    // both apply on the full-frame and normal paths. They share one wrapper
+    // because they share one `onBeforeCompile` hook: two patchers wrapping the
+    // same material would compile differently depending on which mounted
+    // first. Kept mounted while an automated 'enabled' is off, same as shader
+    // instances.
+    materialInstances: plugins.filter((p) => {
+      if (!p.enabled && !fxEnabledAutomated.includes(p.id)) return false
+      const category = getEffect(p.pluginId)?.category
+      return category === 'material' || category === 'deform'
+    }),
+  }), [plugins, fxEnabledAutomated])
 
   // Full-frame can be a per-track MODE (Oscilloscope's "Fit to screen"), so the
   // params record is a real dependency here: flipping the mode swaps which of
@@ -171,13 +180,18 @@ export function ObjectRenderer({
     }
   })
 
-  if (!def) return null
-  const Component = def.component
-  const bare = (
-    <InstrumentCopyContext.Provider value={instrumentCopyContext}>
-      <Component trackId={trackId} />
-    </InstrumentCopyContext.Provider>
-  )
+  // The instrument element is memoized so a re-render of THIS component (its
+  // effect chain changed, say) hands React the same element and the
+  // instrument's own subtree bails out.
+  const Component = def?.component
+  const bare = useMemo(() => Component
+    ? (
+      <InstrumentCopyContext.Provider value={instrumentCopyContext}>
+        <Component trackId={trackId} />
+      </InstrumentCopyContext.Provider>
+    )
+    : null, [Component, instrumentCopyContext, trackId])
+  if (!def || !bare) return null
   const instrument = materialInstances.length > 0
     ? <MaterialWrapper trackId={trackId} plugins={materialInstances}>{bare}</MaterialWrapper>
     : bare
@@ -222,4 +236,13 @@ export function ObjectRenderer({
   }
 
   return <group ref={groupRef}>{content}</group>
+}, (a, b) =>
+  a.sceneId === b.sceneId && a.trackId === b.trackId && a.instrumentId === b.instrumentId
+  && a.visualCopyIndex === b.visualCopyIndex && sameIds(a.maskSourceIds, b.maskSourceIds))
+
+function sameIds(a?: readonly string[], b?: readonly string[]): boolean {
+  if (a === b) return true
+  if (!a || !b || a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+  return true
 }

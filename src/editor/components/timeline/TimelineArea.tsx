@@ -262,8 +262,10 @@ export function TimelineArea() {
   // spans the ruler and every lane, but follows the content during scrolling.
   useLayoutEffect(() => {
     if (!projectLengthEdgeRef.current) return
+    // Mirrored scrollLeft (kept by the scroll handler) - reading the DOM
+    // property inside a layout effect forced a layout on every render.
     projectLengthEdgeRef.current.style.transform =
-      `translateX(${pickupPx + projectWidthPx - (scrollRef.current?.scrollLeft ?? 0)}px)`
+      `translateX(${pickupPx + projectWidthPx - horizontalZoomRef.current.scrollLeft}px)`
   }, [projectWidthPx, pickupPx])
 
   // The render extent is responsive: short projects still show grid/ruler
