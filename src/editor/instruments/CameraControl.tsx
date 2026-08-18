@@ -3,6 +3,7 @@ import { useThree } from '@react-three/fiber'
 import { PerspectiveCamera, Vector3 } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef } from './types'
+import { clamp } from '../utils/math'
 
 // Ported from Excellent DAW's `cameraControl`. This instrument renders NO mesh - it
 // drives the scene camera (position / rotation / fov) each frame from its params.
@@ -23,7 +24,6 @@ import type { ObjectInstrumentDef, ParamDef } from './types'
 const DEG = Math.PI / 180
 const DEFAULTS = { posX: 0, posY: 0, posZ: 5, rotX: 0, rotY: 0, rotZ: 0, fov: 55 }
 
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
 // Smooth exponential-ish decay used for the note punch envelope (Tyler-style easing).
 const easeOutDecay = (t: number) => Math.pow(1 - clamp(t, 0, 1), 2)
 

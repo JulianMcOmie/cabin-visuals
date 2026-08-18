@@ -37,6 +37,7 @@ import type { ParamDef } from '../../instruments/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { RISO_DUOTONE_COLOR } from './identityColors'
 import type { VisualCopy } from './types'
+import { clamp01 } from '../../utils/math'
 
 /** Which scalar of the copy's placement becomes the tone ramp. Deliberately the
  *  Cosine Palette's vocabulary, value for value: two colorizers asking "where
@@ -145,8 +146,6 @@ const RISO_PARAMS: ParamDef[] = [
     default: RISO_BLEND_PERCEPTUAL,
   },
 ]
-
-const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
 
 /**
  * The 8x8 ordered (Bayer) matrix, the classic print screen: thresholds spread

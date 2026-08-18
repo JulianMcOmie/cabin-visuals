@@ -14,8 +14,7 @@
 // is one control among many and vertical space is scarce.
 
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+import { clamp } from '../utils/math'
 
 // ── Color math (HSV ↔ hex) ──────────────────────────────────────────────────
 

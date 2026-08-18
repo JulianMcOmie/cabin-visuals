@@ -48,8 +48,7 @@ import {
 } from './console'
 import type { UserInterfaceRendererDefinition } from './types'
 import { CONVEYOR_COLOR } from '../core/visualCopies/identityColors'
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+import { clamp } from '../utils/math'
 
 // The mover has no colour of its own (it only moves and dims), so the panel
 // wears what it evokes: a cool moving current.

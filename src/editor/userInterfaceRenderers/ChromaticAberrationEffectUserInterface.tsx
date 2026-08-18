@@ -5,6 +5,7 @@ import { isNumberParam, type NumberParamDef } from '../instruments/types'
 import { ParamControl, ParamSlider } from './ParameterControl'
 import { ParameterList } from './ParametersUserInterface'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import { clamp } from '../utils/math'
 
 // Chromatic aberration settings: a black swatch where a lens glyph splits into
 // live R/G/B ghost copies — red pushed along the fringe direction, blue pulled
@@ -12,7 +13,6 @@ import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './
 // params at once (direction = angle, distance = offset); fine-tune sliders sit
 // below.
 
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
 const TAU = Math.PI * 2
 
 type NumberBound = { definition: NumberParamDef; value: number; setValue: (value: number | string) => void }

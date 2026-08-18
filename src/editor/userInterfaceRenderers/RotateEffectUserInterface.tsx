@@ -5,13 +5,12 @@ import { isNumberParam, type NumberParamDef } from '../instruments/types'
 import { ParamControl } from './ParameterControl'
 import { ParameterList } from './ParametersUserInterface'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import { clamp } from '../utils/math'
 
 // Rotate settings: one column per axis. The dial is the orientation — grab it
 // and turn (snaps to the param's 5° step, needle shows the angle); the rim arc
 // shows spin speed and direction; the pill under each dial is a horizontal
 // drag-to-set spin control with a bipolar fill. Double-click anything to reset.
-
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
 
 type NumberBound = { definition: NumberParamDef; value: number; setValue: (value: number | string) => void }
 

@@ -6,12 +6,11 @@ import { isNumberParam, type NumberParamDef } from '../instruments/types'
 import { ParamControl } from './ParameterControl'
 import { ParameterList } from './ParametersUserInterface'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import { clamp } from '../utils/math'
 
 // Offset settings: a crosshair XY drag pad (the offset IS a position, so you
 // place it) with a bipolar Z rail alongside — depth reads as a vertical send
 // fader filling away from center. Mono readouts + reset underneath.
-
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
 
 type NumberBound = { definition: NumberParamDef; value: number; setValue: (value: number | string) => void }
 

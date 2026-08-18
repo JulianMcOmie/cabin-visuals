@@ -45,13 +45,14 @@
 // and one with several targets gives each of them its own loop.
 
 import { Matrix4 } from 'three'
-import type { MidiRowDef, ParamDef } from '../../instruments/types'
+import type { MidiRowDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { wrapToBound } from './motion'
 import { SIGNED_BASIS_DIRECTIONS, normalizedVelocity } from './motionBasis'
 import type { VisualCopy } from './types'
 import { CONVEYOR_COLOR } from './identityColors'
+import { smoothstep } from '../../utils/math'
 
 export interface ConveyorSettings {
   /** Units travelled per beat while a direction note is held. */
@@ -97,11 +98,6 @@ const CONVEYOR_ROWS: MidiRowDef[] = [
   { pitch: 64, label: 'Forward (+Z)' },
   { pitch: 65, label: 'Back (−Z)' },
 ]
-
-function smoothstep(t: number): number {
-  const x = Math.max(0, Math.min(1, t))
-  return x * x * (3 - 2 * x)
-}
 
 /**
  * Area under a velocity ramp that eases 0 → 1 over one unit of time and holds:

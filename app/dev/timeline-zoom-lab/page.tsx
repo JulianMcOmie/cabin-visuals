@@ -32,6 +32,7 @@
 
 import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { UnfoldHorizontal, UnfoldVertical } from 'lucide-react'
+import { clamp01 } from '@/editor/utils/math'
 
 /* ------------------------------------------------------------------ */
 /* The two values, and the log mapping the real control uses.          */
@@ -41,8 +42,6 @@ import { UnfoldHorizontal, UnfoldVertical } from 'lucide-react'
 const PPB = { min: 2, max: 100, initial: 24 }
 /** Vertical zoom: track row height in px (UIStore.tracksRowHeight). */
 const ROW = { min: 28, max: 200, initial: 44 }
-
-const clamp01 = (t: number) => Math.max(0, Math.min(1, t))
 
 /** Zoom is multiplicative, so the track is logarithmic: 4 → 8 px/beat is the
  *  same gesture as 40 → 80. (Same reasoning as the shipped ZoomSlider.) */

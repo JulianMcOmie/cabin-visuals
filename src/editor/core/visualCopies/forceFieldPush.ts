@@ -3,6 +3,7 @@ import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { normalizedVelocity } from './motionBasis'
 import { FORCE_FIELD_PUSH_COLOR } from './identityColors'
+import { smoothstep } from '../../utils/math'
 
 export const FORCE_FIELD_OUTWARD_PITCH = 60
 export const FORCE_FIELD_INWARD_PITCH = 61
@@ -28,11 +29,6 @@ export interface ForceFieldPushSettings {
   rebound: number
   /** Z rotation per unit of radius at the peak. May be negative. */
   twistDegrees: number
-}
-
-function smoothstep(t: number): number {
-  const x = Math.max(0, Math.min(1, t))
-  return x * x * (3 - 2 * x)
 }
 
 /** A quick, smooth strike followed by a longer fluid return to rest. */

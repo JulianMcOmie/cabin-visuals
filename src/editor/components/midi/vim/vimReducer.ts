@@ -15,12 +15,9 @@ import {
   type VimTimeRange,
 } from './types'
 import { anchorForCursor, bigRowStep, keyMapForRows, TYPING_KEY_SET } from './keyMap'
+import { clamp } from '../../../utils/math'
 
 const EPS = 1e-6
-
-function clamp(v: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, v))
-}
 
 function done(state: VimState, intents: VimIntent[] = [], handled = true): VimResult {
   return { state, intents, handled }

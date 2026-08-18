@@ -5,13 +5,12 @@ import { isNumberParam, type NumberParamDef } from '../instruments/types'
 import { ParamControl } from './ParameterControl'
 import { ParameterList } from './ParametersUserInterface'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import { clamp } from '../utils/math'
 
 // Pixelate settings: a live mosaic swatch — an accent gradient quantized into a
 // true checker grid whose cell size IS the pixel-size param (drag across it to
 // coarsen/refine), a chunky notched slider underneath, and power-of-two preset
 // chips for the classic retro sizes.
-
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
 
 type NumberBound = { definition: NumberParamDef; value: number; setValue: (value: number | string) => void }
 

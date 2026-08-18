@@ -7,6 +7,7 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import type { ObjectInstrumentDef, ParamDef } from './types'
+import { clamp } from '../utils/math'
 
 // Ported from Excellent DAW's NeonPolar. A 3D neon polar harmonograph: 6 oscillator
 // layers of drifting polar curves drawn as fat neon lines. Notes in the jitter range
@@ -227,7 +228,6 @@ const PARAMS: ParamDef[] = [
   { key: 'color', label: 'Color', type: 'color', default: '#d4a843' },
   { key: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.05, default: 0.75 },
 ]
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
 
 // ---------------------------------------------------------------------------
 // Component

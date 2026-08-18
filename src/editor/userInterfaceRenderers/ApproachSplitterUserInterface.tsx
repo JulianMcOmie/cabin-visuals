@@ -47,8 +47,7 @@ import {
 } from './console'
 import type { UserInterfaceRendererDefinition } from './types'
 import { APPROACH_COLOR } from '../core/visualCopies/identityColors'
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+import { clamp } from '../utils/math'
 
 // The splitter has no color param (it only moves and scales copies), so the
 // panel wears the sensation it produces: warp-drive blue.

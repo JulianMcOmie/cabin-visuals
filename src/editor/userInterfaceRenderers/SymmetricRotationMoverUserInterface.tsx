@@ -38,12 +38,11 @@ import {
   type SelectBinding,
 } from './console'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import { clamp } from '../utils/math'
 
 // The accent comes FROM THE DEFINITION - the same cornflower this mover's
 // timeline blocks and piano-roll notes wear.
 const ACCENT = SYMMETRIC_ROTATION_COLOR
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
 // ── Live preview: a wall of copies through the real resolve ─────────────────
 

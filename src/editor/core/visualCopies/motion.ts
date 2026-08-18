@@ -61,6 +61,7 @@ import {
 import { evaluateConstantRotationAngles, type ConstantRotationSettings } from './rotationMovers'
 import type { VisualCopy } from './types'
 import { MOTION_COLOR } from './identityColors'
+import { smoothstep } from '../../utils/math'
 
 const DEG_TO_RAD = Math.PI / 180
 
@@ -248,10 +249,6 @@ export function wrapToBound(value: number, bound: number): number {
 /**
  * Smoothstep on [0, 1], clamped outside it - the fade's dissolve curve.
  */
-function smoothstep(t: number): number {
-  const x = Math.max(0, Math.min(1, t))
-  return x * x * (3 - 2 * x)
-}
 
 /**
  * Opacity factor for a copy sitting at `position` along an axis whose wrap

@@ -54,8 +54,7 @@ import {
   PreviewCanvas,
 } from './console'
 import type { UserInterfaceRendererDefinition } from './types'
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+import { clamp } from '../utils/math'
 
 // The stand-in for "the objects' own color". Cool and dim so the flash is
 // unmistakably the colorizer's doing and not the material's - but not so dark

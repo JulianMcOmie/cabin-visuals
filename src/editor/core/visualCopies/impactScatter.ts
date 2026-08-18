@@ -60,6 +60,7 @@ import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { normalizedVelocity } from './motionBasis'
 import { IMPACT_SCATTER_COLOR } from './identityColors'
+import { clamp01 } from '../../utils/math'
 
 export const SCATTER_IMPACT_PITCH = 60
 export const SCATTER_IMPLODE_PITCH = 61
@@ -156,8 +157,6 @@ interface Tuning {
   /** 0 = the orientation unwinds and stops, 1 = it wobbles past home. */
   spinBounce: number
 }
-
-const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
 
 /**
  * Macros → physics. Every curve here is a tuning decision, not a formula:

@@ -17,6 +17,7 @@ import {
   transformDefault,
 } from '../../core/transform'
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
+import { clamp } from '../../utils/math'
 
 // ── Scrub + snap model ───────────────────────────────────────────────────────
 // Every value is a vertical scrub field (drag up = increase, like riding a DAW
@@ -55,8 +56,6 @@ const FIELDS: FieldSpec[] = [
     perPixel: 0.005, format: (v) => `${Math.round(v * 100)}%`,
   },
 ]
-
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
 
 function snapValue(spec: Pick<FieldSpec, 'snaps' | 'snapThreshold'>, raw: number, bypass: boolean): number {
   if (bypass) return raw

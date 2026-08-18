@@ -3,6 +3,7 @@
 import { useRef, type JSX, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import { ParamSlider } from './ParameterControl'
+import { clamp } from '../utils/math'
 
 // Bespoke settings for an Envelope child track: the ADSR drawn as a real curve
 // you grab. Three handles - attack (time), decay (time + sustain level), and
@@ -14,7 +15,6 @@ import { ParamSlider } from './ParameterControl'
 
 export interface EnvelopeAdsr { attackBeats: number; decayBeats: number; sustainLevel: number; releaseBeats: number }
 
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 const snap = (value: number, step = 0.01) => Number((Math.round(value / step) * step).toFixed(4))
 
 // Slider ranges (mirror the stock envelope sliders).

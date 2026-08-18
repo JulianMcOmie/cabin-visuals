@@ -51,8 +51,7 @@ import {
   type StringBinding,
 } from './console'
 import type { UserInterfaceRendererDefinition } from './types'
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+import { clamp } from '../utils/math'
 
 // ── Live preview ────────────────────────────────────────────────────────────
 

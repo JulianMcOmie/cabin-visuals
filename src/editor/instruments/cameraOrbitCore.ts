@@ -30,10 +30,9 @@
 // one number the operator actually wants to hold still.
 
 import type { MidiRowDef } from './types'
+import { clamp } from '../utils/math'
 
 const DEG = Math.PI / 180
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
 // BOTH axes run forever. Neither angle is clamped or wrapped: a held note keeps
 // travelling for as long as it is held, so vertical laps over the top are as

@@ -31,8 +31,7 @@ import { withAlpha } from './colorWheel'
 import { LaserKnob } from './laserKnob'
 import { ParameterList } from './ParametersUserInterface'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+import { clamp } from '../utils/math'
 
 const ACCENT = GRID_COLOR
 // The guide's hue-true dark shade of the accent (never an alpha tint).

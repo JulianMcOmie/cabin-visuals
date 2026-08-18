@@ -35,8 +35,7 @@ import { resolveTrackIdentityColor } from '../utils/trackDisplayColor'
 import { Console, PreviewWindow, Segmented, GutterRow } from './console'
 import { hexToHsv, hsvToHex, towardWhite, withAlpha } from './colorWheel'
 import type { CopyTargets } from '../types'
-
-const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
+import { clamp } from '../utils/math'
 
 /** Each slice gets its own hue off the accent, so a chip and the copies it owns
  *  are the same colour and the picture needs no legend. The spread is kept

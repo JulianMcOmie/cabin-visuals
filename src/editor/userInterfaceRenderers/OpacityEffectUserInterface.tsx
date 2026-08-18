@@ -5,12 +5,11 @@ import { isNumberParam, type NumberParamDef } from '../instruments/types'
 import { ParamControl } from './ParameterControl'
 import { ParameterList } from './ParametersUserInterface'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import { clamp } from '../utils/math'
 
 // Opacity settings: one big vertical fader (this effect IS one number, so give
 // it a channel-strip throw) next to a checkerboard-backed swatch whose panel
 // fades live with the value, a large percent readout, and stop chips.
-
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
 
 type NumberBound = { definition: NumberParamDef; value: number; setValue: (value: number | string) => void }
 

@@ -13,6 +13,7 @@ import { ImprovedNoise } from 'three/examples/jsm/math/ImprovedNoise.js'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { FORCE_TRANSPARENT_KEY } from '../core/visual/animatedOpacity'
 import type { ObjectInstrumentDef, ParamDef } from './types'
+import { clamp } from '../utils/math'
 
 // A noise-warped point tube you fly through, from Bobby Roe's three.js wormhole demo.
 // The vertex lattice, the radial noise displacement and the hue ramp are the
@@ -123,10 +124,6 @@ const fragmentShader = `
     gl_FragColor = vec4(vColor * uBrightness, uOpacity * softEdge * (1.0 - vFog));
   }
 `
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value))
-}
 
 /** The original's cylinder lattice, generated directly. CylinderGeometry(openEnded)
  *  lays vertices out as (lengthSeg + 1) rows of (radialSeg + 1) columns; we want the

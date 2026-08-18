@@ -5,12 +5,11 @@ import { createPortal } from 'react-dom'
 import { ChevronDown, X } from 'lucide-react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { allProjectTags } from '../../utils/trackTags'
+import { clamp } from '../../utils/math'
 
 const PANEL_WIDTH = 240
 // Rough height for the below/above flip test (chips row + combobox).
 const PANEL_EST_HEIGHT = 140
-
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
 
 /** Add/remove a track's tags. Tags are the group labels a modulator can route to.
  *  Chips plus a dashed "+ add" chip; clicking it opens a combobox (type a new

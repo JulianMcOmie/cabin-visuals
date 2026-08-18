@@ -44,8 +44,7 @@ import { withAlpha } from './colorWheel'
 import { LaserKnob, formatKnobValue } from './laserKnob'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 import { TUNNEL_COLOR } from '../core/visualCopies/identityColors'
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+import { clamp } from '../utils/math'
 
 // The splitter has no color param (it only arranges and streams), so the panel
 // wears the sensation it produces: corridor-light blue over a hue-true dark

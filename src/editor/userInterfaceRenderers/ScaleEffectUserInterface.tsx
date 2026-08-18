@@ -5,13 +5,12 @@ import { isNumberParam, type NumberParamDef } from '../instruments/types'
 import { ParamControl, ParamSlider } from './ParameterControl'
 import { ParameterList } from './ParametersUserInterface'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import { clamp } from '../utils/math'
 
 // Scale settings: a ghost rectangle you resize by its corner handle (the handle
 // sits on the true base scale), breathing at the real pulse rate between dashed
 // min/max extents so amount and speed are read, not imagined. Pulse params stay
 // as console sliders below.
-
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
 
 type NumberBound = { definition: NumberParamDef; value: number; setValue: (value: number | string) => void }
 

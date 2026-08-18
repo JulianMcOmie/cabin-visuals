@@ -35,6 +35,7 @@ import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import type { VisualCopy } from './types'
 import { COSINE_PALETTE_COLOR } from './identityColors'
+import { clamp01 } from '../../utils/math'
 
 export const COSINE_MAP_X = 0
 export const COSINE_MAP_Y = 1
@@ -142,8 +143,6 @@ const COSINE_PARAMS: ParamDef[] = [
   { key: 'kick', label: 'Kick', min: 0, max: 1, step: 0.01, default: 0.25 },
   { key: 'kickDecay', label: 'Kick decay', min: 0.05, max: 8, step: 0.01, default: 1, curve: 2 },
 ]
-
-const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
 
 /** The resolved d triple: the selected preset plus the phase-offset knobs.
  *  Exported so a settings panel derives its strip from the same fold. */

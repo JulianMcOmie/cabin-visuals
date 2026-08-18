@@ -1,3 +1,4 @@
+import { clamp01 } from '../utils/math'
 // Track semantics shared by the UI and the engines - promoted out of the visual
 // engine because none of this is about rendering.
 
@@ -9,8 +10,6 @@
 // rendering, hence promoted here.
 export const AUTOMATION_PITCH_MIN = 36
 export const AUTOMATION_PITCH_MAX = 84
-
-const clamp01 = (t: number) => Math.max(0, Math.min(1, t))
 
 /** Map a note pitch to a param value in [paramMin, paramMax]. */
 export function pitchToValue(pitch: number, paramMin: number, paramMax: number): number {

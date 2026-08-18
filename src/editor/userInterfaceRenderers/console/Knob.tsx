@@ -10,8 +10,7 @@ import { LaserKnob, formatKnobValue } from '../laserKnob'
 import { ColorWheelPill } from '../colorWheel'
 import { useConsoleAccent } from './Console'
 import type { ColorBinding, NumBinding } from './bindings'
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+import { clamp } from '../../utils/math'
 
 /** The index of the detent nearest to `value`. */
 function nearestDetent(detents: readonly number[], value: number): number {

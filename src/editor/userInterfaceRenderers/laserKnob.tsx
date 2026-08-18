@@ -13,8 +13,7 @@
 
 import { useRef, type KeyboardEvent, type PointerEvent } from 'react'
 import { towardWhite } from './colorWheel'
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+import { clamp } from '../utils/math'
 
 /** How much vertical travel covers the whole range, in pixels. */
 const DRAG_TRAVEL = 140

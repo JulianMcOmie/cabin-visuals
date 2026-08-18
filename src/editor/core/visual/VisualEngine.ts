@@ -14,6 +14,7 @@ import type { ResolvedGraph, ResolvedGroup, ObjectState, ResolvedEnvelope } from
 import type { ProjectState } from '../../store/ProjectStore'
 import { DEFAULT_SCENE_BACKGROUND, type Scene, type SceneGradient } from '../../types'
 import { compositionAutomatableParams, compositionDef, isCompositionTrack, type CompositionLayer } from '../directors'
+import { clamp } from '../../utils/math'
 
 // The engine is a plain module singleton, NOT a zustand/React store: per-frame
 // state must never trigger React re-renders. Renderers read it imperatively from
@@ -260,10 +261,6 @@ export function syncParams(input: ProjectState | ProjectSnapshot) {
       obj.styleLanes = sceneTracks[obj.trackId].styleLanes
     }
   }
-}
-
-function clamp(v: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, v))
 }
 
 function clampOpacity(v: number): number {

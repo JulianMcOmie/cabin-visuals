@@ -63,8 +63,7 @@ import {
 } from './console'
 import type { UserInterfaceRendererDefinition } from './types'
 import { IMPACT_SCATTER_COLOR } from '../core/visualCopies/identityColors'
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+import { clamp } from '../utils/math'
 
 // The mover has no color param (its flash is a SHIFT of each object's own
 // colour), so the panel wears the material it evokes: cold kinetic shock.
@@ -514,7 +513,6 @@ function ShockKnob({ b, label, format, size = KNOB, detent }: {
     </div>
   )
 }
-
 
 // ── Panel ────────────────────────────────────────────────────────────────────
 

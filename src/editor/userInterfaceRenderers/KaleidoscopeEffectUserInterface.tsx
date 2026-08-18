@@ -6,6 +6,7 @@ import { isNumberParam, type NumberParamDef } from '../instruments/types'
 import { ParamControl, ParamSlider } from './ParameterControl'
 import { ParameterList } from './ParametersUserInterface'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import { clamp } from '../utils/math'
 
 // Kaleidoscope settings: a live mirror-wedge disc — wedge count tracks the
 // segments param, alternating fills show the mirror folds, the whole disc turns
@@ -13,7 +14,6 @@ import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './
 // and its tint follows the hue shift. Segments get a +/- stepper; the rest are
 // console sliders (hue on a rainbow track, spin bipolar).
 
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
 const TAU = Math.PI * 2
 
 type NumberBound = { definition: NumberParamDef; value: number; setValue: (value: number | string) => void }

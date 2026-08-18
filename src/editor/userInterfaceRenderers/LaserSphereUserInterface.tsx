@@ -22,8 +22,7 @@ import {
 } from '../instruments/LaserSphere'
 import { evaluateCoreAppearance } from '../instruments/laserSphereCore'
 import { consolePanel, PreviewCanvas, PreviewWindow, type PanelPreviewProps } from './console'
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+import { clamp } from '../utils/math'
 
 const WHITE = new Color(1, 1, 1)
 

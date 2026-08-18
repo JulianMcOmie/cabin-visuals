@@ -4,8 +4,7 @@
 // copies; a tweak to the visual language meant a fifteen-file sweep.
 
 import { hexToHsv, hsvToHex, withAlpha } from '../colorWheel'
-
-const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
+import { clamp01 } from '../../utils/math'
 
 /** The section background: a hue-true DARK SHADE of the accent, never an alpha
  *  tint — low-alpha color over the panel's mid-gray desaturates into mud

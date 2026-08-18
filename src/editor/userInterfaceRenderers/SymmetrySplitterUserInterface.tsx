@@ -36,8 +36,7 @@ import {
   type SelectBinding,
 } from './console'
 import type { UserInterfaceRendererDefinition } from './types'
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+import { clamp } from '../utils/math'
 
 // The accent comes FROM THE DEFINITION - the same hue this splitter's timeline
 // blocks and piano-roll notes wear.

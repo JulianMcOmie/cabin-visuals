@@ -29,6 +29,7 @@ import type { ParamDef } from '../../instruments/types'
 import { colorToOklch, oklchToHex } from '../../utils/oklch'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { GRADIENT_COLORIZER_COLOR } from './identityColors'
+import { clamp01 } from '../../utils/math'
 
 export const GRADIENT_MODE_POSITION = 0
 export const GRADIENT_MODE_INDEX = 1
@@ -82,8 +83,6 @@ const GRADIENT_PARAMS: ParamDef[] = [
   { key: 'colorA', label: 'Color A', type: 'color', default: '#4dd2ff' },
   { key: 'colorB', label: 'Color B', type: 'color', default: '#ff4d88' },
 ]
-
-const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
 
 /** Below this chroma a color has no meaningful hue of its own (grey/black/
  *  white), so it adopts the other stop's hue instead of contributing an

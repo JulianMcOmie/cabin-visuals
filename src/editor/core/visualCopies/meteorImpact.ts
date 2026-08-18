@@ -62,6 +62,7 @@ import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { normalizedVelocity } from './motionBasis'
 import { METEOR_IMPACT_COLOR } from './identityColors'
+import { smoothstep } from '../../utils/math'
 
 // ── The held vortex ──────────────────────────────────────────────────────────
 //
@@ -261,11 +262,6 @@ function sample(table: Float64Array, response: Response, s: number): number {
   const i = Math.floor(u)
   const frac = u - i
   return table[i] + (table[i + 1] - table[i]) * frac
-}
-
-function smoothstep(u: number): number {
-  const x = Math.max(0, Math.min(1, u))
-  return x * x * (3 - 2 * x)
 }
 
 /** Integral of smoothstep over [0, u]. */

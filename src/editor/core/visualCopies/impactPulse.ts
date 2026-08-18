@@ -42,11 +42,11 @@ import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { normalizedVelocity } from './motionBasis'
 import { IMPACT_PULSE_COLOR } from './identityColors'
+import { clamp } from '../../utils/math'
 
 /** One row per direction, so the piano roll reads as the score for the hit. */
 export const PULSE_SWELL_PITCH = 60
 export const PULSE_SQUASH_PITCH = 61
-
 
 /** How the size falls back after the onset - cliff, ramp, or hang. Three
  *  shapes for the same reason the Colorizer has three, but NOT its curves: its
@@ -72,8 +72,6 @@ export interface ImpactPulseSettings {
   /** PULSE_SNAP | PULSE_EVEN | PULSE_TAIL. */
   falloff: number
 }
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
 const IMPACT_PULSE_PARAMS: ParamDef[] = [
   // Curved: "subtle" is the interesting half of this knob, and a linear 0..1

@@ -1,4 +1,5 @@
 import type { AdsrEnvelope } from '../../types'
+import { clamp01 } from '../../utils/math'
 
 // Closed-form ADSR gain over gate notes - the envelope-track evaluator.
 //
@@ -30,10 +31,6 @@ export const DEFAULT_ADSR: AdsrEnvelope = {
 }
 
 const EPS = 0.0001
-
-function clamp01(v: number): number {
-  return Math.max(0, Math.min(1, v))
-}
 
 /** The minimal note shape the evaluator reads (pitch is deliberately ignored -
  *  an envelope lane is a trigger lane, not a pitched one). */

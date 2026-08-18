@@ -40,8 +40,7 @@ import { ParameterList } from './ParametersUserInterface'
 import { hexToHsv, hsvToHex, towardWhite, withAlpha } from './colorWheel'
 import { LaserKnob } from './laserKnob'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+import { clamp } from '../utils/math'
 
 function parameter(parameters: readonly UserInterfaceParameter[], key: string) {
   return parameters.find((candidate) => candidate.definition.key === key)

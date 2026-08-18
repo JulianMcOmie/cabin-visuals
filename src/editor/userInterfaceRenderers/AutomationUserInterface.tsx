@@ -62,8 +62,8 @@ import { LaserKnob } from './laserKnob'
 import { hexToHsv, hsvToHex, towardWhite, withAlpha } from './colorWheel'
 import { AUTOMATION_MAX_ROWS, automationIntegerGrid, automationRowCount, type AutomationRange, type AutomationSpreadCurve } from '../core/trackTypes'
 import type { AutomationMode, InterpolationMode } from '../types'
+import { clamp } from '../utils/math'
 
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 const snap = (value: number, step = 0.01) => Number((Math.round(value / step) * step).toFixed(4))
 
 /** The panel's color math is hex-only (shade / alpha / white-hot). A lane wearing
