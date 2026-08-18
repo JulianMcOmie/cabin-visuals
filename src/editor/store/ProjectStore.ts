@@ -1131,6 +1131,16 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     set((s) => {
       const track = s.tracks[trackId]
       if (!track) return s
+      // A drag frame that snaps to the same bar used to publish a brand-new
+      // store state anyway - fanning out to every selector, undo, autosave,
+      // the visual re-sync and a WebGL frame. Nothing changed: publish nothing.
+      const current = track.blocks.find((b) => b.id === blockId)
+      if (!current) return s
+      let changed = false
+      for (const key of Object.keys(updates) as (keyof Block)[]) {
+        if (!Object.is(current[key], updates[key])) { changed = true; break }
+      }
+      if (!changed) return s
       return {
         tracks: {
           ...s.tracks,
@@ -1651,6 +1661,8 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     set((s) => {
       const track = s.tracks[trackId]
       if (!track) return s
+      // Knob drags re-emit the same snapped value across many pointermoves.
+      if (track.params && Object.is(track.params[key], value)) return s
       return {
         tracks: {
           ...s.tracks,
