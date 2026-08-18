@@ -257,7 +257,6 @@ function createTextCanvas(
 
   ctx.textBaseline = 'middle'
   const cx = cssWidth / 2
-  const cy = TEXT_CANVAS_SIZE / 2
   const layoutWidth = ctx.measureText(layoutText).width
   const prefixWidth = entry.syllableCount > 1
     ? ctx.measureText(layoutText.slice(0, entry.syllableStart)).width

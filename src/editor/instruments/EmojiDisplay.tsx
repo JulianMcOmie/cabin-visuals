@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import { useThree } from '@react-three/fiber'
-import { Group, Mesh, MeshBasicMaterial, PlaneGeometry, CanvasTexture, LinearFilter, type Material } from 'three'
+import { Group, Mesh, MeshBasicMaterial, PlaneGeometry, CanvasTexture, LinearFilter } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import type { ResolvedNote } from '../core/visual/types'

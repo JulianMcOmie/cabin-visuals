@@ -421,7 +421,6 @@ function DotFieldVisual({ trackId }: { trackId: string }) {
     const pixelSize = dotSize
 
     // Scheme-specific base parameters (used for ripple highlight)
-    const schemeH = scheme === 0 ? 0.0 : scheme === 1 ? 0.48 : 0.75
     const schemeS = scheme === 0 ? 0.9 : scheme === 1 ? 0.75 : 0.85
     const schemeL = scheme === 0 ? 0.45 : scheme === 1 ? 0.45 : 0.4
 

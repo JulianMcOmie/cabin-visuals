@@ -118,7 +118,6 @@ test('a kick lands full-strength on its onset frame and eases back to ~5% at KIC
 
 test('kicks sum over the note history, so a roll winds further than one hit', () => {
   const notes = [note(0), note(0.25), note(0.5)]
-  const single = cosineKickPhase([note(0.5)], 0.5, 0.25, 1)
   // The earlier hits have partly decayed, so the sum lands between one fresh
   // hit and three: 0.25·(1 + e^-0.75 + e^-1.5) ≈ 1.7 hits' worth.
   close(cosineKickPhase(notes, 0.5, 0.25, 1), 0.25 * (1 + Math.exp(-0.75) + Math.exp(-1.5)))

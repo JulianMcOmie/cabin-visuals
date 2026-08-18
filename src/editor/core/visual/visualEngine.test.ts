@@ -8,12 +8,6 @@ function round(n: number) {
   return Math.round(n * 1_000_000) / 1_000_000
 }
 
-function normalizedForward(m: number[]): [number, number, number] {
-  const len = Math.hypot(m[8], m[9], m[10]) || 1
-  const clean = (n: number) => Object.is(n, -0) ? 0 : n
-  return [clean(round(m[8] / len)), clean(round(m[9] / len)), clean(round(m[10] / len))]
-}
-
 function serializeState(trackId: string) {
   const state = getObjectState(trackId)
   assert.ok(state)

@@ -1171,7 +1171,6 @@ function ProjectOccurrence({
 function ProjectTrackPreview({ data, sync }: { data: ProjectPreviewData; sync?: boolean }) {
   // Keyed by the hover data on purpose: a fresh frame per hover so a stale
   // world matrix from the previous row can never bleed into the first paint.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const frame = useMemo<ProjectFrame>(
     () => ({ world: new Matrix4(), meshScale: 1, opacity: 1, copies: [], ghostCopies: [] }),
     [data],

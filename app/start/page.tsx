@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { LoadingScreen } from '@/components/LoadingScreen'
 import { EditorialSkin, EditorialHeader } from '@/components/landing/editorialTheme'

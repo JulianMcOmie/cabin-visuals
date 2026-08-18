@@ -423,8 +423,6 @@ export function MidiEditor({
   }, [dragState, chrome])
 
   const barCount = Math.ceil(initialTotalBeats / beatsPerBar)
-  // Only every `barInterval`th bar is numbered (matches the track ruler's thinning).
-  const barInterval = barCount <= 16 ? 1 : barCount <= 64 ? 2 : 4
   const blockStartPx = beatToX(blockStartBeat, pixelsPerBeat)
   const blockWidthPx = beatToX(blockDurationBeats, pixelsPerBeat)
 

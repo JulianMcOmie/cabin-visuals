@@ -282,7 +282,6 @@ export function useMidiVim({
     const result = vimReduce(stateRef.current, { type: 'clamp' }, ctxRef.current)
     stateRef.current = result.state
     setState(result.state)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows.length, enabled])
 
   // Leaving takes the region's selection with it, so the roll doesn't keep
