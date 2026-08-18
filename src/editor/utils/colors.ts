@@ -110,13 +110,14 @@ export function midiBlockPalette(color: string): MidiBlockPalette {
     selectedBody:
       `radial-gradient(ellipse 78% 150% at 50% 50%, ${oklchToHex(0.98, c(0.01), h)}, ` +
       `${oklchToHex(0.88, c(0.1), h)} 45%, ${oklchToHex(0.72, c(0.19), h)} 100%)`,
+    // Tightened 2026-08-18: the old stack reached 140px out at 0.3 alpha and
+    // bled across neighbouring rows (and cost the compositor two huge blurs
+    // per selected block). Now a close halo that stays with the block.
     selectedBloom: [
-      `inset 0 0 14px ${oklchCss(0.66, c(0.21), h, 0.85)}`,
-      `0 0 4px ${oklchCss(0.97, c(0.03), h, 0.95)}`,
-      `0 0 14px ${oklchCss(0.68, c(0.22), h, 0.95)}`,
-      `0 0 36px ${oklchCss(0.64, c(0.22), h, 0.7)}`,
-      `0 0 76px ${oklchCss(0.58, c(0.21), h, 0.45)}`,
-      `0 0 140px ${oklchCss(0.55, c(0.2), h, 0.3)}`,
+      `inset 0 0 10px ${oklchCss(0.66, c(0.21), h, 0.6)}`,
+      `0 0 3px ${oklchCss(0.97, c(0.03), h, 0.8)}`,
+      `0 0 10px ${oklchCss(0.68, c(0.22), h, 0.6)}`,
+      `0 0 24px ${oklchCss(0.64, c(0.22), h, 0.3)}`,
     ].join(', '),
     selectedNote: oklchToHex(0.18, c(0.06), h),
     selectedNoteWrap: oklchCss(0.84, c(0.15), h, 0.7),
@@ -135,7 +136,7 @@ export function midiSelectionSpill(color: string, centerPx: number, widthPx: num
   const h = source.h
   const c = (target: number) => (colored ? target : 0)
   return (
-    `radial-gradient(ellipse ${Math.round(widthPx * 2.4)}px 185% at ${Math.round(centerPx)}px 50%, ` +
-    `${oklchCss(0.55, c(0.19), h, 0.5)}, ${oklchCss(0.48, c(0.16), h, 0.18)} 52%, transparent 78%)`
+    `radial-gradient(ellipse ${Math.round(widthPx * 1.6)}px 160% at ${Math.round(centerPx)}px 50%, ` +
+    `${oklchCss(0.55, c(0.19), h, 0.28)}, ${oklchCss(0.48, c(0.16), h, 0.1)} 52%, transparent 74%)`
   )
 }

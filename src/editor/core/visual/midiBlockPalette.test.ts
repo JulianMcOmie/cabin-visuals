@@ -42,5 +42,5 @@ test('grey tracks stay grey in both states', () => {
 test('selection spill centers its wash on the block', () => {
   const spill = midiSelectionSpill('#3a7694', 150, 100)
   assert.match(spill, /at 150px 50%/)
-  assert.match(spill, /ellipse 240px/)
+  assert.match(spill, /ellipse 160px/) // 1.6× the block width - a close wash, not a row-wide flood
 })
