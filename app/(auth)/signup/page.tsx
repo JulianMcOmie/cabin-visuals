@@ -3,7 +3,8 @@
 import { initiateSignup } from './actions'; // Updated import
 import { InstantLink as Link } from '@/components/instantNavigation'
 import { useSearchParams, usePathname } from 'next/navigation';
-import { useEffect, useState, Suspense } from 'react'; // Import Suspense
+import { useEffect, useState, Suspense } from 'react';
+import { flushSync } from 'react-dom';
 import Script from 'next/script';
 import { handleSignInWithGoogle } from '../login/actions'; // Updated import
 import { stashAnonWork } from '../../../src/persistence/carryover';
@@ -44,7 +45,8 @@ function SignupPageContent() {
   async function handleGoogleSignInCallback(response: any) {
     if (response.credential) {
       track('google_signin_submitted', { page: 'signup' });
-      setGoogleBusy(true);
+      // Loading screen first, synchronously - before the auth round trip.
+      flushSync(() => setGoogleBusy(true));
       try {
         // Google sign-in replaces any anonymous session - stash its work so
         // the projects page can carry it into the resulting account.
@@ -113,7 +115,7 @@ function SignupPageContent() {
 
       {errorMessage && <AuthBanner kind="error">{errorMessage}</AuthBanner>}
 
-      <form action={initiateSignup} onSubmit={() => { track('signup_started'); setFormBusy(true) }} className="flex flex-col gap-[14px]">
+      <form action={initiateSignup} onSubmit={() => { track('signup_started'); flushSync(() => setFormBusy(true)) }} className="flex flex-col gap-[14px]">
         <div>
           <label htmlFor="email" className={`mb-[6px] block ${authLabelClass}`}>Email</label>
           <input id="email" name="email" type="email" required className={authInputClass} placeholder="you@example.com" />

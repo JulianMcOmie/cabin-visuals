@@ -3,6 +3,7 @@
 import { completeSignup } from './actions';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
+import { flushSync } from 'react-dom';
 import { InstantLink as Link, beginNavigation } from '@/components/instantNavigation'
 import { useFormStatus } from 'react-dom';
 import { getSupabase } from '../../../../src/persistence/supabase';
@@ -64,8 +65,8 @@ function SetPasswordFormInternal() {
     if (password !== confirmPassword) { setErrorMessage('Passwords do not match.'); return; }
     if (!password || password.length < 6) { setErrorMessage('Password must be at least 6 characters long'); return; }
 
-    setConverting(true);
-    setErrorMessage(null);
+    // Loading screen first, synchronously - before the auth round trip.
+    flushSync(() => { setConverting(true); setErrorMessage(null); });
     const supabase = getSupabase();
     const { error } = await supabase.auth.updateUser({ email, password });
     if (error) {
@@ -146,7 +147,7 @@ function SetPasswordFormInternal() {
         onSubmit={(e) => {
           track('signup_password_set', { mode: anonUid ? 'convert' : 'fresh' })
           if (anonUid) void handleConvert(e)
-          else setFormBusy(true)
+          else flushSync(() => setFormBusy(true))
         }}
         className="flex flex-col gap-[14px]"
       >

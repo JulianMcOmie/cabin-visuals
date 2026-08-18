@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, Suspense } from 'react';
+import { flushSync } from 'react-dom';
 import Script from 'next/script';
 import { handleSignInWithGoogle, login } from './actions';
 import { InstantLink as Link } from '@/components/instantNavigation'
@@ -43,8 +44,8 @@ function LoginPageContent() {
   async function handleGoogleSignInCallback(response: any) {
     if (response.credential) {
       track('google_signin_submitted', { page: 'login' });
-      setIsLoading(true);
-      setError(null);
+      // Loading screen first, synchronously - before the auth round trip.
+      flushSync(() => { setIsLoading(true); setError(null); });
       try {
         // Logging in replaces any anonymous session - stash its work first so
         // the projects page can carry it into this account.
@@ -120,7 +121,7 @@ function LoginPageContent() {
       {message && <AuthBanner kind="success">{message}</AuthBanner>}
       {error && <AuthBanner kind="error">{error}</AuthBanner>}
 
-      <form action={login} onSubmit={() => { track('login_submitted'); setFormBusy(true) }} className="flex flex-col gap-[14px]">
+      <form action={login} onSubmit={() => { track('login_submitted'); flushSync(() => setFormBusy(true)) }} className="flex flex-col gap-[14px]">
         <div>
           <label htmlFor="email" className={`mb-[6px] block ${authLabelClass}`}>Email</label>
           <input id="email" name="email" type="email" required className={authInputClass} placeholder="you@example.com" />
