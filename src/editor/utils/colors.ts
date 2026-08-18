@@ -28,6 +28,14 @@ export interface MidiBlockPalette {
   selectedOutline: string
 }
 
+/** `#rrggbb` → 0-255 channels. Anything that isn't a 6-digit hex yields
+ *  `fallback` (a 24-bit packed color) instead of NaNs. */
+export function hexToRgb(hex: string, fallback = 0x000000): [number, number, number] {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
+  const n = m ? parseInt(m[1], 16) : fallback
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
 interface HslColor {
   hue: number
   saturation: number

@@ -6,6 +6,7 @@
 // trap this directory's guide documents).
 
 import type { ResolvedNote } from '../core/visual/types'
+import { hexToRgb } from '../utils/colors'
 
 /** Uniform-array size in the shader; the zones param is capped here. */
 export const FLASH_WALL_MAX_ZONES = 12
@@ -14,6 +15,8 @@ export const FLASH_WALL_MAX_ZONES = 12
 export const FLASH_WALL_BASE_PITCH = 60
 
 export const DEFAULT_FLASH_WALL_COLOR = '#8de1ff'
+/** DEFAULT_FLASH_WALL_COLOR packed, for hexToRgb's unparseable-input fallback. */
+export const FLASH_WALL_FALLBACK_RGB = 0x8de1ff
 
 /** The gradient's far end (zone N): ice blue falling into violet. */
 export const DEFAULT_FLASH_WALL_COLOR2 = '#b48cff'
@@ -117,12 +120,6 @@ export function resolveZoneFlashes(
 
 export const FLASH_WALL_COLOR_MODE = { solid: 0, gradient: 1 } as const
 
-function hexToRgb(hex: string): [number, number, number] {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
-  const n = m ? parseInt(m[1], 16) : 0x8de1ff
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
-}
-
 /**
  * What a zone wears. Solid (the default): every zone is the base color - the
  * wall reads as ONE fixture. Gradient: zones step from the base color to the
@@ -141,8 +138,8 @@ export function zoneColorHex(
 ): string {
   if (mode !== FLASH_WALL_COLOR_MODE.gradient || zones <= 1) return baseHex
   const t = Math.max(0, Math.min(1, zone / (zones - 1)))
-  const from = hexToRgb(baseHex)
-  const to = hexToRgb(endHex)
+  const from = hexToRgb(baseHex, FLASH_WALL_FALLBACK_RGB)
+  const to = hexToRgb(endHex, FLASH_WALL_FALLBACK_RGB)
   let out = '#'
   for (let i = 0; i < 3; i++) {
     out += Math.round(from[i] + (to[i] - from[i]) * t).toString(16).padStart(2, '0')

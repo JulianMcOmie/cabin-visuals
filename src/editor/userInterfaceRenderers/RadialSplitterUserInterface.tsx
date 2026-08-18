@@ -52,6 +52,7 @@ import {
 } from './console'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 import { clamp } from '../utils/math'
+import { hexToRgb } from '../utils/colors'
 
 // The accent comes FROM THE DEFINITION - the same hue this splitter's timeline
 // blocks and piano-roll notes wear.
@@ -73,10 +74,6 @@ const CUBE_CORNERS = Array.from({ length: 8 }, (_, i) => [
 const CUBE_FACES = [
   [1, 5, 7, 3], [0, 2, 6, 4], [2, 3, 7, 6], [0, 4, 5, 1], [4, 6, 7, 5], [0, 1, 3, 2],
 ]
-
-function hexToRgb(hex: string): [number, number, number] {
-  return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number]
-}
 
 /** The splitter's real output at beat 0 with no notes: copy matrices in slot
  *  order, plus how far the layout reaches (what the camera has to frame). */

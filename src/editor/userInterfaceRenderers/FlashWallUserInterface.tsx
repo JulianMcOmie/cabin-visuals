@@ -16,6 +16,7 @@ import {
   DEFAULT_FLASH_WALL_COLOR,
   DEFAULT_FLASH_WALL_COLOR2,
   FLASH_WALL_COLOR_MODE,
+  FLASH_WALL_FALLBACK_RGB,
   flashEnvelopeAt,
   flashWallGrid,
   zoneColorHex,
@@ -27,6 +28,7 @@ import { ColorWheelPill, hexToHsv, hsvToHex, towardWhite, withAlpha } from './co
 import { LaserKnob } from './laserKnob'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 import { clamp } from '../utils/math'
+import { hexToRgb } from '../utils/colors'
 
 function parameter(parameters: readonly UserInterfaceParameter[], key: string) {
   return parameters.find((candidate) => candidate.definition.key === key)
@@ -40,10 +42,9 @@ function stringValue(bound: UserInterfaceParameter | undefined, fallback: string
   return typeof bound?.value === 'string' ? bound.value : fallback
 }
 
-function hexToRgb(hex: string): { r: number; g: number; b: number } {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
-  const n = m ? parseInt(m[1], 16) : 0x8de1ff
-  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }
+function hexToRgbObject(hex: string): { r: number; g: number; b: number } {
+  const [r, g, b] = hexToRgb(hex, FLASH_WALL_FALLBACK_RGB)
+  return { r, g, b }
 }
 
 // ── Live preview ────────────────────────────────────────────────────────────
@@ -73,8 +74,8 @@ function WallPreview({ zones, layout, env, idle, gap, texture, cellColors }: {
   const cellRefs = useRef<(HTMLDivElement | null)[]>([])
   // The rAF loop reads the LATEST values through this ref, so knob turns
   // retune the running animation without restarting it.
-  const live = useRef({ zones, env, idle, colors: cellColors.map(hexToRgb) })
-  live.current = { zones, env, idle, colors: cellColors.map(hexToRgb) }
+  const live = useRef({ zones, env, idle, colors: cellColors.map(hexToRgbObject) })
+  live.current = { zones, env, idle, colors: cellColors.map(hexToRgbObject) }
 
   useEffect(() => {
     let raf = 0
@@ -115,7 +116,7 @@ function WallPreview({ zones, layout, env, idle, gap, texture, cellColors }: {
         }}
       >
         {Array.from({ length: cols * rows }, (_, i) => {
-          const c = hexToRgb(cellColors[i] ?? DEFAULT_FLASH_WALL_COLOR)
+          const c = hexToRgbObject(cellColors[i] ?? DEFAULT_FLASH_WALL_COLOR)
           return (
             <div
               key={`${cols}x${rows}-${i}`}

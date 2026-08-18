@@ -36,6 +36,7 @@ import { Console, PreviewWindow, Segmented, GutterRow } from './console'
 import { hexToHsv, hsvToHex, towardWhite, withAlpha } from './colorWheel'
 import type { CopyTargets } from '../types'
 import { clamp } from '../utils/math'
+import { hexToRgb } from '../utils/colors'
 
 /** Each slice gets its own hue off the accent, so a chip and the copies it owns
  *  are the same colour and the picture needs no legend. The spread is kept
@@ -78,10 +79,6 @@ function RuleGlyph({ rule }: { rule: CopyTargetRule }) {
 
 const PREVIEW_HEIGHT = 146
 const DOT_BUDGET = 400
-
-function hexToRgb(hex: string): [number, number, number] {
-  return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number]
-}
 
 function FormationWindow({
   trackId, accent, targets, onCount, onPickCopy,
