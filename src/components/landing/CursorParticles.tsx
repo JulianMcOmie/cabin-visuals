@@ -14,8 +14,9 @@ export function CursorParticles() {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
     const canvas = ref.current
     if (!canvas) return
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return
+    const context = canvas.getContext("2d")
+    if (!context) return
+    const ctx = context
 
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
     type Particle = {
@@ -43,6 +44,9 @@ export function CursorParticles() {
       const now = performance.now()
       if (now - last < 24 || particles.length > 90) return
       last = now
+      // The loop only runs while there is something to draw - an idle
+      // landing page used to clear a full-viewport canvas 60×/s forever.
+      if (!raf) raf = requestAnimationFrame(tick)
       particles.push({
         x: e.clientX + (Math.random() - 0.5) * 10,
         y: e.clientY + (Math.random() - 0.5) * 10,
@@ -55,7 +59,7 @@ export function CursorParticles() {
       })
     }
 
-    const tick = () => {
+    function tick() {
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight)
       for (const p of particles) {
         p.x += p.vx
@@ -69,9 +73,8 @@ export function CursorParticles() {
         }
       }
       particles = particles.filter((p) => p.life > 0)
-      raf = requestAnimationFrame(tick)
+      raf = particles.length > 0 ? requestAnimationFrame(tick) : 0
     }
-    raf = requestAnimationFrame(tick)
 
     window.addEventListener("resize", resize)
     window.addEventListener("mousemove", move)

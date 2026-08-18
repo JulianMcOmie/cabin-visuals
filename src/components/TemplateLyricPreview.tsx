@@ -111,23 +111,49 @@ export function TemplateLyricPreview({ templateId }: { templateId: string }) {
     process.env.NEXT_PUBLIC_SUPABASE_URL ? null : false,
   )
   const src = useTemplateClipUrl(templateId)
+  // Viewport-gated like TemplatePreviewVideo: a style grid of six cards used
+  // to spin up six decoders and six 60fps canvas loops at once, on screen or
+  // not. The video is created once the card comes near and then kept (paused
+  // offscreen); the canvas fallback only animates while visible.
+  const hostRef = useRef<HTMLDivElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [near, setNear] = useState(false)
+  const [everNear, setEverNear] = useState(false)
+  useEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+    if (typeof IntersectionObserver === 'undefined') { setNear(true); setEverNear(true); return }
+    const observer = new IntersectionObserver(
+      ([entry]) => { setNear(entry.isIntersecting); if (entry.isIntersecting) setEverNear(true) },
+      { rootMargin: '300px 0px' },
+    )
+    observer.observe(host)
+    return () => observer.disconnect()
+  }, [])
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    if (near) void video.play().catch(() => {})
+    else video.pause()
+  }, [near, everNear, src, clipReady])
   return (
-    <>
-      {clipReady !== true && <LyricCanvasFallback templateId={templateId} />}
-      {clipReady !== false && src && (
+    <div ref={hostRef} className="absolute inset-0">
+      {clipReady !== true && near && <LyricCanvasFallback templateId={templateId} />}
+      {clipReady !== false && src && everNear && (
         <video
+          ref={videoRef}
           src={src}
           autoPlay
           loop
           muted
           playsInline
-          preload="metadata"
+          preload="auto"
           onPlaying={() => setClipReady(true)}
           onError={() => setClipReady(false)}
           className="absolute inset-0 h-full w-full object-cover"
         />
       )}
-    </>
+    </div>
   )
 }
 
