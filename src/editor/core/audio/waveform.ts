@@ -1,5 +1,5 @@
 import * as Tone from 'tone'
-import { getPlayableUrl } from './audioSource'
+import { fetchAudioBytes } from './audioSource'
 
 // Decode-once buffer cache, keyed by clip ref. The SAME decoded AudioBuffer
 // feeds the AudioEngine's players and (phase 3) the waveform peak extraction -
@@ -13,9 +13,7 @@ export function getBuffer(ref: string): Promise<AudioBuffer> {
   let pending = bufferCache.get(ref)
   if (!pending) {
     pending = (async () => {
-      const url = await getPlayableUrl(ref)
-      const res = await fetch(url)
-      const bytes = await res.arrayBuffer()
+      const bytes = await fetchAudioBytes(ref)
       const ctx = Tone.getContext().rawContext as AudioContext
       return await ctx.decodeAudioData(bytes)
     })()

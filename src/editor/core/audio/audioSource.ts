@@ -73,6 +73,44 @@ export async function getPlayableUrl(ref: string): Promise<string> {
   return getAudioUrl(ref)
 }
 
+// Cross-session byte cache for UPLOADED clips (Cache API, keyed by ref). The
+// bucket bytes behind a ref are immutable - paths are minted once and never
+// rewritten - so there is nothing to invalidate. Without this every project
+// open re-downloaded the whole song: each open mints a fresh signed URL with
+// a new ?token=, so the browser's HTTP cache never hit either. Session-only
+// and public-asset refs skip it (object URLs / ordinary cacheable requests).
+const AUDIO_CACHE = 'cabin-audio-v1'
+const cacheKeyFor = (ref: string) => `/__cabin-audio/${encodeURIComponent(ref)}`
+
+/** The clip's bytes: this session's local file, the persistent cache, or a
+ *  fresh signed-URL download (which is then cached for next time). */
+export async function fetchAudioBytes(ref: string): Promise<ArrayBuffer> {
+  const local = mem.get(ref)
+  if (local || !isUploadedRef(ref)) {
+    const res = await fetch(local ?? ref)
+    return res.arrayBuffer()
+  }
+  let cache: Cache | null = null
+  try {
+    if (typeof caches !== 'undefined') cache = await caches.open(AUDIO_CACHE)
+  } catch {
+    cache = null // private mode / storage denied - straight to the network
+  }
+  const key = cacheKeyFor(ref)
+  if (cache) {
+    const hit = await cache.match(key).catch(() => undefined)
+    if (hit) return hit.arrayBuffer()
+  }
+  const res = await fetch(await getAudioUrl(ref))
+  if (!res.ok) throw new Error(`Audio download failed (${res.status})`)
+  const bytes = await res.arrayBuffer()
+  if (cache) {
+    // Store a copy under the stable key; the signed URL is not part of it.
+    void cache.put(key, new Response(bytes.slice(0), { headers: { 'Content-Type': res.headers.get('Content-Type') ?? 'application/octet-stream' } })).catch(() => {})
+  }
+  return bytes
+}
+
 /** Drop this session's local hold on a ref. Bucket bytes are deliberately left
  *  alone - see the note below. */
 export function removeAudio(ref: string): void {
