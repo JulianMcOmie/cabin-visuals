@@ -68,15 +68,21 @@ export const AudioBlock = memo(function AudioBlock({ block, trackId, barWidthPx,
     // same bytes for nothing - the effect re-runs when the duration lands.
     if (!canvas || !clip || pending) return
     // Adaptive resolution: ask for more buckets when drawn wider than the base
-    // serves (deep zoom) - a re-extraction from the cached buffer, not a decode.
-    // During a sync drag the block is the surface being aligned by eye, so it
-    // renders at device-pixel density with ~2 buckets per pixel - enough to
-    // resolve individual transients.
+    // serves (deep zoom) - a cached reduction of the clip's fine envelope, not
+    // a decode. During a sync drag the block is the surface being aligned by
+    // eye, so it renders at device-pixel density with ~2 buckets per pixel -
+    // enough to resolve individual transients.
     const dpr = isSyncSource ? Math.max(1, window.devicePixelRatio || 1) : 1
     const bucketsPerPx = isSyncSource ? 2 : 0.5
     const visibleFrac = clip.duration > 0 ? clipSec / clip.duration : 1
     const needed = Math.max(BASE_PEAK_BUCKETS, Math.ceil((width * dpr * bucketsPerPx) / Math.max(visibleFrac, 1e-6)))
-    getPeaks(block.clipRef, Math.min(needed, 20000)).then(({ buckets, data }) => {
+    // The draw itself waits for the next animation frame: `width` follows the
+    // tempo, so a BPM drag re-runs this effect on every pointermove, and each
+    // run's cleanup cancels the frame the previous one queued - only the last
+    // width of a frame reaches the canvas. At rest the one-frame delay is
+    // invisible.
+    let frame = 0
+    const draw = ({ buckets, data }: { buckets: number; data: Float32Array }) => {
       if (cancelled || !canvasRef.current) return
       const c = canvasRef.current
       const rect = c.getBoundingClientRect()
@@ -108,8 +114,12 @@ export const AudioBlock = memo(function AudioBlock({ block, trackId, barWidthPx,
         const h = Math.max(1, (max - min) * mid)
         ctx.fillRect(x, y, 1, h)
       }
+    }
+    getPeaks(block.clipRef, Math.min(needed, 20000)).then((entry) => {
+      if (cancelled) return
+      frame = requestAnimationFrame(() => draw(entry))
     }).catch((err) => console.warn('Waveform draw failed', err))
-    return () => { cancelled = true }
+    return () => { cancelled = true; cancelAnimationFrame(frame) }
   }, [block.clipRef, block.trimStart, block.trimEnd, clip, clipSec, width, color, pending, isSyncSource, isSelected, palette])
 
   // ── Drag gestures: move (body), trim (edges) - free positioning, no snap ──

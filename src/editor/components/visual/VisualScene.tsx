@@ -44,9 +44,8 @@ import { IMPACT_WARP_FIELD_GLSL, resolveActiveImpactWarp } from '../../instrumen
 import { CROP_MASK_FRAGMENT, resolveActiveCropMask } from '../../instruments/Crop'
 import { MAX_DIVISIONS as CROP_MAX_DIVISIONS } from '../../core/directors/crop'
 import { getBeatOverride } from '../../core/visual/beatOverride'
-import { isExportPinned, subscribeExportPinned } from '../../core/export/frameDriver'
 import { useTimeStore } from '../../store/TimeStore'
-import { previewQualityScale, useUIStore } from '../../store/UIStore'
+import { useRenderTargetScale } from './useRenderTargetScale'
 
 RectAreaLightUniformsLib.init()
 
@@ -599,13 +598,10 @@ export function VisualScene() {
   // final grade pass upscales it (all targets are LinearFilter), so a frame
   // costs scale² of the full fragment work. Pinned renders (export, preview
   // capture) must be full-size regardless of the preference, so the scale
-  // stands down for the pin's duration.
-  const previewQuality = useUIStore((s) => s.previewQuality)
-  // AUTO reads the transport: full res paused, half while playing (the resize
-  // effect below re-sizes the targets and invalidates on the change).
-  const isPlaying = useTimeStore((s) => s.isPlaying)
-  const exportPinned = useSyncExternalStore(subscribeExportPinned, isExportPinned, () => false)
-  const targetScale = exportPinned ? 1 : previewQualityScale(previewQuality, isPlaying)
+  // stands down for the pin's duration. Shared with ShaderWrapper's per-object
+  // rig, which shrinks by the same factor (the resize effect below re-sizes
+  // the targets and invalidates on the change).
+  const targetScale = useRenderTargetScale()
   const environment = useMemo(() => {
     const room = new RoomEnvironment()
     const pmrem = new PMREMGenerator(gl)
