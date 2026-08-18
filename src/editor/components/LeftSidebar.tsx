@@ -547,14 +547,13 @@ const MOTION_ITEMS = MOVER_INSTRUMENTS.filter((m) => !IMPACT_IDS.includes(m.id))
 // exactly what they held before the folder pass - demoted, never deleted -
 // but they now sit INSIDE the folder they belong to rather than at the root.
 const SCENE_FOLDERS: LibraryFolder[] = [
+  // The strikes sit at Impact's root (an Impulse subfolder used to hold them
+  // and was Impact's only content - one extra click for nothing).
   {
     id: 'impact',
     title: 'Impact',
-    description: 'Notes hitting the scene itself - camera punches and shockwaves.',
-    items: [],
-    subfolders: [
-      { id: 'impulse', title: 'Impulse', description: 'One sharp hit per note - strikes, then decays.', items: pick(IMPULSE_IDS) },
-    ],
+    description: 'One sharp hit per note - camera punches and shockwaves that strike, then decay.',
+    items: pick(IMPULSE_IDS),
   },
   { id: 'rumble', title: 'Rumble', description: 'Continuous shaking, warping or masking while the note is held.', items: [...pick(RUMBLE_IDS), ...CROP_OBJECT_ITEMS] },
   { id: 'splitters', title: 'Splitters', description: 'Splitters render their objects several times, giving each copy its own reference frame - movers BELOW a splitter move every copy along its own axes.', items: SPLITTER_INSTRUMENTS },
@@ -593,9 +592,17 @@ interface ItemHandlers {
   onItemDoubleClick: (item: InstrumentItem) => void
 }
 
+// A preview card has a MAX size: one column until the pane is wide enough for
+// two ~212px cards, then two per row (never more). Below the threshold the
+// single card grows to fill; above it the pair grow together. The @container
+// is the grid's own wrapper so the query reads this column's width, not the
+// whole sidebar's. `@[448px]` is content-box: 2×212 + 8 gap + 16 padding —
+// kept a literal string so Tailwind's scanner emits the rule. Sized against
+// the pane's 30%-of-window cap: it engages at ~1550px windows dragged wide.
 function ItemGrid({ items, onItemPointerDown, onItemDoubleClick }: { items: InstrumentItem[] } & ItemHandlers) {
   return (
-    <div className="grid grid-cols-1 gap-2 px-2">
+    <div className="@container">
+    <div className="grid grid-cols-1 gap-2 px-2 @[448px]:grid-cols-2">
       {items.map((item) => (
         <div
           key={item.id}
@@ -627,6 +634,7 @@ function ItemGrid({ items, onItemPointerDown, onItemDoubleClick }: { items: Inst
           </div>
         </div>
       ))}
+    </div>
     </div>
   )
 }
