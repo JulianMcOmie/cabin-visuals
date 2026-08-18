@@ -1344,7 +1344,7 @@ export default function EditorApp() {
     getPlaybackEngine().pause()
     useTimeStore.getState().setIsPlaying(false)
   }, [])
-  const { topFrac, containerRef, startResize } = useVerticalSplit()
+  const { topFrac, containerRef, topPanelRef, startResize } = useVerticalSplit()
   const visualCanvasRef = useRef<HTMLCanvasElement>(null)
   const libraryPanelRef = useRef<PanelImperativeHandle>(null)
   const sceneEditorPanelRef = useRef<PanelImperativeHandle>(null)
@@ -1459,7 +1459,7 @@ export default function EditorApp() {
         <div ref={containerRef} className="flex h-full flex-col">
         {/* Upper row: library | workspace card. The timeline lives BELOW this
             whole row (DAW Console 4a), so it runs under the library too. */}
-        <div className="relative min-h-0" style={{ flexBasis: `${topFrac * 100}%`, flexGrow: 0, flexShrink: 0 }}>
+        <div ref={topPanelRef} className="relative min-h-0" style={{ flexBasis: `${topFrac * 100}%`, flexGrow: 0, flexShrink: 0 }}>
         {/* overflow visible so the workspace card's glow can spill past the
             group's top edge onto the header band. */}
         <PanelGroup orientation="horizontal" style={{ height: '100%', overflow: 'visible' }} disabled={modalOpen}>

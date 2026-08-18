@@ -21,6 +21,12 @@ export const DIVIDER_GRAB_INSET = 5
  */
 export function useVerticalSplit() {
   const containerRef = useRef<HTMLDivElement>(null)
+  // The upper panel itself: during a drag its flex-basis is written straight
+  // to the DOM and the store is only told the final fraction on release.
+  // Streaming every pointermove through the store re-rendered the whole
+  // editor root (header, library, inspector, timeline...) per frame - the
+  // canvas resize is the only per-frame work this gesture actually needs.
+  const topPanelRef = useRef<HTMLDivElement>(null)
   const topFrac = useUIStore((s) => s.topPanelFraction)
   const setTopPanelFraction = useUIStore((s) => s.setTopPanelFraction)
 
@@ -29,16 +35,24 @@ export function useVerticalSplit() {
     e.stopPropagation()
     lockCursor('ns-resize')
     const controller = new AbortController()
+    let last: number | null = null
     window.addEventListener('pointermove', (ev) => {
       const c = containerRef.current
       if (!c) return
       const r = c.getBoundingClientRect()
-      setTopPanelFraction((ev.clientY - r.top) / r.height) // the store clamps
+      // Same clamp as the store's setter, so the live preview never shows a
+      // size the commit would then snap away from.
+      last = Math.max(0.3, Math.min(0.85, (ev.clientY - r.top) / r.height))
+      if (topPanelRef.current) topPanelRef.current.style.flexBasis = `${last * 100}%`
     }, { signal: controller.signal })
-    const onUp = () => { controller.abort(); unlockCursor() }
+    const onUp = () => {
+      controller.abort()
+      unlockCursor()
+      if (last !== null) setTopPanelFraction(last)
+    }
     window.addEventListener('pointerup', onUp, { signal: controller.signal })
     window.addEventListener('pointercancel', onUp, { signal: controller.signal })
   }, [setTopPanelFraction])
 
-  return { topFrac, containerRef, startResize }
+  return { topFrac, containerRef, topPanelRef, startResize }
 }
