@@ -20,6 +20,25 @@ export const EXPORT_AUDIO_BITRATE = 192_000
  * Mute/solo fold in exactly as the live engine's setBlocks does. Returns null
  * when there is nothing audible to render (caller emits a video-only file).
  */
+/** The blocks that will actually sound, honoring mute/solo. */
+function audibleBlocks(audioTracks: Track[]) {
+  const anySolo = audioTracks.some((t) => t.solo)
+  return audioTracks
+    .filter((t) => !t.muted && !(anySolo && !t.solo))
+    .flatMap((t) => (t.audioBlocks ?? []).map((block) => ({ block, volume: t.volume ?? 1 })))
+}
+
+/** True iff renderAudioTrack would produce a buffer (same test, no work) - so
+ *  the muxer can be built and the frame walk started BEFORE the offline audio
+ *  render finishes, instead of serially after it. */
+export function willRenderAudio(audioTracks: Track[], durationSec: number): boolean {
+  return durationSec > 0 && audibleBlocks(audioTracks).length > 0
+}
+
+/** Sample rate every export renders audio at (fixed, so the writer can be
+ *  configured before the buffer exists). */
+export const EXPORT_AUDIO_SAMPLE_RATE = 48_000
+
 export async function renderAudioTrack(
   audioTracks: Track[],
   bpm: number,
@@ -27,16 +46,13 @@ export async function renderAudioTrack(
   durationSec: number,
   fromBeat = 0,
 ): Promise<AudioBuffer | null> {
-  const anySolo = audioTracks.some((t) => t.solo)
-  const blocks = audioTracks
-    .filter((t) => !t.muted && !(anySolo && !t.solo))
-    .flatMap((t) => (t.audioBlocks ?? []).map((block) => ({ block, volume: t.volume ?? 1 })))
+  const blocks = audibleBlocks(audioTracks)
   if (blocks.length === 0 || durationSec <= 0) return null
 
   // Decode first (cached - playback has usually already paid this).
   const buffers = await Promise.all(blocks.map(({ block }) => getBuffer(block.clipRef)))
 
-  const sampleRate = 48_000
+  const sampleRate = EXPORT_AUDIO_SAMPLE_RATE
   const ctx = new OfflineAudioContext(2, Math.max(1, Math.ceil(durationSec * sampleRate)), sampleRate)
   const master = ctx.createGain()
   master.gain.value = 0.85 // the live engine's headroom - same loudness as the editor

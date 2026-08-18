@@ -10,7 +10,7 @@ import { getFrameDriver, type FrameDriver } from './frameDriver'
 import { Mp4Writer } from './mux'
 import { createVideoEncodeSession, exportEncoderConfig, exportEncodeOptions } from './videoEncode'
 import { encoderProducesMuxableChunks } from './support'
-import { renderAudioTrack, encodeAudioIntoWriter } from './audioRender'
+import { renderAudioTrack, encodeAudioIntoWriter, willRenderAudio, EXPORT_AUDIO_SAMPLE_RATE } from './audioRender'
 import { createWatermarkCompositor } from './watermark'
 import { framePreparers } from './framePreparers'
 
@@ -146,19 +146,26 @@ export async function runExport(
 
   const timebase = makeTimebase(project.bpm, project.beatsPerBar, project.totalBars, settings.fps, project.range)
 
-  // Audio first: the muxer must know at construction whether the file has an
-  // audio track. One offline pass, off the frame loop's critical path. The
-  // range's startBeat anchors the audio the same way it anchors the walk.
-  const audioBuffer =
-    settings.includeAudio && project.audioTracks?.length
-      ? await renderAudioTrack(project.audioTracks, project.bpm, project.beatsPerBar, timebase.durationSec, timebase.startBeat)
-      : null
+  // Audio renders CONCURRENTLY with the frame walk. The muxer only needs to
+  // know at construction whether the file has an audio track and at what
+  // rate - both are known up front (willRenderAudio is the same mute/solo test
+  // the render applies; the rate is fixed) - so the offline pass, which runs
+  // on the audio thread anyway, no longer sits serially in front of the first
+  // frame. The range's startBeat anchors the audio the same way as the walk.
+  const wantAudio = !!(settings.includeAudio && project.audioTracks?.length)
+    && willRenderAudio(project.audioTracks!, timebase.durationSec)
+  const audioPromise = wantAudio
+    ? renderAudioTrack(project.audioTracks!, project.bpm, project.beatsPerBar, timebase.durationSec, timebase.startBeat)
+    : Promise.resolve(null)
+  // Awaited after the walk; this keeps an early failure from surfacing as an
+  // unhandled rejection in the meantime (it rethrows at the await below).
+  audioPromise.catch(() => {})
   if (hooks.signal?.aborted) return { blob: null, frameCount: timebase.frameCount, poster: null }
 
   const writer = new Mp4Writer({
     width: settings.width,
     height: settings.height,
-    audio: audioBuffer ? { sampleRate: audioBuffer.sampleRate, numberOfChannels: 2 } : undefined,
+    audio: wantAudio ? { sampleRate: EXPORT_AUDIO_SAMPLE_RATE, numberOfChannels: 2 } : undefined,
   })
 
   // A/V alignment is arithmetic and UNCOMPENSATED, on purpose. History: on
@@ -201,6 +208,7 @@ export async function runExport(
       return { blob: null, frameCount: timebase.frameCount, poster: null }
     }
     await video.flush()
+    const audioBuffer = await audioPromise
     if (audioBuffer) await encodeAudioIntoWriter(audioBuffer, writer)
     return { blob: writer.finalize(), frameCount: timebase.frameCount, poster }
   } catch (err) {
