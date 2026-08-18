@@ -19,8 +19,10 @@ let inflight: Promise<User | null> | null = null
  */
 export async function ensureSession(): Promise<User | null> {
   const supabase = getSupabase()
-  const { data } = await supabase.auth.getUser()
-  if (data.user) return data.user
+  // Local session first (no auth round trip); the anonymous sign-in below is
+  // the only path that has to talk to the server.
+  const { data } = await supabase.auth.getSession()
+  if (data.session?.user) return data.session.user
   if (!anonSessionsEnabled()) return null
 
   if (!inflight) {

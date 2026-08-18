@@ -173,15 +173,18 @@ export async function save(id: string, doc: ProjectDocument, expectedRev: number
 /** Create a project - empty by default, or seeded from a document (templates). */
 export async function create(name: string, document?: ProjectDocument): Promise<ProjectSummary> {
   const supabase = getSupabase()
-  const { data: auth, error: authError } = await supabase.auth.getUser()
+  // getSession, not getUser: no auth round trip in front of the insert - RLS
+  // validates the token on the insert itself.
+  const { data: auth, error: authError } = await supabase.auth.getSession()
   if (authError) throw authError
-  if (!auth.user) throw new Error('Not signed in')
+  const user = auth.session?.user
+  if (!user) throw new Error('Not signed in')
   const doc = document ?? emptyDocument()
   const { data, error } = await supabase
     .from('projects')
     .insert({
       name,
-      user_id: auth.user.id,
+      user_id: user.id,
       data: doc,
       schema_version: doc.schemaVersion,
     })

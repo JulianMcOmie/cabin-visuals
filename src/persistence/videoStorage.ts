@@ -12,10 +12,14 @@ const BUCKET = 'project-videos'
  *  ref exists before any bytes move - clips arm instantly against the ref
  *  while the upload runs behind them as pure durability. */
 export async function mintVideoPath(projectId: string): Promise<string> {
-  const { data: auth, error: authError } = await getSupabase().auth.getUser()
+  // getSession (local token, refreshed if stale) rather than getUser: the
+  // latter holds the auth lock across a server round trip, and Storage RLS
+  // re-checks the token on the write anyway.
+  const { data: auth, error: authError } = await getSupabase().auth.getSession()
   if (authError) throw authError
-  if (!auth.user) throw new Error('Not signed in')
-  return `${auth.user.id}/${projectId}/${crypto.randomUUID()}`
+  const user = auth.session?.user
+  if (!user) throw new Error('Not signed in')
+  return `${user.id}/${projectId}/${crypto.randomUUID()}`
 }
 
 /** Upload a source's bytes to an already-minted path. XHR rather than

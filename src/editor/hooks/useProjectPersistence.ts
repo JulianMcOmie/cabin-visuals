@@ -53,8 +53,12 @@ export function useProjectPersistence() {
     // Remember the bind (per user) so the landing page's "Continue creating"
     // can come straight back here. Fire-and-forget: navigation never waits on it.
     const remember = () => {
-      void getSupabase().auth.getUser().then(({ data }) => {
-        if (data.user) rememberLastProject(data.user.id, projectId)
+      // getSession, not getUser: the user id is in the local session, and
+      // getUser would hold the auth lock across a round trip - parking the
+      // project load and the audio signed-URL fetches behind it.
+      void getSupabase().auth.getSession().then(({ data }) => {
+        const user = data.session?.user
+        if (user) rememberLastProject(user.id, projectId)
       }).catch(() => {})
     }
 

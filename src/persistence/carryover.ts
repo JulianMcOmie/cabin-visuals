@@ -22,12 +22,13 @@ interface Carryover {
 export async function stashAnonWork(): Promise<void> {
   try {
     const supabase = getSupabase()
-    const { data } = await supabase.auth.getUser()
-    if (!data.user?.is_anonymous) return
+    const { data } = await supabase.auth.getSession()
+    const user = data.session?.user
+    if (!user?.is_anonymous) return
     const projects = await projectStorage.list()
     if (!projects.length) return
     const { name, document } = await projectStorage.load(projects[0].id)
-    const stash: Carryover = { anonUserId: data.user.id, name, document }
+    const stash: Carryover = { anonUserId: user.id, name, document }
     sessionStorage.setItem(KEY, JSON.stringify(stash))
   } catch {
     /* stashing is a courtesy - never block auth on it */
