@@ -32,7 +32,8 @@ export async function ensureSession(): Promise<User | null> {
           return null
         }
         return anon.user
-      } catch {
+      } catch (err) {
+        console.warn('Anonymous sign-in threw (staying in-memory):', err)
         return null
       } finally {
         inflight = null
