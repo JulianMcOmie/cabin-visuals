@@ -13,8 +13,10 @@ import { getEffect } from '../../effects'
 import { effectiveEffectState } from '../../effects/automation'
 import type { EffectInstance } from '../../types'
 import { composePostMoverScale, evaluatePostMoverScale } from '../../core/visual/postMoverScale'
-import { CROP_MASK_FRAGMENT, resolveActiveCropMask } from '../../instruments/Crop'
+import { CROP_MASK_FRAGMENT, resolveActiveCropMask, type ActiveCropMask } from '../../instruments/Crop'
 import { MAX_DIVISIONS as CROP_MAX_DIVISIONS } from '../../core/directors/crop'
+import { useRenderTargetScale } from './useRenderTargetScale'
+import { acquireShaderScratch, releaseShaderScratch, type ShaderScratch } from './shaderScratchPool'
 
 // Fullscreen-quad vertex shader: writes clip space directly, so a 2×2 plane always fills
 // the target regardless of camera. Passthrough fragment blits the final texture.
@@ -38,12 +40,28 @@ const OUTPUT_FRAG = `
   }
 `
 
+type PassEntry = { plugin: ReturnType<typeof getEffect>; mat: ShaderMaterial }
+/** One pass of this frame's chain: a shader plugin (with its settings as of
+ *  this frame) or a crop mask routed at the object. Planned before rendering so
+ *  the LAST pass can land in the wrapper's own target - see the target notes. */
+type Step =
+  | { pass: PassEntry; eff: ReturnType<typeof effectiveEffectState>; mask: null }
+  | { pass: null; eff: null; mask: ActiveCropMask }
+
 /**
  * Per-object screen-space shader chain (plan §4.6, Option A - ported from Excellent DAW).
  * The object is rendered - with its world transform - into an offscreen scene/FBO, each
  * shader plugin runs as a fullscreen post pass (ping-pong FBOs), and the result is drawn
  * as a clip-space fullscreen overlay (depth-test off) over the 3D scene. So a shaded object
  * becomes a full-frame post-processed layer; un-shaded objects render normally, unaffected.
+ *
+ * Targets: the wrapper OWNS one target (`rig.own` - the texture its overlay
+ * samples during the scene render, so it must survive past this useFrame) and
+ * borrows the source + ping-pong intermediates from `shaderScratchPool`, which
+ * every wrapper shares: each chain runs to completion inside one useFrame, so
+ * the intermediates are free again before the next wrapper's runs. All of them
+ * shrink by the preview-quality scale VisualScene's targets use (and stay
+ * full-size while an export pin holds).
  */
 export function ShaderWrapper({
   trackId,
@@ -81,14 +99,11 @@ export function ShaderWrapper({
     const rim = new PointLight(0xf0abfc, 1.5); rim.position.set(3, 3, -4); scene.add(rim)
     const holder = new Group(); holder.matrixAutoUpdate = false; scene.add(holder)
 
-    const w = Math.max(1, Math.floor(size.width)), h = Math.max(1, Math.floor(size.height))
-    const opts = { minFilter: LinearFilter, magFilter: LinearFilter }
-    // `src` is where the object's real geometry rasterizes, so it carries a
+    // `own` holds the chain's final output; when no pass is active this frame
+    // the object's geometry rasterizes straight into it, so it carries a
     // stencil buffer (Overlap Shape's parity passes need one wherever the
-    // meshes draw); ping/pong only ever receive fullscreen quad passes.
-    const src = new WebGLRenderTarget(w, h, { ...opts, stencilBuffer: true })
-    const ping = new WebGLRenderTarget(w, h, opts)
-    const pong = new WebGLRenderTarget(w, h, opts)
+    // meshes draw). Sized by the effect below.
+    const own = new WebGLRenderTarget(1, 1, { minFilter: LinearFilter, magFilter: LinearFilter, stencilBuffer: true })
 
     const quadScene = new Scene()
     const quadCam = new OrthographicCamera(-1, 1, 1, -1, 0, 1)
@@ -96,8 +111,17 @@ export function ShaderWrapper({
     quadScene.add(quad)
 
     const outUniforms: Record<string, IUniform> = { tDiffuse: { value: null as Texture | null } }
-    return { scene, holder, src, ping, pong, quadScene, quadCam, quad, outUniforms }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    return { scene, holder, own, quadScene, quadCam, quad, outUniforms }
+  }, [])
+
+  // Target size: the canvas' CSS size scaled by the preview-quality factor
+  // (1 at Final and under an export pin). Floor, not round: the wrapper has
+  // always floored its targets, and the pass `resolution` uniforms stay the
+  // CSS size so pixel-measured effects (Pixelate, Glow) keep their look at
+  // every scale.
+  const targetScale = useRenderTargetScale()
+  const targetW = Math.max(1, Math.floor(size.width * targetScale))
+  const targetH = Math.max(1, Math.floor(size.height * targetScale))
 
   // One ShaderMaterial per shader plugin instance (rebuilt if the instance set or size changes).
   const passes = useMemo(() => {
@@ -147,12 +171,17 @@ export function ShaderWrapper({
   useEffect(() => () => { maskMaterial?.dispose() }, [maskMaterial])
 
   useEffect(() => {
-    const w = Math.max(1, Math.floor(size.width)), h = Math.max(1, Math.floor(size.height))
-    rig.src.setSize(w, h); rig.ping.setSize(w, h); rig.pong.setSize(w, h)
-  }, [size.width, size.height, rig])
+    rig.own.setSize(targetW, targetH)
+  }, [targetW, targetH, rig])
 
+  // The shared scratch set is borrowed lazily on the first frame that needs a
+  // pass and swapped for the right-sized set when the target size moves; the
+  // pool disposes a set once its last borrower lets go.
+  const scratchRef = useRef<ShaderScratch | null>(null)
+  const stepsRef = useRef<Step[]>([])
   useEffect(() => () => {
-    rig.src.dispose(); rig.ping.dispose(); rig.pong.dispose()
+    rig.own.dispose()
+    if (scratchRef.current) { releaseShaderScratch(scratchRef.current); scratchRef.current = null }
   }, [rig])
   useEffect(() => () => { passes.forEach((p) => p.mat.dispose()) }, [passes])
 
@@ -191,42 +220,61 @@ export function ShaderWrapper({
         applyMaterialOpacity(rig.holder, state.opacity * (visualCopy?.opacity ?? 1))
       }
     }
-    const prev = gl.getRenderTarget()
-    gl.setRenderTarget(rig.src)
-    gl.setClearColor(0x000000, 0); gl.clear()
-    gl.render(rig.scene, camera)
-
-    // Chain the enabled shader passes, ping-ponging between two targets.
-    let inputTex: Texture = rig.src.texture
-    let a = rig.ping, b = rig.pong
+    // Plan this frame's chain first: the enabled shader passes (settings as of
+    // this frame - stored values merged with automation), then the crop tracks
+    // routed at this object. The matte is the OUTERMOST pass, so every effect
+    // above lands inside the visible slices; a null resolve (crop with no
+    // notes, muted, fully dry) skips that source's pass and the object shows
+    // unmasked. Planning ahead is what lets the LAST pass write the wrapper's
+    // own target while every earlier one uses the shared scratch set.
+    const steps = stepsRef.current
+    steps.length = 0
     for (const inst of plugins) {
-      // Settings/enabled as of this frame (stored values merged with automation).
       const eff = effectiveEffectState(inst, state?.effectOverrides)
       if (!eff.enabled) continue
       const pass = passes.get(inst.id)
       if (!pass) continue
-      pass.mat.uniforms.tDiffuse.value = inputTex
-      if (pass.mat.uniforms.time) pass.mat.uniforms.time.value = beat
-      for (const pd of pass.plugin?.params ?? []) {
-        if (pass.mat.uniforms[pd.key]) pass.mat.uniforms[pd.key].value = eff.settings[pd.key] ?? pd.default
-      }
-      rig.quad.material = pass.mat
-      gl.setRenderTarget(a)
-      gl.setClearColor(0x000000, 0); gl.clear()
-      gl.render(rig.quadScene, rig.quadCam)
-      inputTex = a.texture
-      const t = a; a = b; b = t
+      steps.push({ pass, eff, mask: null })
     }
-
-    // Crop tracks routed at this object mask its post-processed output: the
-    // matte is the OUTERMOST pass, so every effect above lands inside the
-    // visible slices. Null resolve (crop with no notes, muted, fully dry)
-    // skips that source's pass; the object then shows unmasked.
     if (maskMaterial) {
-      const aspect = Math.max(0.0001, size.width / Math.max(1, size.height))
       for (const sourceId of maskSourceIds ?? []) {
         const mask = resolveActiveCropMask(getObjectState(sourceId))
-        if (!mask) continue
+        if (mask) steps.push({ pass: null, eff: null, mask })
+      }
+    }
+    const stepCount = steps.length
+
+    let scratch = scratchRef.current
+    if (stepCount > 0 && (!scratch || scratch.src.width !== targetW || scratch.src.height !== targetH)) {
+      if (scratch) releaseShaderScratch(scratch)
+      scratch = scratchRef.current = acquireShaderScratch(targetW, targetH)
+    }
+
+    // Render the object into the source target: the wrapper's own when no pass
+    // will run (its texture is then what the overlay samples), else the shared
+    // stencil-carrying scratch source.
+    const prev = gl.getRenderTarget()
+    const first = stepCount === 0 || !scratch ? rig.own : scratch.src
+    gl.setRenderTarget(first)
+    gl.setClearColor(0x000000, 0); gl.clear()
+    gl.render(rig.scene, camera)
+
+    // Chain the passes: intermediates ping-pong through the shared pair, the
+    // last one lands in `own`.
+    let inputTex: Texture = first.texture
+    const aspect = Math.max(0.0001, size.width / Math.max(1, size.height))
+    for (let i = 0; i < stepCount; i++) {
+      const step = steps[i]
+      if (step.pass) {
+        const { pass, eff } = step
+        pass.mat.uniforms.tDiffuse.value = inputTex
+        if (pass.mat.uniforms.time) pass.mat.uniforms.time.value = beat
+        for (const pd of pass.plugin?.params ?? []) {
+          if (pass.mat.uniforms[pd.key]) pass.mat.uniforms[pd.key].value = eff.settings[pd.key] ?? pd.default
+        }
+        rig.quad.material = pass.mat
+      } else if (maskMaterial) {
+        const { mask } = step
         const uniforms = maskMaterial.uniforms
         uniforms.tDiffuse.value = inputTex
         uniforms.sliceState.value = mask.sliceState
@@ -238,13 +286,14 @@ export function ShaderWrapper({
         uniforms.wet.value = mask.wet
         uniforms.aspect.value = aspect
         rig.quad.material = maskMaterial
-        gl.setRenderTarget(a)
-        gl.setClearColor(0x000000, 0); gl.clear()
-        gl.render(rig.quadScene, rig.quadCam)
-        inputTex = a.texture
-        const t = a; a = b; b = t
       }
+      const target = i === stepCount - 1 ? rig.own : (i % 2 === 0 ? scratch!.ping : scratch!.pong)
+      gl.setRenderTarget(target)
+      gl.setClearColor(0x000000, 0); gl.clear()
+      gl.render(rig.quadScene, rig.quadCam)
+      inputTex = target.texture
     }
+    steps.length = 0
 
     gl.setRenderTarget(prev)
     rig.outUniforms.tDiffuse.value = inputTex
