@@ -152,12 +152,12 @@ export function useNoteGestures({
     const maxY = Math.max(y1, y2)
 
     const matchingIds: string[] = []
+    const blockStartPx = beatToX(block.startBar * beatsPerBar, pixelsPerBeat)
 
     for (const note of notes) {
       const rowIndex = pitchToRowIndex(note.pitch)
       if (rowIndex === -1) continue
 
-      const blockStartPx = beatToX(block.startBar * beatsPerBar, pixelsPerBeat)
       const noteTop = rowIndexToY(rowIndex, rowHeight)
       const noteBottom = noteTop + rowHeight
       const noteLeft = blockStartPx + beatToX(note.startBeat, pixelsPerBeat)
@@ -169,7 +169,7 @@ export function useNoteGestures({
     }
 
     return matchingIds
-  }, [notes, pitchToRowIndex, rowHeight, pixelsPerBeat])
+  }, [notes, pitchToRowIndex, rowHeight, pixelsPerBeat, block.startBar, beatsPerBar])
 
   // Single ref holding the latest render's values, refreshed every render.
   // The window drag listeners live across many renders, so they read

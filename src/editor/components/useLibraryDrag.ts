@@ -2,7 +2,6 @@ import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent }
 import { resolveNextTrackColor, useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
 import { hasMoverOrSplitterDefinition } from '../core/visualCopies/registry'
-import { getInstrument } from '../instruments'
 import { flattenVisualRows } from './timeline/trackTree'
 import { selectNewTrack } from '../utils/selection'
 import { computeDropTarget } from './timeline/trackDrop'
