@@ -368,8 +368,9 @@ export function MidiEditor({
     }
   })
 
-  // All notes including the one being drawn
-  const allNotes = drawingNote ? [...notes, drawingNote] : notes
+  // All notes including the one being drawn (memoized so it keeps identity
+  // while nothing changed - the loop-ghost memo below keys on it).
+  const allNotes = useMemo(() => (drawingNote ? [...notes, drawingNote] : notes), [notes, drawingNote])
 
   // Editor chrome voiced from the edited track's color (replaces the old
   // hardcoded indigo, so the editor visibly belongs to its block).
@@ -389,13 +390,21 @@ export function MidiEditor({
   // notes, whose folded position shows as a ghost because that is where they
   // play. Notes PAST the window don't loop at all (they play once, in place),
   // so they produce no ghosts.
-  const loopBeats = block.loop
-    ? loopLengthBeats({ loopLengthBars: block.loopLengthBars, notes: allNotes }, beatsPerBar)
-    : null
-  const loopGhosts = loopBeats != null && loopBeats > 0 && loopBeats < blockDurationBeats
-    ? tileLoopNotes(allNotes, loopBeats, blockDurationBeats, 2000)
-        .filter((t) => t.repeat > 0 || t.startBeat !== t.note.startBeat)
-    : []
+  const loopBeats = useMemo(
+    () => (block.loop ? loopLengthBeats({ loopLengthBars: block.loopLengthBars, notes: allNotes }, beatsPerBar) : null),
+    [block.loop, block.loopLengthBars, allNotes, beatsPerBar],
+  )
+  // Memoized: up to 2000 ghost objects, and this component re-renders on
+  // every note-drag pointermove (allNotes changes then, so it recomputes
+  // exactly when the ghosts can actually move - and not for selection,
+  // hover, scroll or playhead re-renders).
+  const loopGhosts = useMemo(
+    () => (loopBeats != null && loopBeats > 0 && loopBeats < blockDurationBeats
+      ? tileLoopNotes(allNotes, loopBeats, blockDurationBeats, 2000)
+          .filter((t) => t.repeat > 0 || t.startBeat !== t.note.startBeat)
+      : []),
+    [allNotes, loopBeats, blockDurationBeats],
+  )
   const loopBoundaries: number[] = []
   if (loopBeats != null && loopBeats > 0) {
     for (let b = loopBeats; b < blockDurationBeats; b += loopBeats) loopBoundaries.push(b)
@@ -876,6 +885,7 @@ export function MidiEditor({
             return (
               <div
                 key={note.id}
+                data-note-id={note.id}
                 style={{
                   position: 'absolute',
                   left,

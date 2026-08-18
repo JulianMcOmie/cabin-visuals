@@ -88,6 +88,11 @@ export function useNoteGestures({
   // (move/resize) and on alt-duplicate; committed once on pointer-up so the
   // whole gesture is a single store write = a single undo step.
   const pendingCommitRef = useRef<Note[] | null>(null)
+  // The last (snappedDelta, rowDelta) applied by the current move/resize:
+  // a 120-240 Hz mouse fires several pointermoves per frame that snap to the
+  // SAME position, and each used to rebuild the note array and re-render the
+  // whole roll. Reset on pointerdown (see beginDrag paths).
+  const lastAppliedRef = useRef<{ dx: number; dy: number } | null>(null)
   // Selection that existed when a marquee began (shift-add base); the live
   // marquee selection is this set unioned with the notes currently boxed.
   const marqueeBaseRef = useRef<Set<string>>(new Set())
@@ -216,6 +221,9 @@ export function useNoteGestures({
 
         const deltaY = grid.y - ds.startY
         const rowDelta = Math.round(deltaY / latest.current.rowHeight)
+        const la = lastAppliedRef.current
+        if (la && la.dx === snappedDelta && la.dy === rowDelta) return
+        lastAppliedRef.current = { dx: snappedDelta, dy: rowDelta }
         const curRows = latest.current.rows
         // Notes may leave the block; bound them to the timeline instead.
         // startBeat is block-relative, so the absolute range [0, timeline] maps
@@ -245,6 +253,8 @@ export function useNoteGestures({
         const deltaX = grid.x - ds.startX
         const deltaBeats = xToBeat(deltaX, latest.current.pixelsPerBeat)
         const snappedDelta = latest.current.roundToNearestStep(deltaBeats)
+        if (lastAppliedRef.current?.dx === snappedDelta) return
+        lastAppliedRef.current = { dx: snappedDelta, dy: 0 }
 
         const next = latest.current.notes.map(n => {
           const originalDuration = ds.originalDurations!.get(n.id)
@@ -262,6 +272,8 @@ export function useNoteGestures({
         const deltaX = grid.x - ds.startX
         const deltaBeats = xToBeat(deltaX, latest.current.pixelsPerBeat)
         const snappedDelta = latest.current.roundToNearestStep(deltaBeats)
+        if (lastAppliedRef.current?.dx === snappedDelta) return
+        lastAppliedRef.current = { dx: snappedDelta, dy: 0 }
 
         // Drag the start; keep the end planted. Clamp so start stays >= 0 and
         // the note never shrinks below one snap step.
@@ -374,6 +386,7 @@ export function useNoteGestures({
         }
       }
 
+      lastAppliedRef.current = null
       setDragState({
         type: nearLeft ? 'resizing-left' : 'resizing',
         startX: grid.x,
@@ -433,6 +446,7 @@ export function useNoteGestures({
         originalPitches.set(dup.id, dup.pitch)
       }
 
+      lastAppliedRef.current = null
       setDragState({
         type: 'moving',
         startX: grid.x,
@@ -458,6 +472,7 @@ export function useNoteGestures({
       }
     }
 
+    lastAppliedRef.current = null
     setDragState({
       type: 'moving',
       startX: grid.x,
