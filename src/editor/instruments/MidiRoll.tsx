@@ -68,6 +68,15 @@ const PARAMS: ParamDef[] = [
   },
   // Scales every play style's emission and reach.
   { key: 'playPower', label: 'Play Intensity', min: 0.2, max: 2, step: 0.05, default: 1 },
+  // Radiant/Prism reproduce black-frame references, so by default they
+  // paint their own black backdrop instead of compositing over whatever
+  // the scene wears (new projects default to cabin blue). Scene = see-through.
+  {
+    key: 'backdrop', label: 'Backdrop', type: 'select', default: 1, showIf: 'playStyle', options: [
+      { value: 0, label: 'Scene' },
+      { value: 1, label: 'Black' },
+    ],
+  },
   // --- Play-style internals, exposed. Shared knobs show for any styled
   // mode; the rest pin to their style via showIf. Numeric = automatable.
   { key: 'bloomReach', label: 'Glow Reach', min: 0.3, max: 2.5, step: 0.05, default: 1, showIf: 'playStyle' },
@@ -278,6 +287,12 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
     const beat = state.beat
     ctx.clearRect(0, 0, W, H)
     if (usesBloom) ectx.clearRect(0, 0, W, H)
+    // Styled modes own the frame: an opaque black backdrop (default) makes
+    // the look independent of the scene's background color.
+    if (styled && Math.round(p.backdrop ?? 1) === 1) {
+      ctx.fillStyle = '#000000'
+      ctx.fillRect(0, 0, W, H)
+    }
 
     // --- Starfield: deterministic dots, drifting slowly with the roll ---
     if (stars > 0) {
