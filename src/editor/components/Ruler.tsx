@@ -1,4 +1,4 @@
-import type { PointerEvent as ReactPointerEvent, ReactNode, RefObject } from 'react'
+import { memo, useMemo, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react'
 import { useTimeStore } from '../store/TimeStore'
 import {
   LOOP_MOVE_EDGE_INSET,
@@ -59,6 +59,46 @@ interface RulerProps {
   loopEdge?: string
 }
 
+/** The minor + 16th tick forest. Thousands of divs at deep zoom on a long
+ *  project, so it is memoized on the four primitives that shape it: the Ruler
+ *  itself re-renders on every store write during a drag (its parents subscribe
+ *  broadly by design), and re-diffing this forest per pointermove was the
+ *  single biggest chunk of that render. */
+const RulerTicks = memo(function RulerTicks({ pixelsPerBeat, beatsPerBar, totalBars, beatExtent }: {
+  pixelsPerBeat: number
+  beatsPerBar: number
+  totalBars: number
+  beatExtent: number
+}) {
+  const { majorBars, minorBeats, subBeats } = computeRulerGrid(pixelsPerBeat, beatsPerBar, totalBars)
+  // Minor ticks: every minor position that isn't a major line (k % 4 skips them
+  // exactly - floats included - since majors sit every 4 minors).
+  const minors = Array.from({ length: Math.ceil(beatExtent / minorBeats) }, (_, k) => k)
+    .filter((k) => (majorBars === 1 ? k % beatsPerBar !== 0 : k % 4 !== 0))
+    .map((k) => k * minorBeats)
+  const subs = subBeats != null
+    ? Array.from({ length: Math.ceil(beatExtent / subBeats) }, (_, k) => k).filter((k) => k % 4 !== 0).map((k) => k * subBeats)
+    : []
+  return (
+    <>
+      {/* Faint 16th sub-ticks (deep zoom only) - shortest and dimmest.
+          Tick/number/line colors read through --ruler-* vars so the
+          TIMELINE (.timeline-neon) can voice them as faint etched white on
+          its near-black stage while the piano roll keeps these defaults. */}
+      {subs.map((beat) => (
+        <div key={`s${beat}`} className="absolute bottom-0 w-px bg-[var(--ruler-tick-sub,#222228)]" style={{ left: beat * pixelsPerBeat, top: '78%' }} />
+      ))}
+
+      {/* Short minor ticks - 4 per major span (one per measure when zoomed
+          out). Clearly shorter than the numbered major lines, still a hair
+          taller than the 16th sub-ticks. */}
+      {minors.map((beat) => (
+        <div key={`b${beat}`} className="absolute bottom-0 w-px bg-[var(--ruler-tick-minor,#2c2c33)]" style={{ left: beat * pixelsPerBeat, top: '74%' }} />
+      ))}
+    </>
+  )
+})
+
 /**
  * The shared Logic-style ruler: lighter top half with the loop lane + bar numbers,
  * darker bottom half with tick lines and the playhead triangle. Used by both the
@@ -104,16 +144,11 @@ export function Ruler({
   // Zoom-adaptive grid (Logic-style), shared with the playhead snap - see
   // computeRulerGrid. Zooming out thins the numbered lines 1 → 2 → 4 → 8...
   // bars; each major span carries 4 minor ticks; deep zoom adds 16th sub-ticks.
-  const { majorBars, minorBeats, subBeats } = computeRulerGrid(pixelsPerBeat, beatsPerBar, totalBars)
-  const bars = Array.from({ length: Math.ceil(totalBars / majorBars) }, (_, i) => i * majorBars)
-  // Minor ticks: every minor position that isn't a major line (k % 4 skips them
-  // exactly - floats included - since majors sit every 4 minors).
-  const minors = Array.from({ length: Math.ceil(beatExtent / minorBeats) }, (_, k) => k)
-    .filter((k) => (majorBars === 1 ? k % beatsPerBar !== 0 : k % 4 !== 0))
-    .map((k) => k * minorBeats)
-  const subs = subBeats != null
-    ? Array.from({ length: Math.ceil(beatExtent / subBeats) }, (_, k) => k).filter((k) => k % 4 !== 0).map((k) => k * subBeats)
-    : []
+  const { majorBars } = computeRulerGrid(pixelsPerBeat, beatsPerBar, totalBars)
+  const bars = useMemo(
+    () => Array.from({ length: Math.ceil(totalBars / majorBars) }, (_, i) => i * majorBars),
+    [totalBars, majorBars],
+  )
 
   return (
     <div className="flex border-b border-[var(--timeline-row-line,var(--border))] bg-[var(--bg-timeline)] select-none flex-shrink-0" style={{ height, paddingRight: gutterPx }}>
@@ -212,20 +247,7 @@ export function Ruler({
             </div>
           )}
 
-          {/* Faint 16th sub-ticks (deep zoom only) - shortest and dimmest.
-              Tick/number/line colors read through --ruler-* vars so the
-              TIMELINE (.timeline-neon) can voice them as faint etched white on
-              its near-black stage while the piano roll keeps these defaults. */}
-          {subs.map((beat) => (
-            <div key={`s${beat}`} className="absolute bottom-0 w-px bg-[var(--ruler-tick-sub,#222228)]" style={{ left: beat * pixelsPerBeat, top: '78%' }} />
-          ))}
-
-          {/* Short minor ticks - 4 per major span (one per measure when zoomed
-              out). Clearly shorter than the numbered major lines, still a hair
-              taller than the 16th sub-ticks. */}
-          {minors.map((beat) => (
-            <div key={`b${beat}`} className="absolute bottom-0 w-px bg-[var(--ruler-tick-minor,#2c2c33)]" style={{ left: beat * pixelsPerBeat, top: '74%' }} />
-          ))}
+          <RulerTicks pixelsPerBeat={pixelsPerBeat} beatsPerBar={beatsPerBar} totalBars={totalBars} beatExtent={beatExtent} />
 
           {bars.map((bar) => {
             const barBeat = bar * beatsPerBar
