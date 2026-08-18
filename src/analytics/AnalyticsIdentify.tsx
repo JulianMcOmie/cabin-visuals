@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import { useAuth } from '../persistence/hooks/useAuth'
-import { getPostHog } from './posthog'
+import { withPostHog } from './posthog'
 
 /**
  * Headless: bridges Supabase auth into PostHog so every event carries a stable
@@ -20,21 +20,21 @@ export function AnalyticsIdentify() {
   const identified = useRef<string | null>(null)
 
   useEffect(() => {
-    const ph = getPostHog()
-    if (!ph || loading) return
-
+    if (loading) return
     const realUserId = user && !isAnonymous ? user.id : null
-
-    if (realUserId) {
-      if (identified.current !== realUserId) {
-        ph.identify(realUserId, user!.email ? { email: user!.email } : undefined)
-        identified.current = realUserId
+    const email = user?.email
+    withPostHog((ph) => {
+      if (realUserId) {
+        if (identified.current !== realUserId) {
+          ph.identify(realUserId, email ? { email } : undefined)
+          identified.current = realUserId
+        }
+      } else if (identified.current) {
+        // Signed out (or dropped back to anonymous): forget the person.
+        ph.reset()
+        identified.current = null
       }
-    } else if (identified.current) {
-      // Signed out (or dropped back to anonymous): forget the person.
-      ph.reset()
-      identified.current = null
-    }
+    })
   }, [user, loading, isAnonymous])
 
   return null

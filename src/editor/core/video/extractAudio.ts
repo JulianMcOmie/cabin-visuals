@@ -1,4 +1,5 @@
-import { Input, Output, Conversion, Mp4OutputFormat, BufferTarget, ALL_FORMATS } from 'mediabunny'
+import type { BufferTarget } from 'mediabunny'
+import { loadMediabunny } from './loadMediabunny'
 import { getVideoSource } from './videoSource'
 import { loadAudioTrack } from '../../utils/loadAudioTrack'
 
@@ -15,6 +16,7 @@ import { loadAudioTrack } from '../../utils/loadAudioTrack'
 /** Extract `ref`'s audio into a new project audio track. Throws with a
  *  user-facing message when the video has no audio or can't be converted. */
 export async function extractAudioTrack(ref: string, fileName: string): Promise<void> {
+  const { Input, Output, Conversion, Mp4OutputFormat, BufferTarget, ALL_FORMATS } = await loadMediabunny()
   const input = new Input({ formats: ALL_FORMATS, source: await getVideoSource(ref) })
   try {
     const audioTrack = await input.getPrimaryAudioTrack()

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Archivo, Hanken_Grotesk, IBM_Plex_Mono, IBM_Plex_Sans, Instrument_Serif, JetBrains_Mono } from "next/font/google";
+import { Archivo, Hanken_Grotesk, IBM_Plex_Mono, IBM_Plex_Sans, Instrument_Serif } from "next/font/google";
 import { AnalyticsGate } from "../src/analytics/AnalyticsGate";
 import { AnalyticsIdentify } from "../src/analytics/AnalyticsIdentify";
 import { NavigationOverlay } from "../src/components/instantNavigation";
@@ -27,10 +27,10 @@ const displaySerif = Instrument_Serif({
   variable: "--font-display",
 });
 // Console spec one-offs: Archivo 700 for the project name, IBM Plex Sans 600
-// for the Export button, JetBrains Mono for the BPM value.
+// for the Export button. (JetBrains Mono was declared for the BPM value but
+// nothing ever referenced --font-jetbrains - two preloaded woff2 for nothing.)
 const archivo = Archivo({ subsets: ["latin"], weight: "700", variable: "--font-archivo" });
 const plexSans = IBM_Plex_Sans({ subsets: ["latin"], weight: "600", variable: "--font-plex-sans" });
-const jetbrains = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-jetbrains" });
 
 export const metadata: Metadata = {
   title: "Cabin Visuals",
@@ -53,7 +53,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${uiSans.variable} ${plexMono.variable} ${displaySerif.variable} ${archivo.variable} ${plexSans.variable} ${jetbrains.variable} ${uiSans.className}`}
+      className={`${uiSans.variable} ${plexMono.variable} ${displaySerif.variable} ${archivo.variable} ${plexSans.variable} ${uiSans.className}`}
     >
       <body>
         {children}

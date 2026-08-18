@@ -1,7 +1,7 @@
 'use client'
 
 import { track as vercelTrack } from '@vercel/analytics'
-import { getPostHog } from './posthog'
+import { withPostHog } from './posthog'
 
 /**
  * One thin seam over the analytics vendors: the rest of the app only ever calls
@@ -63,5 +63,5 @@ export type AnalyticsEvent =
 
 export function track(event: AnalyticsEvent, props?: Record<string, string | number | boolean | null>) {
   vercelTrack(event, props)
-  getPostHog()?.capture(event, props ?? undefined)
+  withPostHog((ph) => ph.capture(event, props ?? undefined))
 }

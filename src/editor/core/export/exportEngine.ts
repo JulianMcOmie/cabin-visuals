@@ -12,6 +12,7 @@ import { createVideoEncodeSession, exportEncoderConfig, exportEncodeOptions } fr
 import { encoderProducesMuxableChunks } from './support'
 import { renderAudioTrack, encodeAudioIntoWriter } from './audioRender'
 import { createWatermarkCompositor } from './watermark'
+import { framePreparers } from './framePreparers'
 
 export interface WalkHooks {
   /** Called about once a second of output (every `fps` frames) and once at the end. */
@@ -19,16 +20,10 @@ export interface WalkHooks {
   signal?: AbortSignal
 }
 
-/**
- * Frame preparers: async work that must COMPLETE before a frame is rendered.
- * The Video instrument registers one that seeks its <video> element to the
- * exact beat-derived time and resolves on `seeked` - that is what makes
- * exported video frame-exact where live playback merely drift-corrects.
- * Zero registered preparers costs the loop nothing. Returns an unregister fn.
- */
-export type FramePreparer = (beat: number) => Promise<void> | void
-
-const framePreparers = new Set<FramePreparer>()
+// Frame preparers live in their own tiny module: instruments (Photo, Video)
+// register them, and importing THIS file for that would drag the encoder,
+// muxer and audio renderer into the instrument bundle.
+export { registerFramePreparer, type FramePreparer } from './framePreparers'
 
 // The loop's once-a-second yield must NOT be setTimeout: hidden tabs throttle
 // timers to >=1s wakeups (and ~1/minute once "intensive" throttling kicks in
@@ -42,11 +37,6 @@ function yieldMacrotask(): Promise<void> {
     ch.port1.onmessage = () => resolve()
     ch.port2.postMessage(null)
   })
-}
-
-export function registerFramePreparer(fn: FramePreparer): () => void {
-  framePreparers.add(fn)
-  return () => framePreparers.delete(fn)
 }
 
 /**

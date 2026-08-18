@@ -1,5 +1,6 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import { InstantLink as Link } from '../components/instantNavigation'
 import { useSearchParams } from 'next/navigation'
@@ -27,7 +28,9 @@ import { TrackEditor } from './components/TrackEditor'
 import { PlayIcon, PauseIcon, SkipBackIcon, LoopIcon } from './components/TransportIcons'
 import { BpmControl } from './components/BpmControl'
 import { PlaybackRateControl } from './components/PlaybackRateControl'
-import { ExportDialog } from './components/ExportDialog'
+// Loaded on first open: the dialog drags the whole export engine (encoder,
+// muxer, audio render) behind it, none of which the editor needs until then.
+const ExportDialog = dynamic(() => import('./components/ExportDialog').then((m) => m.ExportDialog), { ssr: false })
 import { SaveToCloudDialog } from './components/SaveToCloudDialog'
 import { EditorSignupGate } from './components/EditorSignupGate'
 import { MediaFileDropLayer } from './components/MediaFileDropLayer'

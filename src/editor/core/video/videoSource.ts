@@ -1,4 +1,5 @@
-import { BlobSource, UrlSource, type Source } from 'mediabunny'
+import type { Source } from 'mediabunny'
+import { loadMediabunny } from './loadMediabunny'
 import { mintVideoPath, uploadVideoTo, getVideoUrl } from '../../../persistence/videoStorage'
 
 // Ref-based access to video bytes, mirroring core/audio/audioSource.ts: with a
@@ -58,6 +59,7 @@ export function isPublicAssetRef(ref: string): boolean {
  *  app asset served as-is, else the bucket's signed URL (range-streamed,
  *  not fully downloaded). */
 export async function getVideoSource(ref: string): Promise<Source> {
+  const { BlobSource, UrlSource } = await loadMediabunny()
   const file = memFiles.get(ref)
   if (file) return new BlobSource(file)
   if (isPublicAssetRef(ref)) return new UrlSource(new URL(ref, window.location.origin).href)

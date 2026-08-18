@@ -1,6 +1,6 @@
 'use client'
 
-import posthog, { type PostHog } from 'posthog-js'
+import type { PostHog } from 'posthog-js'
 import { ANALYTICS_OPTOUT_KEY } from './AnalyticsGate'
 
 /**
@@ -19,30 +19,43 @@ import { ANALYTICS_OPTOUT_KEY } from './AnalyticsGate'
  *   free-tier event cap than 'identified_only'; flip back if volume ever bites.
  */
 let instance: PostHog | null = null
-let tried = false
+let loading: Promise<PostHog | null> | null = null
 
-export function getPostHog(): PostHog | null {
-  if (tried) return instance
-  tried = true
+/** Resolve the initialised client, loading posthog-js on demand. The library
+ *  is ~70 KB gzipped and used to sit in the root layout's shared bundle on
+ *  every route; now it arrives as its own chunk after hydration and the
+ *  first events wait for it (in order) instead of the page waiting for it. */
+export function loadPostHog(): Promise<PostHog | null> {
+  if (loading) return loading
+  loading = (async () => {
+    if (typeof window === 'undefined') return null
+    const key = process.env.NEXT_PUBLIC_POSTHOG_KEY
+    if (!key) return null
+    if (localStorage.getItem(ANALYTICS_OPTOUT_KEY)) return null
 
-  if (typeof window === 'undefined') return null
-  const key = process.env.NEXT_PUBLIC_POSTHOG_KEY
-  if (!key) return null
-  if (localStorage.getItem(ANALYTICS_OPTOUT_KEY)) return null
+    const { default: posthog } = await import('posthog-js')
+    posthog.init(key, {
+      // Same-origin proxy (rewrites in next.config.ts) so ad blockers that
+      // blacklist *.posthog.com don't eat the events; ui_host keeps toolbar
+      // and deep links pointed at the real PostHog UI.
+      api_host: '/ingest',
+      ui_host: 'https://us.posthog.com',
+      person_profiles: 'always',
+      // 'history_change' captures client-side route changes too (App Router
+      // navigations, e.g. landing -> /projects) - plain `true` only fires on
+      // full page loads.
+      capture_pageview: 'history_change',
+      capture_pageleave: true,
+    })
+    instance = posthog
+    return instance
+  })()
+  return loading
+}
 
-  posthog.init(key, {
-    // Same-origin proxy (rewrites in next.config.ts) so ad blockers that
-    // blacklist *.posthog.com don't eat the events; ui_host keeps toolbar
-    // and deep links pointed at the real PostHog UI.
-    api_host: '/ingest',
-    ui_host: 'https://us.posthog.com',
-    person_profiles: 'always',
-    // 'history_change' captures client-side route changes too (App Router
-    // navigations, e.g. landing -> /projects) - plain `true` only fires on
-    // full page loads.
-    capture_pageview: 'history_change',
-    capture_pageleave: true,
-  })
-  instance = posthog
-  return instance
+/** Run `fn` against the client - now if it is loaded, else once it is (calls
+ *  queue in order behind the same promise). A no-op when unconfigured/opted out. */
+export function withPostHog(fn: (ph: PostHog) => void): void {
+  if (instance) { fn(instance); return }
+  void loadPostHog().then((ph) => { if (ph) fn(ph) })
 }

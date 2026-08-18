@@ -7,7 +7,7 @@ import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { getObjectState } from '../core/visual/VisualEngine'
 import { photoTransitionAt, PHOTO_BASE_PITCH } from '../core/photo/photoTime'
 import { getPhotoPlayableUrl } from '../core/photo/photoSource'
-import { registerFramePreparer } from '../core/export/exportEngine'
+import { registerFramePreparer } from '../core/export/framePreparers'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 // The Photo instrument: an ordered bank of the user's own photos, cut by MIDI.

@@ -14,7 +14,8 @@
 // Ownership: VideoSamples are close()d exactly once (drawn, skipped, disposed);
 // head-cache ImageBitmaps live until their clip is dropped.
 
-import { Input, ALL_FORMATS, VideoSampleSink, type InputVideoTrack, type VideoSample } from 'mediabunny'
+import type { Input, InputVideoTrack, VideoSample, VideoSampleSink } from 'mediabunny'
+import { loadMediabunny } from './loadMediabunny'
 import { getVideoSource } from './videoSource'
 
 const HEAD_SPAN_S = 0.4 // pre-decoded window every (re)trigger lands inside
@@ -183,6 +184,7 @@ export class VideoDecodeEngine {
 
   private async arm(rt: ClipRuntime): Promise<void> {
     try {
+      const { Input, ALL_FORMATS, VideoSampleSink } = await loadMediabunny()
       const input = new Input({ formats: ALL_FORMATS, source: await getVideoSource(rt.ref) })
       const track = await input.getPrimaryVideoTrack()
       if (!track) throw new Error('no video track')

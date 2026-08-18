@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ArrowDown, ArrowUp, Film, Music, Pause, Play, Plus, X } from 'lucide-react'
-import { Input, ALL_FORMATS, BlobSource, VideoSampleSink, type Input as MbInput } from 'mediabunny'
+import type { Input as MbInput, VideoSampleSink } from 'mediabunny'
+import { loadMediabunny } from '../core/video/loadMediabunny'
 import { claimMediaDrop } from './MediaFileDropLayer'
 import { dragCarriesFiles, isVideoFile } from '../core/mediaFileKinds'
 import { useProjectStore } from '../store/ProjectStore'
@@ -106,6 +107,7 @@ function MomentPickerModal({
     let cancelled = false
     void (async () => {
       try {
+        const { Input, ALL_FORMATS, BlobSource, VideoSampleSink } = await loadMediabunny()
         const source = picker.file ? new BlobSource(picker.file) : await getVideoSource(picker.ref!)
         const input = new Input({ formats: ALL_FORMATS, source })
         const track = await input.getPrimaryVideoTrack()
