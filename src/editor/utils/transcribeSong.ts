@@ -49,11 +49,17 @@ async function postWords(
  * Transcribe the project's song into sung-seconds words. Reports progress
  * through `onPhase`; throws with a user-facing message on every failure.
  * Callers place the words on the timeline (placeTranscription + addLyricTrack).
+ *
+ * `getBlock` picks WHICH song: it defaults to the project's first audio block
+ * (the setup flow's contract), and the audio-track panel's Transcribe button
+ * passes its own track's block instead. A getter, not a block - the pipeline
+ * re-reads it after the decode wait, which rewrites the trim it reads.
  */
 export async function transcribeActiveSong(
   onPhase: (phase: TranscribePhase) => void = () => {},
+  getBlock: () => AudioBlock | undefined = firstAudioBlock,
 ): Promise<TranscribedWord[]> {
-  const block = firstAudioBlock()
+  const block = getBlock()
   if (!block) throw new Error('There is no song in this project yet - add one to the timeline first.')
   // Transcription reads the song from the bucket, so bytes that never left the
   // tab (an unsaved project) can't be transcribed - say that, rather than
@@ -79,7 +85,7 @@ export async function transcribeActiveSong(
   // stops setting trimEnd - proceed (unsynced grid) after a short wait.
   const decodeDeadline = Date.now() + 30_000
   while (Date.now() < decodeDeadline) {
-    const b = firstAudioBlock()
+    const b = getBlock()
     if (!b || b.trimEnd > 0) break
     await new Promise((r) => setTimeout(r, 200))
   }

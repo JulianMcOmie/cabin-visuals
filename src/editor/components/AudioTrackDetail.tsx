@@ -1,5 +1,9 @@
-import { useEffect, useRef, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { Mic } from 'lucide-react'
 import { getAudioEngine } from '../core/audio/AudioEngine'
+import { transcribeActiveSong, type TranscribePhase } from '../utils/transcribeSong'
+import { placeTranscription } from '../utils/lyricPlacement'
+import { track as trackEvent } from '../../analytics/analytics'
 import { getPeaks, BASE_PEAK_BUCKETS } from '../core/audio/waveform'
 import { useAudioStore } from '../store/AudioStore'
 import { useProjectStore } from '../store/ProjectStore'
@@ -22,6 +26,84 @@ const WINDOW_MAX_SEC = 32
 const MAX_PEAK_BUCKETS = 1 << 18
 /** Oscilloscope trace resolution - one sample per ~2 device pixels is plenty. */
 const SCOPE_SAMPLES = 512
+
+/**
+ * Transcribe THIS track's song into a lyric track - the Lyric Video setup
+ * pipeline (upload → Scribe transcription → forced alignment), reachable from
+ * any audio track without going through a template. Words land through
+ * addLyricTrack: a root 'Lyrics' Text Display track is refilled in place
+ * (styling kept), otherwise a fresh one is created.
+ */
+function TranscribeControl({ trackId }: { trackId: string }) {
+  const [phase, setPhase] = useState<TranscribePhase | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const runningRef = useRef(false)
+  // Selecting another track unmounts this panel mid-flight; the pipeline keeps
+  // running (its result still lands in the store) but must not set state after.
+  const aliveRef = useRef(true)
+  useEffect(() => {
+    aliveRef.current = true
+    return () => { aliveRef.current = false }
+  }, [])
+
+  const run = async () => {
+    if (runningRef.current) return
+    runningRef.current = true
+    setError(null)
+    setPhase({ kind: 'uploading', progress: 0 })
+    try {
+      // THIS panel's track, not the project's first audio track - a getter
+      // because the pipeline's decode wait rewrites the block's trim.
+      const getBlock = () => useProjectStore.getState().tracks[trackId]?.audioBlocks?.[0]
+      const timing = await transcribeActiveSong((next) => { if (aliveRef.current) setPhase(next) }, getBlock)
+      const block = getBlock()
+      if (!block) throw new Error('The song went away mid-transcription - try again.')
+      const { bpm, beatsPerBar } = useProjectStore.getState()
+      const words = placeTranscription(timing, block, bpm, beatsPerBar, true)
+      const id = useProjectStore.getState().addLyricTrack(words, timing)
+      if (!id) throw new Error('No usable words found in the song.')
+      trackEvent('lyrics_applied', { source: 'aligned', where: 'audio_track_panel', words: words.length })
+    } catch (err) {
+      if (aliveRef.current) setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      runningRef.current = false
+      if (aliveRef.current) setPhase(null)
+    }
+  }
+
+  const working = phase !== null
+  const status = phase?.kind === 'uploading'
+    ? `uploading${phase.progress > 0 ? ` ${Math.round(phase.progress * 100)}%` : ''}`
+    : phase?.kind === 'transcribing'
+      ? 'transcribing…'
+      : phase?.kind === 'aligning'
+        ? 'aligning words…'
+        : null
+
+  return (
+    <div className="absolute bottom-2 left-3 flex items-center gap-2">
+      <button
+        onClick={() => void run()}
+        disabled={working}
+        aria-busy={working}
+        title="Transcribe this song and write its timed words onto a Lyrics track"
+        className={`flex h-6 items-center gap-1.5 rounded border px-2.5 text-[10px] font-medium transition-colors ${
+          working
+            ? 'cursor-default border-[var(--border)] text-[var(--text-muted)]'
+            : 'cursor-pointer border-[var(--border)] text-[var(--text-3)] hover:border-[var(--border-strong)] hover:text-[var(--text)]'
+        }`}
+      >
+        <Mic size={11} />
+        {working ? 'Transcribing…' : error ? 'Try again' : 'Transcribe'}
+      </button>
+      {(status || error) && (
+        <span className={`max-w-[240px] truncate font-mono text-[10px] select-none ${error ? 'text-[#d68383]' : ''}`} style={error ? undefined : { color: LABEL }} title={error ?? undefined}>
+          {error ?? status}
+        </span>
+      )}
+    </div>
+  )
+}
 
 /** Size a canvas to its CSS box at device resolution. Returns CSS-pixel dims. */
 function fitCanvas(canvas: HTMLCanvasElement): { w: number; h: number } | null {
@@ -332,6 +414,7 @@ export function AudioTrackDetail({ track }: { track: Track }) {
             {Math.round(volume * 100)}%
           </span>
         </div>
+        <TranscribeControl trackId={track.id} />
       </div>
 
       <div className="h-px flex-shrink-0 bg-[var(--border)]" />
