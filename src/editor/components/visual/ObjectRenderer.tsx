@@ -28,6 +28,22 @@ import { MaterialWrapper } from './MaterialWrapper'
  */
 const _composed = new Matrix4()
 
+// Every mounted COPY of a track runs the selectors below on every store
+// write - hundreds of copies × 60 writes/s during a drag. The answers depend
+// only on (state, scene, track), so compute each once per published state and
+// let every copy of the same track read the memo. WeakMap-keyed on the state
+// object, so old states are collected as the store moves on.
+const perStateCache = new WeakMap<object, Map<string, string>>()
+function perStateOnce(state: object, key: string, compute: () => string): string {
+  let bucket = perStateCache.get(state)
+  if (!bucket) { bucket = new Map(); perStateCache.set(state, bucket) }
+  const hit = bucket.get(key)
+  if (hit !== undefined) return hit
+  const value = compute()
+  bucket.set(key, value)
+  return value
+}
+
 export function ObjectRenderer({
   sceneId,
   trackId,
@@ -52,7 +68,7 @@ export function ObjectRenderer({
   // subscribes to a FINGERPRINT (settings included - knob drags must repaint)
   // and merges via getState in the memo below; no group ancestors = the empty
   // string and the own-effects array passes through untouched.
-  const groupFxFingerprint = useProjectStore((s) => {
+  const groupFxFingerprint = useProjectStore((s) => perStateOnce(s, `gfx|${sceneId}|${trackId}`, () => {
     const tracks = s.scenes[sceneId]?.tracks
     let out = ''
     for (let cur = tracks?.[trackId]?.parentId; cur != null; cur = tracks?.[cur]?.parentId) {
@@ -60,7 +76,7 @@ export function ObjectRenderer({
       if (t?.type === 'group' && t.effects?.length) out += JSON.stringify(t.effects)
     }
     return out
-  })
+  }))
   const plugins = useMemo(() => {
     const own = ownEffects ?? []
     if (!groupFxFingerprint) return own
@@ -77,7 +93,7 @@ export function ObjectRenderer({
   // Shader instances whose 'enabled' is automated must stay MOUNTED while their
   // checkbox is off - the automation lane can switch them on mid-project. A
   // stable string of automated instance ids keeps the selector reference-clean.
-  const fxEnabledAutomated = useProjectStore((s) => {
+  const fxEnabledAutomated = useProjectStore((s) => perStateOnce(s, `fxa|${sceneId}|${trackId}`, () => {
     const sceneTracks = s.scenes[sceneId]?.tracks
     const t = sceneTracks?.[trackId]
     if (!t) return ''
@@ -88,7 +104,7 @@ export function ObjectRenderer({
       if (target?.key === 'enabled') ids.push(target.instanceId)
     }
     return ids.sort().join(',')
-  })
+  }))
   const shaderInstances = plugins.filter(
     (p) => (p.enabled || fxEnabledAutomated.includes(p.id)) && getEffect(p.pluginId)?.category === 'shader',
   )
