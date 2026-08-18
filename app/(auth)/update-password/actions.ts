@@ -25,6 +25,5 @@ export async function updatePassword(newPassword: string) {
     return { error: errorMessage };
   }
 
-  console.log('Password updated successfully via reset flow.');
   return { error: null }; // Return success
 } 

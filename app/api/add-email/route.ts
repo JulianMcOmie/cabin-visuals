@@ -50,7 +50,6 @@ export async function POST(request: NextRequest) {
         },
       ]);
       
-      console.log(`Successfully added email to Airtable: ${email}`);
       return NextResponse.json({ message: 'Successfully added to waitlist!' }, { status: 200 });
 
     } catch (airtableError: any) {

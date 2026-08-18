@@ -13,10 +13,6 @@ export async function completeSignup(formData: FormData) {
   const confirmPassword = formData.get('confirmPassword') as string; // Also get confirm password
 
   // *** DEBUG LOGGING START ***
-  console.log("--- completeSignup Action --- ");
-  console.log("Email from formData:", email);
-  console.log("Password from formData:", password ? '[Exists]' : '[Missing]');
-  console.log("ConfirmPassword from formData:", confirmPassword ? '[Exists]' : '[Missing]');
   // *** DEBUG LOGGING END ***
 
   // Rebuild params for potential redirects
@@ -44,7 +40,6 @@ export async function completeSignup(formData: FormData) {
   }
   // --- End Validation ---
 
-  console.log(`Attempting supabase.auth.signUp for ${email}`);
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -77,6 +72,5 @@ export async function completeSignup(formData: FormData) {
   }
 
   // On successful signup initiation, redirect to login with a confirmation message
-  console.log(`Signup initiated for ${email}. Redirecting to login for confirmation.`);
   return redirect('/projects');//redirect('/login?message=Please check your email to confirm your account.');
 } 

@@ -91,7 +91,6 @@ export async function updateSession(request: NextRequest) {
 
   // Redirect unauthenticated users from *protected* pages to login
   if (!signedIn && !isPublicPath) {
-    console.log(`Middleware: Unauthenticated user accessing protected path ${pathname}. Redirecting to login.`);
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
@@ -99,7 +98,6 @@ export async function updateSession(request: NextRequest) {
 
   // Redirect authenticated users from auth pages (login, signup, reset) to the projects page
   if (signedIn && isAuthRoute) {
-      console.log(`Middleware: Authenticated user accessing auth route ${pathname}. Redirecting to projects.`);
       const url = request.nextUrl.clone();
       url.pathname = '/projects';
       return NextResponse.redirect(url);

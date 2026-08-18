@@ -7,7 +7,6 @@ import { redirect } from 'next/navigation'
  * Signs the user out and redirects them.
  */
 export async function logout() {
-  console.log('Executing logout server action');
   const supabase = await createClient();
   
   const { error } = await supabase.auth.signOut();
@@ -15,7 +14,6 @@ export async function logout() {
   if (error) {
     console.error('Error logging out:', error.message);
   } else {
-    console.log("Successfully signed out.");
   }
 
   // Redirect to home page after logout

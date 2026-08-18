@@ -42,7 +42,6 @@ function SignupPageContent() {
   const [gsiReady, setGsiReady] = useState(false);
 
   async function handleGoogleSignInCallback(response: any) {
-    console.log("Google Sign-In CredentialResponse (Signup Page):", response);
     if (response.credential) {
       track('google_signin_submitted', { page: 'signup' });
       setGoogleBusy(true);
@@ -89,7 +88,6 @@ function SignupPageContent() {
     if (window.google?.accounts?.id) {
         const buttonContainer = document.getElementById('google-signin-button-container');
         if (buttonContainer && buttonContainer.childElementCount === 0) {
-            console.log('Rendering Google Sign-In button (Signup Page)');
             window.google.accounts.id.renderButton(
                 buttonContainer,
                 // "Console" restyle: filled_black is the darkest surface GSI

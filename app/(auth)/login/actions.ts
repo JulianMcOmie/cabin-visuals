@@ -34,7 +34,6 @@ export async function handleSignInWithGoogle(idToken: string) {
     return redirect('/login?error=Google sign-in failed: No token received.');
   }
 
-  console.log("Attempting signInWithIdToken...");
   const { data, error } = await supabase.auth.signInWithIdToken({
     provider: 'google',
     token: idToken,
@@ -46,7 +45,6 @@ export async function handleSignInWithGoogle(idToken: string) {
     return redirect('/login?error=Could not authenticate with Google.');
   }
 
-  console.log("signInWithIdToken success!");
 
   // Owner ping for FIRST-TIME Google users only (never throws). This action
   // serves login and signup alike, so "new" = the auth row was created within

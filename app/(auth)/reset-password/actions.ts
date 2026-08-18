@@ -22,7 +22,6 @@ export async function requestPasswordReset(formData: FormData) {
   // Construct the redirect URL for the update password page (now nested under /auth)
   const redirectUrl = `${origin}/update-password`;
 
-  console.log(`Requesting password reset for ${email} with redirect to ${redirectUrl}`);
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: redirectUrl,
@@ -33,6 +32,5 @@ export async function requestPasswordReset(formData: FormData) {
     return { error: 'Failed to send password reset email. Please try again later.' };
   }
 
-  console.log('Password reset email requested successfully.');
   return { error: null }; // Return success
 } 
