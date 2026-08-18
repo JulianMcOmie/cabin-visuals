@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { InstantLink as Link } from './instantNavigation'
 import type { ReactNode } from 'react'
 import { CabinLogo } from './CabinLogo'
 

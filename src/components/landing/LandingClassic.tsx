@@ -1,7 +1,6 @@
 "use client"
 
 import { type ReactNode } from "react"
-import Link from "next/link"
 import { MotionConfig } from "framer-motion"
 import { CabinLogo } from "../CabinLogo"
 import { SiteHeader } from "../SiteHeader"
@@ -10,7 +9,7 @@ import { ProfileMenu } from "../ProfileMenu"
 import { useAuth } from "../../persistence/hooks/useAuth"
 import { getLastProjectId } from "../../persistence/lastProject"
 import { track } from "../../analytics/analytics"
-import { useInstantNavigation } from "../useInstantNavigation"
+import { InstantLink as Link, useInstantNavigation } from "../instantNavigation"
 import { EditorFacsimile } from "./EditorFacsimile"
 import { SOCIAL_LINKS, VISUAL_EXAMPLES } from "./content"
 
@@ -101,7 +100,7 @@ export function LandingClassic() {
   const last = user ? getLastProjectId(user.id) : null
   const destination = user ? (last ? `/editor?project=${last}` : '/projects') : '/start'
   // The loading screen paints in the click itself, before the route is fetched.
-  const { go, overlay } = useInstantNavigation(destination)
+  const { go } = useInstantNavigation(destination)
 
   return (
     <MotionConfig reducedMotion="user">
@@ -153,8 +152,7 @@ export function LandingClassic() {
             </p>
           </Appear>
           <Appear delay={0.1} className="flex flex-col items-center gap-[18px]">
-            {overlay}
-            {user ? (
+                {user ? (
               // Logged in: straight back into the last project they opened
               // on this device; /projects only when there's nothing to resume.
               <CtaGlow>
@@ -175,11 +173,7 @@ export function LandingClassic() {
               <CtaGlow>
                 <Link
                   href="/start"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    track('try_it_out_clicked')
-                    go('/start')
-                  }}
+                  onClick={() => track('try_it_out_clicked')}
                   className={CTA_CLASSES}
                 >
                   Start creating

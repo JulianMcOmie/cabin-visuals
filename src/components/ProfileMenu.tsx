@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { beginNavigation } from './instantNavigation'
 import { LogOut, Settings } from 'lucide-react'
 import {
   DropdownMenu,
@@ -117,6 +118,7 @@ export function ProfileMenu({ size = 'md' }: { size?: 'sm' | 'md' }) {
         <DropdownMenuItem
           className="flex cursor-pointer items-center text-[13px] text-[var(--text-2)] focus:bg-[var(--bg-elevated)] focus:text-[var(--text)]"
           onSelect={() => {
+            beginNavigation()
             window.location.href = '/account'
           }}
         >

@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { InstantLink as Link } from '../instantNavigation'
 
 // Console style: solid accent with dark text (the one blue, no glow).
 const SignUpButton: React.FC = () => {

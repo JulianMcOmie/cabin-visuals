@@ -1,7 +1,8 @@
 'use client'
 
 import { Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useInstantNavigation } from '@/components/instantNavigation'
 import { PhotoSetupScreen } from '@/editor/components/PhotoSetupScreen'
 import { LoadingScreen } from '@/components/LoadingScreen'
 import { useUIStore } from '@/editor/store/UIStore'
@@ -17,7 +18,7 @@ function PhotoSetupContent() {
   // Hydrates ?project= into the stores and arms autosave - the exact same
   // binding the editor itself uses, so the pad writes persist.
   useProjectPersistence()
-  const router = useRouter()
+  const { go } = useInstantNavigation()
   const search = useSearchParams()
   const projectId = search.get('project')
   const projectName = useUIStore((s) => s.projectName)
@@ -25,7 +26,7 @@ function PhotoSetupContent() {
 
   const done = async () => {
     if (projectId) await waitForSaved()
-    router.replace(projectId ? `/editor?project=${projectId}` : '/editor')
+    go(projectId ? `/editor?project=${projectId}` : '/editor', { replace: true })
   }
 
   return <PhotoSetupScreen projectLoading={projectLoading} onClose={() => void done()} />

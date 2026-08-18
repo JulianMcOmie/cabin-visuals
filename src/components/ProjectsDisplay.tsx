@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import Link from "next/link"
+import { InstantLink as Link } from "./instantNavigation"
 import Image from "next/image"
 import { motion, AnimatePresence, MotionConfig } from "framer-motion"
 import { Plus, X, FilePlus, LayoutTemplate, ChevronLeft, Copy, Trash2, MoreHorizontal } from "lucide-react"

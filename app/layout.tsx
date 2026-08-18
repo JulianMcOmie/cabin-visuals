@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Archivo, Hanken_Grotesk, IBM_Plex_Mono, IBM_Plex_Sans, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import { AnalyticsGate } from "../src/analytics/AnalyticsGate";
 import { AnalyticsIdentify } from "../src/analytics/AnalyticsIdentify";
+import { NavigationOverlay } from "../src/components/instantNavigation";
 import "./globals.css";
 
 // "DAW Console 1a" type stack: Hanken Grotesk for UI sans, IBM Plex Mono for
@@ -58,6 +59,8 @@ export default function RootLayout({
         {children}
         <AnalyticsGate />
         <AnalyticsIdentify />
+        {/* The instant loading screen every internal navigation paints first. */}
+        <NavigationOverlay />
       </body>
     </html>
   );

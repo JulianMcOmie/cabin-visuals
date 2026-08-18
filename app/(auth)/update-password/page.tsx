@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { updatePassword } from './actions'
 import { createClient } from '../../../src/utils/supabase/client'
 import { track } from '../../../src/analytics/analytics'
-import Link from 'next/link';
+import { InstantLink as Link, beginNavigation } from '@/components/instantNavigation'
 import {
   AuthShell,
   AuthTitle,
@@ -67,6 +67,7 @@ function UpdatePasswordFormInternal() {
       setMessage('Password updated successfully! You will be redirected to login shortly.')
       setTimeout(() => {
          // Redirect to new login path
+         beginNavigation();
          window.location.href = '/login';
       }, 3000);
     }

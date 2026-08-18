@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type DragEvent as ReactDragEvent } from 'react'
-import Link from 'next/link'
+import { InstantLink as Link } from '../../components/instantNavigation'
 import { Image as ImageIcon } from 'lucide-react'
 import { CabinLogo } from '../../components/CabinLogo'
 import { SiteHeader } from '../../components/SiteHeader'

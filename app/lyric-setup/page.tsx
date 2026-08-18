@@ -1,7 +1,8 @@
 'use client'
 
 import { Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useInstantNavigation } from '@/components/instantNavigation'
 import { LyricSetupScreen } from '@/editor/components/LyricSetupScreen'
 import { LoadingScreen } from '@/components/LoadingScreen'
 import { useUIStore } from '@/editor/store/UIStore'
@@ -19,7 +20,7 @@ function LyricSetupContent() {
   // Hydrates ?project= into the stores and arms autosave - the exact same
   // binding the editor itself uses, so the pipeline's writes persist.
   useProjectPersistence()
-  const router = useRouter()
+  const { go } = useInstantNavigation()
   const search = useSearchParams()
   const projectId = search.get('project')
   // The mobile flow creates the project already ON its chosen style
@@ -30,7 +31,7 @@ function LyricSetupContent() {
 
   const done = async () => {
     if (projectId) await waitForSaved()
-    router.replace(projectId ? `/editor?project=${projectId}` : '/editor')
+    go(projectId ? `/editor?project=${projectId}` : '/editor', { replace: true })
   }
 
   return <LyricSetupScreen projectLoading={projectLoading} preStyled={preStyled} onClose={() => void done()} />

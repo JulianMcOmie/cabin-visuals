@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import Script from 'next/script';
 import { handleSignInWithGoogle, login } from './actions';
-import Link from 'next/link';
+import { InstantLink as Link } from '@/components/instantNavigation'
 import { useSearchParams, usePathname } from 'next/navigation';
 import { stashAnonWork } from '../../../src/persistence/carryover';
 import { track } from '../../../src/analytics/analytics';

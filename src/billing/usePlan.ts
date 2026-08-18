@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { beginNavigation } from '../components/instantNavigation'
 import { getSupabase } from '../persistence/supabase'
 
 // Client-side plan state. `isPro` gates UI niceties only (resolution picker,
@@ -60,16 +61,18 @@ export async function startCheckout(): Promise<void> {
     body: JSON.stringify({ returnTo }),
   })
   if (res.status === 401) {
+    beginNavigation()
     window.location.href = '/login'
     return
   }
   if (res.status === 403) {
     // Anonymous session - a subscription needs a real account first.
+    beginNavigation()
     window.location.href = '/signup'
     return
   }
   const body = await res.json()
-  if (body.url) window.location.href = body.url
+  if (body.url) { beginNavigation(); window.location.href = body.url }
   else throw new Error(body.error ?? 'Checkout failed')
 }
 
@@ -82,6 +85,6 @@ export async function openBillingPortal(): Promise<void> {
     body: JSON.stringify({ returnTo }),
   })
   const body = await res.json()
-  if (body.url) window.location.href = body.url
+  if (body.url) { beginNavigation(); window.location.href = body.url }
   else throw new Error(body.error ?? 'Could not open billing portal')
 }

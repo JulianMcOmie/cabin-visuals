@@ -1,7 +1,7 @@
 'use client';
 
 import { initiateSignup } from './actions'; // Updated import
-import Link from 'next/link';
+import { InstantLink as Link } from '@/components/instantNavigation'
 import { useSearchParams, usePathname } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react'; // Import Suspense
 import Script from 'next/script';

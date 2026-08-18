@@ -2,13 +2,12 @@
 
 import { useRef, useState, type ReactNode } from "react"
 import Image from "next/image"
-import Link from "next/link"
 import { CabinLogo } from "../CabinLogo"
 import { ProfileMenu } from "../ProfileMenu"
 import { useAuth } from "../../persistence/hooks/useAuth"
 import { getLastProjectId } from "../../persistence/lastProject"
 import { track } from "../../analytics/analytics"
-import { useInstantNavigation } from "../useInstantNavigation"
+import { InstantLink as Link, useInstantNavigation } from "../instantNavigation"
 import { CursorParticles } from "./CursorParticles"
 import { PolarRipples } from "./PolarRipples"
 import { EditorialSkin, EditorialHeader } from "./editorialTheme"
@@ -30,39 +29,25 @@ function CreateCta({ children }: { children?: ReactNode }) {
   const { user } = useAuth()
   const last = user ? getLastProjectId(user.id) : null
   const destination = user ? (last ? `/editor?project=${last}` : "/projects") : "/start"
-  const { go, overlay } = useInstantNavigation(destination)
+  const { go } = useInstantNavigation(destination)
 
   if (user) {
     return (
-      <>
-        {overlay}
-        <button
-          onClick={() => {
-            track("continue_creating_clicked", { destination: last ? "editor" : "projects" })
-            go(destination)
-          }}
-          className={CTA_PILL_CLASSES}
-        >
-          Continue creating
-        </button>
-      </>
-    )
-  }
-  return (
-    <>
-      {overlay}
-      <Link
-        href="/start"
-        onClick={(e) => {
-          e.preventDefault()
-          track("try_it_out_clicked")
-          go("/start")
+      <button
+        onClick={() => {
+          track("continue_creating_clicked", { destination: last ? "editor" : "projects" })
+          go(destination)
         }}
         className={CTA_PILL_CLASSES}
       >
-        {children ?? "Start creating"}
-      </Link>
-    </>
+        Continue creating
+      </button>
+    )
+  }
+  return (
+    <Link href="/start" onClick={() => track("try_it_out_clicked")} className={CTA_PILL_CLASSES}>
+      {children ?? "Start creating"}
+    </Link>
   )
 }
 

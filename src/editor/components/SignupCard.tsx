@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import { InstantLink as Link } from '../../components/instantNavigation'
 import Script from 'next/script'
 import { Loader2 } from 'lucide-react'
 import { track } from '../../analytics/analytics'

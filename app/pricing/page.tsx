@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import { InstantLink as Link } from '@/components/instantNavigation'
 import { Check, Loader2 } from 'lucide-react'
 import { ProfileMenu } from '../../src/components/ProfileMenu'
 import { EditorialSkin, EditorialHeader } from '../../src/components/landing/editorialTheme'

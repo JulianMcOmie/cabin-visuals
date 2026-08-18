@@ -1,4 +1,4 @@
-import Link from "next/link"
+import { InstantLink as Link } from "./instantNavigation"
 import { CabinLogo } from "./CabinLogo"
 import { EditorialSkin } from "./landing/editorialTheme"
 

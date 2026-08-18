@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useInstantNavigation } from '../../components/instantNavigation'
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { useSaveStatus } from '../../persistence/autosave'
 import * as projectStorage from '../../persistence/projectStorage'
@@ -27,7 +27,7 @@ import { useUIStore } from '../store/UIStore'
 export function ConflictDialog() {
   const status = useSaveStatus((s) => s.status)
   const projectName = useUIStore((s) => s.projectName)
-  const router = useRouter()
+  const { go } = useInstantNavigation()
   const [busy, setBusy] = useState<'reload' | 'fork' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -47,7 +47,7 @@ export function ConflictDialog() {
     try {
       const name = `${projectName?.trim() || 'Untitled'} copy`
       const copy = await projectStorage.create(name, serialize())
-      router.replace(`/editor?project=${copy.id}`)
+      go(`/editor?project=${copy.id}`, { replace: true })
     } catch (err) {
       console.error('Failed to save conflicted copy', err)
       setError('Could not save the copy. Check your connection and try again.')

@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { ArrowRight } from 'lucide-react'
 import { LoadingScreen } from '@/components/LoadingScreen'
+import { useInstantNavigation } from '@/components/instantNavigation'
 import { EditorialSkin, EditorialHeader } from '@/components/landing/editorialTheme'
 import { TemplatePreviewVideo } from '@/components/TemplatePreviewVideo'
 import { TemplateSlideshowPreview } from '@/components/TemplateSlideshowPreview'
@@ -24,7 +24,7 @@ import { useIsMobile } from '@/components/useIsMobile'
 // refuses a clip that only exists as a blob in the tab. No row means no upload
 // means no lyric video - which is the whole point of this screen.
 export default function StartPage() {
-  const router = useRouter()
+  const { go } = useInstantNavigation()
   const [chosen, setChosen] = useState<string | null>(null)
   // Phones skip the template gallery: the mobile flow is style → song →
   // editor, so this page IS the style step there.
@@ -38,17 +38,17 @@ export default function StartPage() {
     // tell them to sign in when it needs the upload.
     const sessionUser = anonSessionsEnabled() ? await ensureSession() : null
     if (!sessionUser) {
-      router.push(`/editor?template=${template.id}`)
+      go(`/editor?template=${template.id}`)
       return
     }
     try {
       // Fresh deep copy - template documents are shared module state.
       const project = await projectStorage.create(template.name, structuredClone(template.document))
       track('project_created', { source: 'template', template: template.id })
-      router.push(projectDestination(template.id, project.id))
+      go(projectDestination(template.id, project.id))
     } catch (err) {
       console.error('Create from template failed:', err)
-      router.push(`/editor?template=${template.id}`)
+      go(`/editor?template=${template.id}`)
     }
   }
 
@@ -60,16 +60,16 @@ export default function StartPage() {
     setChosen(style.id)
     const sessionUser = anonSessionsEnabled() ? await ensureSession() : null
     if (!sessionUser) {
-      router.push(`/editor?template=${style.id}`)
+      go(`/editor?template=${style.id}`)
       return
     }
     try {
       const project = await projectStorage.create(style.name, structuredClone(style.document))
       track('project_created', { source: 'template', template: style.id })
-      router.push(`/lyric-setup?project=${project.id}&styled=1`)
+      go(`/lyric-setup?project=${project.id}&styled=1`)
     } catch (err) {
       console.error('Create from style failed:', err)
-      router.push(`/editor?template=${style.id}`)
+      go(`/editor?template=${style.id}`)
     }
   }
 
@@ -80,16 +80,16 @@ export default function StartPage() {
     setChosen('__empty__')
     const sessionUser = anonSessionsEnabled() ? await ensureSession() : null
     if (!sessionUser) {
-      router.push('/editor')
+      go('/editor')
       return
     }
     try {
       const project = await projectStorage.create('Untitled')
       track('project_created', { source: 'empty' })
-      router.push(`/editor?project=${project.id}`)
+      go(`/editor?project=${project.id}`)
     } catch (err) {
       console.error('Create empty project failed:', err)
-      router.push('/editor')
+      go('/editor')
     }
   }
 

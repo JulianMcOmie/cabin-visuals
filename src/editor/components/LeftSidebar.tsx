@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useInstantNavigation } from '../../components/instantNavigation'
 import { ArrowLeftRight, Check, ChevronLeft, ChevronRight, Plus, Sparkles, Repeat } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
 import { useLoopBlockDrag } from './useLoopBlockDrag'
@@ -756,7 +757,7 @@ function TemplatesTab() {
   }))
   const isLyricProject = isLyricTemplateId(appliedTemplateId) || hasLyricsTrack
   const shown = isLyricProject ? LYRIC_STYLES : LISTED_TEMPLATES
-  const router = useRouter()
+  const { go } = useInstantNavigation()
   const projectId = useSearchParams().get('project')
   // Covers the editor while the applied template autosaves before handing
   // off to /lyric-setup (which re-hydrates the project from its row).
@@ -793,7 +794,7 @@ function TemplatesTab() {
       setLeaving(true)
       void (async () => {
         if (projectId) await waitForSaved()
-        router.push(projectId ? `/lyric-setup?project=${projectId}` : '/lyric-setup')
+        go(projectId ? `/lyric-setup?project=${projectId}` : '/lyric-setup')
       })()
     }
   }

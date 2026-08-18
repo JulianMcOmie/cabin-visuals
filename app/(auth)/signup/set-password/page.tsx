@@ -3,7 +3,7 @@
 import { completeSignup } from './actions';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
-import Link from 'next/link';
+import { InstantLink as Link, beginNavigation } from '@/components/instantNavigation'
 import { useFormStatus } from 'react-dom';
 import { getSupabase } from '../../../../src/persistence/supabase';
 import { track } from '../../../../src/analytics/analytics';
@@ -95,6 +95,7 @@ function SetPasswordFormInternal() {
     if (!email) {
       console.error('Missing user details on password page, redirecting.');
       if (typeof window !== 'undefined') {
+         beginNavigation();
          window.location.href = '/signup?message=Something went wrong, please try again.';
       }
     }

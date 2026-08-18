@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
-import Link from 'next/link'
+import { InstantLink as Link } from '../components/instantNavigation'
 import { useSearchParams } from 'next/navigation'
 import { Canvas, useThree } from '@react-three/fiber'
 import { Play, Pause, Upload, Maximize, Minimize, Cloud, Pencil, Loader2 } from 'lucide-react'

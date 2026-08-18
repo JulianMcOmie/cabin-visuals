@@ -3,7 +3,7 @@
 import { requestPasswordReset } from './actions';
 import { useState } from 'react';
 import { track } from '../../../src/analytics/analytics';
-import Link from 'next/link';
+import { InstantLink as Link } from '@/components/instantNavigation'
 import {
   AuthShell,
   AuthTitle,

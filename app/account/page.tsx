@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
+import { InstantLink as Link } from '@/components/instantNavigation'
 import { Loader2 } from 'lucide-react'
 import { CabinLogo } from '../../src/components/CabinLogo'
 import { ProfileMenu } from '../../src/components/ProfileMenu'

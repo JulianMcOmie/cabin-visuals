@@ -4,7 +4,7 @@
 // 1px --border, 28px padding, 8px radius), and optional mono microcopy below.
 // Pure presentation - no auth logic lives here.
 
-import Link from 'next/link';
+import { InstantLink as Link } from '@/components/instantNavigation'
 import type { ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 import { CabinLogo } from '../../src/components/CabinLogo';

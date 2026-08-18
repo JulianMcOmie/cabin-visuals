@@ -1,11 +1,11 @@
 "use client"
 
 import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import ProjectsDisplay from '../../src/components/ProjectsDisplay'
 import { EditorialSkin } from '../../src/components/landing/editorialTheme'
 import { ProjectsSkeleton } from '../../src/components/ProjectsSkeleton'
 import { LoadingScreen } from '../../src/components/LoadingScreen'
+import { useInstantNavigation } from '../../src/components/instantNavigation'
 import { createClient } from '../../src/utils/supabase/client'
 import { useAuth } from '../../src/persistence/hooks/useAuth'
 import { useProjectList } from '../../src/persistence/hooks/useProjectList'
@@ -29,7 +29,7 @@ interface ProfileData {
 }
 
 export default function ProjectsPage() {
-  const router = useRouter()
+  const { go } = useInstantNavigation()
   const { user, loading: authLoading, isAnonymous } = useAuth()
   const { projects, loading: projectsLoading, createProject, duplicateProject, deleteProject } = useProjectList(!!user)
   const plan = usePlan()
@@ -68,12 +68,12 @@ export default function ProjectsPage() {
   const promptUpgrade = () => {
     if (isAnonymous) {
       if (window.confirm(`Guest sessions hold ${ANON_PROJECT_LIMIT} project. Sign up to get ${FREE_PROJECT_LIMIT} free projects?`)) {
-        router.push('/signup')
+        go('/signup')
       }
       return
     }
     if (window.confirm(`The free plan includes ${FREE_PROJECT_LIMIT} projects. Upgrade to Pro for unlimited projects?`)) {
-      router.push('/pricing')
+      go('/pricing')
     }
   }
 
@@ -114,12 +114,12 @@ export default function ProjectsPage() {
         }
         const project = await createProject(`${carried.name} (carried over)`, carried.document)
         track('project_created', { source: 'carryover' })
-        router.push(`/editor?project=${project.id}`)
+        go(`/editor?project=${project.id}`)
       } catch (err) {
         console.error('Could not save carried-over work:', err)
       }
     })()
-  }, [authLoading, projectsLoading, user, isAnonymous, plan.loading, plan.isPro, projects.length, createProject, router])
+  }, [authLoading, projectsLoading, user, isAnonymous, plan.loading, plan.isPro, projects.length, createProject, go])
 
   // Flipped synchronously in the click handlers so the overlay is on screen
   // BEFORE any network work - never reset on success (navigation replaces the
@@ -134,7 +134,7 @@ export default function ProjectsPage() {
       setCreating(true)
       const sessionUser = anonSessionsEnabled() ? await ensureSession() : null
       if (!sessionUser) {
-        router.push('/editor')
+        go('/editor')
         return
       }
     } else if (atFreeLimit) { promptUpgrade(); return }
@@ -142,7 +142,7 @@ export default function ProjectsPage() {
     try {
       const project = await createProject(name)
       track('project_created', { source: 'blank' })
-      router.push(`/editor?project=${project.id}`)
+      go(`/editor?project=${project.id}`)
     } catch (err) {
       console.error('Project create failed:', err)
       setCreating(false)
@@ -157,15 +157,15 @@ export default function ProjectsPage() {
       setCreating(true)
       const sessionUser = anonSessionsEnabled() ? await ensureSession() : null
       if (!sessionUser) {
-        router.push(`/editor?template=${template.id}`)
+        go(`/editor?template=${template.id}`)
         return
       }
       try {
         const project = await createProject(template.name, structuredClone(template.document))
         track('project_created', { source: 'template', template: template.id })
-        router.push(projectDestination(template.id, project.id))
+        go(projectDestination(template.id, project.id))
       } catch {
-        router.push(`/editor?template=${template.id}`)
+        go(`/editor?template=${template.id}`)
       }
       return
     }
@@ -175,7 +175,7 @@ export default function ProjectsPage() {
       // Fresh deep copy per project - template documents are shared module state.
       const project = await createProject(template.name, structuredClone(template.document))
       track('project_created', { source: 'template', template: template.id })
-      router.push(projectDestination(template.id, project.id))
+      go(projectDestination(template.id, project.id))
     } catch (err) {
       console.error('Project create from template failed:', err)
       setCreating(false)
@@ -186,7 +186,7 @@ export default function ProjectsPage() {
   const handleSelectProject = (projectId: string) => {
     track('project_opened')
     setCreating(true)
-    router.push(`/editor?project=${projectId}`)
+    go(`/editor?project=${projectId}`)
   }
 
   const handleDuplicateProject = async (projectId: string) => {
