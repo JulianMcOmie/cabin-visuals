@@ -204,7 +204,17 @@ export const useUIStore = create<UIState>((set) => ({
     }),
 
   selectedBlockIds: new Set(),
-  setSelectedBlockIds: (ids) => set({ selectedBlockIds: ids }),
+  // Marquee drags rebuild the Set every pointermove; only publish when the
+  // membership actually changed, or every row re-renders per pixel.
+  setSelectedBlockIds: (ids) => set((s) => {
+    const prev = s.selectedBlockIds
+    if (prev.size === ids.size) {
+      let same = true
+      for (const id of ids) if (!prev.has(id)) { same = false; break }
+      if (same) return s
+    }
+    return { selectedBlockIds: ids }
+  }),
 
   editingBlock: null,
   setEditingBlock: (ref) => set({ editingBlock: ref }),
@@ -251,7 +261,18 @@ export const useUIStore = create<UIState>((set) => ({
   setTracksScroll: (left, top) => set({ tracksScrollLeft: left, tracksScrollTop: top }),
 
   trackDrop: null,
-  setTrackDrop: (v) => set({ trackDrop: v }),
+  // Nest/library drags mint a new object per pointermove; skip the publish
+  // when nothing inside it moved (TimelineArea subscribes to the whole thing).
+  setTrackDrop: (v) => set((s) => {
+    const p = s.trackDrop
+    if (p === v) return s
+    if (p && v
+      && p.activeId === v.activeId && p.intoId === v.intoId
+      && (p.line?.top === v.line?.top) && (p.line?.left === v.line?.left)
+      && (p.replace?.trackId === v.replace?.trackId) && (p.replace?.name === v.replace?.name)
+      && (p.replace?.oldName === v.replace?.oldName) && (p.replace?.color === v.replace?.color)) return s
+    return { trackDrop: v }
+  }),
 
   libraryDragging: false,
   setLibraryDragging: (v) => set({ libraryDragging: v }),

@@ -435,6 +435,10 @@ export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOpti
 
     // Shift toggles selection without starting a drag. preventDefault keeps the
     // shift-click from extending the browser's DOM text selection across the app.
+    // Read the selection LIVE rather than closing over it: closing over the
+    // Set made this callback (a prop of every Block) change identity on every
+    // selection write - a marquee sweep re-rendered every block per pixel.
+    const selectedBlockIds = useUIStore.getState().selectedBlockIds
     if (e.shiftKey) {
       e.preventDefault()
       const next = new Set(selectedBlockIds)
@@ -504,7 +508,7 @@ export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOpti
     }
     placeDragGuideAtClientX(rect.left)
     beginGestureTracking()
-  }, [selectedBlockIds, setSelectedBlockIds, placeDragGuideAtClientX, beginGestureTracking])
+  }, [setSelectedBlockIds, placeDragGuideAtClientX, beginGestureTracking])
 
   // Pointer down on a lane: right-click draws a new block on that track; left-click
   // begins a marquee (shift keeps the current selection as the base).
@@ -531,7 +535,7 @@ export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOpti
     // Shift-marquee adds to the selection; keep the shift-click itself from
     // extending the browser's DOM text selection.
     if (e.shiftKey) e.preventDefault()
-    const base = e.shiftKey ? new Set(selectedBlockIds) : new Set<string>()
+    const base = e.shiftKey ? new Set(useUIStore.getState().selectedBlockIds) : new Set<string>()
     if (!e.shiftKey) setSelectedBlockIds(new Set())
     dragRef.current = {
       type: 'marquee',
@@ -540,7 +544,7 @@ export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOpti
       base,
     }
     beginGestureTracking()
-  }, [selectedBlockIds, setSelectedBlockIds, beginGestureTracking, laneRef, placeDragGuideAtBar])
+  }, [setSelectedBlockIds, beginGestureTracking, laneRef, placeDragGuideAtBar])
 
   // Delete: selected blocks win (their track stays); with no blocks selected,
   // a selected track is deleted along with its blocks. Escape clears selection.

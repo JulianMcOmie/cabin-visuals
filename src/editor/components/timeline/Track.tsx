@@ -100,7 +100,8 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
   const bpm = useProjectStore((s) => s.bpm)
   const isPlaying = useTimeStore((s) => s.isPlaying)
 
-  const selectedTrackId = useUIStore((s) => s.selectedTrackId)
+  // A boolean, not the id: selecting some OTHER row must not re-render this one.
+  const isPrimarySelected = useUIStore((s) => s.selectedTrackId === track.id)
   const inMultiSelection = useUIStore((s) => s.selectedTrackIds.has(track.id))
   const loopDragHere = useUIStore((s) => (s.loopDrag?.target?.trackId === track.id ? s.loopDrag : null))
   const rowHeight = useUIStore((s) => s.tracksRowHeight)
@@ -148,7 +149,7 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
     if (renaming) renameRef.current?.select()
   }, [renaming])
 
-  const isSelected = selectedTrackId === track.id || inMultiSelection
+  const isSelected = isPrimarySelected || inMultiSelection
 
   // Tag badges are a second label line, shown only on deliberately-tall rows.
   const tagList = isObjectTrack ? track.tags ?? [] : []
@@ -220,7 +221,7 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
   // their prior copy count; a sibling edit leaves this preview stale until the
   // track itself changes - cosmetic row placement, accepted so foreign edits
   // don't touch this row (the full MIDI editor resolves its own rows fresh).
-  const { previewRowPitches, strictPreviewRows } = useMemo(() => {
+  const declaredRows = useMemo(() => {
     const declared = track.type === 'audio'
       ? undefined
       : resolveDeclaredMidiRows(track, useProjectStore.getState())
@@ -229,6 +230,19 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
       strictPreviewRows: declared?.strict,
     }
   }, [track])
+  // Keyed on `track`, so a block drag on this row recomputes every move - but
+  // the pitches themselves almost never change. Hand every Block the SAME
+  // array while its contents are equal, or the row's memoized blocks (and
+  // their activity registrations) churn on every pointermove.
+  const stablePitchesRef = useRef<number[] | undefined>(undefined)
+  const previewRowPitches = useMemo(() => {
+    const next = declaredRows.previewRowPitches
+    const prev = stablePitchesRef.current
+    if (prev && next && prev.length === next.length && prev.every((p, i) => p === next[i])) return prev
+    stablePitchesRef.current = next
+    return next
+  }, [declaredRows])
+  const strictPreviewRows = declaredRows.strictPreviewRows
   // Automation, envelope and ability sub-rows render darker than their object; mover
   // and word-formation lanes are first-class creative tracks - you sequence them and
   // they carry their own geometry - so they keep the normal surface.
