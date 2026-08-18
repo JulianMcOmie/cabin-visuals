@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTemplateClipUrl } from './templateClipUrl'
 
 // A looping clip of the template's real render, served from the public Supabase
@@ -8,21 +8,54 @@ import { useTemplateClipUrl } from './templateClipUrl'
 // preview: it IS the actual output, muted and looping, with no engine coupling
 // and one <video> per card. Until a clip exists for a template, the card's
 // gradient backdrop simply shows through.
+//
+// The <video> is only created once the card has come near the viewport (so a
+// tab of nine templates doesn't spin up nine decoders at once), and it stays
+// mounted afterwards - merely paused while scrolled away - so scrolling back
+// never re-fetches or re-decodes.
 
 export function TemplatePreviewVideo({ id }: { id: string }) {
   const [ok, setOk] = useState(true)
+  const hostRef = useRef<HTMLDivElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [near, setNear] = useState(false)
+  const [everNear, setEverNear] = useState(false)
   const src = useTemplateClipUrl(id)
-  if (!src || !ok) return null
+
+  useEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+    if (typeof IntersectionObserver === 'undefined') { setNear(true); setEverNear(true); return }
+    const observer = new IntersectionObserver(
+      ([entry]) => { setNear(entry.isIntersecting); if (entry.isIntersecting) setEverNear(true) },
+      { rootMargin: '300px 0px' },
+    )
+    observer.observe(host)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    if (near) void video.play().catch(() => {})
+    else video.pause()
+  }, [near, everNear, src])
+
   return (
-    <video
-      src={src}
-      autoPlay
-      loop
-      muted
-      playsInline
-      preload="metadata"
-      onError={() => setOk(false)}
-      className="absolute inset-0 h-full w-full object-cover"
-    />
+    <div ref={hostRef} className="absolute inset-0">
+      {src && ok && everNear && (
+        <video
+          ref={videoRef}
+          src={src}
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="auto"
+          onError={() => setOk(false)}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      )}
+    </div>
   )
 }

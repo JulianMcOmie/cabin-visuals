@@ -3,6 +3,7 @@ import { chromium } from 'playwright'
 
 const BASE = process.env.BASE ?? 'http://localhost:3050'
 const folderTitle = process.argv[2] ?? null
+const tab = process.env.TAB ?? "Instruments"
 const browser = await chromium.launch({ headless: true, args: ['--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'] })
 const page = await browser.newPage({ viewport: { width: 1500, height: 900 } })
 await page.route(/supabase\.co\/(rest|auth)/, (r) => r.abort())
@@ -12,7 +13,7 @@ page.on('request', (req) => { if (/\.mp4/.test(req.url())) vidReq.push(req.url()
 page.on('response', (res) => { if (/\.mp4/.test(res.url())) netVideos.push({ url: res.url().split('/').pop().split('?')[0], status: res.status() }) })
 await page.goto(`${BASE}/editor`, { waitUntil: 'domcontentloaded' })
 await page.waitForFunction(() => !!window.__three, null, { timeout: 60000 })
-await page.getByRole('button', { name: 'Instruments' }).click()
+await page.getByRole("button", { name: tab }).click()
 await page.waitForTimeout(500)
 
 // Install long-task + frame observers

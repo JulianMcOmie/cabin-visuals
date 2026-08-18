@@ -2,7 +2,7 @@ import { useProjectStore } from '../../store/ProjectStore'
 import { useTimeStore } from '../../store/TimeStore'
 import { getFrameDriver } from './frameDriver'
 import { runExport } from './exportEngine'
-import { resolveExportRange, defaultBitrate, type ExportSettings } from './types'
+import { resolveExportRange, type ExportSettings } from './types'
 
 // Shared logic for generating a template gallery preview clip: a short, looping
 // slice of the CURRENT project's real render. Used two ways - the dev "Preview
@@ -13,7 +13,8 @@ import { resolveExportRange, defaultBitrate, type ExportSettings } from './types
 // Bump when the capture settings below change (resolution, bars, fps, …): it is
 // folded into each template's preview hash, so bumping it forces every clip to
 // regenerate on the next `npm run previews`.
-export const PREVIEW_CAPTURE_VERSION = 2
+export const PREVIEW_CAPTURE_VERSION = 3
+const PREVIEW_BITRATE = 1_500_000
 
 // First PREVIEW_BARS bars; loops cleanly at the templates' shared 120 bpm
 // (4 bars = 16 beats = 8s - one full lyric-template phrase, so the placeholder
@@ -48,7 +49,10 @@ export async function capturePreviewClip(): Promise<Blob | null> {
     aspect: '16:9',
     fps: 30,
     includeAudio: false,
-    videoBitrate: defaultBitrate(PREVIEW_HEIGHT, 30),
+    // A card-sized clip, not an export: the export table's 9 Mbps at 360p made
+    // 5-10 MB cards (44 MB for the tab). ~1.5 Mbps is visually identical at
+    // the 200-300 CSS px the gallery renders these at.
+    videoBitrate: PREVIEW_BITRATE,
     rateControl: 'bitrate',
     fileName: 'preview',
     watermark: false,

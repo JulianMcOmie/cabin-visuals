@@ -29,6 +29,7 @@
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { createClient } from '@supabase/supabase-js'
+import { faststart } from './lib/faststart.mjs'
 
 // Load .env.local ourselves (a standalone script doesn't get Next's env loading).
 function loadEnv() {
@@ -139,7 +140,7 @@ try {
         console.log('failed (capture returned nothing)')
         continue
       }
-      const bytes = Buffer.from(b64, 'base64')
+      const bytes = faststart(Buffer.from(b64, 'base64'))
       const { error } = await supabase.storage
         .from(BUCKET)
         .upload(`${id}.mp4`, bytes, {

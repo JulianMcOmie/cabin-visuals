@@ -25,6 +25,7 @@
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { createClient } from '@supabase/supabase-js'
+import { faststart } from './lib/faststart.mjs'
 
 // Load .env.local ourselves (a standalone script doesn't get Next's env loading).
 function loadEnv() {
@@ -133,10 +134,12 @@ try {
         console.log('failed (scene never became renderable)')
         continue
       }
-      const bytes = Buffer.from(b64, 'base64')
+      const bytes = faststart(Buffer.from(b64, 'base64'))
       const { error } = await supabase.storage
         .from(BUCKET)
-        .upload(`${id}.mp4`, bytes, { upsert: true, contentType: 'video/mp4' })
+        // URLs are content-hash versioned (?v=), so a year-long cache is safe;
+        // the bucket default (an hour) re-downloaded the whole tab hourly.
+        .upload(`${id}.mp4`, bytes, { upsert: true, contentType: 'video/mp4', cacheControl: '31536000' })
       if (error) {
         console.log(`upload failed: ${error.message}`)
         continue
