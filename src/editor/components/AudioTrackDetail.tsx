@@ -106,8 +106,35 @@ function TranscribeControl({ trackId }: { trackId: string }) {
 }
 
 /** Size a canvas to its CSS box at device resolution. Returns CSS-pixel dims. */
+// CSS size per canvas, kept fresh by a ResizeObserver: the two scopes below
+// call fitCanvas every animation frame, and getBoundingClientRect there forced
+// a layout read per frame (two canvases, so two) whenever anything else had
+// dirtied style that frame.
+const cssSize = new WeakMap<HTMLCanvasElement, { width: number; height: number }>()
+const observed = new WeakSet<HTMLCanvasElement>()
+const sizeObserver = typeof ResizeObserver !== 'undefined'
+  ? new ResizeObserver((entries) => {
+    for (const e of entries) {
+      const r = e.contentRect
+      cssSize.set(e.target as HTMLCanvasElement, { width: r.width, height: r.height })
+    }
+  })
+  : null
+
+function forgetCanvasSize(canvas: HTMLCanvasElement) {
+  sizeObserver?.unobserve(canvas)
+  observed.delete(canvas)
+  cssSize.delete(canvas)
+}
+
 function fitCanvas(canvas: HTMLCanvasElement): { w: number; h: number } | null {
-  const rect = canvas.getBoundingClientRect()
+  let rect = cssSize.get(canvas)
+  if (!rect) {
+    const r = canvas.getBoundingClientRect()
+    rect = { width: r.width, height: r.height }
+    cssSize.set(canvas, rect)
+    if (sizeObserver && !observed.has(canvas)) { observed.add(canvas); sizeObserver.observe(canvas) }
+  }
   if (rect.width < 1 || rect.height < 1) return null
   const dpr = Math.min(2, window.devicePixelRatio || 1)
   const pw = Math.round(rect.width * dpr)
@@ -333,7 +360,9 @@ export function AudioTrackDetail({ track }: { track: Track }) {
     const onResize = () => { dirtyRef.current = true }
     window.addEventListener('resize', onResize)
     const observer = new ResizeObserver(onResize)
-    if (scopeRef.current) observer.observe(scopeRef.current)
+    const scopeCanvas = scopeRef.current
+    const laneCanvas = laneRef.current
+    if (scopeCanvas) observer.observe(scopeCanvas)
 
     // Wheel over the lane zooms the window; the playhead edge is the anchor.
     // The hint names the new width, then gets out of the way.
@@ -359,6 +388,7 @@ export function AudioTrackDetail({ track }: { track: Track }) {
       cancelAnimationFrame(frame)
       window.removeEventListener('resize', onResize)
       observer.disconnect()
+      for (const c of [scopeCanvas, laneCanvas]) if (c) forgetCanvasSize(c)
       lane?.removeEventListener('wheel', onWheel)
       if (hintTimer) clearTimeout(hintTimer)
     }
