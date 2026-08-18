@@ -1,12 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Mic, Plus, X } from 'lucide-react'
+import { ChevronRight, Mic, Plus, X } from 'lucide-react'
 import { track as trackEvent } from '../../analytics/analytics'
 import { ensureFont } from '../core/visual/fonts'
 import { isNumberParam } from '../instruments/types'
 import { useProjectStore } from '../store/ProjectStore'
-import { MAX_STYLE_LANES, resolveStyleLanes, styleLanePitch, trackLyricClips } from '../core/visual/lyricClips'
+import { MAX_STYLE_LANES, laneIndexForPitch, resolveStyleLanes, styleLanePitch, trackLyricClips } from '../core/visual/lyricClips'
 import type { LyricClipLayout, LyricLayoutKind, StyleLaneFx } from '../types'
 import { placeTranscription } from '../utils/lyricPlacement'
 import { firstAudioBlock, transcribeActiveSong, type TranscribePhase } from '../utils/transcribeSong'
@@ -120,13 +120,29 @@ const LANE_SIZE_CHIPS = [0.55, 0.8, 1, 1.45, 2.1]
 const LANE_FX: StyleLaneFx[] = ['shake', 'rainbow', 'outline']
 
 function StyleLanesSection({ trackId }: { trackId: string }) {
-  const stored = useProjectStore((s) => s.tracks[trackId]?.styleLanes)
-  const updateStyleLane = useProjectStore((s) => s.updateStyleLane)
+  const trackSlice = useProjectStore((s) => s.tracks[trackId])
+  const stored = trackSlice?.styleLanes
   const addStyleLane = useProjectStore((s) => s.addStyleLane)
   const removeStyleLane = useProjectStore((s) => s.removeStyleLane)
   const lanes = resolveStyleLanes(stored)
-  const [openIndex, setOpenIndex] = useState(0)
-  const open = Math.min(openIndex, lanes.length - 1)
+  // How many word notes each lane carries. Shown per row and used to pick the
+  // lane the panel opens on: a transcribed track puts every word on PLAIN,
+  // and opening on TITLE (lane 0) had users restyling an empty lane and
+  // seeing nothing change on screen.
+  const usage = useMemo(() => {
+    const counts = new Array<number>(lanes.length).fill(0)
+    for (const b of trackSlice?.blocks ?? []) {
+      for (const n of b.notes) {
+        const i = laneIndexForPitch(n.pitch, lanes.length)
+        if (i >= 0) counts[i]++
+      }
+    }
+    return counts
+  }, [trackSlice, lanes.length])
+  const busiest = usage.reduce((best, c, i) => (c > usage[best] ? i : best), 0)
+  // null = follow the busiest lane; a click pins an explicit choice.
+  const [openIndex, setOpenIndex] = useState<number | null>(null)
+  const open = Math.min(openIndex ?? busiest, lanes.length - 1)
   const lane = lanes[open]
 
   return (
@@ -146,24 +162,33 @@ function StyleLanesSection({ trackId }: { trackId: string }) {
         {lanes.map((l, i) => {
           const preview = FONT_PREVIEWS[l.font]
           const active = i === open
+          const count = usage[i] ?? 0
           return (
             <button
               key={i}
               onClick={() => setOpenIndex(i)}
               aria-pressed={active}
+              title={count > 0 ? `${count} word${count === 1 ? '' : 's'} on this lane` : 'No words on this lane yet'}
               className={`group flex h-8 w-full cursor-pointer items-center justify-between px-2.5 text-left transition-colors ${active ? 'bg-[var(--bg-elevated)]' : 'bg-[var(--bg-app)] hover:bg-[var(--bg-panel)]'}`}
             >
               <span
-                className="truncate text-[13px] leading-none"
+                className={`truncate text-[13px] leading-none ${count === 0 ? 'opacity-50' : ''}`}
                 style={{ fontFamily: preview?.family, color: l.color, fontSize: `${Math.min(17, 10 + l.size * 3.5)}px` }}
               >{l.name}</span>
               <span className="flex items-center gap-2">
+                {/* The word count is what tells you which lane your lyrics
+                    actually wear - restyling an empty lane changes nothing. */}
+                {count > 0 && (
+                  <span className="rounded-full bg-[var(--accent)]/15 px-1.5 py-px font-mono text-[9px] text-[var(--accent)]">
+                    {count} {count === 1 ? 'word' : 'words'}
+                  </span>
+                )}
                 <span className="font-mono text-[9px] text-[var(--text-muted)]">row {styleLanePitch(i)}</span>
                 {active && lanes.length > 1 && (
                   <span
                     role="button"
                     tabIndex={0}
-                    onClick={(e) => { e.stopPropagation(); removeStyleLane(trackId, i); setOpenIndex(0) }}
+                    onClick={(e) => { e.stopPropagation(); removeStyleLane(trackId, i); setOpenIndex(null) }}
                     title="Remove this lane (its notes become orphans)"
                     className="flex h-4 w-4 items-center justify-center rounded text-[var(--text-muted)] hover:text-[#d68383]"
                   ><X size={10} /></span>
@@ -388,47 +413,90 @@ function LyricClipsSection({ trackId }: { trackId: string }) {
     [trackSlice, beatsPerBar],
   )
   const addLyricClip = useProjectStore((s) => s.addLyricClip)
-  const updateLyricClip = useProjectStore((s) => s.updateLyricClip)
   const removeLyricClip = useProjectStore((s) => s.removeLyricClip)
   const sliceLyricsIntoClips = useProjectStore((s) => s.sliceLyricsIntoClips)
   const [paste, setPaste] = useState('')
   const ordered = [...(clips ?? [])].sort((a, b) => a.startBeat - b.startBeat)
-
-  const setLayout = (clipId: string, layout: LyricClipLayout) => updateLyricClip(trackId, clipId, { layout })
+  // Clips are collapsed by default - a transcribed song is dozens of them,
+  // and a column of open editors buried every setting below. A collapsed
+  // row still shows the phrase, so the list reads as the lyric sheet.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
+  const toggle = (id: string) => setExpanded((prev) => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  })
+  const allOpen = ordered.length > 0 && ordered.every((c) => expanded.has(c.id))
 
   return (
     <div className="mt-1 border-t border-[var(--border-subtle)] pt-3">
       <SectionLabel
         right={(
-          <button
-            onClick={() => {
-              const last = ordered[ordered.length - 1]
-              addLyricClip(trackId, {
-                startBeat: last ? last.startBeat + last.durationBeats : 0,
-                durationBeats: beatsPerBar,
-                words: [],
-                layout: last?.layout ?? { kind: 'one' },
-              })
-            }}
-            title="Add a lyric clip"
-            className="flex h-5 w-5 cursor-pointer items-center justify-center rounded border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)]"
-          ><Plus size={11} /></button>
-        )}
-      >LYRIC CLIPS</SectionLabel>
-      {ordered.map((clip) => {
-        return (
-          <div key={clip.id} className="mb-2 rounded border border-[var(--border)] bg-[var(--bg-panel)] p-2">
-            <div className="mb-1 flex items-center justify-end">
+          <span className="flex items-center gap-1">
+            {ordered.length > 1 && (
               <button
-                onClick={() => removeLyricClip(trackId, clip.id)}
-                title="Remove this clip"
-                className="flex h-4 w-4 cursor-pointer items-center justify-center rounded text-[var(--text-muted)] hover:text-[#d68383]"
-              ><X size={10} /></button>
-            </div>
-            <LyricClipEditorCard trackId={trackId} clipId={clip.id} />
-          </div>
-        )
-      })}
+                onClick={() => setExpanded(allOpen ? new Set() : new Set(ordered.map((c) => c.id)))}
+                className="h-5 cursor-pointer rounded border border-[var(--border)] px-1.5 text-[9px] text-[var(--text-muted)] hover:text-[var(--text)]"
+              >{allOpen ? 'Collapse all' : 'Expand all'}</button>
+            )}
+            <button
+              onClick={() => {
+                const last = ordered[ordered.length - 1]
+                addLyricClip(trackId, {
+                  startBeat: last ? last.startBeat + last.durationBeats : 0,
+                  durationBeats: beatsPerBar,
+                  words: [],
+                  layout: last?.layout ?? { kind: 'one' },
+                })
+              }}
+              title="Add a lyric clip"
+              className="flex h-5 w-5 cursor-pointer items-center justify-center rounded border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)]"
+            ><Plus size={11} /></button>
+          </span>
+        )}
+      >LYRIC CLIPS{ordered.length > 0 ? ` · ${ordered.length}` : ''}</SectionLabel>
+      {ordered.length > 0 && (
+        <div className="mb-2 overflow-hidden rounded border border-[var(--border)]">
+          {ordered.map((clip) => {
+            const isOpen = expanded.has(clip.id)
+            const bar = Math.floor(clip.startBeat / beatsPerBar) + 1
+            const phrase = clip.words.join(' ')
+            return (
+              <div key={clip.id} className="border-b border-[var(--border-subtle)] last:border-b-0">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isOpen}
+                  onClick={() => toggle(clip.id)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(clip.id) } }}
+                  className={`group flex min-h-7 w-full cursor-pointer items-center gap-1.5 px-1.5 py-1 text-left transition-colors ${isOpen ? 'bg-[var(--bg-elevated)]' : 'bg-[var(--bg-app)] hover:bg-[var(--bg-panel)]'}`}
+                >
+                  <ChevronRight
+                    size={11}
+                    className={`flex-shrink-0 text-[var(--text-muted)] transition-transform ${isOpen ? 'rotate-90' : ''}`}
+                  />
+                  <span className="w-7 flex-shrink-0 font-mono text-[9px] text-[var(--text-muted)]">b{bar}</span>
+                  <span
+                    className={`min-w-0 flex-1 text-[11px] leading-snug ${phrase ? 'text-[var(--text)]' : 'italic text-[var(--text-muted)]'} ${isOpen ? '' : 'truncate'}`}
+                    title={phrase || undefined}
+                  >{phrase || 'empty clip'}</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removeLyricClip(trackId, clip.id) }}
+                    title="Remove this clip"
+                    className="flex h-4 w-4 flex-shrink-0 cursor-pointer items-center justify-center rounded text-transparent group-hover:text-[var(--text-muted)] hover:!text-[#d68383]"
+                  ><X size={10} /></button>
+                </div>
+                {isOpen && (
+                  <div className="bg-[var(--bg-panel)] px-2 pb-2 pt-1">
+                    <LyricClipEditorCard trackId={trackId} clipId={clip.id} />
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
       {/* Paste a verse → one line becomes one clip, laid down the timeline. */}
       <GrowingTextarea value={paste} onChange={setPaste} ariaLabel="Paste lyrics, one line per clip" />
       <button
