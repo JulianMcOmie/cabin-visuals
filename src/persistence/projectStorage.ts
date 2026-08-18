@@ -120,6 +120,17 @@ export async function list(): Promise<ProjectSummary[]> {
  *  back with it: whoever holds the document must hand it to `save` to prove the
  *  row hasn't moved on underneath them. */
 export async function load(id: string): Promise<{ name: string; document: ProjectDocument; rev: number }> {
+  // One-shot: a preload started by the route shell is consumed by the first
+  // real load and never reused, so a later rebind always fetches fresh.
+  const preloaded = preloads.get(id)
+  if (preloaded) {
+    preloads.delete(id)
+    return preloaded
+  }
+  return fetchProject(id)
+}
+
+async function fetchProject(id: string): Promise<{ name: string; document: ProjectDocument; rev: number }> {
   const { data, error } = await getSupabase()
     .from('projects')
     .select('name, data, rev')
@@ -127,6 +138,20 @@ export async function load(id: string): Promise<{ name: string; document: Projec
     .single()
   if (error) throw error
   return { name: data.name, document: upgradeDocument(data.data), rev: data.rev }
+}
+
+const preloads = new Map<string, Promise<{ name: string; document: ProjectDocument; rev: number }>>()
+
+/** Start fetching a project's row NOW so it overlaps the editor bundle
+ *  download (app/editor/page.tsx calls this from the route shell); the
+ *  editor's own load() then picks the result up instead of starting the
+ *  round trip only after three.js and the instrument library have parsed. */
+export function preloadProject(id: string): void {
+  if (preloads.has(id)) return
+  const p = fetchProject(id)
+  preloads.set(id, p)
+  // A failed preload must not poison the real load: drop it so load() retries.
+  p.catch(() => preloads.delete(id))
 }
 
 /**
