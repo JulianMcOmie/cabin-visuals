@@ -2,7 +2,6 @@
 
 import { type ReactNode } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { MotionConfig } from "framer-motion"
 import { CabinLogo } from "../CabinLogo"
 import { SiteHeader } from "../SiteHeader"
@@ -11,6 +10,7 @@ import { ProfileMenu } from "../ProfileMenu"
 import { useAuth } from "../../persistence/hooks/useAuth"
 import { getLastProjectId } from "../../persistence/lastProject"
 import { track } from "../../analytics/analytics"
+import { useInstantNavigation } from "../useInstantNavigation"
 import { EditorFacsimile } from "./EditorFacsimile"
 import { SOCIAL_LINKS, VISUAL_EXAMPLES } from "./content"
 
@@ -94,11 +94,14 @@ function VisualExamples() {
 /** The pre-2026-redesign landing page, kept intact as a swappable cover.
  *  Restore it by pointing ACTIVE_LANDING at 'classic' in ./index.tsx. */
 export function LandingClassic() {
-  const router = useRouter()
   // Shared cached auth (not a private per-mount fetch), so navigating back to
   // the landing page renders the known sign-in state instead of re-running the
   // login/signup -> profile flip.
   const { user } = useAuth()
+  const last = user ? getLastProjectId(user.id) : null
+  const destination = user ? (last ? `/editor?project=${last}` : '/projects') : '/start'
+  // The loading screen paints in the click itself, before the route is fetched.
+  const { go, overlay } = useInstantNavigation(destination)
 
   return (
     <MotionConfig reducedMotion="user">
@@ -150,15 +153,15 @@ export function LandingClassic() {
             </p>
           </Appear>
           <Appear delay={0.1} className="flex flex-col items-center gap-[18px]">
+            {overlay}
             {user ? (
               // Logged in: straight back into the last project they opened
               // on this device; /projects only when there's nothing to resume.
               <CtaGlow>
                 <button
                   onClick={() => {
-                    const last = getLastProjectId(user.id)
                     track('continue_creating_clicked', { destination: last ? 'editor' : 'projects' })
-                    router.push(last ? `/editor?project=${last}` : '/projects')
+                    go(destination)
                   }}
                   className={CTA_CLASSES}
                 >
@@ -172,7 +175,11 @@ export function LandingClassic() {
               <CtaGlow>
                 <Link
                   href="/start"
-                  onClick={() => track('try_it_out_clicked')}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    track('try_it_out_clicked')
+                    go('/start')
+                  }}
                   className={CTA_CLASSES}
                 >
                   Start creating

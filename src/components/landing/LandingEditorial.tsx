@@ -3,12 +3,12 @@
 import { useRef, useState, type ReactNode } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { CabinLogo } from "../CabinLogo"
 import { ProfileMenu } from "../ProfileMenu"
 import { useAuth } from "../../persistence/hooks/useAuth"
 import { getLastProjectId } from "../../persistence/lastProject"
 import { track } from "../../analytics/analytics"
+import { useInstantNavigation } from "../useInstantNavigation"
 import { CursorParticles } from "./CursorParticles"
 import { PolarRipples } from "./PolarRipples"
 import { EditorialSkin, EditorialHeader } from "./editorialTheme"
@@ -24,29 +24,45 @@ const CTA_PILL_CLASSES =
 
 /** The hero + closing CTA. Logged-in users resume their last project (same
  *  routing as the classic cover); everyone else starts at /start, which
- *  creates a project on an anonymous session. */
+ *  creates a project on an anonymous session. The loading screen is painted
+ *  in the click itself, before the navigation starts (useInstantNavigation). */
 function CreateCta({ children }: { children?: ReactNode }) {
-  const router = useRouter()
   const { user } = useAuth()
+  const last = user ? getLastProjectId(user.id) : null
+  const destination = user ? (last ? `/editor?project=${last}` : "/projects") : "/start"
+  const { go, overlay } = useInstantNavigation(destination)
 
   if (user) {
     return (
-      <button
-        onClick={() => {
-          const last = getLastProjectId(user.id)
-          track("continue_creating_clicked", { destination: last ? "editor" : "projects" })
-          router.push(last ? `/editor?project=${last}` : "/projects")
-        }}
-        className={CTA_PILL_CLASSES}
-      >
-        Continue creating
-      </button>
+      <>
+        {overlay}
+        <button
+          onClick={() => {
+            track("continue_creating_clicked", { destination: last ? "editor" : "projects" })
+            go(destination)
+          }}
+          className={CTA_PILL_CLASSES}
+        >
+          Continue creating
+        </button>
+      </>
     )
   }
   return (
-    <Link href="/start" onClick={() => track("try_it_out_clicked")} className={CTA_PILL_CLASSES}>
-      {children ?? "Start creating"}
-    </Link>
+    <>
+      {overlay}
+      <Link
+        href="/start"
+        onClick={(e) => {
+          e.preventDefault()
+          track("try_it_out_clicked")
+          go("/start")
+        }}
+        className={CTA_PILL_CLASSES}
+      >
+        {children ?? "Start creating"}
+      </Link>
+    </>
   )
 }
 
