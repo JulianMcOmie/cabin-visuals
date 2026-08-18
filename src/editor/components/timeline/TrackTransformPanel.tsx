@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
@@ -200,7 +200,11 @@ function IsoViewport({ trackId, scale }: { trackId: string; scale: number }) {
   const z = useProjectStore((s) => transformValue(s.tracks[trackId]?.params, TF_Z))
   const size = useProjectStore((s) => transformValue(s.tracks[trackId]?.params, TF_SIZE))
   const opacity = useProjectStore((s) => transformValue(s.tracks[trackId]?.params, TF_OPACITY))
-  const multiIds = useUIStore((s) => (s.selectedTrackIds.has(trackId) && s.selectedTrackIds.size > 1 ? [...s.selectedTrackIds] : null))
+  // Select the Set itself (identity-stable across unrelated UI writes) rather
+  // than spreading a fresh array per call - that re-rendered this panel on
+  // EVERY UIStore write while a multi-selection was open.
+  const multiSet = useUIStore((s) => (s.selectedTrackIds.has(trackId) && s.selectedTrackIds.size > 1 ? s.selectedTrackIds : null))
+  const multiIds = useMemo(() => (multiSet ? [...multiSet] : null), [multiSet])
   const tracks = useProjectStore((s) => s.tracks)
 
   const grid: ReactNode[] = []
