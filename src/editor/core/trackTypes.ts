@@ -126,16 +126,6 @@ export function automationRowCount(
   return Math.max(2, Math.min(AUTOMATION_MAX_ROWS, Math.round(range.rows)))
 }
 
-/** The highest pitch that is a row under this config (rows fill upward from
- *  AUTOMATION_PITCH_MIN). */
-export function automationTopPitch(
-  range: AutomationRange | undefined,
-  paramMin: number,
-  paramMax: number,
-): number {
-  return AUTOMATION_PITCH_MIN + automationRowCount(range, paramMin, paramMax) - 1
-}
-
 /** The spread curve on a 0..1 fraction: fineLow squares (more resolution near
  *  the min), fineHigh mirrors it, sCurve is smoothstep. */
 export function spreadFraction(t: number, curve?: AutomationSpreadCurve): number {

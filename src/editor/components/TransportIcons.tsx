@@ -36,14 +36,6 @@ export function PauseIcon(props: IconProps) {
   )
 }
 
-export function StopIcon(props: IconProps) {
-  return (
-    <FilledIcon {...props}>
-      <path d="M17 4h-10a3 3 0 0 0 -3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3 -3v-10a3 3 0 0 0 -3 -3z" />
-    </FilledIcon>
-  )
-}
-
 export function SkipBackIcon(props: IconProps) {
   return (
     <FilledIcon {...props}>

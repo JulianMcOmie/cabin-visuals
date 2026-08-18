@@ -7,17 +7,6 @@ type ColoredMaterial = Material & { color?: Color }
 // parameters before the instrument renders instead of tinting final materials.
 const BASE_COLOR_KEY = '__cabinPreviewBaseColor'
 
-/** Instrument-side per-frame color write. In the real renderer, colorizers
- * transform declared instrument params. The base bookkeeping here only keeps
- * the isolated hover-preview material pass from compounding. */
-export function setAnimatedColor(material: Material, color: Color): void {
-  const m = material as ColoredMaterial
-  if (!m.color) return
-  m.color.copy(color)
-  const base = m.userData[BASE_COLOR_KEY] as Color | undefined
-  if (base) base.copy(color)
-}
-
 /** Preview-only fallback for the standalone project-element hover canvas. */
 export function applyMaterialHueShift(root: Group, hueShift: number, satShift: number, lightShift: number): void {
   const active = Math.abs(hueShift) + Math.abs(satShift) + Math.abs(lightShift) > 0.0001

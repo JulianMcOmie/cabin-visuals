@@ -45,8 +45,3 @@ export async function syncSubscriptionRow(sub: Stripe.Subscription, fallbackUser
   )
   if (error) throw new Error(`Failed to sync subscription: ${error.message}`)
 }
-
-/** True for statuses that should unlock Pro features. */
-export function isProStatus(status: string | null | undefined): boolean {
-  return status === 'active' || status === 'trialing'
-}

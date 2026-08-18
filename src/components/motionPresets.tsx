@@ -53,10 +53,3 @@ export function Reveal({
     </motion.div>
   )
 }
-
-/** Interactive-element feedback: a fast scale nudge, no vertical jump. Spread
- *  onto a motion element. Kept quick on purpose - hover should feel instant. */
-export const hoverLift = {
-  whileHover: { scale: 1.012, transition: { duration: 0.06 } },
-  whileTap: { scale: 0.99, transition: { duration: 0.06 } },
-} as const

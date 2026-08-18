@@ -1030,57 +1030,6 @@ function buildProjectPreview(projectTrackId: string): ProjectPreviewData | null 
   }
 }
 
-export interface AffectedObjectPreview {
-  object: ResolvedObject
-  bpm: number
-  beatsPerBar: number
-  /** Bar boundary near the object's first note - a paused preview loops from here. */
-  loopStart: number
-}
-
-/** The object a mover/splitter track actually acts on - the same resolution as
- *  buildProjectPreview's mover branch (the parent object for chain children,
- *  else the first routing that resolves to an object), for surfaces that render
- *  the affected object outside the hover popup. */
-export function resolveAffectedObject(projectTrackId: string, snapshot: ProjectSnapshot): AffectedObjectPreview | null {
-  const track = snapshot.tracks[projectTrackId]
-  if (!track || (track.type !== 'mover' && track.type !== 'splitter')) return null
-  const graph = resolveProject(snapshot)
-  let targetId: string | undefined
-  if (track.parentId && snapshot.tracks[track.parentId]?.instrumentId) {
-    targetId = track.parentId
-  } else {
-    outer: for (const routing of track.targets ?? []) {
-      const scope = routing.scope
-      if (scope.kind === 'track') {
-        if (graph.objects.some((o) => o.trackId === scope.id)) { targetId = scope.id; break }
-      } else if (scope.kind === 'tag') {
-        for (const o of graph.objects) {
-          if (o.tags.includes(scope.tag)) { targetId = o.trackId; break outer }
-        }
-      } else {
-        for (const o of graph.objects) {
-          let current: (typeof snapshot.tracks)[string] | undefined = snapshot.tracks[o.trackId]
-          while (current) {
-            if (current.id === scope.id) { targetId = o.trackId; break outer }
-            current = current.parentId ? snapshot.tracks[current.parentId] : undefined
-          }
-        }
-      }
-    }
-  }
-  if (!targetId) return null
-  const object = graph.objects.find((o) => o.trackId === targetId)
-  if (!object || get2DPreview(object.instrumentId)) return null
-  const firstNote = firstNoteBeat(object.notes)
-  return {
-    object,
-    bpm: snapshot.bpm,
-    beatsPerBar: snapshot.beatsPerBar,
-    loopStart: firstNote === null ? 0 : Math.floor(firstNote / snapshot.beatsPerBar) * snapshot.beatsPerBar,
-  }
-}
-
 /** Per-frame data every occurrence group reads; written once by the driver. */
 interface ProjectFrame {
   world: Matrix4

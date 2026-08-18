@@ -226,10 +226,6 @@ function cloneTrackRecord(t: Track, id: string, parentId: string | null, childId
   }
 }
 
-export const cloneTrack = (t: Track): Track => ({
-  ...cloneTrackRecord(t, crypto.randomUUID(), t.parentId ?? null, [], new Map()),
-})
-
 export function snapshotTrackTree(rootId: string, tracks: Record<string, Track>): TrackTreeSnapshot | null {
   if (!tracks[rootId]) return null
   const out: Record<string, Track> = {}
@@ -763,11 +759,6 @@ function writeTrackBlockNotes(s: ProjectState, trackId: string, blockId: string,
       [trackId]: { ...t, blocks: t.blocks.map((b) => (b.id === blockId ? { ...b, notes } : b)) },
     },
   }
-}
-
-export function sceneSnapshot(state: ProjectState, sceneId: string) {
-  const scene = state.scenes[sceneId]
-  return scene ? { tracks: scene.tracks, rootTrackIds: scene.rootTrackIds, bpm: state.bpm, beatsPerBar: state.beatsPerBar, totalBars: state.totalBars } : null
 }
 
 export const useProjectStore = create<ProjectState>((rawSet) => {

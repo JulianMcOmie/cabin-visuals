@@ -19,10 +19,6 @@ import type { CompositionInstrumentDef } from './types'
 const DEFINITIONS: CompositionInstrumentDef[] = [sceneDirector, sceneSwitcherDirector, cutDirector, radialCutDirector, cropDirector]
 const BY_ID = new Map(DEFINITIONS.map((def) => [def.id, def]))
 
-export function getCompositionInstrument(id: string | undefined): CompositionInstrumentDef | undefined {
-  return id ? BY_ID.get(id) : undefined
-}
-
 export function listCompositionInstruments(): CompositionInstrumentDef[] {
   return DEFINITIONS
 }

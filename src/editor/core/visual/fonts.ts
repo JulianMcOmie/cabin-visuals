@@ -34,11 +34,6 @@ const FONT_FILES: Record<string, FontFileDef[]> = {
 const loaded = new Set<string>()
 const loading = new Map<string, Promise<void>>()
 
-/** True once `family` is usable for canvas drawing. */
-export function fontReady(family: string): boolean {
-  return loaded.has(family)
-}
-
 /**
  * Kick off (or continue) loading `family`; returns readiness NOW. Idempotent
  * and cheap after the first call. Unknown families count as ready - they are

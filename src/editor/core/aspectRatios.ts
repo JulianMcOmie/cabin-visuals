@@ -24,10 +24,6 @@ export function aspectRatioValue(id: AspectRatioId): number {
   return RATIOS[id]
 }
 
-export function isAspectRatioId(value: unknown): value is AspectRatioId {
-  return typeof value === 'string' && value in RATIOS
-}
-
 /** Pixel dimensions for an aspect at a tier, where the tier names its SHORT
  *  edge (1080p = 1080 tall in landscape, 1080 wide in portrait). So a 2:1
  *  "1080p" is 2160×1080 - the way people say it - rather than a 1920-wide

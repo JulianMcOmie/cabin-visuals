@@ -39,10 +39,6 @@ export function isSceneTrackId(id: string | undefined | null): boolean {
   return !!id && id.startsWith(SCENE_TRACK_ID_PREFIX)
 }
 
-export function sceneIdOfSceneTrackId(id: string): string | null {
-  return isSceneTrackId(id) ? id.slice(SCENE_TRACK_ID_PREFIX.length) : null
-}
-
 /** The scene instrument's own colour - a neutral pewter, deliberately outside
  *  the OKLCH hue cycle new tracks walk (utils/trackColors.ts) so the scene row
  *  never reads as "just another track that happens to be first". */

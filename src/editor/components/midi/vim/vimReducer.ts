@@ -22,13 +22,6 @@ function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v))
 }
 
-/** Nudge a beat back onto the step grid — keeps the cursor legible after a
- *  grid change, exactly like retuning a tracker's row height. */
-function snapBeat(beat: number, step: number) {
-  if (step <= 0) return Math.max(0, beat)
-  return Math.max(0, Math.round(beat / step) * step)
-}
-
 function done(state: VimState, intents: VimIntent[] = [], handled = true): VimResult {
   return { state, intents, handled }
 }
@@ -736,9 +729,4 @@ function reduceKey(state: VimState, action: Extract<VimAction, { type: 'key' }>,
   }
 
   return unhandled(state)
-}
-
-/** Re-snap the cursor when the grid changes under it. */
-export function resnapCursor(state: VimState, stepBeats: number): VimState {
-  return { ...state, cursorBeat: snapBeat(state.cursorBeat, stepBeats) }
 }

@@ -45,7 +45,7 @@ import { overlapSolidInstrument } from './OverlapSolid'
 import { cropMaskInstrument } from './Crop'
 import { midiRollInstrument } from './MidiRoll'
 import { wireframeInstrument } from './Wireframe'
-import { paramDefault, type ObjectInstrumentDef } from './types'
+import type { ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef } from './types'
 
@@ -96,14 +96,4 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {
   return INSTRUMENTS[id]
-}
-
-/** A track's current value for a param, falling back to the instrument's default. */
-export function paramValue(
-  track: { instrumentId: string; params?: Record<string, number> },
-  key: string,
-): number {
-  const def = INSTRUMENTS[track.instrumentId]
-  if (!def) return 0
-  return track.params?.[key] ?? paramDefault(def, key)
 }

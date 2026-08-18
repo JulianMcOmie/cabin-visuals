@@ -87,8 +87,3 @@ export function endAudioSyncDrag() {
     engine.endBlockDrag() // one re-arm at the final position, back on the user's loop
   }
 }
-
-/** True while THIS block is the sync-drag source. */
-export function isAudioSyncDragActive(): boolean {
-  return session !== null
-}
