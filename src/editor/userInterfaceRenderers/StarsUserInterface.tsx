@@ -73,7 +73,9 @@ function TintSlider({ bound }: { bound: UserInterfaceParameter }) {
     setFromClientX(e.clientX)
     const controller = new AbortController()
     window.addEventListener('pointermove', (ev) => setFromClientX(ev.clientX), { signal: controller.signal })
-    window.addEventListener('pointerup', () => { controller.abort(); unlockCursor() }, { signal: controller.signal })
+    const onUp = () => { controller.abort(); unlockCursor() }
+    window.addEventListener('pointerup', onUp, { signal: controller.signal })
+    window.addEventListener('pointercancel', onUp, { signal: controller.signal })
   }
 
   return (

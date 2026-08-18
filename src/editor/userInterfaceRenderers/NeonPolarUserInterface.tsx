@@ -105,7 +105,9 @@ function RadiusRange({ minBound, maxBound }: { minBound: UserInterfaceParameter;
     setFromClientX(e.clientX)
     const controller = new AbortController()
     window.addEventListener('pointermove', (ev) => setFromClientX(ev.clientX), { signal: controller.signal })
-    window.addEventListener('pointerup', () => { controller.abort(); activeRef.current = null; unlockCursor() }, { signal: controller.signal })
+    const onUp = () => { controller.abort(); activeRef.current = null; unlockCursor() }
+    window.addEventListener('pointerup', onUp, { signal: controller.signal })
+    window.addEventListener('pointercancel', onUp, { signal: controller.signal })
   }
 
   return (

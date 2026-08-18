@@ -163,6 +163,7 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
     }
     window.addEventListener('pointermove', onMove, { signal: controller.signal })
     window.addEventListener('pointerup', onUp, { signal: controller.signal })
+    window.addEventListener('pointercancel', onUp, { signal: controller.signal })
   }, [scrollRef])
 
   return { copyDrag, ghostRef, startTrackCopyDrag }

@@ -20,8 +20,10 @@ export function startEdgeResize(
   window.addEventListener('pointermove', (ev) => {
     setWidth(startWidth + (ev.clientX - startX))
   }, { signal: controller.signal })
-  window.addEventListener('pointerup', () => {
+  const onUp = () => {
     controller.abort()
     unlockCursor()
-  }, { signal: controller.signal })
+  }
+  window.addEventListener('pointerup', onUp, { signal: controller.signal })
+  window.addEventListener('pointercancel', onUp, { signal: controller.signal })
 }

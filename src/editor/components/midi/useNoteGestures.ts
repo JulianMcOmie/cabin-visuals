@@ -326,6 +326,7 @@ export function useNoteGestures({
 
     window.addEventListener('pointermove', handleMove, { signal: controller.signal })
     window.addEventListener('pointerup', handleUp, { signal: controller.signal })
+    window.addEventListener('pointercancel', handleUp, { signal: controller.signal })
   }, [setCursor, gridRef, containerRef, placeDragGuideAtBeat, placeDragGuideAtClientX])
 
   // If the component unmounts mid-drag, tear the window listeners down

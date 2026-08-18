@@ -35,7 +35,9 @@ export function useVerticalSplit() {
       const r = c.getBoundingClientRect()
       setTopPanelFraction((ev.clientY - r.top) / r.height) // the store clamps
     }, { signal: controller.signal })
-    window.addEventListener('pointerup', () => { controller.abort(); unlockCursor() }, { signal: controller.signal })
+    const onUp = () => { controller.abort(); unlockCursor() }
+    window.addEventListener('pointerup', onUp, { signal: controller.signal })
+    window.addEventListener('pointercancel', onUp, { signal: controller.signal })
   }, [setTopPanelFraction])
 
   return { topFrac, containerRef, startResize }

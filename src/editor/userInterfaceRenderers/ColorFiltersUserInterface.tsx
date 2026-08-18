@@ -53,7 +53,9 @@ function AmountBar({ bound }: { bound: UserInterfaceParameter | undefined }) {
     setFromClientX(event.clientX)
     const controller = new AbortController()
     window.addEventListener('pointermove', (ev) => setFromClientX(ev.clientX), { signal: controller.signal })
-    window.addEventListener('pointerup', () => controller.abort(), { signal: controller.signal })
+    const onUp = () => controller.abort()
+    window.addEventListener('pointerup', onUp, { signal: controller.signal })
+    window.addEventListener('pointercancel', onUp, { signal: controller.signal })
   }
 
   return (

@@ -138,6 +138,7 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
     }
     window.addEventListener('pointermove', onMove, { signal: controller.signal })
     window.addEventListener('pointerup', onUp, { signal: controller.signal })
+    window.addEventListener('pointercancel', onUp, { signal: controller.signal })
   }, [block.startBar, block.durationBars, block.loop, block.loopLengthBars])
 
   // Ruler header: edges resize, body moves (mode chosen from the grab position).

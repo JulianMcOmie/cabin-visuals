@@ -93,7 +93,9 @@ function PendulumArc({ kick, snare, kickStep, snareStep }: {
     applyAngle(e.clientX, e.clientY)
     const controller = new AbortController()
     window.addEventListener('pointermove', (ev) => applyAngle(ev.clientX, ev.clientY), { signal: controller.signal })
-    window.addEventListener('pointerup', () => { controller.abort(); activeRef.current = null; unlockCursor() }, { signal: controller.signal })
+    const onUp = () => { controller.abort(); activeRef.current = null; unlockCursor() }
+    window.addEventListener('pointerup', onUp, { signal: controller.signal })
+    window.addEventListener('pointercancel', onUp, { signal: controller.signal })
   }
 
   const ticks: ReactNode[] = []

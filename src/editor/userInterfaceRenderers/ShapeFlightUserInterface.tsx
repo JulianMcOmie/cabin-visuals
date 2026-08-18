@@ -125,7 +125,9 @@ function CurvePad({ x, y }: { x: UserInterfaceParameter; y: UserInterfaceParamet
     setFromPointer(e.clientX, e.clientY)
     const controller = new AbortController()
     window.addEventListener('pointermove', (ev) => setFromPointer(ev.clientX, ev.clientY), { signal: controller.signal })
-    window.addEventListener('pointerup', () => { controller.abort(); unlockCursor() }, { signal: controller.signal })
+    const onUp = () => { controller.abort(); unlockCursor() }
+    window.addEventListener('pointerup', onUp, { signal: controller.signal })
+    window.addEventListener('pointercancel', onUp, { signal: controller.signal })
   }
 
   return (
