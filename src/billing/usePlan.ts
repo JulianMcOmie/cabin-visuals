@@ -18,34 +18,63 @@ function proFromStatus(status: string | null | undefined): boolean {
   return status === 'active' || status === 'trialing'
 }
 
+// One fetch per session, shared by every mount. Four+ components mount this
+// hook at editor open (header, drop layer, media banks), and each used to run
+// its own subscriptions query - twice, since onAuthStateChange replays
+// INITIAL_SESSION to every new subscriber.
+let cached: PlanState | null = null
+let inflight: Promise<PlanState> | null = null
+const listeners = new Set<(s: PlanState) => void>()
+
+function publish(next: PlanState) {
+  cached = next
+  listeners.forEach((l) => l(next))
+}
+
+async function fetchPlan(): Promise<PlanState> {
+  const supabase = getSupabase()
+  // getSession(), not getUser(): this only needs to know whether there is a
+  // session at all, and getUser() is a network round trip taken on the auth
+  // lock that useAuth is also waiting on - so paying for it here delayed the
+  // whole page's auth resolution, not just this hook's. The stored session
+  // is enough because it isn't trusted for anything: the subscriptions row
+  // is RLS-guarded, so a forged one still reads back nothing.
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return { loading: false, isPro: false }
+  const { data } = await supabase.from('subscriptions').select('status').maybeSingle()
+  return { loading: false, isPro: proFromStatus(data?.status) }
+}
+
+function loadPlan(force = false): Promise<PlanState> {
+  if (!force && cached) return Promise.resolve(cached)
+  if (!inflight || force) {
+    inflight = fetchPlan().then((s) => { publish(s); return s }).finally(() => { inflight = null })
+  }
+  return inflight
+}
+
+let authSubscribed = false
+function subscribeAuthOnce() {
+  if (authSubscribed) return
+  authSubscribed = true
+  getSupabase().auth.onAuthStateChange((event) => {
+    // Sign-in/out changes the answer; token refreshes and the replayed
+    // INITIAL_SESSION don't.
+    if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') void loadPlan(true)
+  })
+}
+
 export function usePlan(): PlanState {
-  const [state, setState] = useState<PlanState>({ loading: true, isPro: false })
+  const [state, setState] = useState<PlanState>(cached ?? { loading: true, isPro: false })
 
   useEffect(() => {
-    const supabase = getSupabase()
     let mounted = true
-
-    const fetchPlan = async () => {
-      // getSession(), not getUser(): this only needs to know whether there is a
-      // session at all, and getUser() is a network round trip taken on the auth
-      // lock that useAuth is also waiting on - so paying for it here delayed the
-      // whole page's auth resolution, not just this hook's. The stored session
-      // is enough because it isn't trusted for anything: the subscriptions row
-      // is RLS-guarded, so a forged one still reads back nothing.
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        if (mounted) setState({ loading: false, isPro: false })
-        return
-      }
-      const { data } = await supabase.from('subscriptions').select('status').maybeSingle()
-      if (mounted) setState({ loading: false, isPro: proFromStatus(data?.status) })
-    }
-
-    void fetchPlan()
-    const { data: sub } = supabase.auth.onAuthStateChange(() => void fetchPlan())
+    listeners.add(setState)
+    subscribeAuthOnce()
+    void loadPlan().then((s) => { if (mounted) setState(s) })
     return () => {
       mounted = false
-      sub.subscription.unsubscribe()
+      listeners.delete(setState)
     }
   }, [])
 
