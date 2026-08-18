@@ -10,7 +10,7 @@
 
 - `AudioEngine.ts` — player pool keyed by block id; `armAll(beat, when, bpm, beatsPerBar)` gathers audible blocks (mute/solo folded in at gather time) and schedules each via placement math. Master `Tone.Gain(0.85)` for headroom + a `Tone.Meter` tap (`getOutputLevel()`) feeding the transport's audio-reactive glow — a pure listener.
 - `placement.ts` — **the one place beat⟷second block-placement math lives**, shared LITERALLY by live playback and offline export. Three cases per block vs `atBeat`: past → null, future → delay ahead, mid-clip → join at in-clip offset. Change placement semantics HERE only; both paths follow.
-- `waveform.ts` — decode + peak cache (`getBuffer`); powers timeline waveforms and the export's offline render.
+- `waveform.ts` — decode + peak cache (`getBuffer`); powers timeline waveforms and the export's offline render. `getPeaks` walks the samples ONCE per clip at `FINE_PEAK_BUCKETS` (2^18) and serves every coarser request as a cached power-of-two reduction of that array (`peaks.ts` — pure, node-testable; `waveform.test.ts` pins the reduction). Callers must read the returned `buckets`, which is ≥ what they asked for.
 - `audioSource.ts` — bytes behind refs (bucket + session cache); `beatDetect.ts` — onset/BPM estimation for imported audio.
 
 ## Semantics to preserve
