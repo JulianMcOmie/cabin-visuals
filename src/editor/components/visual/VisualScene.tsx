@@ -1306,10 +1306,16 @@ export function VisualScene() {
   return (
     <>
       {[...mounted.entries()].map(([sceneId, runtime]) => {
-        const sceneObjects = objects.filter((o) => o.sceneId === sceneId)
-        const base = sceneObjects.filter((o) => placementKey[objects.indexOf(o)] === 'B')
-        const front = sceneObjects.filter((o) => placementKey[objects.indexOf(o)] === 'F')
-        const invert = sceneObjects.filter((o) => placementKey[objects.indexOf(o)] === 'I')
+        // One pass with the index in hand (indexOf inside three filters was
+        // O(n²) per render of this component).
+        const base: ObjectListEntry[] = [], front: ObjectListEntry[] = [], invert: ObjectListEntry[] = []
+        objects.forEach((o, i) => {
+          if (o.sceneId !== sceneId) return
+          const k = placementKey[i]
+          if (k === 'F') front.push(o)
+          else if (k === 'I') invert.push(o)
+          else base.push(o)
+        })
         return (
           <Fragment key={sceneId}>
             {createPortal(

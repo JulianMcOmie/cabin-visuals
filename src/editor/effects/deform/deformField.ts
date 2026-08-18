@@ -38,7 +38,19 @@ export { uniformName as deformUniformName, instanceSuffix as deformSuffix }
 
 const TAU = '6.28318530718'
 
+// Memoized per suffix: MaterialWrapper asks for this every frame per deformer
+// per copy, and the ~5 KB template string was being rebuilt each time.
+const glslBySuffix = new Map<string, string>()
+
 export function deformFieldGlsl(suffix: string): string {
+  const cached = glslBySuffix.get(suffix)
+  if (cached !== undefined) return cached
+  const glsl = buildDeformFieldGlsl(suffix)
+  glslBySuffix.set(suffix, glsl)
+  return glsl
+}
+
+function buildDeformFieldGlsl(suffix: string): string {
   const u = (key: string) => uniformName(key, suffix)
   return `
 uniform float ${u('operation')};
