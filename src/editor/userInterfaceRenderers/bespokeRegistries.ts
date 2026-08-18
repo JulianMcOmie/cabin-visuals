@@ -1,79 +1,70 @@
 import type { UserInterfaceRendererDefinition } from './types'
-import { MoverUserInterfaceRenderer } from './MoverUserInterface'
-import { WaypointsUserInterfaceRenderer } from './WaypointsUserInterface'
-import { VisibilityMoverUserInterfaceRenderer } from './VisibilityMoverUserInterface'
-import { BypassUserInterfaceRenderer } from './BypassUserInterface'
-import { MeteorImpactMoverUserInterfaceRenderer } from './MeteorImpactMoverUserInterface'
-import { ColorizerUserInterfaceRenderer } from './ColorizerUserInterface'
-import { GradientColorizerUserInterfaceRenderer } from './GradientColorizerUserInterface'
-import { CosinePaletteUserInterfaceRenderer } from './CosinePaletteUserInterface'
-import { ImpactScatterMoverUserInterfaceRenderer } from './ImpactScatterMoverUserInterface'
-import { ImpactPulseMoverUserInterfaceRenderer } from './ImpactPulseMoverUserInterface'
-import { ConveyorMoverUserInterfaceRenderer } from './ConveyorMoverUserInterface'
-import { SymmetricMotionMoverUserInterfaceRenderer } from './SymmetricMotionMoverUserInterface'
-import { SymmetricRotationMoverUserInterfaceRenderer } from './SymmetricRotationMoverUserInterface'
-import { ContourMoverUserInterfaceRenderer } from './ContourMoverUserInterface'
-import { RadialMotionMoverUserInterfaceRenderer } from './RadialMotionMoverUserInterface'
-import { RadialSplitterUserInterfaceRenderer } from './RadialSplitterUserInterface'
-import { LineSplitterUserInterfaceRenderer } from './LineSplitterUserInterface'
-import { GridSplitterUserInterfaceRenderer } from './GridSplitterUserInterface'
-import { SymmetrySplitterUserInterfaceRenderer } from './SymmetrySplitterUserInterface'
-import { ApproachSplitterUserInterfaceRenderer } from './ApproachSplitterUserInterface'
-import { TunnelSplitterUserInterfaceRenderer } from './TunnelSplitterUserInterface'
-import { OffsetEffectUserInterfaceRenderer } from './OffsetEffectUserInterface'
-import { RotateEffectUserInterfaceRenderer } from './RotateEffectUserInterface'
-import { ScaleEffectUserInterfaceRenderer } from './ScaleEffectUserInterface'
-import { KaleidoscopeEffectUserInterfaceRenderer } from './KaleidoscopeEffectUserInterface'
-import { KaleidoSkinEffectUserInterfaceRenderer } from './KaleidoSkinEffectUserInterface'
-import { PixelateEffectUserInterfaceRenderer } from './PixelateEffectUserInterface'
-import { ChromaticAberrationEffectUserInterfaceRenderer } from './ChromaticAberrationEffectUserInterface'
-import { OpacityEffectUserInterfaceRenderer } from './OpacityEffectUserInterface'
-import { DeformEffectUserInterfaceRenderer } from './DeformEffectUserInterface'
-import { SCENE_FX_USER_INTERFACES } from './SceneFxUserInterface'
+import { lazyPanel } from './lazyPanel'
+import { gradeScenePlugin } from '../effects/scene/grade'
+import { lensScenePlugin } from '../effects/scene/lens'
+import { blurScenePlugin } from '../effects/scene/blur'
+import { grainScenePlugin } from '../effects/scene/grain'
+import { crushScenePlugin } from '../effects/scene/crush'
+import { glitchScenePlugin } from '../effects/scene/glitch'
+import { mirrorScenePlugin } from '../effects/scene/mirror'
 
 // Bespoke settings surfaces for the non-object tracks, mirroring the object
 // registry in index.ts: movers/splitters are keyed by their definition id,
 // effects by their plugin id. A missing entry falls back to the generic
 // ParamControl list in TrackEditor, so registration is always optional.
+// Every panel loads on demand (lazyPanel.ts) — the maps stay synchronous.
 
 export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRendererDefinition>> = {
-  mover: MoverUserInterfaceRenderer,
-  waypoints: WaypointsUserInterfaceRenderer,
-  visibility: VisibilityMoverUserInterfaceRenderer,
-  bypass: BypassUserInterfaceRenderer,
-  meteorImpact: MeteorImpactMoverUserInterfaceRenderer,
+  mover: lazyPanel(() => import('./MoverUserInterface'), 'MoverUserInterfaceRenderer'),
+  waypoints: lazyPanel(() => import('./WaypointsUserInterface'), 'WaypointsUserInterfaceRenderer'),
+  visibility: lazyPanel(() => import('./VisibilityMoverUserInterface'), 'VisibilityMoverUserInterfaceRenderer'),
+  bypass: lazyPanel(() => import('./BypassUserInterface'), 'BypassUserInterfaceRenderer'),
+  meteorImpact: lazyPanel(() => import('./MeteorImpactMoverUserInterface'), 'MeteorImpactMoverUserInterfaceRenderer'),
   // The Colorizer's definition id is still its original `calmHueRotate`.
-  calmHueRotate: ColorizerUserInterfaceRenderer,
-  gradient: GradientColorizerUserInterfaceRenderer,
-  cosinePalette: CosinePaletteUserInterfaceRenderer,
-  impactScatter: ImpactScatterMoverUserInterfaceRenderer,
-  impactPulse: ImpactPulseMoverUserInterfaceRenderer,
-  conveyor: ConveyorMoverUserInterfaceRenderer,
-  symmetricMotion: SymmetricMotionMoverUserInterfaceRenderer,
-  symmetricRotation: SymmetricRotationMoverUserInterfaceRenderer,
-  contour: ContourMoverUserInterfaceRenderer,
-  radialMotion: RadialMotionMoverUserInterfaceRenderer,
-  radial: RadialSplitterUserInterfaceRenderer,
-  line: LineSplitterUserInterfaceRenderer,
-  symmetry: SymmetrySplitterUserInterfaceRenderer,
-  grid: GridSplitterUserInterfaceRenderer,
-  approach: ApproachSplitterUserInterfaceRenderer,
-  tunnel: TunnelSplitterUserInterfaceRenderer,
+  calmHueRotate: lazyPanel(() => import('./ColorizerUserInterface'), 'ColorizerUserInterfaceRenderer'),
+  gradient: lazyPanel(() => import('./GradientColorizerUserInterface'), 'GradientColorizerUserInterfaceRenderer'),
+  cosinePalette: lazyPanel(() => import('./CosinePaletteUserInterface'), 'CosinePaletteUserInterfaceRenderer'),
+  impactScatter: lazyPanel(() => import('./ImpactScatterMoverUserInterface'), 'ImpactScatterMoverUserInterfaceRenderer'),
+  impactPulse: lazyPanel(() => import('./ImpactPulseMoverUserInterface'), 'ImpactPulseMoverUserInterfaceRenderer'),
+  conveyor: lazyPanel(() => import('./ConveyorMoverUserInterface'), 'ConveyorMoverUserInterfaceRenderer'),
+  symmetricMotion: lazyPanel(() => import('./SymmetricMotionMoverUserInterface'), 'SymmetricMotionMoverUserInterfaceRenderer'),
+  symmetricRotation: lazyPanel(() => import('./SymmetricRotationMoverUserInterface'), 'SymmetricRotationMoverUserInterfaceRenderer'),
+  contour: lazyPanel(() => import('./ContourMoverUserInterface'), 'ContourMoverUserInterfaceRenderer'),
+  radialMotion: lazyPanel(() => import('./RadialMotionMoverUserInterface'), 'RadialMotionMoverUserInterfaceRenderer'),
+  radial: lazyPanel(() => import('./RadialSplitterUserInterface'), 'RadialSplitterUserInterfaceRenderer'),
+  line: lazyPanel(() => import('./LineSplitterUserInterface'), 'LineSplitterUserInterfaceRenderer'),
+  symmetry: lazyPanel(() => import('./SymmetrySplitterUserInterface'), 'SymmetrySplitterUserInterfaceRenderer'),
+  grid: lazyPanel(() => import('./GridSplitterUserInterface'), 'GridSplitterUserInterfaceRenderer'),
+  approach: lazyPanel(() => import('./ApproachSplitterUserInterface'), 'ApproachSplitterUserInterfaceRenderer'),
+  tunnel: lazyPanel(() => import('./TunnelSplitterUserInterface'), 'TunnelSplitterUserInterfaceRenderer'),
 }
 
+// The scene chain's seven devices are one family sharing a chassis, so they
+// live in one module (SceneFxUserInterface.tsx) exporting a map keyed by
+// plugin id; each entry here reaches into that map once it loads.
+const sceneFxPanel = (pluginId: string): UserInterfaceRendererDefinition =>
+  lazyPanel(
+    () => import('./SceneFxUserInterface').then((m) => m.SCENE_FX_USER_INTERFACES),
+    pluginId,
+  )
+
 export const EFFECT_USER_INTERFACES: Partial<Record<string, UserInterfaceRendererDefinition>> = {
-  offset: OffsetEffectUserInterfaceRenderer,
-  rotate: RotateEffectUserInterfaceRenderer,
-  scale: ScaleEffectUserInterfaceRenderer,
-  kaleidoscope: KaleidoscopeEffectUserInterfaceRenderer,
-  kaleidoSkin: KaleidoSkinEffectUserInterfaceRenderer,
-  pixelate: PixelateEffectUserInterfaceRenderer,
-  chromaticAberration: ChromaticAberrationEffectUserInterfaceRenderer,
-  opacity: OpacityEffectUserInterfaceRenderer,
-  deform: DeformEffectUserInterfaceRenderer,
-  // The scene chain's seven devices are one family sharing a chassis, so they
-  // register as a map rather than seven imports (SceneFxUserInterface.tsx).
-  ...SCENE_FX_USER_INTERFACES,
+  offset: lazyPanel(() => import('./OffsetEffectUserInterface'), 'OffsetEffectUserInterfaceRenderer'),
+  rotate: lazyPanel(() => import('./RotateEffectUserInterface'), 'RotateEffectUserInterfaceRenderer'),
+  scale: lazyPanel(() => import('./ScaleEffectUserInterface'), 'ScaleEffectUserInterfaceRenderer'),
+  kaleidoscope: lazyPanel(() => import('./KaleidoscopeEffectUserInterface'), 'KaleidoscopeEffectUserInterfaceRenderer'),
+  kaleidoSkin: lazyPanel(() => import('./KaleidoSkinEffectUserInterface'), 'KaleidoSkinEffectUserInterfaceRenderer'),
+  pixelate: lazyPanel(() => import('./PixelateEffectUserInterface'), 'PixelateEffectUserInterfaceRenderer'),
+  chromaticAberration: lazyPanel(() => import('./ChromaticAberrationEffectUserInterface'), 'ChromaticAberrationEffectUserInterfaceRenderer'),
+  opacity: lazyPanel(() => import('./OpacityEffectUserInterface'), 'OpacityEffectUserInterfaceRenderer'),
+  deform: lazyPanel(() => import('./DeformEffectUserInterface'), 'DeformEffectUserInterfaceRenderer'),
+  [gradeScenePlugin.id]: sceneFxPanel(gradeScenePlugin.id),
+  [lensScenePlugin.id]: sceneFxPanel(lensScenePlugin.id),
+  [blurScenePlugin.id]: sceneFxPanel(blurScenePlugin.id),
+  [grainScenePlugin.id]: sceneFxPanel(grainScenePlugin.id),
+  [crushScenePlugin.id]: sceneFxPanel(crushScenePlugin.id),
+  [glitchScenePlugin.id]: sceneFxPanel(glitchScenePlugin.id),
+  [mirrorScenePlugin.id]: sceneFxPanel(mirrorScenePlugin.id),
 }
 
 export function getMoverUserInterface(definitionId: string | undefined): UserInterfaceRendererDefinition | undefined {
