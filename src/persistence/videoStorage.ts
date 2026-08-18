@@ -1,4 +1,5 @@
 import { getSupabase } from './supabase'
+import { signedUrlFor } from './signedUrlCache'
 
 // Upload/download for the project-videos Storage bucket. Paths are
 // `{userId}/{projectId}/{clipId}` - the bucket's RLS policies key on the first
@@ -60,10 +61,8 @@ export async function uploadVideoTo(
 }
 
 /** A URL a <video> element can load (signed; the bucket is private). */
-export async function getVideoUrl(path: string): Promise<string> {
-  const { data, error } = await getSupabase().storage.from(BUCKET).createSignedUrl(path, 60 * 60)
-  if (error) throw error
-  return data.signedUrl
+export function getVideoUrl(path: string): Promise<string> {
+  return signedUrlFor(BUCKET, path) // memoized per path, see signedUrlCache
 }
 
 /** Drop a clip's bytes. */

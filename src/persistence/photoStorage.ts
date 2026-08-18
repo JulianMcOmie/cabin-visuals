@@ -1,4 +1,5 @@
 import { getSupabase } from './supabase'
+import { signedUrlFor } from './signedUrlCache'
 
 // Upload/download for the project-photos Storage bucket. Paths are
 // `{userId}/{projectId}/{photoId}` - the bucket's RLS policies key on the first
@@ -60,10 +61,8 @@ export async function uploadPhotoTo(
 }
 
 /** A URL an <img> / TextureLoader can load (signed; the bucket is private). */
-export async function getPhotoUrl(path: string): Promise<string> {
-  const { data, error } = await getSupabase().storage.from(BUCKET).createSignedUrl(path, 60 * 60)
-  if (error) throw error
-  return data.signedUrl
+export function getPhotoUrl(path: string): Promise<string> {
+  return signedUrlFor(BUCKET, path) // memoized per path, see signedUrlCache
 }
 
 /** Drop a photo's bytes. */
