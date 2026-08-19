@@ -74,9 +74,16 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
         background: hasLoopSections ? 'transparent' : active ? palette.selectedBody : palette.fill,
         boxShadow: active ? palette.selectedBloom : restingShadow,
         filter: activityFilter,
-        // No will-change: it promoted EVERY block to its own compositor layer
-        // (texture memory + per-scroll compositing for hundreds of blocks);
-        // only the handful near the playhead ever animate the filter.
+        // will-change is NOT set here. A static hint promoted every block to
+        // its own compositor layer for the life of the editor (texture memory
+        // + per-scroll compositing for hundreds of blocks); leaving it off
+        // entirely was worse the other way - the glow var moves every frame
+        // while the transport runs, so an unpromoted block re-RASTERIZES per
+        // frame (measured 2026-08-18: 5x the raster time of the promoted
+        // build, which is the "everything is laggier with the timeline open"
+        // regression). So the promotion is applied by the activity registry
+        // for exactly as long as the transport is playing, and dropped on
+        // pause - see setActivityPromotion in midiActivityRegistry.
       }}
       onPointerDown={(e) => onBlockPointerDown(e, trackId, block.id)}
       onPointerMove={(e) => {
@@ -116,6 +123,10 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
       {!hasLoopSections && (
         <div
           aria-hidden="true"
+          // The registry promotes this alongside its block: the screen-blended
+          // glow is the more expensive half of the per-frame raster, so the
+          // block's own hint alone only recovers a third of the cost.
+          data-midi-activity-glow=""
           className="absolute inset-0 pointer-events-none rounded-[6px]"
           style={{
             backgroundColor: palette.selectedOutline,

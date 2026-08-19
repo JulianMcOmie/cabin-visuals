@@ -13,6 +13,9 @@ const MAX_GLOW_OPACITY = 0.5
 
 interface MidiActivityBlock {
   element: HTMLDivElement
+  /** The screen-blended glow overlay inside the block, when it has one (a
+   *  looped block draws its sections instead and has none). */
+  glow: HTMLElement | null
   triggers: MidiActivityTrigger[]
   /** Muted tracks are silent, so their blocks must not pulse on note hits. */
   muted: boolean
@@ -26,6 +29,43 @@ interface MidiActivityBlock {
 
 const blocks = new Map<string, MidiActivityBlock>()
 
+// ── Compositor promotion ────────────────────────────────────────────────────
+//
+// The glow drives `filter` on the block and `opacity` on its screen-blended
+// overlay, and while the transport runs those move EVERY frame. Unpromoted,
+// each moving block re-rasterizes per frame on the main thread; promoted, the
+// change is a compositor-only update. But a permanent `will-change` in the
+// style prop is the other extreme - hundreds of blocks each holding a layer
+// texture for the life of the editor, paid for on every timeline scroll,
+// almost all of them never animating.
+//
+// So the hint is applied for exactly as long as it buys something: while
+// playing, on the blocks that can actually pulse (a muted track holds at 0,
+// and a block with no triggers has nothing to glow for). Both elements need
+// it - measured 2026-08-18, the block's own hint alone recovers only about a
+// third of the raster cost, because the screen-blended overlay is the
+// expensive half.
+let promoted = false
+/** Last value handed to updateMidiActivityAtBeat, so a block registered
+ *  mid-playback (scrolled into view, or minted by an edit) is promoted on
+ *  arrival rather than waiting for the next pause/play cycle. */
+let transportPlaying = false
+
+function canPulse(block: MidiActivityBlock): boolean {
+  return !block.muted && block.triggers.length > 0
+}
+
+function setBlockPromotion(block: MidiActivityBlock, on: boolean): void {
+  if (!canPulse(block)) return
+  if (on) {
+    block.element.style.willChange = 'filter'
+    if (block.glow) block.glow.style.willChange = 'opacity'
+  } else {
+    block.element.style.removeProperty('will-change')
+    block.glow?.style.removeProperty('will-change')
+  }
+}
+
 export function registerMidiActivityBlock(
   block: Block,
   beatsPerBar: number,
@@ -38,8 +78,9 @@ export function registerMidiActivityBlock(
     const key = noteElement.dataset.midiPreviewKey
     if (key) elements.set(key, noteElement)
   })
-  const registration = {
+  const registration: MidiActivityBlock = {
     element,
+    glow: element.querySelector<HTMLElement>('[data-midi-activity-glow]'),
     triggers,
     muted,
     lastOpacity: '0',
@@ -52,10 +93,12 @@ export function registerMidiActivityBlock(
   }
   blocks.set(block.id, registration)
   element.style.setProperty('--midi-activity-opacity', '0')
+  if (transportPlaying) setBlockPromotion(registration, true)
 
   return () => {
     if (blocks.get(block.id) === registration) blocks.delete(block.id)
     element.style.removeProperty('--midi-activity-opacity')
+    setBlockPromotion(registration, false)
     for (const note of registration.notes) {
       note.element.style.removeProperty('--midi-note-activity')
     }
@@ -78,6 +121,14 @@ const SINGLE_TRIGGER = (t: MidiActivityTrigger) => { singleTrigger[0] = t; retur
  *  An inactive transport explicitly clears every block instead of leaving the
  *  envelope frozen at the stopped or scrubbed beat. */
 export function updateMidiActivityAtBeat(beat: number, isPlaying: boolean): void {
+  transportPlaying = isPlaying
+  // Promotion follows the transport, not the individual pulse: toggling per
+  // note would churn a layer up and down on every hit, and the promotion only
+  // pays off if it is already in place when the var starts moving.
+  if (isPlaying !== promoted) {
+    promoted = isPlaying
+    for (const block of blocks.values()) setBlockPromotion(block, isPlaying)
+  }
   if (!isPlaying) {
     if (idleCleared) return
     idleCleared = true
