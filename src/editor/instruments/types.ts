@@ -198,6 +198,14 @@ export interface ObjectInstrumentDef {
   /** Tracks of this instrument draw on top of everything by default (the per-track
    *  "In front" toggle overrides). Text wants this: words are captions, not scenery. */
   defaultOnTop?: boolean
+  /** This instrument's meshes carry `castShadow` (the solids: Cube, Kaleido
+   *  Solid, the spec shapes). VisualScene only gives a scene's key light a
+   *  shadow map while some object in it declares this - three otherwise binds
+   *  and clears the 1024² shadow target and walks the scene on every render
+   *  pass for a map nothing writes into. Output-identical either way: with no
+   *  caster the map is empty and every receiver reads "lit". A new instrument
+   *  whose meshes cast must set this, or its shadows never appear. */
+  castsShadows?: boolean
 }
 
 /** A numeric param's schema default (no track/registry lookup). Non-numeric params → 0. */
