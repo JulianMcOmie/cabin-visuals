@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cabin Visuals — Rendering Performance</title>
+<style>
+  @page { size: letter; margin: 0.6in; }
+  html, body { background: #fff; color: #000; }
+  body { font: 15.5px/1.45 Georgia, "Times New Roman", serif; max-width: 7.3in; margin: 0 auto; padding: 0.3in 0.2in; overflow-x: hidden; }
+  h1 { font-size: 30px; margin: 0 0 4px; letter-spacing: -0.5px; }
+  h2 { font-size: 22px; margin: 26px 0 8px; border-bottom: 2px solid #000; padding-bottom: 3px; page-break-after: avoid; }
+  h3 { font-size: 17px; margin: 16px 0 4px; page-break-after: avoid; }
+  p, li { margin: 5px 0; }
+  .sub { color: #333; font-size: 14px; margin-bottom: 14px; }
+  code, pre { font-family: Consolas, "Courier New", monospace; }
+  code { font-size: 13.5px; background: #f0f0f0; padding: 0 3px; }
+  pre { font-size: 12.5px; line-height: 1.35; background: #f4f4f4; border-left: 3px solid #000; padding: 8px 10px; margin: 8px 0 12px; white-space: pre-wrap; word-break: break-word; page-break-inside: avoid; }
+  .path { display: block; font-family: Consolas, monospace; font-size: 12px; color: #222; margin: 6px 0 -4px; }
+  figure { margin: 12px 0 14px; page-break-inside: avoid; }
+  figure svg { width: 100%; height: auto; display: block; }
+  figcaption { font-size: 13px; color: #333; margin-top: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 8px 0 12px; page-break-inside: avoid; }
+  th, td { border: 1px solid #000; padding: 4px 7px; text-align: left; vertical-align: top; }
+  th { background: #e6e6e6; }
+  .box { border: 2px solid #000; padding: 8px 12px; margin: 10px 0; page-break-inside: avoid; }
+  .tree { font-family: Consolas, monospace; font-size: 12.5px; line-height: 1.4; background: #f4f4f4; padding: 8px 10px; white-space: pre; overflow: hidden; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media print { .two { display: block; } .pb { page-break-before: always; } }
+  svg text { font-family: Helvetica, Arial, sans-serif; }
+</style>
+</head>
+<body>
+
+<h1>Cabin Visuals — Rendering Performance</h1>
+<p class="sub">How the visual engine turns a beat into pixels, where the per-frame work goes, and what governs it. All paths are under <code>src/editor/</code>. Numbers are from the probes in <code>scripts/perf/</code> on real saved projects (2026‑08‑18).</p>
+
+<h2>1. The one rule that makes performance tractable</h2>
+<p><b>Every visual is a pure function of the current beat</b> (plus the document and params). Nothing in an instrument reads a clock, a delta, or a random number. This means: a paused frame is a <em>frozen</em> frame that need not be re-rendered; scrubbing shows exactly what playback shows; and export just steps the beat arithmetically through the same path. Almost every optimization below is “don’t do the work again when the beat and inputs didn’t change.”</p>
+
+<div class="tree">src/editor/
+├─ core/
+│  ├─ playback.ts              transport: the ONLY producer of TimeStore.currentBeat
+│  ├─ visual/
+│  │  ├─ VisualEngine.ts        resolve tracks → graph; computeAtBeat per frame → ObjectState
+│  │  ├─ VisualBeatSync.tsx     r3f useFrame: pushes the beat + params into the engine
+│  │  ├─ instrumentFrame.ts     useInstrumentFrame: signature-gated per-instrument callback
+│  │  ├─ noteWindow.ts          bisected note windows (no full scans per frame)
+│  │  └─ pauseCanary.ts         dev-only: names any object that moves while paused
+│  └─ visualCopies/
+│     └─ resolveVisualCopies.ts movers/splitters → VisualCopy[] per object
+├─ components/visual/
+│  ├─ VisualScene.tsx           the render-pass pipeline (scene → composite → bloom → grade)
+│  ├─ RenderGovernor.tsx        frameloop 'demand' while paused; one frame per change
+│  ├─ ObjectRenderer.tsx        one mounted copy of an object (memoized)
+│  ├─ InstancedObjectRenderer.tsx  one InstancedMesh2 per track (Cube family)
+│  ├─ ShaderWrapper.tsx + shaderScratchPool.ts   per-copy shader effects, pooled targets
+│  └─ useRenderTargetScale.ts   preview quality → render-target scale
+├─ instruments/                 defs (metadata) + lazily loaded *Visual.tsx components
+├─ store/TimeStore.ts, UIStore.ts (previewQuality)
+└─ App.tsx                      the &lt;Canvas&gt; (dpr 1, no MSAA), ambient bleed</div>
+
+<h2>2. Architecture: beat → state → meshes → passes → screen</h2>
+<figure>
+<svg viewBox="0 0 900 470" role="img" aria-label="Data flow from transport to screen">
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000"/></marker></defs>
+  <g font-size="22" font-weight="bold" text-anchor="middle">
+    <rect x="10" y="20" width="420" height="80" fill="#fff" stroke="#000" stroke-width="2.5"/>
+    <text x="220" y="52">playback.ts (RAF)</text>
+    <text x="220" y="82" font-weight="normal" font-size="19">writes TimeStore.currentBeat</text>
+
+    <rect x="470" y="20" width="420" height="80" fill="#fff" stroke="#000" stroke-width="2.5"/>
+    <text x="680" y="52">VisualBeatSync (useFrame)</text>
+    <text x="680" y="82" font-weight="normal" font-size="19">beat + params into the engine</text>
+    <line x1="430" y1="60" x2="468" y2="60" stroke="#000" stroke-width="2.5" marker-end="url(#a)"/>
+
+    <line x1="680" y1="100" x2="680" y2="118" stroke="#000" stroke-width="2.5"/>
+    <line x1="680" y1="118" x2="220" y2="118" stroke="#000" stroke-width="2.5"/>
+    <line x1="220" y1="118" x2="220" y2="138" stroke="#000" stroke-width="2.5" marker-end="url(#a)"/>
+
+    <rect x="10" y="140" width="420" height="80" fill="#eee" stroke="#000" stroke-width="2.5"/>
+    <text x="220" y="172">VisualEngine.computeAtBeat</text>
+    <text x="220" y="202" font-weight="normal" font-size="19">→ ObjectState per object</text>
+
+    <rect x="470" y="140" width="420" height="80" fill="#fff" stroke="#000" stroke-width="2.5"/>
+    <text x="680" y="172">resolveVisualCopies</text>
+    <text x="680" y="202" font-weight="normal" font-size="19">movers/splitters → copies</text>
+    <line x1="430" y1="180" x2="468" y2="180" stroke="#000" stroke-width="2.5" marker-end="url(#a)"/>
+
+    <line x1="680" y1="220" x2="680" y2="238" stroke="#000" stroke-width="2.5"/>
+    <line x1="680" y1="238" x2="450" y2="238" stroke="#000" stroke-width="2.5"/>
+    <line x1="450" y1="238" x2="450" y2="258" stroke="#000" stroke-width="2.5" marker-end="url(#a)"/>
+
+    <rect x="10" y="260" width="880" height="80" fill="#fff" stroke="#000" stroke-width="2.5"/>
+    <text x="450" y="292">useInstrumentFrame(trackId, cb) — one per mounted copy</text>
+    <text x="450" y="322" font-weight="normal" font-size="19">signature gate: cb runs only when beat / params / notes / size changed</text>
+
+    <line x1="450" y1="340" x2="450" y2="378" stroke="#000" stroke-width="2.5" marker-end="url(#a)"/>
+
+    <rect x="10" y="380" width="880" height="80" fill="#eee" stroke="#000" stroke-width="2.5"/>
+    <text x="450" y="412">VisualScene useFrame: scene → composite → bloom → grade → screen</text>
+    <text x="450" y="442" font-weight="normal" font-size="19">RenderGovernor: 'always' while playing, 'demand' (one frame per change) while paused</text>
+  </g>
+</svg>
+<figcaption>Figure 1 — One frame. The engine is a module singleton, not React: per-frame state never triggers re-renders. Only the structural object <em>list</em> (which objects exist) is a React-visible store.</figcaption>
+</figure>
+
+<span class="path">src/editor/core/playback.ts</span>
+<pre>// The transport is the ONLY writer of the beat: Tone transport position → beat, on a RAF.
+const beat = positionToBeat(Tone.getTransport().position, getBeatsPerBar())
+useTimeStore.getState().setCurrentBeat(beat)</pre>
+
+<span class="path">src/editor/core/visual/VisualBeatSync.tsx</span>
+<pre>useFrame(() => { computeAtBeat(currentBeat) })          // per frame: params + beat → ObjectState
+// structural changes (notes, blocks, tracks) re-resolve the graph, DEBOUNCED:
+timer = setTimeout(() => setProject(s), 80)</pre>
+
+<span class="path">src/editor/core/visual/instrumentFrame.ts</span>
+<pre>// A per-copy signature of everything the picture depends on. Same signature → skip cb.
+put(sig, state.beat); put(sig, root.size.width); put(sig, root.size.height)
+for (k = 0; k &lt; active.length; k++) put(sig, active[k])       // sounding notes
+for (const k in params) { put(sig, k); put(sig, params[k]) }   // + stringParams ref
+if (sig.dirty) { if (cb(state) === false) buf.length = 0 }   // false = "retry next frame"</pre>
+
+<h2 class="pb">3. Paused = idle: the render governor</h2>
+<p>While paused, the r3f canvas runs <code>frameloop="demand"</code>: nothing renders until something asks. The governor asks for exactly one frame when an input changes — a store edit (params reach the engine synchronously), the debounced re-resolve, a scrub, or a resize. While playing the loop is <code>'always'</code>. Export pins <code>'never'</code> and steps frames itself.</p>
+<span class="path">src/editor/components/visual/RenderGovernor.tsx</span>
+<pre>useProjectStore.subscribe(() => invalidate())            // any edit → one frame
+subscribeObjects(() => invalidate())                     // re-resolve landed → one frame
+useTimeStore.subscribe((s, prev) => {
+  if (!s.isPlaying &amp;&amp; (s.currentBeat !== prev.currentBeat || prev.isPlaying)) invalidate()
+})</pre>
+<p>Measured on a real project, paused: <b>0 GL frames, 0 ambient-bleed copies per 3 s</b>; the profiler shows ~88 % idle. Every other loop in the editor follows the same contract: the ambient bleed painter parks itself 300 ms after the last change; canvas vignettes in the library pause offscreen; the timeline’s glow sweep early-exits once cleared.</p>
+
+<h2>4. Where the per-frame JS goes (and how it was cut)</h2>
+<table>
+<tr><th>Stage</th><th>File</th><th>What it costs / what governs it</th></tr>
+<tr><td>Engine state</td><td><code>core/visual/VisualEngine.ts</code> + <code>noteWindow.ts</code></td><td><code>computeAtBeat</code> per object: active notes, pulse energy, ADSR, transform. Every note scan is a <b>bisected window</b> over the sorted stream — 11 k-note project: 450 → 80 µs/frame. State objects are reused per track (no per-frame allocation).</td></tr>
+<tr><td>Copies</td><td><code>core/visualCopies/resolveVisualCopies.ts</code></td><td>Movers/splitters produce N copies per object. One context object per chain step, padding copies pooled. 24 tracks × splitter: 0.93 → 0.12 ms/frame.</td></tr>
+<tr><td>Instruments</td><td><code>core/visual/instrumentFrame.ts</code></td><td>Signature gate (§2). Canvas instruments (Midi Roll, Text Display) repaint only when their inputs change; Midi Roll indexes its notes (1.0 → 0.44 ms/frame on the 11 k-note project); Text Display pre-draws upcoming words 1–2 beats early so the on-beat frame is a texture pointer swap.</td></tr>
+<tr><td>React</td><td><code>components/visual/ObjectRenderer.tsx</code></td><td>Memoized per copy: a structural re-publish (~12/s during a block drag) no longer re-renders instrument components. Group-effect selectors are answered once per store write and shared by all copies.</td></tr>
+</table>
+
+<span class="path">src/editor/core/visual/noteWindow.ts</span>
+<pre>// [first onset ≥ beat − lookback, first onset &gt; beat) by bisection; callers keep their exact test.
+const { start, end } = soundingNoteWindow(notes, beat)
+for (let i = start; i &lt; end; i++) if (sounding(notes[i], beat)) active.push(notes[i])</pre>
+
+<h2 class="pb">5. The render passes</h2>
+<figure>
+<svg viewBox="0 0 900 340" role="img" aria-label="Render pass chain">
+  <defs><marker id="b" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000"/></marker></defs>
+  <g font-size="19" text-anchor="middle">
+    <rect x="10" y="20" width="190" height="100" fill="#fff" stroke="#000" stroke-width="2.5"/>
+    <text x="105" y="52" font-weight="bold">scene pass</text>
+    <text x="105" y="80">per composited</text><text x="105" y="106">scene → target</text>
+
+    <rect x="240" y="20" width="190" height="100" fill="#fff" stroke="#000" stroke-width="2.5"/>
+    <text x="335" y="52" font-weight="bold">composite</text>
+    <text x="335" y="80">layers/directors</text><text x="335" y="106">→ half-float</text>
+
+    <rect x="470" y="20" width="190" height="100" fill="#eee" stroke="#000" stroke-width="2.5"/>
+    <text x="565" y="52" font-weight="bold">bloom</text>
+    <text x="565" y="80">luminance + 5 mips</text><text x="565" y="106">= 10 passes</text>
+
+    <rect x="700" y="20" width="190" height="100" fill="#fff" stroke="#000" stroke-width="2.5"/>
+    <text x="795" y="52" font-weight="bold">final grade</text>
+    <text x="795" y="80">FXAA + bloom + grain</text><text x="795" y="106">one quad → screen</text>
+
+    <line x1="200" y1="70" x2="238" y2="70" stroke="#000" stroke-width="2.5" marker-end="url(#b)"/>
+    <line x1="430" y1="70" x2="468" y2="70" stroke="#000" stroke-width="2.5" marker-end="url(#b)"/>
+    <line x1="660" y1="70" x2="698" y2="70" stroke="#000" stroke-width="2.5" marker-end="url(#b)"/>
+
+    <rect x="10" y="160" width="880" height="170" fill="#fff" stroke="#000" stroke-width="2.5" stroke-dasharray="7 5"/>
+    <text x="450" y="192" font-weight="bold">Optional per-copy passes — only when the object has them</text>
+    <text x="450" y="226">shader effects / crop masks: object rendered offscreen, one pass per effect</text>
+    <text x="450" y="256">targets scaled by preview quality, POOLED across copies (16 copies: 68 → 38 textures)</text>
+    <text x="450" y="286">shadow depth pass only when a casting instrument is mounted (def.castsShadows)</text>
+    <text x="450" y="316" font-size="16">components/visual/ShaderWrapper.tsx · shaderScratchPool.ts · useRenderTargetScale.ts · VisualScene.tsx</text>
+  </g>
+</svg>
+<figcaption>Figure 2 — A typical project is ~13 GPU passes/frame (was 17: bloom went from seven mip levels to five, pixel-identical; the empty shadow pass was removed). Empty front/invert passes are skipped.</figcaption>
+</figure>
+
+<span class="path">src/editor/components/visual/VisualScene.tsx</span>
+<pre>const bloomEffect = new BloomEffect({ luminanceThreshold: 1.15, mipmapBlur: true, radius: 0.72, levels: 5 })
+gl.render(compositor.scene, compositor.cam)             // composite
+compositor.bloomEffect.update(gl, compositor.compositeTarget, 0)
+compositor.filterMesh.material = compositor.finalMaterial // FXAA + bloom + grade → screen
+&lt;directionalLight castShadow={shadows} shadow-mapSize-width={1024} .../&gt;   // shadows = scene has a caster</pre>
+
+<h2 class="pb">6. How the GPU is used</h2>
+<p>Everything on screen is one WebGL2 context, driven by three.js through react-three-fiber. There is no compute, no WebGPU; “GPU utilization” is a handful of explicit decisions:</p>
+<div class="box">
+<p><b>Resolution.</b> The canvas renders at <code>dpr={1}</code> with <code>antialias: false</code> — every scene rasterizes into 1× (CSS-pixel) offscreen targets and only the final grade quad touches the default framebuffer, so a HiDPI/MSAA backbuffer would just upscale a 1× image. This is also exactly what export renders.</p>
+<span class="path">src/editor/App.tsx</span>
+<pre>&lt;Canvas frameloop={isPlaying ? 'always' : 'demand'} dpr={1} gl={{ antialias: false }} shadows="soft"&gt;</pre>
+<p><b>Preview quality (a flag).</b> Every offscreen target is sized by one scale: Final = 1, Auto = 0.5 while playing / 1 while paused, Fast = 0.5, Fastest = 0.25. Export pins 1.</p>
+<span class="path">src/editor/store/UIStore.ts · components/visual/useRenderTargetScale.ts</span>
+<pre>export const PREVIEW_QUALITY_SCALE = { final: 1, auto: 0.5, fast: 0.5, fastest: 0.25 }
+return exportPinned ? 1 : previewQualityScale(previewQuality, isPlaying)</pre>
+<p><b>Batching.</b> Splitter copies of the 3D Shape family draw as ONE <code>InstancedMesh2</code> per track (matrices, colors and opacity live in GPU textures) instead of one mesh per copy. Other instruments mount one mesh per copy.</p>
+<p><b>No compiles during play.</b> Every pass’s programs are compiled in-frame with the pass’s render state right after mount (and once after lazy instrument chunks settle), so nothing links a shader on the first beat.</p>
+<p><b>Uploads.</b> Canvas-backed instruments upload textures only when their canvas changed (Midi Roll ≈ 2 MB per changed frame at 576×1024; Text Display words are shared textures, prewarmed). Photos decode off-thread before their first upload.</p>
+<p><b>The 2D-canvas readback trap.</b> Chrome only GPU-accelerates a 2D canvas above ~16.5 k pixels. The ambient bleed copies the WebGL canvas into a small 2D canvas 15×/s; at 128×72 that canvas was CPU-backed and each copy was a full framebuffer <em>readback</em>. It is now 192×108, so the copy stays on the GPU.</p>
+</div>
+
+<h2>7. What outside the engine can still slow playback</h2>
+<ul>
+<li><b>Timeline blocks.</b> The glow is a CSS filter driven by a variable the playhead RAF rewrites; blocks get a compositor layer (<code>will-change</code>) <em>only while the transport runs</em>. Without it, ~10 % fewer frames with 138 blocks visible (measured headed, real GPU). Files: <code>components/timeline/Block.tsx</code>, <code>midiActivityRegistry.ts</code>.</li>
+<li><b>Forced layout.</b> Nothing in a per-frame path may read layout (<code>scrollLeft</code>, <code>getBoundingClientRect</code>) after styles were dirtied; the playhead reads mirrored values instead. One such read cost ~40 % of playback JS on an 11 k-note project.</li>
+<li><b>Session replay.</b> PostHog recording is paused on <code>/editor</code> (rrweb’s mutation observer and canvas capture were ~half the main thread during play). “Record canvas” must also be off in the PostHog project settings.</li>
+</ul>
+
+<h2>8. Measuring it (scripts/perf/)</h2>
+<table>
+<tr><th>Probe</th><th>Reports</th></tr>
+<tr><td><code>render-probe.mjs &lt;proj|template:id&gt;</code></td><td>Per frame: draw calls, triangles, <code>gl.render</code> passes, framebuffer binds, texture uploads (count/MB), frame-time p50/p95.</td></tr>
+<tr><td><code>pass-breakdown.mjs</code></td><td>Which code issues each pass, per frame (bloom vs scene vs effects).</td></tr>
+<tr><td><code>profile-play.mjs &lt;proj&gt; [s] [--paused|--drag|--scrub]</code></td><td>CDP CPU profile of a real saved project: top self-time functions, long tasks.</td></tr>
+<tr><td><code>paint-probe.mjs</code> (<code>HEADED=1</code>)</td><td>Paint/layout/commit ms per second and frame count — headed = the real GPU compositor.</td></tr>
+<tr><td><code>shot.mjs</code>, <code>mr-hash.mjs</code>, <code>roll-rows-check.mjs</code></td><td>Output identity: canvas screenshots (PSNR ∞ = identical), Midi Roll canvas hashes, piano-roll DOM identity.</td></tr>
+</table>
+<p>Real projects load through the dev-only <code>window.__cabinHydrate</code> hook; the software rasterizer makes GPU <em>time</em> meaningless but pass counts, uploads and JS time are exact, and <code>HEADED=1</code> uses the real GPU. The rule for any rendering change: prove PSNR ∞ (or match a known two-state flip) before merging.</p>
+
+</body>
+</html>
