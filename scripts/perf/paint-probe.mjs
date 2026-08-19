@@ -24,7 +24,12 @@ await cdp.send('Tracing.end'); await new Promise((r) => cdp.once('Tracing.tracin
 const gaps = await page.evaluate(() => window.__gaps.slice().sort((a, b) => a - b))
 const sum = {}
 for (const e of events) { if (e.ph === 'X' && e.dur) sum[e.name] = (sum[e.name] ?? 0) + e.dur / 1000 }
-const pick = ['Paint', 'Layout', 'UpdateLayoutTree', 'UpdateLayerTree', 'PrePaint', 'CompositeLayers', 'Commit', 'FunctionCall', 'RunTask']
+// RasterTask and Layerize are load-bearing here, not extras: a COMPOSITING
+// regression moves those two and almost nothing else. The 2026-08-18 timeline
+// -block one ran 250ms -> 1370ms of raster per 6s while Paint, PrePaint,
+// UpdateLayoutTree and Layout stayed flat to within noise - so a list without
+// RasterTask reports "no change" on exactly the bug this probe exists to catch.
+const pick = ['Paint', 'Layout', 'UpdateLayoutTree', 'UpdateLayerTree', 'Layerize', 'PrePaint', 'RasterTask', 'CompositeLayers', 'Commit', 'FunctionCall', 'RunTask']
 console.log(`blocks visible: ${blocks}; frames ${gaps.length}, p50 ${gaps[Math.floor(gaps.length / 2)]?.toFixed(1)}ms p95 ${gaps[Math.floor(gaps.length * 0.95)]?.toFixed(1)}ms`)
 console.log(Object.fromEntries(pick.filter((k) => sum[k]).map((k) => [k, `${(sum[k] / secs).toFixed(0)} ms/s`])))
 await browser.close()
