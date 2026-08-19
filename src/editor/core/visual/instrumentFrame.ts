@@ -44,16 +44,36 @@ const NO_COLOR_SHIFT: VisualCopy['colorShift'] =
  * until remount" bug). Returning `false` resets the signature so the frame
  * retries until the callback can actually run.
  */
+/** The write-and-compare signature buffer one useInstrumentFrame mount owns.
+ *  A plain record walked by a module-level `put` rather than a per-frame
+ *  closure: the closure version allocated one function per copy per frame,
+ *  which at fifty-odd puts a copy was the hook's own biggest cost. */
+interface FrameSignature {
+  buf: unknown[]
+  i: number
+  dirty: boolean
+}
+
+function put(sig: FrameSignature, v: unknown) {
+  const i = sig.i
+  if (!Object.is(sig.buf[i], v)) {
+    sig.dirty = true
+    sig.buf[i] = v
+  }
+  sig.i = i + 1
+}
+
 export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => void | false) {
   const copyContext = useContext(InstrumentCopyContext)
   // Signature buffer, reused across frames (write-and-compare, no allocation).
-  const buf = useRef<unknown[]>([]).current
+  const sig = useRef<FrameSignature>({ buf: [], i: 0, dirty: false }).current
   const shiftedStringParams = useRef<Record<string, string>>({}).current
   const shiftedState = useRef<ObjectState | null>(null)
   const scratchColor = useRef(new Color()).current
   const scratchTint = useRef(new Color()).current
   useFrame((root) => {
     const state = getObjectState(trackId)
+    const buf = sig.buf
     if (!state) {
       // Unresolved: clear so the first resolved frame always runs.
       buf.length = 0
@@ -70,67 +90,64 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
     const tintAmount = colorShift.tintAmount
     const tintPerceptual = colorShift.tintPerceptual ?? false
     const huePerceptual = colorShift.huePerceptual ?? false
-    let i = 0
-    let dirty = false
-    const put = (v: unknown) => {
-      if (!Object.is(buf[i], v)) {
-        dirty = true
-        buf[i] = v
-      }
-      i++
-    }
-    put(state.beat)
-    put(state.secPerBeat)
-    put(state.beatsPerBar)
-    put(state.blackedOut)
-    put(root.size.width)
-    put(root.size.height)
-    put(root.viewport.dpr)
+    sig.i = 0
+    sig.dirty = false
+    put(sig, state.beat)
+    put(sig, state.secPerBeat)
+    put(sig, state.beatsPerBar)
+    put(sig, state.blackedOut)
+    put(sig, root.size.width)
+    put(sig, root.size.height)
+    put(sig, root.viewport.dpr)
     // Stable references per resolve - a structural re-resolve replaces them.
-    put(state.notes)
-    put(state.stringParams)
+    put(sig, state.notes)
+    put(sig, state.stringParams)
     // Copy color and copy opacity are instrument inputs: MIDI-driven shifts and
     // visibility fades must invalidate an otherwise static instrument (the
     // lasers write copy opacity into a shader uniform) even though the base
     // stringParams are stable - e.g. tweaking a visibility mover's ADSR while
     // paused changes copy opacity at a frozen beat.
-    put(hueShift)
-    put(saturationShift)
-    put(lightnessShift)
-    put(tint)
-    put(tintAmount)
+    put(sig, hueShift)
+    put(sig, saturationShift)
+    put(sig, lightnessShift)
+    put(sig, tint)
+    put(sig, tintAmount)
     // Which mix the tint walks changes the rendered color at a fixed beat, so
     // flipping the Colorizer's MIX while paused has to repaint like any other
     // colorShift field.
-    put(tintPerceptual)
+    put(sig, tintPerceptual)
     // Same reason for the hue: which circle it turns on changes the rendered
     // color at a fixed beat, so flipping a Hue Rotate's MODE while paused has
     // to repaint.
-    put(huePerceptual)
-    put(visualCopy?.opacity ?? 1)
-    put(state.abilityEvents)
-    put(state.videoPads)
-    put(state.photoPads)
+    put(sig, huePerceptual)
+    put(sig, visualCopy?.opacity ?? 1)
+    put(sig, state.abilityEvents)
+    put(sig, state.videoPads)
+    put(sig, state.photoPads)
     // Document identity: any store edit to the clips or lanes mints fresh
     // arrays, and this is what repaints the words while paused.
-    put(state.lyricClips)
-    put(state.styleLanes)
-    put(state.opacity)
+    put(sig, state.lyricClips)
+    put(sig, state.styleLanes)
+    put(sig, state.opacity)
     // Mutated in place each computeAtBeat: compare by element.
     const w = state.world.elements
-    for (let k = 0; k < 16; k++) put(w[k])
+    for (let k = 0; k < 16; k++) put(sig, w[k])
     const cam = root.camera
-    put(cam.position.x); put(cam.position.y); put(cam.position.z)
-    put(cam.quaternion.x); put(cam.quaternion.y); put(cam.quaternion.z); put(cam.quaternion.w)
-    put(state.activeNotes.length)
-    for (const n of state.activeNotes) put(n)
-    put(state.energy)
-    for (const k in state.params) { put(k); put(state.params[k]) }
-    if (buf.length !== i) {
-      buf.length = i
-      dirty = true
+    put(sig, cam.position.x); put(sig, cam.position.y); put(sig, cam.position.z)
+    put(sig, cam.quaternion.x); put(sig, cam.quaternion.y); put(sig, cam.quaternion.z); put(sig, cam.quaternion.w)
+    // The active-note array is per-object scratch the engine refills in place,
+    // so its identity says nothing - its length and elements do.
+    const active = state.activeNotes
+    put(sig, active.length)
+    for (let k = 0; k < active.length; k++) put(sig, active[k])
+    put(sig, state.energy)
+    const params = state.params
+    for (const k in params) { put(sig, k); put(sig, params[k]) }
+    if (buf.length !== sig.i) {
+      buf.length = sig.i
+      sig.dirty = true
     }
-    if (dirty) {
+    if (sig.dirty) {
       const colorShiftActive = copyContext && copyContext.colorParams.length > 0 &&
         (Math.abs(hueShift) + Math.abs(saturationShift) + Math.abs(lightnessShift) > 0.0001 ||
           (tint !== null && tintAmount > 0.0001))
