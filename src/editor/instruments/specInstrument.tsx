@@ -158,6 +158,7 @@ export function specInstrument(opts: {
     id: opts.id,
     name: opts.name,
     kind: 'object',
+    castsShadows: true, // the spec mesh above is castShadow + receiveShadow
     userInterfaceRenderer: 'parameters',
     params: opts.params,
     midiRows: opts.midiRows,

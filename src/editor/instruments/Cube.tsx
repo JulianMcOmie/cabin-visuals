@@ -19,6 +19,7 @@ export const cubeInstrument: ObjectInstrumentDef = {
   id: 'cube',
   name: '3D Shape',
   kind: 'object',
+  castsShadows: true, // FundamentalMesh + the shatter fragments (CubeVisual)
   userInterfaceRenderer: 'cube',
   // Position and size are the canonical track transform now (core/transform.ts,
   // edited via the track strip's panel) - instruments keep only behavior params.

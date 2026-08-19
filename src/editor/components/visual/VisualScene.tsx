@@ -21,6 +21,7 @@ import {
   NoToneMapping,
   Vector2,
   Vector3,
+  type Material,
   type Texture,
 } from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
@@ -32,6 +33,8 @@ import { effectiveEffectState } from '../../effects/automation'
 import type { CompositionLayer } from '../../core/directors'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
+import { whenInstrumentsSettled } from '../../instruments/lazyInstrument'
+import { FORCE_TRANSPARENT_KEY } from '../../core/visual/animatedOpacity'
 import { isOnTopTrack } from '../../instruments/types'
 import { DEFAULT_SCENE_BACKGROUND, type Scene, type SceneGradient } from '../../types'
 import { ObjectRenderer } from './ObjectRenderer'
@@ -530,7 +533,10 @@ function applyCompositorLayer(
   mesh.renderOrder = index
 }
 
-function lights() {
+/** The per-pass light rig. `shadows` = give the key light a shadow map (see
+ *  shadowScenes in VisualScene): only a scene with a casting instrument pays
+ *  for the shadow pass. */
+function lights(shadows: boolean) {
   return (
     <>
       <ambientLight intensity={0.12} />
@@ -539,7 +545,7 @@ function lights() {
       <directionalLight
         position={[4, 7, 5]}
         intensity={2.4}
-        castShadow
+        castShadow={shadows}
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
         shadow-camera-left={-10}
@@ -860,29 +866,6 @@ export function VisualScene() {
     }
   }, [mounted])
 
-  // Prewarm shaders for scenes that exist but haven't been DRAWN yet. A scene
-  // is only rendered once the composition requests it, and three compiles all
-  // of its materials on that first draw - a synchronous multi-hundred-ms hitch
-  // exactly when the user clicks into another scene (or the Scene Switcher
-  // first cuts to it mid-playback). compileAsync uses the parallel-compile
-  // extension off the render loop, so by switch time the programs are ready.
-  // Delayed a tick so the portals' meshes have committed into the runtimes.
-  const prewarmedRef = useRef(new Set<string>())
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      for (const [sceneId, runtime] of mounted) {
-        if (prewarmedRef.current.has(sceneId)) continue
-        prewarmedRef.current.add(sceneId)
-        void gl.compileAsync(runtime.base, camera).catch(() => {})
-        void gl.compileAsync(runtime.front, camera).catch(() => {})
-      }
-      for (const sceneId of prewarmedRef.current) {
-        if (!mounted.has(sceneId)) prewarmedRef.current.delete(sceneId)
-      }
-    }, 150)
-    return () => clearTimeout(timer)
-  }, [mounted, gl, camera])
-
   useEffect(() => () => {
     for (const runtime of prevMountedRef.current.values()) disposeMountedScene(runtime)
     prevMountedRef.current = new Map()
@@ -963,6 +946,81 @@ export function VisualScene() {
     return m
   }, [objects, placementKey])
 
+  // Which scenes hold a shadow-CASTING instrument (`castsShadows` on the def).
+  // Only those get a shadow-mapped key light: three's shadow pass runs on
+  // every gl.render of a scene whose light casts - bind the 1024² map, clear
+  // it, walk the whole graph for casters - and with none the map is empty and
+  // every receiver reads fully lit, so a light without a map draws the same
+  // picture for less. Structural: flips only when a caster mounts/unmounts
+  // (which recompiles the scene's lit materials once, at edit time).
+  const shadowScenes = useMemo(() => {
+    const s = new Set<string>()
+    for (const o of objects) if (getInstrument(o.instrumentId)?.castsShadows) s.add(o.sceneId)
+    return s
+  }, [objects])
+
+  // Shader precompile. three compiles a material's program the first time it is
+  // DRAWN, and `checkShaderErrors` (on by default) then blocks on the driver's
+  // link (getProgramInfoLog) - so an object that first becomes visible on a
+  // note (a text word, a burst) paid its compile ON that beat, mid-playback,
+  // and a scene first cut to by the Scene Switcher paid for all of its at once.
+  // Instead, whenever the set of mounted instruments changes (and again once
+  // lazily fetched instrument chunks have landed), the next frame walks every
+  // mounted pass scene with gl.compile - hidden meshes and not-yet-composited
+  // scenes included - so every program is linked before anything is drawn.
+  //
+  // It has to happen INSIDE the frame, after a render target and NoToneMapping
+  // are set: both are program-key inputs (outputColorSpace = linear when a
+  // target is bound, toneMapping = none), so a compile issued from an effect
+  // with the screen bound builds sRGB + ACES variants the passes never draw
+  // with - which is exactly what the previous compileAsync-in-a-useEffect
+  // prewarm did (found 2026-08-18: eight useless programs at load, and every
+  // real one still compiled on first draw).
+  const precompileRef = useRef(true)
+  const instrumentSetKey = [...new Set(objects.map((o) => `${o.sceneId}:${o.instrumentId}`))].sort().join(',')
+  useEffect(() => {
+    // Twice: once now, and once a beat after the lazy chunks have settled -
+    // instrument components commit their meshes in their own effects and
+    // re-renders (Text Display mounts its planes after a `ready` flip), so the
+    // frame right after this effect can find a still-empty group.
+    precompileRef.current = true
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    void whenInstrumentsSettled().then(() => {
+      if (cancelled) return
+      timer = setTimeout(() => {
+        precompileRef.current = true
+        invalidate()
+      }, 200)
+    })
+    return () => {
+      cancelled = true
+      if (timer !== undefined) clearTimeout(timer)
+    }
+  }, [instrumentSetKey, mounted, invalidate])
+  const precompilePass = (scene: ThreeScene) => {
+    // Pass 1: every material as it is now.
+    const materials = gl.compile(scene, camera)
+    // Pass 2: the OTHER blend state. Fades flip `transparent` per frame
+    // (applyMaterialOpacity), and three keys its program on the resulting
+    // OPAQUE define, so a material's first fade compiled again mid-song.
+    // Force-transparent materials never flip and are skipped.
+    const flipped: Material[] = []
+    for (const material of materials) {
+      if (material.userData[FORCE_TRANSPARENT_KEY] === true) continue
+      material.transparent = !material.transparent
+      material.needsUpdate = true
+      flipped.push(material)
+    }
+    if (flipped.length > 0) {
+      gl.compile(scene, camera)
+      for (const material of flipped) {
+        material.transparent = !material.transparent
+        material.needsUpdate = true
+      }
+    }
+  }
+
   useFrame(() => {
     const previous = gl.getRenderTarget()
     const previousAutoClear = gl.autoClear
@@ -1035,8 +1093,12 @@ export function VisualScene() {
         gl.clear(true, true, true)
         const sceneGradient = backdrop ? backdrop.gradient : activeBackdropGradient(projectScene)
         if (sceneGradient) paintBackdropGradient(sceneGradient)
-        gl.render(runtime.base, camera)
         const presence = passPresence.get(sceneId)
+        if (precompileRef.current) {
+          precompilePass(runtime.base)
+          if (presence?.front) precompilePass(runtime.front)
+        }
+        gl.render(runtime.base, camera)
         if (presence?.front) {
           gl.clearDepth()
           gl.render(runtime.front, camera)
@@ -1206,6 +1268,7 @@ export function VisualScene() {
           gl.setRenderTarget(runtime.invertTarget)
           gl.setClearColor(0x000000, 0)
           gl.clear(true, true, true)
+          if (precompileRef.current) precompilePass(runtime.invert)
           gl.render(runtime.invert, camera)
           runtime.invertBlank = false
         } else if (!runtime.invertBlank) {
@@ -1214,6 +1277,23 @@ export function VisualScene() {
           gl.clear(true, true, true)
           runtime.invertBlank = true
         }
+      }
+      // Mounted scenes the composition did NOT request this frame (the other
+      // scenes of a multi-scene project) get the same walk against their own
+      // targets, so cutting to one later finds its programs linked.
+      if (precompileRef.current) {
+        for (const [sceneId, runtime] of mounted) {
+          if (requested.has(sceneId)) continue
+          const presence = passPresence.get(sceneId)
+          gl.setRenderTarget(runtime.target)
+          precompilePass(runtime.base)
+          if (presence?.front) precompilePass(runtime.front)
+          if (presence?.invert) {
+            gl.setRenderTarget(runtime.invertTarget)
+            precompilePass(runtime.invert)
+          }
+        }
+        precompileRef.current = false
       }
 
       while (compositor.meshes.length < layers.length) {
@@ -1321,21 +1401,21 @@ export function VisualScene() {
           <Fragment key={sceneId}>
             {createPortal(
             <>
-              {lights()}
+              {lights(shadowScenes.has(sceneId))}
               {mountObjects(base, '')}
             </>,
             runtime.base,
             )}
             {createPortal(
             <>
-              {lights()}
+              {lights(shadowScenes.has(sceneId))}
               {mountObjects(front, ':front')}
             </>,
             runtime.front,
             )}
             {createPortal(
             <FinalInvertMaskContext.Provider value>
-              {lights()}
+              {lights(shadowScenes.has(sceneId))}
               {mountObjects(invert, ':invert')}
             </FinalInvertMaskContext.Provider>,
             runtime.invert,

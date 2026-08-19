@@ -32,6 +32,7 @@ export const kaleidoSolidInstrument: ObjectInstrumentDef = {
   id: 'kaleidoSolid',
   name: 'Kaleido Solid',
   kind: 'object',
+  castsShadows: true,
   userInterfaceRenderer: 'kaleidoSolid',
   // Position and size are the canonical track transform (core/transform.ts), so
   // these are behaviour only. Four knobs on purpose - everything else that makes
