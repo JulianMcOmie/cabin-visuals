@@ -1,4 +1,4 @@
-import { flattenTrackNotes } from '../visual/noteFlatten'
+import { flattenTrackNotesMemo } from '../visual/noteFlatten'
 import type { Track } from '../../types'
 import type { CompositionInstrumentDef } from './types'
 import { FULL_FRAME } from './types'
@@ -12,7 +12,7 @@ export function partitionSceneCount(track: Track, available: number): number {
 }
 
 export function heldDirectorPitches(track: Track, beat: number, beatsPerBar: number, totalBars: number) {
-  return new Set(flattenTrackNotes(track, beatsPerBar, totalBars)
+  return new Set(flattenTrackNotesMemo(track, beatsPerBar, totalBars)
     .filter((note) => beat >= note.beat && beat < note.beat + note.durationBeats)
     .map((note) => note.pitch))
 }

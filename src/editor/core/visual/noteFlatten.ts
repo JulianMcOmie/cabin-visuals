@@ -115,3 +115,29 @@ export function flattenBlocks(blocks: Block[], beatsPerBar: number, totalBars?: 
 export function flattenTrackNotes(track: Track, beatsPerBar: number, totalBars?: number): ResolvedNote[] {
   return flattenBlocks(track.blocks, beatsPerBar, totalBars)
 }
+
+// The composition instruments (core/directors) flatten their track's notes on
+// EVERY frame - they never enter the resolved graph, so there is no resolve
+// step to do it once for them. This memo keys on the blocks array's identity
+// (the store replaces it on any block/note edit, the same invalidation the
+// per-track resolve cache in resolve.ts relies on) plus the two tempo inputs,
+// and hands back the same array until one of them changes. Read-only by
+// contract: callers iterate it and never sort or splice it. Deliberately not
+// wired into `flattenTrackNotes` itself - the resolve-time callers hand the
+// result to definitions that own it, and sharing one array between two
+// resolves of the same track is not something they were written to expect.
+interface FlattenMemo {
+  beatsPerBar: number
+  totalBars: number | undefined
+  notes: ResolvedNote[]
+}
+const flattenMemo = new WeakMap<Block[], FlattenMemo>()
+
+export function flattenTrackNotesMemo(track: Track, beatsPerBar: number, totalBars?: number): ResolvedNote[] {
+  const blocks = track.blocks
+  const hit = flattenMemo.get(blocks)
+  if (hit && hit.beatsPerBar === beatsPerBar && hit.totalBars === totalBars) return hit.notes
+  const notes = flattenBlocks(blocks, beatsPerBar, totalBars)
+  flattenMemo.set(blocks, { beatsPerBar, totalBars, notes })
+  return notes
+}
