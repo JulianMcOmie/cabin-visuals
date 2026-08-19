@@ -4,6 +4,7 @@ import { CanvasTexture, LinearFilter, Mesh, MeshBasicMaterial } from 'three'
 import { useInstrumentFrame, seededRand, beatInBlock } from '../core/visual/instrumentFrame'
 import { FORCE_TRANSPARENT_KEY } from '../core/visual/animatedOpacity'
 import type { ObjectInstrumentDef, ParamDef } from './types'
+import type { ResolvedNote } from '../core/visual/types'
 
 // Midi Roll: the track's notes as a scrolling piano roll, modeled on a VIDI
 // Studio reference capture - hollow neon bars drifting right-to-left past a
@@ -172,6 +173,83 @@ function makeCanvas(w: number, h: number): HTMLCanvasElement {
   return c
 }
 
+/**
+ * Per-frame note lookup. A real Midi Roll project carries ~11k notes and only
+ * a few dozen sit inside the time window, so scanning the whole array (twice -
+ * bars, then markers) was the roll's dominant JS cost. `order` is the note
+ * indices sorted by onset; a binary search yields the candidates for any
+ * beat range, and the caller iterates them in ORIGINAL array order (indices
+ * re-sorted ascending), because overlapping draws are order-dependent and the
+ * frame must stay pixel-identical to the full scan. Keyed on the notes array
+ * itself: the engine hands out one stable array per resolve, so this is built
+ * once per edit, never per frame. Pitch bounds ride along for the auto-fit.
+ */
+interface NoteIndex {
+  order: number[]
+  /** onset of `order[j]` - the sorted key the search runs on. */
+  onsets: Float64Array
+  /** Longest `max(0.05, durationBeats)` - how far back an onset can sit and still reach the window. */
+  maxDur: number
+  minPitch: number
+  maxPitch: number
+}
+const NOTE_INDEX = new WeakMap<ResolvedNote[], NoteIndex>()
+function noteIndexFor(notes: ResolvedNote[]): NoteIndex {
+  let idx = NOTE_INDEX.get(notes)
+  if (idx) return idx
+  const order = notes.map((_, i) => i).sort((a, b) => notes[a].beat - notes[b].beat)
+  const onsets = new Float64Array(order.length)
+  let maxDur = 0.05
+  let minPitch = Infinity
+  let maxPitch = -Infinity
+  for (let j = 0; j < order.length; j++) {
+    const n = notes[order[j]]
+    onsets[j] = n.beat
+    const d = Math.max(0.05, n.durationBeats)
+    if (d > maxDur) maxDur = d
+    if (n.pitch < minPitch) minPitch = n.pitch
+    if (n.pitch > maxPitch) maxPitch = n.pitch
+  }
+  idx = { order, onsets, maxDur, minPitch, maxPitch }
+  NOTE_INDEX.set(notes, idx)
+  return idx
+}
+/** Indices of every note whose onset lies in [lo, hi], ascending (= original
+ *  order). A superset is fine - callers re-run their exact per-note test. */
+function notesOnsetWithin(idx: NoteIndex, lo: number, hi: number, out: number[]): number[] {
+  out.length = 0
+  const { onsets, order } = idx
+  let a = 0
+  let b = onsets.length
+  while (a < b) {
+    const m = (a + b) >> 1
+    if (onsets[m] < lo) a = m + 1
+    else b = m
+  }
+  for (let j = a; j < onsets.length && onsets[j] <= hi; j++) out.push(order[j])
+  if (out.length > 1) out.sort((x, y) => x - y)
+  return out
+}
+/** Slack on the search bounds: they are derived from the per-note pixel test
+ *  by algebra, and float rounding must never drop a note the test would keep. */
+const SEARCH_EPS = 1e-6
+
+/** Starfield constants: the seeded layer/x/y of star i never changes, so they
+ *  are rolled once for the maximum count instead of three sines per star per
+ *  frame. Same doubles, just remembered. */
+const MAX_STARS = 170
+let starTable: Float64Array | null = null
+function starConsts(): Float64Array {
+  if (starTable) return starTable
+  starTable = new Float64Array(MAX_STARS * 3)
+  for (let i = 0; i < MAX_STARS; i++) {
+    starTable[i * 3] = seededRand(i * 3.7 + 2.2)
+    starTable[i * 3 + 1] = seededRand(i * 3.7 + 0.4)
+    starTable[i * 3 + 2] = seededRand(i * 3.7 + 1.3)
+  }
+  return starTable
+}
+
 function MidiRollVisual({ trackId }: { trackId: string }) {
   const { viewport, invalidate } = useThree()
   const meshRef = useRef<Mesh>(null)
@@ -185,23 +263,48 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
     quarter: HTMLCanvasElement
     octaves: HTMLCanvasElement[]
   } | null>(null)
+  // 2D contexts, fetched once with their canvases rather than per frame.
+  const ctxsRef = useRef<{
+    ctx: CanvasRenderingContext2D
+    ectx: CanvasRenderingContext2D
+    hctx: CanvasRenderingContext2D
+    qctx: CanvasRenderingContext2D
+    octx: CanvasRenderingContext2D[]
+  } | null>(null)
+  // True while the emissive layer holds anything: it is cleared only when it
+  // does, and the bloom chain runs only when this frame drew into it - a
+  // blank layer blooms to nothing, so skipping is pixel-identical.
+  const emissiveDirtyRef = useRef(false)
+  // Scratch for the per-frame visible-note index lists (see noteIndexFor).
+  const visibleRef = useRef<number[]>([])
   const aspect = viewport.height > 0 ? viewport.width / viewport.height : 1
   const textureWidth = Math.max(256, Math.min(2048, Math.round((TEXTURE_HEIGHT * aspect) / 64) * 64))
 
   useEffect(() => {
     const canvas = makeCanvas(textureWidth, TEXTURE_HEIGHT)
     canvasRef.current = canvas
-    emissiveRef.current = makeCanvas(textureWidth, TEXTURE_HEIGHT)
+    const emissive = makeCanvas(textureWidth, TEXTURE_HEIGHT)
+    emissiveRef.current = emissive
     const hw = Math.max(1, Math.round(textureWidth / 2))
     const hh = Math.max(1, Math.round(TEXTURE_HEIGHT / 2))
     const qw = Math.max(1, Math.round(textureWidth / 4))
     const qh = Math.max(1, Math.round(TEXTURE_HEIGHT / 4))
-    bloomRef.current = {
+    const bloom = {
       half: makeCanvas(hw, hh),
       quarter: makeCanvas(qw, qh),
       // One scratch canvas per octave, sized to the resolution it blurs at.
       octaves: BLOOM_OCTAVES.map((o) => (o.res === 2 ? makeCanvas(hw, hh) : makeCanvas(qw, qh))),
     }
+    bloomRef.current = bloom
+    const ctx = canvas.getContext('2d')
+    const ectx = emissive.getContext('2d')
+    const hctx = bloom.half.getContext('2d')
+    const qctx = bloom.quarter.getContext('2d')
+    const octx = bloom.octaves.map((c) => c.getContext('2d'))
+    ctxsRef.current = ctx && ectx && hctx && qctx && octx.every(Boolean)
+      ? { ctx, ectx, hctx, qctx, octx: octx as CanvasRenderingContext2D[] }
+      : null
+    emissiveDirtyRef.current = false
 
     const texture = new CanvasTexture(canvas)
     texture.minFilter = LinearFilter
@@ -215,6 +318,7 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
       textureRef.current = null
       emissiveRef.current = null
       bloomRef.current = null
+      ctxsRef.current = null
     }
   }, [invalidate, textureWidth])
 
@@ -224,10 +328,9 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
     const mesh = meshRef.current
     const emissive = emissiveRef.current
     const bloom = bloomRef.current
-    if (!canvas || !texture || !mesh || !emissive || !bloom) return false
-    const ctx = canvas.getContext('2d')
-    const ectx = emissive.getContext('2d')
-    if (!ctx || !ectx) return false
+    const ctxs = ctxsRef.current
+    if (!canvas || !texture || !mesh || !emissive || !bloom || !ctxs) return false
+    const { ctx, ectx, hctx, qctx, octx } = ctxs
 
     // Blocks are the on-screen region: no block at the playhead, no roll.
     const inBlock = beatInBlock(state)
@@ -285,22 +388,31 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
     const baseDim = styled ? 0.32 * (idleLit / 0.55) : 1
 
     const beat = state.beat
-    ctx.clearRect(0, 0, W, H)
-    if (usesBloom) ectx.clearRect(0, 0, W, H)
     // Styled modes own the frame: an opaque black backdrop (default) makes
-    // the look independent of the scene's background color.
+    // the look independent of the scene's background color. An opaque
+    // full-canvas fill replaces every pixel outright, so it IS the clear -
+    // clearing first would just touch the whole surface twice.
     if (styled && Math.round(p.backdrop ?? 1) === 1) {
       ctx.fillStyle = '#000000'
       ctx.fillRect(0, 0, W, H)
+    } else {
+      ctx.clearRect(0, 0, W, H)
     }
+    if (usesBloom && emissiveDirtyRef.current) {
+      ectx.clearRect(0, 0, W, H)
+      emissiveDirtyRef.current = false
+    }
+    let emitted = false
 
     // --- Starfield: deterministic dots, drifting slowly with the roll ---
     if (stars > 0) {
       const count = Math.round(stars * 170)
+      const table = starConsts()
       for (let i = 0; i < count; i++) {
-        const layer = seededRand(i * 3.7 + 2.2) // depth: brighter = faster
-        const sx = seededRand(i * 3.7 + 0.4)
-        const sy = seededRand(i * 3.7 + 1.3)
+        const cached = i < MAX_STARS
+        const layer = cached ? table[i * 3] : seededRand(i * 3.7 + 2.2) // depth: brighter = faster
+        const sx = cached ? table[i * 3 + 1] : seededRand(i * 3.7 + 0.4)
+        const sy = cached ? table[i * 3 + 2] : seededRand(i * 3.7 + 1.3)
         const drift = beat * 0.0035 * (0.3 + layer)
         const x = (((sx - drift) % 1) + 1) % 1
         // A sprinkle of warm dust among the white, like the reference.
@@ -313,12 +425,8 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
     }
 
     // --- Pitch auto-fit over the WHOLE track ---
-    let minPitch = Infinity
-    let maxPitch = -Infinity
-    for (const note of state.notes) {
-      if (note.pitch < minPitch) minPitch = note.pitch
-      if (note.pitch > maxPitch) maxPitch = note.pitch
-    }
+    const noteIndex = noteIndexFor(state.notes)
+    const { minPitch, maxPitch } = noteIndex
     const hasNotes = minPitch !== Infinity
     const range = hasNotes ? maxPitch - minPitch : 0
     const usableH = H * 0.86
@@ -352,12 +460,14 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
     // blur passes turn them into light - no hand-drawn falloff anywhere.
     const emitCapsule = (x1: number, x2: number, cy: number, halfH: number, col: Rgb, a: number) => {
       if (a <= 0.01 || x2 - x1 < 1) return
+      emitted = true
       ectx.fillStyle = rgba(col, a)
       emitBarPath(x1, cy - halfH, x2 - x1, halfH * 2)
       ectx.fill()
     }
     const emitPoint = (x: number, cy: number, r: number, col: Rgb, a: number) => {
       if (a <= 0.01 || r < 0.5) return
+      emitted = true
       ectx.fillStyle = rgba(col, a)
       ectx.beginPath()
       ectx.arc(x, cy, r, 0, Math.PI * 2)
@@ -366,6 +476,7 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
     // Horizontal light streak with faded ends (anamorphic-flare material).
     const emitStreak = (x1: number, x2: number, cy: number, halfTh: number, col: Rgb, a: number) => {
       if (a <= 0.01 || x2 - x1 < 2) return
+      emitted = true
       const gr = ectx.createLinearGradient(x1, 0, x2, 0)
       gr.addColorStop(0, rgba(col, 0))
       gr.addColorStop(0.15, rgba(col, a * 0.6))
@@ -422,6 +533,7 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
     // itself must stay thin so the blur builds real falloff around it.
     const emitShaft = (x: number, width: number, a: number) => {
       if (a <= 0.01 || width < 0.5) return
+      emitted = true
       const gr = ectx.createLinearGradient(0, 0, 0, H)
       gr.addColorStop(0, rgba(rgb, 0))
       gr.addColorStop(0.35, rgba(rgb, a))
@@ -433,13 +545,19 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
     // 4-point star flare: thin cross streaks + core, with a whisper of
     // warm/cool fringe so the bloomed result refracts like the crystal
     // reference instead of reading as a plus sign.
+    // Per-frame constant tints (pure mixes of the note color), hoisted out of
+    // the per-note loops.
+    const flareCol = mixRgb(rgb, WHITE, 0.7)
+    const flareWarm = mixRgb(rgb, [255, 96, 96], 0.5)
+    const flareCool = mixRgb(rgb, [96, 128, 255], 0.5)
     const emitFlare = (x: number, cy: number, len: number, a: number) => {
       if (a <= 0.01 || len < 2) return
-      const fl = mixRgb(rgb, WHITE, 0.7)
+      emitted = true
+      const fl = flareCol
       const th = Math.max(1.5, h * 0.14)
       emitStreak(x - len, x + len, cy, th / 2, fl, a)
-      emitStreak(x - len, x + len, cy - 1.5, th / 2, mixRgb(rgb, [255, 96, 96], 0.5), a * 0.3)
-      emitStreak(x - len, x + len, cy + 1.5, th / 2, mixRgb(rgb, [96, 128, 255], 0.5), a * 0.3)
+      emitStreak(x - len, x + len, cy - 1.5, th / 2, flareWarm, a * 0.3)
+      emitStreak(x - len, x + len, cy + 1.5, th / 2, flareCool, a * 0.3)
       const vlen = len * 0.55
       const gr = ectx.createLinearGradient(0, cy - vlen, 0, cy + vlen)
       gr.addColorStop(0, rgba(fl, 0))
@@ -500,7 +618,23 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
 
     // --- Notes ---
     if (hasNotes) {
-      for (const note of state.notes) {
+      // Candidates: the exact pixel test below, solved for the onset -
+      // xEnd >= -200 and xStart <= W + 200 - widened by the longest note and
+      // a float epsilon, so the search can only over-include.
+      const reachBeats = (W / 2 + 200) / pxPerBeat
+      const visible = notesOnsetWithin(noteIndex,
+        beat - reachBeats - noteIndex.maxDur - SEARCH_EPS,
+        beat + reachBeats + SEARCH_EPS,
+        visibleRef.current)
+      const radiantCore = mixRgb(rgb, WHITE, coreWhite)
+      const radiantHead = mixRgb(rgb, WHITE, 0.7)
+      const radiantPillar = mixRgb(rgb, WHITE, 0.85)
+      const dustWhite = mixRgb(rgb, WHITE, 0.85)
+      const dustTint = mixRgb(rgb, WHITE, 0.3)
+      const gemCol = mixRgb(rgb, WHITE, gemWhite)
+      const streakCol = mixRgb(rgb, WHITE, 0.75)
+      for (const noteI of visible) {
+        const note = state.notes[noteI]
         const xStart = playheadX + (note.beat - beat) * pxPerBeat
         const xEnd = xStart + Math.max(0.05, note.durationBeats) * pxPerBeat
         if (xEnd < -200 || xStart > W + 200) continue
@@ -598,7 +732,7 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
           // thin core in pure saturated color - the emissive shape is never
           // bigger than the bar, or blur can't build falloff.
           const lit = idleLit + (1 - idleLit) * gate
-          ctx.fillStyle = rgba(mixRgb(rgb, WHITE, coreWhite), 0.95 * lit)
+          ctx.fillStyle = rgba(radiantCore, 0.95 * lit)
           barPath(xStart, y, w, h)
           ctx.fill()
           // The reference wraps its blazing bars in vines and roses. Queued
@@ -644,7 +778,7 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
           })
           emitCapsule(xStart, xEnd, yMid, h * 0.5, rgb, (0.35 + 0.5 * gate) * playPower)
           if (sounding && pillarWidth > 0.01) {
-            emitPoint(headX, yMid, h * 0.4, mixRgb(rgb, WHITE, 0.7), 0.55 * playPower)
+            emitPoint(headX, yMid, h * 0.4, radiantHead, 0.55 * playPower)
             // The pillar: a broad hot white core in the main canvas plus a
             // saturated shaft in the emissive layer. Sounding only - an
             // afterglow pillar at the note's end reads as a stray line.
@@ -653,8 +787,8 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
             const coreA = Math.min(1, 0.7 * (pillarBright / 0.65))
             const pg = ctx.createLinearGradient(0, 0, 0, H)
             pg.addColorStop(0, rgba(WHITE, 0))
-            pg.addColorStop(0.35, rgba(mixRgb(rgb, WHITE, 0.85), coreA))
-            pg.addColorStop(0.65, rgba(mixRgb(rgb, WHITE, 0.85), coreA))
+            pg.addColorStop(0.35, rgba(radiantPillar, coreA))
+            pg.addColorStop(0.65, rgba(radiantPillar, coreA))
             pg.addColorStop(1, rgba(WHITE, 0))
             ctx.fillStyle = pg
             ctx.fillRect(headX - pw * 0.45, 0, pw * 0.9, H)
@@ -674,7 +808,7 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
               const mx = headX + Math.cos(ang) * rad * 1.4
               const my = yMid + Math.sin(ang) * rad
               const a = (1 - ph) * ph * 4 * 0.7 * gate
-              const col = k % 3 === 0 ? mixRgb(rgb, WHITE, 0.85) : mixRgb(rgb, WHITE, 0.3)
+              const col = k % 3 === 0 ? dustWhite : dustTint
               const size = (1 + seededRand(sk + 4) * 1.4) * dustSize
               ctx.fillStyle = rgba(col, a * 0.3)
               ctx.beginPath()
@@ -689,6 +823,7 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
               ectx.arc(mx, my, size * 1.4, 0, Math.PI * 2)
               ectx.fill()
             }
+            if (dustN > 0) emitted = true
           }
         } else if (playStyle === 3) {
           // Prism - the crystal reference: EVERY bar is a blazing gem -
@@ -697,7 +832,7 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
           // an X-shaped star flare. The sounding gem flares wider and adds
           // a long anamorphic streak.
           const lit = idleLit * 0.9 + (1 - idleLit * 0.9) * gate
-          ctx.fillStyle = rgba(mixRgb(rgb, WHITE, gemWhite), 0.85 * lit)
+          ctx.fillStyle = rgba(gemCol, 0.85 * lit)
           barPath(xStart, y, w, h)
           ctx.fill()
           // Refraction speckle, clipped inside the gem. Seeded positions and
@@ -730,6 +865,7 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
               ctx.arc(px, py, rad, 0, Math.PI * 2)
               ctx.fill()
               if (k % 3 === 0) {
+                emitted = true
                 ectx.fillStyle = `hsla(${hue}, 95%, 60%, ${0.5 * tw * lit})`
                 ectx.beginPath()
                 ectx.arc(px, py, rad * 1.5, 0, Math.PI * 2)
@@ -759,7 +895,7 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
             // Anamorphic streak through the sounding gem.
             const reach = pxPerBeat * (0.9 + 1.1 * flare) * playPower * streakLength
             emitStreak(fx - reach, fx + reach, yMid, Math.max(1, h * 0.12),
-              mixRgb(rgb, WHITE, 0.75), (0.18 + 0.3 * flare) * gate)
+              streakCol, (0.18 + 0.3 * flare) * gate)
           }
         }
       }
@@ -770,39 +906,37 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
       // styles; the sharp emissive layer itself is deliberately NOT drawn
       // (that overlay is what washed everything pastel). The glow knob
       // scales the summed light.
-      if (usesBloom) {
-        const hctx = bloom.half.getContext('2d')
-        const qctx = bloom.quarter.getContext('2d')
-        const octx = bloom.octaves.map((c) => c.getContext('2d'))
-        if (hctx && qctx && octx.every(Boolean)) {
-          hctx.clearRect(0, 0, bloom.half.width, bloom.half.height)
-          hctx.drawImage(emissive, 0, 0, bloom.half.width, bloom.half.height)
-          qctx.clearRect(0, 0, bloom.quarter.width, bloom.quarter.height)
-          qctx.drawImage(bloom.half, 0, 0, bloom.quarter.width, bloom.quarter.height)
-          ctx.save()
-          // 'screen', not 'lighter': additive stacking hard-clips each RGB
-          // channel at a different radius, tearing a colored halo into
-          // white/magenta/blue terraces wherever notes overlap. Screen
-          // saturates asymptotically, so hot spots roll toward white and
-          // the halo keeps its hue the whole way down.
-          ctx.globalCompositeOperation = 'screen'
-          ctx.imageSmoothingEnabled = true
-          ctx.imageSmoothingQuality = 'high'
-          const glowK = 0.35 + 0.65 * glow
-          for (let i = 0; i < BLOOM_OCTAVES.length; i++) {
-            const oct = BLOOM_OCTAVES[i]
-            const target = bloom.octaves[i]
-            const tctx = octx[i]!
-            const src = oct.res === 2 ? bloom.half : bloom.quarter
-            tctx.clearRect(0, 0, target.width, target.height)
-            tctx.filter = `blur(${Math.max(0.5, oct.blur * bloomReach)}px)`
-            tctx.drawImage(src, 0, 0)
-            tctx.filter = 'none'
-            ctx.globalAlpha = oct.gain * glowK
-            ctx.drawImage(target, 0, 0, W, H)
-          }
-          ctx.restore()
+      // Nothing emitted this frame (no bar in the window) = a blank layer,
+      // and blank blooms to nothing: the whole chain is skipped outright.
+      if (usesBloom && emitted) {
+        emissiveDirtyRef.current = true
+        hctx.clearRect(0, 0, bloom.half.width, bloom.half.height)
+        hctx.drawImage(emissive, 0, 0, bloom.half.width, bloom.half.height)
+        qctx.clearRect(0, 0, bloom.quarter.width, bloom.quarter.height)
+        qctx.drawImage(bloom.half, 0, 0, bloom.quarter.width, bloom.quarter.height)
+        ctx.save()
+        // 'screen', not 'lighter': additive stacking hard-clips each RGB
+        // channel at a different radius, tearing a colored halo into
+        // white/magenta/blue terraces wherever notes overlap. Screen
+        // saturates asymptotically, so hot spots roll toward white and
+        // the halo keeps its hue the whole way down.
+        ctx.globalCompositeOperation = 'screen'
+        ctx.imageSmoothingEnabled = true
+        ctx.imageSmoothingQuality = 'high'
+        const glowK = 0.35 + 0.65 * glow
+        for (let i = 0; i < BLOOM_OCTAVES.length; i++) {
+          const oct = BLOOM_OCTAVES[i]
+          const target = bloom.octaves[i]
+          const tctx = octx[i]
+          const src = oct.res === 2 ? bloom.half : bloom.quarter
+          tctx.clearRect(0, 0, target.width, target.height)
+          tctx.filter = `blur(${Math.max(0.5, oct.blur * bloomReach)}px)`
+          tctx.drawImage(src, 0, 0)
+          tctx.filter = 'none'
+          ctx.globalAlpha = oct.gain * glowK
+          ctx.drawImage(target, 0, 0, W, H)
         }
+        ctx.restore()
       }
 
       // Foliage rides on top of the finished light.
@@ -812,7 +946,14 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
       // Play styles own the playhead treatment, so markers draw only for the
       // classic Fill - none of the reference images has one.
       if (marker > 0 && !styled) {
-        for (const note of state.notes) {
+        // Candidates: onset at or before the beat, and not yet faded out -
+        // solved for the onset with the longest note as slack, as above.
+        const lingering = notesOnsetWithin(noteIndex,
+          beat - MARKER_FADE_BEATS - noteIndex.maxDur - SEARCH_EPS,
+          beat + SEARCH_EPS,
+          visibleRef.current)
+        for (const noteI of lingering) {
+          const note = state.notes[noteI]
           const age = beat - note.beat
           if (age < 0) continue
           const pastEnd = age - note.durationBeats
