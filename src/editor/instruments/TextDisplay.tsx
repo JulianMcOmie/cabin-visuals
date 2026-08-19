@@ -16,6 +16,7 @@ import {
   OneMinusSrcAlphaFactor,
   PlaneGeometry,
   Quaternion,
+  SRGBColorSpace,
   SrcAlphaFactor,
   Vector3,
   type Material,
@@ -63,6 +64,12 @@ import type { ObjectInstrumentDef, ParamDef } from './types'
 // BLOWN UP then snaps back (pitch PITCH_ZOOM_FLASH, kept from the old design).
 const ZOOM_FLASH_SECONDS = 0.09
 const MAX_DELAY_TAPS = 8
+// How far ahead the word-texture prewarm looks (see prewarmAhead in the frame
+// callback): the next PREWARM_WORDS words, but only once each is within
+// PREWARM_BEATS of the playhead. Two beats covers the common one-word-a-beat
+// lyric with a frame or so of slack; further out would just churn the LRU.
+const PREWARM_WORDS = 2
+const PREWARM_BEATS = 2
 
 // Font stacks. 0-3 are system stacks; the rest are self-hosted template faces
 // (core/visual/fonts.ts) - the frame callback gates on `load` being ready and
@@ -151,6 +158,28 @@ function configureTextMaterial(material: MeshBasicMaterial, invertBehind: boolea
 const canvasCache = new Map<string, HTMLCanvasElement>()
 const CANVAS_CACHE_MAX = 64
 
+/** Everything a word canvas is drawn from, as the cache key both caches
+ *  share. Mirrors createTextCanvas' outline rewrite (a stroke-only glyph forces
+ *  a stroke and takes the word's color) so a caller can ask "is this word
+ *  already drawn / uploaded?" without drawing it. */
+function textureKey(
+  entry: TextEntry,
+  strokeWidth: number,
+  font: FontDef,
+  color: string,
+  strokeColor: string,
+  glow: number,
+  glowContained: boolean,
+  shadow: number,
+  outline: boolean,
+): string {
+  if (outline) {
+    strokeWidth = Math.max(strokeWidth, 0.06)
+    strokeColor = color
+  }
+  return `${entry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${color}|${strokeColor}|${glow}|${glowContained}|${shadow}|${outline ? 1 : 0}`
+}
+
 function createTextCanvas(
   word: TextEntry | string,
   strokeWidth: number,
@@ -163,13 +192,13 @@ function createTextCanvas(
   outline = false,
 ): HTMLCanvasElement {
   const entry = typeof word === 'string' ? singleTextEntry(word) : word
+  const key = textureKey(entry, strokeWidth, font, color, strokeColor, glow, glowContained, shadow, outline)
   // Outline (a style-lane fx): the glyph is stroke-only in the word's color -
   // force a visible stroke and skip every fill pass below.
   if (outline) {
     strokeWidth = Math.max(strokeWidth, 0.06)
     strokeColor = color
   }
-  const key = `${entry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${color}|${strokeColor}|${glow}|${glowContained}|${shadow}|${outline ? 1 : 0}`
   const cached = canvasCache.get(key)
   if (cached) return cached
 
@@ -382,24 +411,121 @@ function texAspect(tex: CanvasTexture): number {
   return img && img.width && img.height ? img.width / img.height : 1
 }
 
-/** Swap a texture's backing canvas. Word canvases vary in WIDTH now, and the
- *  GPU storage three allocates is fixed-size - a different-sized upload
- *  silently no-ops, leaving the previous word's pixels on screen. Dispose
- *  first when the size changed so the storage is reallocated. */
-function setTextureCanvas(tex: CanvasTexture, canvas: HTMLCanvasElement) {
-  const prev = tex.image as { width?: number; height?: number } | undefined
-  if (prev && (prev.width !== canvas.width || prev.height !== canvas.height)) tex.dispose()
-  tex.image = canvas
-  tex.needsUpdate = true
+// GPU-side twin of canvasCache: ONE CanvasTexture per drawn word canvas, shared
+// by every mesh of every Text Display mount (main word, echo taps, flight and
+// scatter sprites, splitter copies). A mesh takes a word by pointing its
+// material.map at the cached texture - never by re-uploading the canvas into a
+// texture of its own - so a word that has been shown (or prewarmed, below)
+// costs a pointer swap on the beat instead of a multi-MB upload. Before this,
+// each mesh owned a texture and re-uploaded whenever its word changed: eight
+// echo taps meant eight uploads of the same canvas, and flight mode's sprite
+// pool re-uploaded on every acquisition. LRU by lookup (a lookup per frame per
+// mesh in use keeps live words at the fresh end); an evicted texture that is
+// still on some mesh's material simply re-uploads if it is drawn again - three
+// re-initialises a disposed texture on next use - so eviction is a cost, not
+// a bug. Sized for main + next + eight taps + a flight trail's distinct words.
+//
+// GPU memory: a word texture is TEXT_CANVAS_SIZE*dpr tall and as wide as the
+// word (a five-letter word is ~1080 css px, i.e. ~4.4 MB at dpr 1 and ~17 MB
+// at dpr 2), so a full cache is not something to leave resident for a whole
+// song. Entries idle for TEXTURE_IDLE_TICKS frame callbacks are DISPOSED but
+// KEPT (`pruned`): the CanvasTexture object is cheap and its canvas is still
+// in canvasCache, and three re-uploads a disposed texture on its next use, so a
+// pruned word that comes back (a chorus) costs one upload - which the prewarm
+// pays a beat early, since it treats pruned as cold. Steady state is therefore
+// the words on screen plus the next couple, not the last sixteen.
+//
+// TWO textures per canvas can exist, and that is deliberate: the main word
+// mesh's texture was assigned through JSX, and r3f stamps SRGBColorSpace on any
+// texture it assigns to a color map, while the echo / flight / scatter meshes
+// created theirs imperatively and got NoColorSpace - so a coloured word has
+// always drawn darker (sRGB-decoded) on the main mesh than the same word on an
+// echo tap or a stack card. Preserving that byte-for-byte means the cache is
+// keyed on the colour space too (`srgb`); collapsing it to one would recolour
+// every stack/scatter/echo word in every existing project.
+const textureCache = new Map<string, CanvasTexture>()
+const TEXTURE_CACHE_MAX = 16
+const textureCacheKey = (srgb: boolean, key: string) => (srgb ? 'S|' : 'N|') + key
+const TEXTURE_IDLE_TICKS = 180
+/** Advances once per frame callback (any mount); `userData.lastTouch` on each
+ *  cached texture is compared against it. Not time - a callback count. */
+let textureTick = 0
+/** Bumped on every canvas upload this module causes (a fresh texture, or a
+ *  pruned one touched again) - the frame callback reads it to keep to ONE
+ *  draw + upload per frame (a cold current word has already spent it). */
+let textureUploads = 0
+
+/** The cached texture for this word + styling, drawing and creating it on a
+ *  miss. Touches the LRU on every call, so call it per frame per mesh in use. */
+function wordTexture(
+  srgb: boolean,
+  entry: TextEntry,
+  strokeWidth: number,
+  font: FontDef,
+  color: string,
+  strokeColor: string,
+  glow: number,
+  glowContained: boolean,
+  shadow: number,
+  outline: boolean,
+): CanvasTexture {
+  const key = textureCacheKey(srgb, textureKey(entry, strokeWidth, font, color, strokeColor, glow, glowContained, shadow, outline))
+  const hit = textureCache.get(key)
+  if (hit) {
+    // Re-insert = move to the fresh end (Map iterates in insertion order).
+    textureCache.delete(key)
+    textureCache.set(key, hit)
+    hit.userData.lastTouch = textureTick
+    if (hit.userData.pruned) {
+      // Its GPU storage was released; the next draw re-uploads the canvas.
+      hit.userData.pruned = false
+      textureUploads++
+    }
+    return hit
+  }
+  const tex = new CanvasTexture(createTextCanvas(entry, strokeWidth, font, color, strokeColor, glow, glowContained, shadow, outline))
+  tex.minFilter = LinearFilter
+  tex.magFilter = LinearFilter
+  if (srgb) tex.colorSpace = SRGBColorSpace
+  tex.userData.lastTouch = textureTick
+  tex.userData.pruned = false
+  // `resident` = this module pushed it to the GPU (gl.initTexture). A draw
+  // uploads too, invisibly to us, so a redundant initTexture is possible and
+  // harmless: three sees the version already uploaded and does nothing.
+  tex.userData.resident = false
+  textureUploads++
+  if (textureCache.size >= TEXTURE_CACHE_MAX) {
+    const oldest = textureCache.keys().next().value
+    if (oldest !== undefined) {
+      textureCache.get(oldest)?.dispose()
+      textureCache.delete(oldest)
+    }
+  }
+  textureCache.set(key, tex)
+  return tex
 }
 
-// Flight sprites are pooled: one mesh+texture reused across subdiv indices, retextured
-// only when the (word, styling) key changes.
+/** Release the GPU storage of cache entries nobody has looked up for a while
+ *  (see the cache comment). Called once per frame callback; O(cache size). */
+function pruneIdleTextures() {
+  for (const tex of textureCache.values()) {
+    if (tex.userData.pruned || textureTick - (tex.userData.lastTouch as number) <= TEXTURE_IDLE_TICKS) continue
+    tex.dispose()
+    tex.userData.pruned = true
+    tex.userData.resident = false
+  }
+}
+
+/** The blank-word texture every mesh starts on (and shows when it has no
+ *  word): a real cache entry, so it is created lazily on the client and shared. */
+const blankTexture = (srgb: boolean) => wordTexture(srgb, singleTextEntry(''), 0.05, fontStack(0), '#ffffff', '#000000', 0, false, 0, false)
+
+// Flight sprites are pooled: one mesh reused across subdiv indices; `texture`
+// is whichever cached word texture the sprite currently wears.
 interface FlightPooled {
   mesh: Mesh
   texture: CanvasTexture
   mat: MeshBasicMaterial
-  key: string
   active: boolean
 }
 
@@ -515,15 +641,12 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
   const renderingFinalInvertMask = useContext(FinalInvertMaskContext)
   const groupRef = useRef<Group>(null)
   const meshRef = useRef<Mesh>(null)
+  // The blank cache texture the main material mounts with (so `map` is set
+  // from the first program compile); words are swapped in per frame.
   const textureRef = useRef<CanvasTexture | null>(null)
-
-  // Cache keys for the main texture so we only re-render the canvas when needed.
-  const lastRenderKeyRef = useRef('')
 
   // Delay echoes - one pre-created mesh per tap slot.
   const echoMeshesRef = useRef<Mesh[]>([])
-  const echoTexturesRef = useRef<CanvasTexture[]>([])
-  const echoLastWordsRef = useRef<string[]>([])
 
   // Flight mode mesh pool.
   const flightPoolRef = useRef<FlightPooled[]>([])
@@ -542,47 +665,33 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
   const fieldAmbientRef = useRef<{ key: string; positions: Float32Array } | null>(null)
   const fieldRecruitsRef = useRef<Array<{ key: string; map: Uint32Array }>>([])
 
-  const { viewport, camera } = useThree()
+  const { viewport, camera, gl } = useThree()
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    const tex = new CanvasTexture(createTextCanvas('HELLO', 0.05, fontStack(0), '#ffffff', '#000000'))
-    tex.minFilter = LinearFilter
-    tex.magFilter = LinearFilter
-    textureRef.current = tex
+    // Word textures live in the module cache and are never disposed per
+    // mount - only this mount's meshes, materials and geometries are.
+    textureRef.current = blankTexture(true)
 
     const meshes: Mesh[] = []
-    const textures: CanvasTexture[] = []
-    const lastWords: string[] = []
     for (let i = 0; i < MAX_DELAY_TAPS; i++) {
-      const echoTex = new CanvasTexture(createTextCanvas('', 0.05, fontStack(0), '#ffffff', '#000000'))
-      echoTex.minFilter = LinearFilter
-      echoTex.magFilter = LinearFilter
-      textures.push(echoTex)
-      lastWords.push('')
-      const mat = new MeshBasicMaterial({ map: echoTex, transparent: true, alphaTest: TEXT_ALPHA_TEST, depthWrite: false, opacity: 0 })
+      const mat = new MeshBasicMaterial({ map: blankTexture(false), transparent: true, alphaTest: TEXT_ALPHA_TEST, depthWrite: false, opacity: 0 })
       configureTextMaterial(mat, false)
       const mesh = new Mesh(new PlaneGeometry(1, 1), mat)
       mesh.visible = false
       meshes.push(mesh)
     }
     echoMeshesRef.current = meshes
-    echoTexturesRef.current = textures
-    echoLastWordsRef.current = lastWords
 
     setReady(true)
     return () => {
-      tex.dispose()
-      for (const t of textures) t.dispose()
       for (const m of meshes) { (m.material as Material).dispose(); m.geometry.dispose() }
       for (const spr of flightPoolRef.current) {
-        spr.texture.dispose()
         spr.mat.dispose()
         spr.mesh.geometry.dispose()
       }
       flightPoolRef.current = []
       for (const spr of scatterPoolRef.current) {
-        spr.texture.dispose()
         spr.mat.dispose()
         spr.mesh.geometry.dispose()
       }
@@ -602,21 +711,29 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     for (const spr of pool) {
       if (!spr.active) { spr.active = true; spr.mesh.visible = true; return spr }
     }
-    const texture = new CanvasTexture(createTextCanvas('', 0.05, fontStack(0), '#ffffff', '#000000'))
-    texture.minFilter = LinearFilter
-    texture.magFilter = LinearFilter
+    const texture = blankTexture(false)
     const mat = new MeshBasicMaterial({ map: texture, transparent: true, alphaTest: TEXT_ALPHA_TEST, opacity: 1, side: DoubleSide, depthWrite: false, toneMapped: false })
     configureTextMaterial(mat, false)
     const mesh = new Mesh(new PlaneGeometry(1, 1), mat)
     group.add(mesh)
-    const entry: FlightPooled = { mesh, texture, mat, key: '', active: true }
+    const entry: FlightPooled = { mesh, texture, mat, active: true }
     pool.push(entry)
     return entry
   }
   const acquireFlightSprite = (group: Group) => acquirePooled(flightPoolRef.current, group)
+  /** Point a pooled sprite at a cached word texture (a pointer swap: `map`
+   *  stays non-null, so no program change and no upload). */
+  const wearTexture = (spr: FlightPooled, tex: CanvasTexture) => {
+    if (spr.mat.map !== tex) spr.mat.map = tex
+    spr.texture = tex
+  }
 
   useInstrumentFrame(trackId, (state) => {
     if (!textureRef.current || !meshRef.current || !groupRef.current) return false
+    // One canvas draw + GPU upload per frame at most: the prewarm below stands
+    // down on any frame that already minted a texture (a cold word on scrub).
+    textureTick++
+    const uploadsAtStart = textureUploads
 
     // Face the camera. R3F's Canvas silently calls camera.lookAt(0,0,0) when no
     // rotation is given, so the scene camera is pitched down atan(1.2/5) = 13.5
@@ -938,6 +1055,57 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       else if (n.pitch === PITCH_ZOOM_FLASH) lastZoomNote = n
     }
 
+    // Rainbow hue cycles on beat subdivisions. Track-level Rainbow paints every
+    // word; a lane's 'rainbow' fx paints just that lane's words.
+    const rainbowSubdiv = Math.floor(currentBeat * flightSubdivRate)
+    const rainbowHue = ((rainbowSubdiv % rainbowCycleLength) / rainbowCycleLength) * 360
+    const rainbowOn = (i: number) => rainbowEnabled || (laneAt(i).fx?.includes('rainbow') ?? false)
+    const colorAt = (i: number) => shiftHex(rainbowOn(i) ? hslToHex(rainbowHue, 1, 0.55) : laneAt(i).color)
+    const canvasColorAt = (i: number) => (invertBehind ? '#ffffff' : colorAt(i))
+    const canvasStrokeColor = invertBehind ? '#ffffff' : strokeColor
+    /** Word i's texture in this frame's styling (the one call site for the
+     *  argument order, so every mesh and the prewarm agree on the key). */
+    const wordTextureAt = (srgb: boolean, i: number, entry: TextEntry) =>
+      wordTexture(srgb, entry, strokeWidth, fontAt(i), canvasColorAt(i), canvasStrokeColor, glow, glowContained, shadow, outlineAt(i))
+
+    // Prewarm: draw + upload the NEXT word(s) while the current one shows, so
+    // the swap on the beat is a pointer swap into an already-resident texture.
+    // Spread over frames (one draw+upload per frame, and none on a frame that
+    // already minted the current word), a couple of beats ahead at most so
+    // the LRU is never churned by a distant future. Pure optimization: which
+    // texture a frame SHOWS is decided by its key alone, so the output at any
+    // beat is identical warmed or cold - a scrub onto a cold word just pays
+    // the upload on that frame, exactly as before. Predicted with THIS frame's
+    // styling: a hue lane or rainbow that moves before the word lands makes
+    // the prediction miss, and the miss costs nothing but the warm-up.
+    // Which cache variant a word will be drawn from: the main mesh (Center
+    // layout, its texture stamped sRGB by r3f) or a pooled sprite (every other
+    // layout, NoColorSpace) - see the cache comment.
+    const srgbForWord = (i: number) => (lyric[i]?.layout ?? { kind: 'one' as const }).kind === 'one'
+    const prewarmAhead = (fromIdx: number) => {
+      pruneIdleTextures()
+      if (textureUploads !== uploadsAtStart) return
+      for (let k = 1; k <= PREWARM_WORDS; k++) {
+        const i = fromIdx + k
+        const note: ResolvedNote | undefined = allWordNotes[i]
+        if (!note || note.beat - currentBeat > PREWARM_BEATS) return
+        const entry = entryAt(i)
+        if (!entry) continue
+        const srgb = srgbForWord(i)
+        const key = textureCacheKey(srgb, textureKey(entry, strokeWidth, fontAt(i), canvasColorAt(i), canvasStrokeColor, glow, glowContained, shadow, outlineAt(i)))
+        if (textureCache.get(key)?.userData.resident) continue
+        // Draw into the cache (if cold) and push it to the GPU now, off the
+        // beat. A stack card's future words are looked up (drawn) before they
+        // are sung but never drawn to the screen until then, so "in the cache"
+        // is not "on the GPU" - hence the resident flag rather than a has().
+        const tex = wordTextureAt(srgb, i, entry)
+        gl.initTexture(tex)
+        tex.userData.resident = true
+        if (textureUploads === uploadsAtStart) textureUploads++
+        return
+      }
+    }
+
     if (nextWordNotes.length === 0) {
       meshRef.current.visible = false
       setAnimatedOpacity(meshRef.current.material as MeshBasicMaterial, 0)
@@ -950,6 +1118,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         spr.active = false
         spr.mesh.visible = false
       }
+      if (!particleMode) prewarmAhead(-1) // the first word lands warm too
       if (particleMode && fieldMode) {
         driveField([]) // no words sounded yet: just the ambient slab
       } else if (particleMode) {
@@ -1013,15 +1182,6 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const scatterMode = currentLayout.kind === 'scatter'
     const stackMode = currentLayout.kind === 'stack' || currentLayout.kind === 'row'
     const seatsMode = (currentLayout.kind === 'grid' || currentLayout.kind === 'circle') && currentClipIndex >= 0
-
-    // Rainbow hue cycles on beat subdivisions. Track-level Rainbow paints every
-    // word; a lane's 'rainbow' fx paints just that lane's words.
-    const rainbowSubdiv = Math.floor(currentBeat * flightSubdivRate)
-    const rainbowHue = ((rainbowSubdiv % rainbowCycleLength) / rainbowCycleLength) * 360
-    const rainbowOn = (i: number) => rainbowEnabled || (laneAt(i).fx?.includes('rainbow') ?? false)
-    const colorAt = (i: number) => shiftHex(rainbowOn(i) ? hslToHex(rainbowHue, 1, 0.55) : laneAt(i).color)
-    const canvasColorAt = (i: number) => (invertBehind ? '#ffffff' : colorAt(i))
-    const canvasStrokeColor = invertBehind ? '#ffffff' : strokeColor
 
     // --- Particle words: the cloud replaces every plane-based word visual ---
     if (particleMode) {
@@ -1152,14 +1312,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           if (!seat) continue
           const spr = acquirePooled(scatterPoolRef.current, groupRef.current)
           configureTextMaterial(spr.mat, invertInThisPass)
-          const wFont = fontAt(i)
-          const wColor = canvasColorAt(i)
-          const wOutline = outlineAt(i)
-          const sprKey = `${entry.cacheKey}|${strokeWidth}|${wFont.css}|${wFont.weight}|${wColor}|${canvasStrokeColor}|${glow}|${shadow}|${wOutline ? 1 : 0}`
-          if (sprKey !== spr.key) {
-            spr.key = sprKey
-            setTextureCanvas(spr.texture, createTextCanvas(entry, strokeWidth, wFont, wColor, canvasStrokeColor, glow, glowContained, shadow, wOutline))
-          }
+          wearTexture(spr, wordTextureAt(false, i, entry))
           const newest = i === wordCount - 1
           const wordBeat = nextWordNotes[i]?.beat ?? currentBeat
           const onsetT = newest ? Math.min(onsetAge / 0.12, 1) : 1
@@ -1183,6 +1336,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           setAnimatedOpacity(spr.mat, releaseOpacity * textOpacity)
         }
       }
+      prewarmAhead(wordIdx)
       return
     }
     // --- Scatter layout ---
@@ -1224,14 +1378,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           if (!entry) continue
           const spr = acquirePooled(scatterPoolRef.current, groupRef.current)
           configureTextMaterial(spr.mat, invertInThisPass)
-          const wFont = fontAt(i)
-          const wColor = canvasColorAt(i)
-          const wOutline = outlineAt(i)
-          const sprKey = `${entry.cacheKey}|${strokeWidth}|${wFont.css}|${wFont.weight}|${wColor}|${canvasStrokeColor}|${glow}|${shadow}|${wOutline ? 1 : 0}`
-          if (sprKey !== spr.key) {
-            spr.key = sprKey
-            setTextureCanvas(spr.texture, createTextCanvas(entry, strokeWidth, wFont, wColor, canvasStrokeColor, glow, glowContained, shadow, wOutline))
-          }
+          wearTexture(spr, wordTextureAt(false, i, entry))
 
           const s = i * 131
           const newest = i === wordCount - 1
@@ -1280,6 +1427,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           setAnimatedOpacity(spr.mat, (newest ? 1 : 0.78) * flickerK * releaseOpacity * textOpacity)
         }
       }
+      prewarmAhead(wordIdx)
       return
     }
 
@@ -1343,14 +1491,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           if (!entry) continue
           const spr = acquirePooled(scatterPoolRef.current, groupRef.current)
           configureTextMaterial(spr.mat, invertInThisPass)
-          const wFont = fontAt(i)
-          const wColor = canvasColorAt(i)
-          const wOutline = outlineAt(i)
-          const sprKey = `${entry.cacheKey}|${strokeWidth}|${wFont.css}|${wFont.weight}|${wColor}|${canvasStrokeColor}|${glow}|${shadow}|${wOutline ? 1 : 0}`
-          if (sprKey !== spr.key) {
-            spr.key = sprKey
-            setTextureCanvas(spr.texture, createTextCanvas(entry, strokeWidth, wFont, wColor, canvasStrokeColor, glow, glowContained, shadow, wOutline))
-          }
+          wearTexture(spr, wordTextureAt(false, i, entry))
           const scaleMul = laneAt(i).size
           sprites.push({
             spr,
@@ -1413,21 +1554,17 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           }
         }
       }
+      prewarmAhead(wordIdx)
       return
     }
     for (const spr of scatterPoolRef.current) { spr.active = false; spr.mesh.visible = false }
 
-    // Re-render main texture when the word or styling changes.
-    const mainFont = fontAt(wordIdx)
-    const mainColor = canvasColorAt(wordIdx)
-    const mainOutline = outlineAt(wordIdx)
-    const renderKey = `${currentEntry.cacheKey}|${strokeWidth}|${mainFont.css}|${mainFont.weight}|${mainColor}|${canvasStrokeColor}|${glow}|${shadow}|${mainOutline ? 1 : 0}`
-    if (renderKey !== lastRenderKeyRef.current) {
-      lastRenderKeyRef.current = renderKey
-      setTextureCanvas(textureRef.current, createTextCanvas(currentEntry, strokeWidth, mainFont, mainColor, canvasStrokeColor, glow, glowContained, shadow, mainOutline))
-      // Invalidate echo caches so they re-render with new styling.
-      echoLastWordsRef.current.fill('')
-    }
+    // The main mesh wears the current word's cached texture - a pointer swap
+    // when the word or styling changes (the canvas draw + upload happened
+    // when the texture was first minted, ideally in the prewarm a beat ago).
+    const mainMaterial = meshRef.current.material as MeshBasicMaterial
+    const mainTexture = wordTextureAt(true, wordIdx, currentEntry)
+    if (mainMaterial.map !== mainTexture) mainMaterial.map = mainTexture
 
     // --- Flight mode ---
     // One sprite per past flight subdiv where a word note was held. Each sprite's
@@ -1466,14 +1603,10 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
 
         const spr = acquireFlightSprite(groupRef.current)
         configureTextMaterial(spr.mat, invertInThisPass)
-        const sprStrokeColor = invertBehind ? '#ffffff' : strokeColor
-        const sprFont = fontAt(sprWordIdx)
-        const sprOutline = outlineAt(sprWordIdx)
-        const sprKey = `${sprEntry.cacheKey}|${strokeWidth}|${sprFont.css}|${sprFont.weight}|${sprColor}|${sprStrokeColor}|${glow}|${shadow}|${sprOutline ? 1 : 0}`
-        if (sprKey !== spr.key) {
-          spr.key = sprKey
-          setTextureCanvas(spr.texture, createTextCanvas(sprEntry, strokeWidth, sprFont, sprColor, sprStrokeColor, glow, glowContained, shadow, sprOutline))
-        }
+        // Not wordTextureAt: a flight sprite's rainbow hue is keyed to its own
+        // subdiv (sprColor), not the frame's; canvasStrokeColor is the same
+        // invert-aware value.
+        wearTexture(spr, wordTexture(false, sprEntry, strokeWidth, fontAt(sprWordIdx), sprColor, canvasStrokeColor, glow, glowContained, shadow, outlineAt(sprWordIdx)))
         spr.mesh.position.set(
           vx * ageSec + placeX(sprOnsetBeat),
           yOffsetAt(spawnBeat) * viewport.height * heightAmount + vy * ageSec + placeY(sprOnsetBeat),
@@ -1527,7 +1660,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     // overflows the visible frame (a whole-line entry in a 9:16 view used to
     // sail off both edges). Applied BEFORE the zoom flash, whose blow-up is
     // an intentional overflow.
-    const aspect = texAspect(textureRef.current)
+    const aspect = texAspect(mainTexture)
     const baseScale = sizeForWord(wordIdx, wordOnsetBeat) * onsetScale * bassPopScale * jitterSize
     const scale = Math.min(baseScale, (viewport.width * 0.92) / Math.max(0.0001, aspect)) * zoomFlash
     meshRef.current.scale.set(scale * aspect, scale, 1)
@@ -1568,15 +1701,11 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
 
       const echoEntry = entryAt(echoIdx)
       if (!echoEntry) { mesh.visible = false; continue }
-      const tex = echoTexturesRef.current[tap]
-      const echoFont = fontAt(echoIdx)
-      const echoColor = canvasColorAt(echoIdx)
-      const echoOutline = outlineAt(echoIdx)
-      const echoKey = `${echoEntry.cacheKey}|${echoFont.css}|${echoColor}|${canvasStrokeColor}|${shadow}|${echoOutline ? 1 : 0}`
-      if (echoKey !== echoLastWordsRef.current[tap]) {
-        setTextureCanvas(tex, createTextCanvas(echoEntry, strokeWidth, echoFont, echoColor, canvasStrokeColor, glow, glowContained, shadow, echoOutline))
-        echoLastWordsRef.current[tap] = echoKey
-      }
+      // The tap wears the cached texture of the word it echoes - the same
+      // texture the main mesh already uploaded when that word was current.
+      const tex = wordTextureAt(false, echoIdx, echoEntry)
+      const echoMaterial = mesh.material as MeshBasicMaterial
+      if (echoMaterial.map !== tex) echoMaterial.map = tex
 
       const tapScale = sizeForWord(echoIdx, echoNote.beat) * Math.max(0.1, 1 - delayScaleFalloff * tapNum)
       mesh.scale.set(tapScale * texAspect(tex), tapScale, 1)
@@ -1587,6 +1716,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       setAnimatedOpacity(mesh.material as MeshBasicMaterial, Math.max(0.01, 1 - delayOpacityFalloff * tapNum) * textOpacity)
       mesh.visible = true
     }
+    prewarmAhead(wordIdx)
   })
 
   if (!ready) return null
