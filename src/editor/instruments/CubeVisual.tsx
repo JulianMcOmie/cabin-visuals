@@ -256,7 +256,15 @@ export function CubeInstanced({ trackId }: { trackId: string }) {
     const sides = normalizeSides(state.params.sides ?? paramDefault(cubeInstrument, 'sides'))
     const paramValue = TUBED_GEOMETRIES.has(geometry) ? tube : SIDED_GEOMETRIES.has(geometry) ? sides : 0
     if (rig.built.id !== geometry || Math.abs(rig.built.value - paramValue) > 1e-4) {
-      solid.geometry.dispose()
+      // InstancedMesh2 attaches its SHARED `instanceIndex` GL buffer attribute
+      // to whatever geometry it holds. Disposing the old geometry with that
+      // attribute still on it makes three delete the shared buffer - the new
+      // geometry then draws with a dead index buffer, i.e. NOTHING, until a
+      // reload (the "some shapes don't show up until refresh" bug). Detach
+      // it first, then dispose only what this geometry owns.
+      const old = solid.geometry
+      old.deleteAttribute('instanceIndex')
+      old.dispose()
       solid.geometry = buildFundamentalGeometry(geometry, tube, sides)
       solid.geometry.computeBoundingSphere()
       rig.built = { id: geometry, value: paramValue }
