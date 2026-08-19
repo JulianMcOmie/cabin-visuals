@@ -1,6 +1,6 @@
 import type { Matrix4 } from 'three'
 import { identityVisualCopy } from './identityVisualCopy'
-import type { MoverOrSplitter, VisualCopy } from './types'
+import type { MoverOrSplitter, MoverOrSplitterContext, VisualCopy } from './types'
 
 /**
  * Evaluates an ordered mover-and-splitter chain at one beat.
@@ -34,51 +34,65 @@ export function resolveVisualCopies(
 ): VisualCopy[] {
   let visualCopies = [identityVisualCopy()]
   // Parallel to visualCopies: each copy's accumulated internal motion, or null.
-  let internals: (Matrix4 | null)[] = [null]
+  // Materialized lazily - a chain with no `applyFramed` entry never has an
+  // internal transform to carry, and most chains are exactly that, so the
+  // parallel arrays (one per step, one push per copy) are only built once a
+  // framed entry actually hands one over. Until then `internals` is null and
+  // means "null for every copy".
+  let internals: (Matrix4 | null)[] | null = null
 
   for (const moverOrSplitter of moverAndSplitterChain) {
     const previousVisualCopies = visualCopies
     const previousInternals = internals
     const count = previousVisualCopies.length
     const nextVisualCopies: VisualCopy[] = []
-    const nextInternals: (Matrix4 | null)[] = []
+    let nextInternals: (Matrix4 | null)[] | null = null
+    const framed = moverOrSplitter.applyFramed
+    // ONE context per step, re-pointed at each copy: `index` is the only field
+    // that varies per copy, and the contract (types.ts) makes the context
+    // read-only for the entry, so nothing observes it mutating between calls.
+    // `formation` is the same reference for the whole step, which is what makes
+    // measuring it once per frame safe (see the contract in types.ts).
+    const context: MoverOrSplitterContext = placementTransform
+      ? { beat, index: 0, count, formation: previousVisualCopies, placementTransform }
+      : { beat, index: 0, count, formation: previousVisualCopies }
 
-    previousVisualCopies.forEach((visualCopy, index) => {
-      const context = {
-        beat,
-        index,
-        count,
-        // The whole formation, so a step can measure how its copies are
-        // arranged before deciding what to do with one of them. Passed by
-        // reference and never mutated here, so this costs nothing per copy and
-        // its identity is stable for the step (see the contract in types.ts).
-        formation: previousVisualCopies,
-        ...(placementTransform ? { placementTransform } : {}),
-      }
-      const inherited = previousInternals[index]
-      if (moverOrSplitter.applyFramed) {
-        for (const { visualCopy: framed, internalTransform } of moverOrSplitter.applyFramed(visualCopy, context)) {
-          nextVisualCopies.push(framed)
-          nextInternals.push(
-            inherited && internalTransform
-              ? inherited.clone().multiply(internalTransform)
-              : internalTransform ?? inherited,
-          )
+    for (let index = 0; index < count; index++) {
+      const visualCopy = previousVisualCopies[index]
+      context.index = index
+      const inherited = previousInternals ? previousInternals[index] : null
+      if (framed) {
+        for (const { visualCopy: next, internalTransform } of framed.call(moverOrSplitter, visualCopy, context)) {
+          const internal = inherited && internalTransform
+            ? inherited.clone().multiply(internalTransform)
+            : internalTransform ?? inherited
+          if (internal && !nextInternals) {
+            // First internal transform of the step: back-fill nulls for the
+            // copies already emitted, then track per copy from here on.
+            nextInternals = new Array<Matrix4 | null>(nextVisualCopies.length).fill(null)
+          }
+          nextVisualCopies.push(next)
+          if (nextInternals) nextInternals.push(internal)
         }
       } else {
         for (const next of moverOrSplitter.apply(visualCopy, context)) {
+          if (inherited && !nextInternals) {
+            nextInternals = new Array<Matrix4 | null>(nextVisualCopies.length).fill(null)
+          }
           nextVisualCopies.push(next)
-          nextInternals.push(inherited)
+          if (nextInternals) nextInternals.push(inherited)
         }
       }
-    })
+    }
 
     visualCopies = nextVisualCopies
     internals = nextInternals
   }
 
+  if (!internals) return visualCopies
+  const folded = internals
   return visualCopies.map((visualCopy, index) => {
-    const internal = internals[index]
+    const internal = folded[index]
     if (!internal) return visualCopy
     return { ...visualCopy, transform: visualCopy.transform.clone().multiply(internal) }
   })
