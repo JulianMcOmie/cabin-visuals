@@ -1,5 +1,6 @@
-import { Fragment, useMemo } from 'react'
+import { Fragment, Suspense, useMemo } from 'react'
 import { getInstrument } from '../../instruments'
+import { InstrumentPending } from '../../instruments/lazyInstrument'
 import { isFullFrameTrack } from '../../instruments/types'
 import { useProjectStore } from '../../store/ProjectStore'
 import { InstancedScaleContext } from '../../core/visual/instancedFrame'
@@ -91,7 +92,9 @@ export function InstancedObjectRenderer({
   }
   return (
     <InstancedScaleContext.Provider value={scaleInstances}>
-      <Instanced trackId={trackId} />
+      <Suspense fallback={<InstrumentPending />}>
+        <Instanced trackId={trackId} />
+      </Suspense>
     </InstancedScaleContext.Provider>
   )
 }

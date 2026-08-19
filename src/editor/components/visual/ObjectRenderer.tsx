@@ -1,7 +1,8 @@
-import { memo, useMemo, useRef } from 'react'
+import { memo, Suspense, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Group, Matrix4 } from 'three'
 import { getInstrument } from '../../instruments'
+import { InstrumentPending } from '../../instruments/lazyInstrument'
 import { isFullFrameTrack } from '../../instruments/types'
 import { getObjectState, getVisualCopy } from '../../core/visual/VisualEngine'
 import { composeScreenAnchor } from '../../core/visual/screenAnchor'
@@ -182,12 +183,17 @@ export const ObjectRenderer = memo(function ObjectRenderer({
 
   // The instrument element is memoized so a re-render of THIS component (its
   // effect chain changed, say) hands React the same element and the
-  // instrument's own subtree bails out.
+  // instrument's own subtree bails out. Per-object Suspense: the component is
+  // a lazy chunk (instruments/lazyInstrument.ts) - one instrument's fetch must
+  // never blank the others, and the wrappers around this only traverse per
+  // frame, so a late-arriving mesh is picked up as it lands.
   const Component = def?.component
   const bare = useMemo(() => Component
     ? (
       <InstrumentCopyContext.Provider value={instrumentCopyContext}>
-        <Component trackId={trackId} />
+        <Suspense fallback={<InstrumentPending />}>
+          <Component trackId={trackId} />
+        </Suspense>
       </InstrumentCopyContext.Provider>
     )
     : null, [Component, instrumentCopyContext, trackId])

@@ -52,5 +52,6 @@ Both axes are forced even (H.264 chroma subsampling). Two consequences worth kno
 
 - No wall clock, no RAF, no transport anywhere in this path. If a visual looks right live but wrong in export, the instrument is impure (see the root pause invariant) — fix the instrument, don't patch export.
 - Export ignores the loop region on purpose (wrap lives only in playback's RAF tick).
+- `runExport` awaits `whenInstrumentsSettled()` (instruments/lazyInstrument.ts) before frame 0: instrument visuals are lazy chunks, and an object whose chunk is still on the wire is showing its Suspense fallback - an empty object in the capture. `capturePreviewClip`'s `waitUntilRenderable` does the same after the tracks hydrate.
 - Starting an export PAUSES the transport (ExportDialog): playback and the encode share one canvas, so a running transport only steals frames from the render.
 - UI entry: `components/ExportDialog.tsx` + `components/visual/ExportDriver.tsx`.
