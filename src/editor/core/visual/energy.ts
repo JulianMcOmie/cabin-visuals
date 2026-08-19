@@ -1,4 +1,5 @@
 import type { ResolvedNote } from './types'
+import { noteWindow } from './noteWindow'
 
 // The per-object energy signal: a decaying envelope from the most recent of
 // the object's OWN notes at or before the current beat (intensity scaled by
@@ -13,7 +14,14 @@ const PULSE_DAMPENER = 20
 export function evaluatePulse(triggers: ResolvedNote[], beat: number): number {
   let closest = Infinity
   let intensity = 1
-  for (const n of triggers) {
+  // Only a note whose onset is within DECAY_BEATS can contribute: anything
+  // older gives `1 - since / DECAY_BEATS <= 0`, which the max() below floors
+  // to 0 - the same answer an empty window returns. So the scan is a window
+  // on the sorted stream (noteWindow.ts), walked in the same order as before
+  // so ties between equal onsets still resolve to the first one.
+  const { start, end } = noteWindow(triggers, beat, DECAY_BEATS)
+  for (let i = start; i < end; i++) {
+    const n = triggers[i]
     if (beat < n.blockStartBeat || beat > n.blockEndBeat) continue
     if (n.beat <= beat) {
       const since = beat - n.beat

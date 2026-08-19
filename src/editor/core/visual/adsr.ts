@@ -1,5 +1,6 @@
 import type { AdsrEnvelope } from '../../types'
 import { clamp01 } from '../../utils/math'
+import { noteArrayIndex, noteWindow } from './noteWindow'
 
 // Closed-form ADSR gain over gate notes - the envelope-track evaluator.
 //
@@ -71,6 +72,13 @@ export function adsrGateGain(note: AdsrGate, beat: number, p: AdsrEnvelope): num
  */
 export function evaluateAdsrGain(notes: readonly AdsrGate[], beat: number, p: AdsrEnvelope): number {
   let gain = 0
-  for (const n of notes) gain += adsrGateGain(n, beat, p)
+  // A gate contributes exactly 0 once `t >= hold + release` (hold = max(its
+  // duration, attack)) and 0 before it opens, so only onsets within
+  // max(longest duration, attack) + release of the beat can add anything.
+  // Bisect to that window (noteWindow.ts) and sum in the original order -
+  // the skipped terms were zeros, and adding zero leaves a float unchanged.
+  const reach = Math.max(noteArrayIndex(notes).maxDuration, Math.max(EPS, p.attackBeats)) + Math.max(EPS, p.releaseBeats)
+  const { start, end } = noteWindow(notes, beat, reach)
+  for (let i = start; i < end; i++) gain += adsrGateGain(notes[i], beat, p)
   return clamp01(gain)
 }

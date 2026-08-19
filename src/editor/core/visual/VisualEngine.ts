@@ -10,9 +10,10 @@ import { isIdentityTransform, readTrackTransform, trackOpacity } from '../transf
 import { identityVisualCopy } from '../visualCopies/identityVisualCopy'
 import { resolveVisualCopies, structuralCopyCount, warpChainBeat } from '../visualCopies/resolveVisualCopies'
 import type { VisualCopy } from '../visualCopies/types'
-import type { ResolvedGraph, ResolvedGroup, ObjectState, ResolvedEnvelope } from './types'
+import type { ResolvedGraph, ResolvedGroup, ObjectState, ResolvedEnvelope, ResolvedNote } from './types'
+import { MIN_SOUNDING_BEATS, soundingNoteWindow } from './noteWindow'
 import type { ProjectState } from '../../store/ProjectStore'
-import { DEFAULT_SCENE_BACKGROUND, type Scene, type SceneGradient } from '../../types'
+import { DEFAULT_SCENE_BACKGROUND, type Scene, type SceneGradient, type Track } from '../../types'
 import { compositionAutomatableParams, compositionDef, isCompositionTrack, type CompositionLayer } from '../directors'
 import { clamp } from '../../utils/math'
 
@@ -42,7 +43,14 @@ let mountedRenderScenes = new Map<string, ThreeScene>()
 // Project bpm, mirrored on every setProject/syncParams - computeAtBeat derives
 // secPerBeat from it so instruments can convert beat-ages to seconds.
 let bpm = 120
+// One ObjectState per object, REUSED across frames: computeAtBeat overwrites
+// every field in place rather than minting a fresh object per object per
+// frame. Every consumer pulls it fresh each frame (getObjectState in useFrame)
+// and none compares state objects by identity, so the reuse is invisible -
+// and it keeps ~25-field allocations off the per-frame heap. The same goes
+// for `activeNotes`: a per-object scratch array refilled each frame.
 const states = new Map<string, ObjectState>()
+const activeNoteScratch = new Map<string, ResolvedNote[]>()
 // World transforms, reused across frames (one Matrix4 per object). Also the source
 // of each object's parent transform during composition.
 const worldMatrices = new Map<string, Matrix4>()
@@ -68,6 +76,20 @@ const _tfSV = identitySV()
 const visualCopiesByTrack = new Map<string, VisualCopy[]>()
 const visualCopyCounts = new Map<string, number>()
 const copyCountWarned = new Set<string>()
+// The hidden copies that pad a frame's output up to the structural pool size.
+// VisualCopies are immutable by contract (visualCopies/types.ts), so ONE
+// opacity-0 identity copy can stand in every padded slot of every track; the
+// pool grows to the deepest padding ever asked for and is never rebuilt.
+const hiddenCopyPool: VisualCopy[] = []
+function hiddenCopy(index: number): VisualCopy {
+  let copy = hiddenCopyPool[index]
+  if (!copy) {
+    copy = identityVisualCopy()
+    copy.opacity = 0
+    hiddenCopyPool[index] = copy
+  }
+  return copy
+}
 
 /** One structural render-list entry per VisualCopy occurrence. The renderer
  *  mounts one ObjectRenderer per entry; each pulls exactly its copy per frame.
@@ -183,6 +205,7 @@ export function setProject(input: ProjectState | ProjectSnapshot) {
     ...(graph.groups ?? []).map((g) => g.trackId),
   ]))
   for (const id of states.keys()) if (!live.has(id)) states.delete(id)
+  for (const id of activeNoteScratch.keys()) if (!live.has(id)) activeNoteScratch.delete(id)
   for (const id of worldMatrices.keys()) if (!live.has(id)) worldMatrices.delete(id)
   for (const id of inheritedOpacities.keys()) if (!live.has(id)) inheritedOpacities.delete(id)
   for (const id of visualCopiesByTrack.keys()) if (!live.has(id)) visualCopiesByTrack.delete(id)
@@ -197,11 +220,7 @@ export function setProject(input: ProjectState | ProjectSnapshot) {
   for (const graph of graphs.values()) for (const obj of graph.objects) {
     const copies = resolveVisualCopies(obj.moverAndSplitterChain, 0)
     const structuralCount = Math.max(copies.length, structuralCopyCount(obj.moverAndSplitterChain))
-    while (copies.length < structuralCount) {
-      const hidden = identityVisualCopy()
-      hidden.opacity = 0
-      copies.push(hidden)
-    }
+    while (copies.length < structuralCount) copies.push(hiddenCopy(copies.length))
     visualCopyCounts.set(obj.trackId, structuralCount)
     visualCopiesByTrack.set(obj.trackId, copies)
   }
@@ -267,6 +286,42 @@ function clampOpacity(v: number): number {
   return clamp(v, 0, 1)
 }
 
+// Composition tracks resolve per frame (they never enter the graph), which used
+// to mean re-gathering their automation lanes from the document every frame.
+// The lanes are a function of the director track, its child lane tracks and
+// the tempo fields, so they are cached on the track's reference and validated
+// against those inputs by identity - the same invalidation resolve.ts's
+// per-track cache uses: the store updates immutably, so a lane edit mints a new
+// child track ref and a re-parent mints a new director ref. Cached lanes carry
+// per-beat memos internally, exactly as the object path's cached lanes do.
+type CompositionSnapshot = Parameters<typeof resolveAutomationLanes>[2]
+interface CompositionLaneCache {
+  deps: unknown[]
+  lanes: ReturnType<typeof resolveAutomationLanes>
+}
+const compositionLaneCache = new WeakMap<Track, CompositionLaneCache>()
+
+function compositionLanes(
+  track: Track,
+  def: NonNullable<ReturnType<typeof compositionDef>>,
+  p: CompositionSnapshot,
+): ReturnType<typeof resolveAutomationLanes> {
+  const hit = compositionLaneCache.get(track)
+  if (hit) {
+    let valid = hit.deps.length === track.childIds.length + 3
+      && hit.deps[0] === p.bpm && hit.deps[1] === p.beatsPerBar && hit.deps[2] === p.totalBars
+    for (let i = 0; valid && i < track.childIds.length; i++) {
+      if (hit.deps[i + 3] !== p.tracks[track.childIds[i]]) valid = false
+    }
+    if (valid) return hit.lanes
+  }
+  const lanes = resolveAutomationLanes(track, compositionAutomatableParams(def), p)
+  const deps: unknown[] = [p.bpm, p.beatsPerBar, p.totalBars]
+  for (const cid of track.childIds) deps.push(p.tracks[cid])
+  compositionLaneCache.set(track, { deps, lanes })
+  return lanes
+}
+
 function resolveComposition(beat: number): CompositionLayer[] {
   if (!project) return []
   const selected = mainCompositionOverride || mainPreviewEnabled
@@ -306,7 +361,7 @@ function resolveComposition(beat: number): CompositionLayer[] {
     const def = compositionDef(rawTrack.instrumentId)
     let track = rawTrack
     if (def && rawTrack.childIds.length) {
-      const lanes = resolveAutomationLanes(rawTrack, compositionAutomatableParams(def), mainSnapshot)
+      const lanes = compositionLanes(rawTrack, def, mainSnapshot)
       if (lanes.length) {
         const params = { ...rawTrack.params }
         for (const lane of lanes) {
@@ -479,33 +534,69 @@ export function computeAtBeat(beat: number) {
     // nothing for the renderer to reconcile per beat.
     const blackedOut = off
     // Notes live at this beat - pitch-reactive instruments read them (a zero-length note
-    // stays "on" for a hair so single-tick triggers still register).
-    const activeNotes = obj.notes.filter((n) => objBeat >= n.beat && objBeat < n.beat + (n.durationBeats || 0.05))
-    states.set(obj.trackId, {
-      beat: objBeat,
-      secPerBeat,
-      beatsPerBar: project?.beatsPerBar ?? 4,
-      params,
-      energy,
-      videoPads: obj.videoPads,
-      photoPads: obj.photoPads,
-      world,
-      meshScale,
-      opacity,
-      effectOverrides,
-      blackedOut,
-      stringParams: obj.stringParams,
-      abilityEvents: obj.abilityEvents,
-      lyricClips: obj.lyricClips,
-      styleLanes: obj.styleLanes,
-      notes: obj.notes,
-      activeNotes,
-      // The object's own lanes, by reference (no per-frame allocation). Handed to
-      // instruments so they can ask what a param was at some OTHER beat - see
-      // paramAtBeat. `params` above is still the answer for "right now".
-      automations: obj.automations,
-      baseParams: obj.params,
-    })
+    // stays "on" for a hair so single-tick triggers still register). The stream is
+    // sorted by onset, so only the bisected window of notes that can be sounding is
+    // tested (noteWindow.ts), into a per-object scratch array reused every frame.
+    let activeNotes = activeNoteScratch.get(obj.trackId)
+    if (!activeNotes) { activeNotes = []; activeNoteScratch.set(obj.trackId, activeNotes) }
+    activeNotes.length = 0
+    {
+      const notes = obj.notes
+      const { start, end } = soundingNoteWindow(notes, objBeat)
+      for (let i = start; i < end; i++) {
+        const n = notes[i]
+        if (objBeat >= n.beat && objBeat < n.beat + (n.durationBeats || MIN_SOUNDING_BEATS)) activeNotes.push(n)
+      }
+    }
+    let state = states.get(obj.trackId)
+    if (!state) {
+      state = {
+        beat: objBeat,
+        secPerBeat,
+        beatsPerBar: 4,
+        params,
+        energy,
+        videoPads: obj.videoPads,
+        photoPads: obj.photoPads,
+        world,
+        meshScale,
+        opacity,
+        effectOverrides,
+        blackedOut,
+        stringParams: obj.stringParams,
+        abilityEvents: obj.abilityEvents,
+        lyricClips: obj.lyricClips,
+        styleLanes: obj.styleLanes,
+        notes: obj.notes,
+        activeNotes,
+        automations: obj.automations,
+        baseParams: obj.params,
+      }
+      states.set(obj.trackId, state)
+    }
+    state.beat = objBeat
+    state.secPerBeat = secPerBeat
+    state.beatsPerBar = project?.beatsPerBar ?? 4
+    state.params = params
+    state.energy = energy
+    state.videoPads = obj.videoPads
+    state.photoPads = obj.photoPads
+    state.world = world
+    state.meshScale = meshScale
+    state.opacity = opacity
+    state.effectOverrides = effectOverrides
+    state.blackedOut = blackedOut
+    state.stringParams = obj.stringParams
+    state.abilityEvents = obj.abilityEvents
+    state.lyricClips = obj.lyricClips
+    state.styleLanes = obj.styleLanes
+    state.notes = obj.notes
+    state.activeNotes = activeNotes
+    // The object's own lanes, by reference (no per-frame allocation). Handed to
+    // instruments so they can ask what a param was at some OTHER beat - see
+    // paramAtBeat. `params` above is still the answer for "right now".
+    state.automations = obj.automations
+    state.baseParams = obj.params
 
     // Evaluate the new VisualCopy chain at this beat (pure function of beat +
     // resolved chain, so scrub == playback == export). The structural count was
@@ -527,11 +618,7 @@ export function computeAtBeat(beat: number) {
       }
       copies.length = structuralCount
     }
-    while (copies.length < structuralCount) {
-      const hidden = identityVisualCopy()
-      hidden.opacity = 0
-      copies.push(hidden)
-    }
+    while (copies.length < structuralCount) copies.push(hiddenCopy(copies.length))
     visualCopiesByTrack.set(obj.trackId, copies)
   }
   }

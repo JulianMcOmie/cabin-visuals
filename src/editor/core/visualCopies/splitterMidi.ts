@@ -7,6 +7,7 @@
 
 import type { MidiRowDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
+import { MIN_SOUNDING_BEATS, soundingNoteWindow } from '../visual/noteWindow'
 
 const SPLITTER_TOP_PITCH = 127
 const MIDI_PITCH_COUNT = 128
@@ -30,7 +31,12 @@ export function noteDisablesSplitterSlot(
   const rowCount = Math.min(MIDI_PITCH_COUNT, slotCount)
   const rowIndex = Math.min(rowCount - 1, Math.floor((slot * rowCount) / slotCount))
   const pitch = SPLITTER_TOP_PITCH - rowIndex
-  return notes.some((note) =>
-    note.pitch === pitch && beat >= note.beat && beat < note.beat + (note.durationBeats || 0.05),
-  )
+  // Called once per COPY per frame, so the scan is bisected to the notes that
+  // can be sounding at all (noteWindow.ts) before the exact test runs.
+  const { start, end } = soundingNoteWindow(notes, beat)
+  for (let i = start; i < end; i++) {
+    const note = notes[i]
+    if (note.pitch === pitch && beat >= note.beat && beat < note.beat + (note.durationBeats || MIN_SOUNDING_BEATS)) return true
+  }
+  return false
 }
