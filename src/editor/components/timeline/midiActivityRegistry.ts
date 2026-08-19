@@ -13,9 +13,8 @@ const MAX_GLOW_OPACITY = 0.5
 
 interface MidiActivityBlock {
   element: HTMLDivElement
-  /** The screen-blended glow overlay inside the block, when it has one (a
-   *  looped block draws its sections instead and has none). */
-  glow: HTMLElement | null
+  /** The matte pulse washes inside this block - one, or one per loop section. */
+  pulses: HTMLElement[]
   triggers: MidiActivityTrigger[]
   /** Muted tracks are silent, so their blocks must not pulse on note hits. */
   muted: boolean
@@ -31,20 +30,20 @@ const blocks = new Map<string, MidiActivityBlock>()
 
 // ── Compositor promotion ────────────────────────────────────────────────────
 //
-// The glow drives `filter` on the block and `opacity` on its screen-blended
-// overlay, and while the transport runs those move EVERY frame. Unpromoted,
-// each moving block re-rasterizes per frame on the main thread; promoted, the
-// change is a compositor-only update. But a permanent `will-change` in the
-// style prop is the other extreme - hundreds of blocks each holding a layer
-// texture for the life of the editor, paid for on every timeline scroll,
+// The pulse is an opacity fade (see MattePulse in Block.tsx), which the
+// compositor CAN animate without repainting - but only on a promoted layer,
+// and only `will-change` gets us one here: an imperative per-frame style write
+// is not an accelerated animation, so an unpromoted wash repaints its tiles
+// every frame exactly like the filter it replaced.
+//
+// The hint is therefore applied for exactly as long as it buys something:
+// while the transport runs, on blocks that can actually pulse. A permanent
+// hint in the style prop is the other extreme - hundreds of layer textures
+// held for the life of the editor and composited on every timeline scroll,
 // almost all of them never animating.
 //
-// So the hint is applied for exactly as long as it buys something: while
-// playing, on the blocks that can actually pulse (a muted track holds at 0,
-// and a block with no triggers has nothing to glow for). Both elements need
-// it - measured 2026-08-18, the block's own hint alone recovers only about a
-// third of the raster cost, because the screen-blended overlay is the
-// expensive half.
+// It is only the small wash overlays that are promoted, not the blocks
+// themselves, so the layers are cheap and nothing else about the block moves.
 let promoted = false
 /** Last value handed to updateMidiActivityAtBeat, so a block registered
  *  mid-playback (scrolled into view, or minted by an edit) is promoted on
@@ -57,12 +56,9 @@ function canPulse(block: MidiActivityBlock): boolean {
 
 function setBlockPromotion(block: MidiActivityBlock, on: boolean): void {
   if (!canPulse(block)) return
-  if (on) {
-    block.element.style.willChange = 'filter'
-    if (block.glow) block.glow.style.willChange = 'opacity'
-  } else {
-    block.element.style.removeProperty('will-change')
-    block.glow?.style.removeProperty('will-change')
+  for (const pulse of block.pulses) {
+    if (on) pulse.style.willChange = 'opacity'
+    else pulse.style.removeProperty('will-change')
   }
 }
 
@@ -80,7 +76,7 @@ export function registerMidiActivityBlock(
   })
   const registration: MidiActivityBlock = {
     element,
-    glow: element.querySelector<HTMLElement>('[data-midi-activity-glow]'),
+    pulses: [...element.querySelectorAll<HTMLElement>('[data-midi-activity-pulse]')],
     triggers,
     muted,
     lastOpacity: '0',
@@ -123,8 +119,8 @@ const SINGLE_TRIGGER = (t: MidiActivityTrigger) => { singleTrigger[0] = t; retur
 export function updateMidiActivityAtBeat(beat: number, isPlaying: boolean): void {
   transportPlaying = isPlaying
   // Promotion follows the transport, not the individual pulse: toggling per
-  // note would churn a layer up and down on every hit, and the promotion only
-  // pays off if it is already in place when the var starts moving.
+  // note would churn a layer up and down on every hit, and the hint only pays
+  // off if it is already in place when the opacity starts moving.
   if (isPlaying !== promoted) {
     promoted = isPlaying
     for (const block of blocks.values()) setBlockPromotion(block, isPlaying)

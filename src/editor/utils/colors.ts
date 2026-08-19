@@ -23,7 +23,26 @@ export interface MidiBlockPalette {
   selectedNoteWrap: string
   /** Outshone loop repeats: dimmer via lower contrast (a mid tint). */
   selectedRepeatedNote: string
-  /** Note-activity pulse overlay colors (screen-blended, see Block.tsx). */
+  // ── Note-activity endpoints ───────────────────────────────────────────────
+  // The playing pulse is a MATTE colour walk, not light: each surface below is
+  // where its resting colour lands at full activity, and Block.tsx interpolates
+  // with `color-mix` driven by the activity var. This is the piano roll's own
+  // move - `midiNoteColor` lifts LIGHTNESS for selection rather than glowing -
+  // so a playing block reads like the editor rather than like a lamp.
+  /** Resting pane at full activity: the block fills IN with its hue. */
+  activeFill: string
+  /** Resting note dash at full activity: lifted toward white, chroma easing
+   *  off so the peak reads as brightness rather than a hue shift. */
+  activeNote: string
+  /** Loop repeats stay a step behind the first pass at every activity level. */
+  activeRepeatedNote: string
+  /** On a SELECTED block the notes are dark on a lit body, so their pulse runs
+   *  the other way - deeper and more saturated, never toward white (which
+   *  would dissolve them into the body). */
+  activeSelectedNote: string
+  activeSelectedRepeatedNote: string
+  /** Project-card chrome (ProjectsDisplay). These were the pulse's overlay
+   *  colours before it went matte; the timeline no longer reads them. */
   outline: string
   selectedOutline: string
 }
@@ -122,6 +141,15 @@ export function midiBlockPalette(color: string): MidiBlockPalette {
     selectedNote: oklchToHex(0.18, c(0.06), h),
     selectedNoteWrap: oklchCss(0.84, c(0.15), h, 0.7),
     selectedRepeatedNote: oklchToHex(0.48, c(0.09), h),
+    // The pane travels far in LIGHTNESS and chroma but stops well short of the
+    // note voice (0.88/0.18) - the notes have to stay legible on top of it at
+    // the peak, which is the whole reason the old brightness filter (which
+    // lifted pane and notes together, so contrast never changed) read as glare.
+    activeFill: oklchToHex(0.38, c(0.09), h),
+    activeNote: oklchToHex(0.97, c(0.07), h),
+    activeRepeatedNote: oklchToHex(0.8, c(0.12), h),
+    activeSelectedNote: oklchToHex(0.1, c(0.04), h),
+    activeSelectedRepeatedNote: oklchToHex(0.34, c(0.07), h),
     outline: oklchToHex(0.58, c(0.18), h),
     selectedOutline: oklchToHex(0.74, c(0.2), h),
   }

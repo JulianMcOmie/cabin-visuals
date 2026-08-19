@@ -42,11 +42,13 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
   const palette = useMemo(() => midiBlockPalette(color), [color])
   const active = isSelected || isEditing
 
-  const activityFilter = 'brightness(calc(1 + var(--midi-activity-opacity, 0) * 1.5))'
   // Resting: the neon-signage pane - an inset hue hairline plus a near-black
   // separation ring against the lane. Selected: the supernova - the body IS
   // the light, so the only "edge" is the burning rim inside its bloom stack.
   const restingShadow = `inset 0 0 0 1px ${palette.edge}, 0 0 0 1px rgba(0,0,0,0.45)`
+  // The playing pulse is a flat wash of `activeFill` faded in over the pane -
+  // see MattePulse. A SELECTED block skips it: there is nothing lighter than a
+  // white-hot core to travel to, so its notes carry the pulse instead.
 
   useEffect(() => {
     const element = blockRef.current
@@ -73,17 +75,10 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
         // at the notches, which reads as intended.
         background: hasLoopSections ? 'transparent' : active ? palette.selectedBody : palette.fill,
         boxShadow: active ? palette.selectedBloom : restingShadow,
-        filter: activityFilter,
-        // will-change is NOT set here. A static hint promoted every block to
-        // its own compositor layer for the life of the editor (texture memory
-        // + per-scroll compositing for hundreds of blocks); leaving it off
-        // entirely was worse the other way - the glow var moves every frame
-        // while the transport runs, so an unpromoted block re-RASTERIZES per
-        // frame (measured 2026-08-18: 5x the raster time of the promoted
-        // build, which is the "everything is laggier with the timeline open"
-        // regression). So the promotion is applied by the activity registry
-        // for exactly as long as the transport is playing, and dropped on
-        // pause - see setActivityPromotion in midiActivityRegistry.
+        // Nothing on THIS element moves per frame any more - no filter, no
+        // blend mode, no per-frame background. The pulse lives entirely in the
+        // MattePulse overlay below, whose opacity the compositor can animate
+        // without repainting anything.
       }}
       onPointerDown={(e) => onBlockPointerDown(e, trackId, block.id)}
       onPointerMove={(e) => {
@@ -120,22 +115,7 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
         setEditingBlock({ trackId, blockId: block.id })
       }}
     >
-      {!hasLoopSections && (
-        <div
-          aria-hidden="true"
-          // The registry promotes this alongside its block: the screen-blended
-          // glow is the more expensive half of the per-frame raster, so the
-          // block's own hint alone only recovers a third of the cost.
-          data-midi-activity-glow=""
-          className="absolute inset-0 pointer-events-none rounded-[6px]"
-          style={{
-            backgroundColor: palette.selectedOutline,
-            opacity: 'var(--midi-activity-opacity, 0)',
-            boxShadow: `inset 0 0 16px ${palette.outline}`,
-            mixBlendMode: 'screen',
-          }}
-        />
-      )}
+      {!hasLoopSections && !active && <MattePulse color={palette.activeFill} />}
       <NotePreview
         notes={block.notes}
         totalBeats={totalBeatsInBlock}
@@ -152,6 +132,47 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
 // Preview divs per looped block stay bounded; a tiny pattern in a huge block
 // caps out instead of flooding the DOM.
 const PREVIEW_NOTE_CAP = 512
+
+/**
+ * The block's playing pulse: a flat wash of the track's `activeFill` faded in
+ * over the resting pane. Matte by construction - one opaque colour at an alpha,
+ * the move the MIDI editor's own chrome makes (`regionTint`, `marqueeFill`) -
+ * where the old pulse was light: a `brightness()` filter plus a screen-blended
+ * overlay.
+ *
+ * **Opacity is the point, not just the look.** Of everything that could say
+ * "this block is sounding right now", opacity is the only property the
+ * compositor can animate without repainting, so a promoted overlay costs
+ * nothing per frame. Walking the pane's own background-colour instead renders
+ * identically and was measured at ~920ms of raster per 6s of playback on an
+ * 80-block project: a paint change on hundreds of unpromoted elements
+ * re-rasters every tile they cover, filter or no filter. That is the same trap
+ * the `brightness()` filter fell into, one layer down - which is why "make it
+ * matte" and "make it cheap" turned out to be different problems.
+ *
+ * `will-change: opacity` is applied by the registry only while the transport
+ * runs: an imperative per-frame write is not an accelerated animation, so
+ * without the hint this repaints like anything else. See midiActivityRegistry.
+ */
+function MattePulse({ color }: { color: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      data-midi-activity-pulse=""
+      className="absolute inset-0 pointer-events-none rounded-[6px]"
+      style={{ backgroundColor: color, opacity: 'var(--midi-activity-opacity, 0)' }}
+    />
+  )
+}
+
+/** A note dash's colour as a function of ITS activity: `resting` at 0, `active`
+ *  at 1, interpolated in oklab by the browser. Notes take the colour walk
+ *  rather than the overlay above because there are tens of thousands of them on
+ *  a real project - one promoted layer each is not on the table - and measured
+ *  against the block pulse they are minor (~140ms of that 1060ms). */
+function noteActivityMix(resting: string, active: string): string {
+  return `color-mix(in oklab, ${resting}, ${active} calc(var(--midi-note-activity, 0) * 100%))`
+}
 
 interface LoopSection {
   startBeat: number
@@ -210,16 +231,7 @@ const NotePreview = memo(function NotePreview({ notes, totalBeats, loopBeats, pa
               // makes the loop repeats read as a chain of small suns.
             }}
           >
-            <div
-              aria-hidden="true"
-              className="absolute inset-0 rounded-[inherit]"
-              style={{
-                backgroundColor: palette.selectedOutline,
-                opacity: 'var(--midi-activity-opacity, 0)',
-                boxShadow: `inset 0 0 16px ${palette.outline}`,
-                mixBlendMode: 'screen',
-              }}
-            />
+            {!selected && <MattePulse color={palette.activeFill} />}
           </div>
         )
       })}
@@ -234,9 +246,16 @@ const NotePreview = memo(function NotePreview({ notes, totalBeats, loopBeats, pa
         // Resting: lit tubing with a glow. Selected: the notes flip DARK -
         // outshone by the ignited body - and the body's light wraps around
         // each first-pass mark (repeats stay unwrapped so they read dimmer).
+        // The pulse walks that resting colour to its matte peak: toward white
+        // on the dark pane, DEEPER on the lit body (where lifting a note would
+        // dissolve it into the light it is supposed to read against).
         const noteFill = selected
-          ? (repeat > 0 ? palette.selectedRepeatedNote : palette.selectedNote)
-          : (repeat > 0 ? palette.repeatedNote : palette.note)
+          ? (repeat > 0
+              ? noteActivityMix(palette.selectedRepeatedNote, palette.activeSelectedRepeatedNote)
+              : noteActivityMix(palette.selectedNote, palette.activeSelectedNote))
+          : (repeat > 0
+              ? noteActivityMix(palette.repeatedNote, palette.activeRepeatedNote)
+              : noteActivityMix(palette.note, palette.activeNote))
         const noteHalo = repeat > 0
           ? undefined
           : selected
@@ -252,25 +271,15 @@ const NotePreview = memo(function NotePreview({ notes, totalBeats, loopBeats, pa
               width: `max(${widthPct}%, 3px)`,
               top: `${topPct}%`,
               height: 2,
-              backgroundColor: noteFill,
+              background: noteFill,
               boxShadow: noteHalo,
-              // No will-change here (or on the spans below): these hint-promoted
-              // compositor layers numbered in the tens of thousands on a large
-              // project. A 2px dash repaints trivially when its activity var
-              // moves; the block-level layers above are hint enough.
-              filter: 'brightness(calc(1 + var(--midi-note-activity, 0) * 2.6)) saturate(1.25)',
+              // The dash's resting halo stays (it is static - part of the neon
+              // voice, not the pulse). What is gone is the per-note brightness
+              // filter and the overlay span that rode it: one filtered element
+              // and one extra div PER NOTE PER FRAME, in the tens of thousands
+              // on a real project.
             }}
-          >
-            <span
-              aria-hidden="true"
-              className="absolute inset-0 rounded-[inherit]"
-              style={{
-                backgroundColor: palette.selectedOutline,
-                opacity: 'var(--midi-note-activity, 0)',
-                boxShadow: `0 0 6px ${palette.outline}`,
-              }}
-            />
-          </div>
+          />
         )
       })}
     </>
