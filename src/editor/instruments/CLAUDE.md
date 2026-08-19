@@ -1,6 +1,23 @@
 # src/editor/instruments — one file per visual instrument
 
-Each file exports an `ObjectInstrumentDef` (schema) colocated with its R3F component. `index.ts` is the registry.
+Each instrument is a `Foo.tsx` def file (`ObjectInstrumentDef` - the schema) plus, for anything but a trivial visual, a sibling `FooVisual.tsx` holding its R3F component. `index.ts` is the registry.
+
+## The def is metadata; the visual is a lazy chunk
+
+`index.ts` imports every def eagerly (resolve, the stores, the picker and the tests all read def metadata synchronously), so whatever a def file imports rides in the editor's initial bundle. The R3F component - the bulk of an instrument, its GLSL, and any instrument-only library - therefore lives in `FooVisual.tsx`, and the def wires it with
+
+```ts
+component: lazyInstrument(() => import('./FooVisual').then((m) => m.FooVisual)),
+```
+
+(`lazyInstrument.ts`; same for `instancedComponent`). A project downloads only the instruments it uses. Rules that keep it working:
+
+- **The def file never imports the view file statically** - only through that `import()`. The view file MAY import from the def file (PARAMS, exported consts, pure helpers); that direction is fine.
+- **Everything other code imports from an instrument stays in the def file** (`resolveActiveX`, exported GLSL, `PALETTES`, row tables) - grep for `instruments/Foo'` before moving anything.
+- Render sites wrap the component in `<Suspense fallback={<InstrumentPending />}>` per object (ObjectRenderer, InstancedObjectRenderer). `lazyInstrument` renders synchronously once the chunk is in memory - it does NOT suspend on first render the way `React.lazy` does - so a preloaded instrument mounts exactly like an inline one. Preloads: `preloadProjectInstruments` runs on every ProjectStore change (VisualBeatSync), library cards preload on hover, `InstrumentPreviewCapture` before capturing.
+- **Export gates on it**: `runExport` awaits `whenInstrumentsSettled()` (no fetch in flight, no `InstrumentPending` mounted) before frame 0, because a suspended object is an empty object in the capture. Keep `InstrumentPending` as the fallback at any new scene render site.
+- Trivial visuals (the scene post-process instruments that render `null`, the two camera rigs, `shapes.tsx`) keep `component:` inline - there is nothing to defer.
+- Tests importing a def file get a `lazyInstrument` reference; nothing calls it under node, and the `import()` never runs at module load.
 
 ## PURITY IS LAW (lint-enforced in this directory)
 
@@ -8,7 +25,7 @@ No `useFrame`, `performance.now`, `Date.now`, `Math.random`, clock/delta. Per-fr
 
 ## Adding an instrument — the checklist
 
-1. New file exporting the def: `id`, `name`, `kind: 'object'`, `params: ParamDef[]`, `userInterfaceRenderer`, `component: FC<{trackId}>`, plus optional `localTransform`, `abilities`, `midiRows`, `fullFrame`, `defaultOnTop`.
+1. New def file exporting the def: `id`, `name`, `kind: 'object'`, `params: ParamDef[]`, `userInterfaceRenderer`, `component` (a `lazyInstrument(() => import('./FooVisual').then((m) => m.FooVisual))` pointing at the sibling `FooVisual.tsx` that holds the R3F component - see above), plus optional `localTransform`, `abilities`, `midiRows`, `fullFrame`, `defaultOnTop`.
 2. Register in `index.ts` (`INSTRUMENTS` map).
 3. **Add a picker entry in `components/LeftSidebar.tsx` `ALL_OBJECT_INSTRUMENTS`** — the add-track menu is curated and does NOT read the registry; without this the instrument is registered but unreachable.
 3b. **Add a track-row mark in `components/timeline/trackGlyphs.tsx`** — a monotone 16px glyph in `currentColor` (the row tints it with the track's color). Separate from the card icon above, which is full-color and can't be tinted. Missing one is not a crash: the row falls back to an anonymous dashed circle.
@@ -24,7 +41,10 @@ the component again. Only instruments whose file pulls in nothing but types
 (BassRipple) can be tested directly. Everything else splits the pure half into a
 sibling module with type-only imports — `laserSphereCore.ts`, `waterDropCore.ts`
 — and the test imports that. Name the test after the core file, not the
-instrument, so the pairing is obvious.
+instrument, so the pairing is obvious. (Since the visual moved to `FooVisual.tsx`
+a DEF file usually imports nothing but types and `lazyInstrument`, so importing
+a def in a test is fine again - it is the VIEW file that still closes the cycle;
+never import a `*Visual.tsx` from a test.)
 
 ## Per-instance opacity on an InstancedMesh
 

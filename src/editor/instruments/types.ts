@@ -170,7 +170,10 @@ export interface ObjectInstrumentDef {
    *  it with its ancestors' transforms; the component renders at the result. Omit for
    *  a non-transforming object (identity). */
   localTransform?: (ctx: TransformCtx) => LocalTransform
-  /** The R3F visual; pulls its per-frame state by trackId from the engine. */
+  /** The R3F visual; pulls its per-frame state by trackId from the engine.
+   *  Normally a `lazyInstrument(() => import('./FooVisual')...)` (lazyInstrument.ts)
+   *  so the component's chunk is fetched only by projects that mount it; the
+   *  render sites wrap it in Suspense. An inline FC is fine for trivial visuals. */
   component: FC<{ trackId: string }>
   /** Instanced fast path: ONE mount per track that draws every VisualCopy
    *  occurrence itself (InstancedMesh2 + core/visual/instancedFrame.ts),
