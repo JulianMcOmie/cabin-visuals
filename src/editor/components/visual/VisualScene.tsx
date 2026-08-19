@@ -772,15 +772,20 @@ export function VisualScene() {
     const hdrOptions = { minFilter: LinearFilter, magFilter: LinearFilter, type: HalfFloatType }
     const compositeTarget = new WebGLRenderTarget(1, 1, hdrOptions)
     // Production mip-chain bloom from `postprocessing`. It extracts luminance
-    // from the half-float scene buffer, then combines seven progressively wider
+    // from the half-float scene buffer, then combines five progressively wider
     // levels. HDR emitters create a tight core and long, smooth falloff without
-    // geometry shells or hand-authored blur planes.
+    // geometry shells or hand-authored blur planes. Five levels, not seven: the
+    // two smallest mips (a few px across) cost four render passes per frame
+    // and their contribution was below 8-bit quantization on every template
+    // shot-diffed (PSNR ∞) - halving bloom's pass count for free. Half-res
+    // luminance (resolutionScale) was ALSO tried and rejected: visibly softer
+    // on real bloom content (22 dB).
     const bloomEffect = new BloomEffect({
       luminanceThreshold: 1.15,
       luminanceSmoothing: 0.08,
       mipmapBlur: true,
       radius: 0.72,
-      levels: 7,
+      levels: 5,
     })
     bloomEffect.initialize(gl, true, HalfFloatType)
     const finalMaterial = new ShaderMaterial({
