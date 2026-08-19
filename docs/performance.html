@@ -4,26 +4,26 @@
 <meta charset="utf-8">
 <title>Cabin Visuals — Rendering Performance</title>
 <style>
-  @page { size: letter; margin: 0.6in; }
+  @page { size: letter; margin: 0.5in; }
   html, body { background: #fff; color: #000; }
-  body { font: 15.5px/1.45 Georgia, "Times New Roman", serif; max-width: 7.3in; margin: 0 auto; padding: 0.3in 0.2in; overflow-x: hidden; }
-  h1 { font-size: 30px; margin: 0 0 4px; letter-spacing: -0.5px; }
-  h2 { font-size: 22px; margin: 26px 0 8px; border-bottom: 2px solid #000; padding-bottom: 3px; page-break-after: avoid; }
-  h3 { font-size: 17px; margin: 16px 0 4px; page-break-after: avoid; }
+  body { font: 17px/1.35 Georgia, "Times New Roman", serif; max-width: 7.3in; margin: 0 auto; padding: 0.3in 0.2in; overflow-x: hidden; }
+  h1 { font-size: 34px; margin: 0 0 4px; letter-spacing: -0.5px; }
+  h2 { font-size: 24px; margin: 18px 0 6px; border-bottom: 2px solid #000; padding-bottom: 3px; page-break-after: avoid; }
+  h3 { font-size: 20px; margin: 16px 0 4px; page-break-after: avoid; }
   p, li { margin: 5px 0; }
-  .sub { color: #333; font-size: 14px; margin-bottom: 14px; }
+  .sub { color: #333; font-size: 17px; margin-bottom: 14px; }
   code, pre { font-family: Consolas, "Courier New", monospace; }
-  code { font-size: 13.5px; background: #f0f0f0; padding: 0 3px; }
-  pre { font-size: 12.5px; line-height: 1.35; background: #f4f4f4; border-left: 3px solid #000; padding: 8px 10px; margin: 8px 0 12px; white-space: pre-wrap; word-break: break-word; page-break-inside: avoid; }
-  .path { display: block; font-family: Consolas, monospace; font-size: 12px; color: #222; margin: 6px 0 -4px; }
-  figure { margin: 12px 0 14px; page-break-inside: avoid; }
+  code { font-size: 16px; background: #f0f0f0; padding: 0 3px; }
+  pre { font-size: 14px; line-height: 1.32; background: #f4f4f4; border-left: 3px solid #000; padding: 6px 9px; margin: 6px 0 10px; white-space: pre-wrap; word-break: break-word; page-break-inside: avoid; }
+  .path { display: block; font-family: Consolas, monospace; font-size: 14.5px; color: #222; margin: 6px 0 -4px; }
+  figure { margin: 8px 0 10px; page-break-inside: avoid; }
   figure svg { width: 100%; height: auto; display: block; }
-  figcaption { font-size: 13px; color: #333; margin-top: 4px; }
-  table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 8px 0 12px; page-break-inside: avoid; }
-  th, td { border: 1px solid #000; padding: 4px 7px; text-align: left; vertical-align: top; }
+  figcaption { font-size: 16px; color: #333; margin-top: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; margin: 6px 0 10px; page-break-inside: avoid; }
+  th, td { border: 1px solid #000; padding: 3px 6px; text-align: left; vertical-align: top; }
   th { background: #e6e6e6; }
   .box { border: 2px solid #000; padding: 8px 12px; margin: 10px 0; page-break-inside: avoid; }
-  .tree { font-family: Consolas, monospace; font-size: 12.5px; line-height: 1.4; background: #f4f4f4; padding: 8px 10px; white-space: pre; overflow: hidden; }
+  .tree { font-family: Consolas, monospace; font-size: 14px; line-height: 1.3; background: #f4f4f4; padding: 8px 10px; white-space: pre-wrap; overflow: hidden; }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   @media print { .two { display: block; } .pb { page-break-before: always; } }
   svg text { font-family: Helvetica, Arial, sans-serif; }
@@ -39,38 +39,37 @@
 
 <div class="tree">src/editor/
 ├─ core/
-│  ├─ playback.ts              transport: the ONLY producer of TimeStore.currentBeat
+│  ├─ playback.ts            the ONLY writer of TimeStore.currentBeat
 │  ├─ visual/
-│  │  ├─ VisualEngine.ts        resolve tracks → graph; computeAtBeat per frame → ObjectState
-│  │  ├─ VisualBeatSync.tsx     r3f useFrame: pushes the beat + params into the engine
-│  │  ├─ instrumentFrame.ts     useInstrumentFrame: signature-gated per-instrument callback
-│  │  ├─ noteWindow.ts          bisected note windows (no full scans per frame)
-│  │  └─ pauseCanary.ts         dev-only: names any object that moves while paused
-│  └─ visualCopies/
-│     └─ resolveVisualCopies.ts movers/splitters → VisualCopy[] per object
+│  │  ├─ VisualEngine.ts      resolve → graph; computeAtBeat → ObjectState
+│  │  ├─ VisualBeatSync.tsx   useFrame: beat + params into the engine
+│  │  ├─ instrumentFrame.ts   useInstrumentFrame (signature-gated cb)
+│  │  ├─ noteWindow.ts        bisected note windows, no full scans
+│  │  └─ pauseCanary.ts       dev-only: names anything moving while paused
+│  └─ visualCopies/resolveVisualCopies.ts   movers/splitters → copies
 ├─ components/visual/
-│  ├─ VisualScene.tsx           the render-pass pipeline (scene → composite → bloom → grade)
-│  ├─ RenderGovernor.tsx        frameloop 'demand' while paused; one frame per change
-│  ├─ ObjectRenderer.tsx        one mounted copy of an object (memoized)
-│  ├─ InstancedObjectRenderer.tsx  one InstancedMesh2 per track (Cube family)
-│  ├─ ShaderWrapper.tsx + shaderScratchPool.ts   per-copy shader effects, pooled targets
-│  └─ useRenderTargetScale.ts   preview quality → render-target scale
-├─ instruments/                 defs (metadata) + lazily loaded *Visual.tsx components
+│  ├─ VisualScene.tsx         pass pipeline: scene → composite → bloom → grade
+│  ├─ RenderGovernor.tsx      'demand' while paused; one frame per change
+│  ├─ ObjectRenderer.tsx      one mounted copy (memoized)
+│  ├─ InstancedObjectRenderer.tsx   one InstancedMesh2 per track
+│  ├─ ShaderWrapper.tsx, shaderScratchPool.ts   per-copy fx, pooled targets
+│  └─ useRenderTargetScale.ts preview quality → target scale
+├─ instruments/               defs + lazily loaded *Visual.tsx components
 ├─ store/TimeStore.ts, UIStore.ts (previewQuality)
-└─ App.tsx                      the &lt;Canvas&gt; (dpr 1, no MSAA), ambient bleed</div>
+└─ App.tsx                    the &lt;Canvas&gt; (dpr 1, no MSAA), ambient bleed</div>
 
 <h2>2. Architecture: beat → state → meshes → passes → screen</h2>
 <figure>
 <svg viewBox="0 0 900 470" role="img" aria-label="Data flow from transport to screen">
   <defs><marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000"/></marker></defs>
-  <g font-size="22" font-weight="bold" text-anchor="middle">
+  <g font-size="27" font-weight="bold" text-anchor="middle">
     <rect x="10" y="20" width="420" height="80" fill="#fff" stroke="#000" stroke-width="2.5"/>
     <text x="220" y="52">playback.ts (RAF)</text>
-    <text x="220" y="82" font-weight="normal" font-size="19">writes TimeStore.currentBeat</text>
+    <text x="220" y="82" font-weight="normal" font-size="23">writes TimeStore.currentBeat</text>
 
     <rect x="470" y="20" width="420" height="80" fill="#fff" stroke="#000" stroke-width="2.5"/>
     <text x="680" y="52">VisualBeatSync (useFrame)</text>
-    <text x="680" y="82" font-weight="normal" font-size="19">beat + params into the engine</text>
+    <text x="680" y="82" font-weight="normal" font-size="23">beat + params into the engine</text>
     <line x1="430" y1="60" x2="468" y2="60" stroke="#000" stroke-width="2.5" marker-end="url(#a)"/>
 
     <line x1="680" y1="100" x2="680" y2="118" stroke="#000" stroke-width="2.5"/>
@@ -79,11 +78,11 @@
 
     <rect x="10" y="140" width="420" height="80" fill="#eee" stroke="#000" stroke-width="2.5"/>
     <text x="220" y="172">VisualEngine.computeAtBeat</text>
-    <text x="220" y="202" font-weight="normal" font-size="19">→ ObjectState per object</text>
+    <text x="220" y="202" font-weight="normal" font-size="23">→ ObjectState per object</text>
 
     <rect x="470" y="140" width="420" height="80" fill="#fff" stroke="#000" stroke-width="2.5"/>
     <text x="680" y="172">resolveVisualCopies</text>
-    <text x="680" y="202" font-weight="normal" font-size="19">movers/splitters → copies</text>
+    <text x="680" y="202" font-weight="normal" font-size="23">movers/splitters → copies</text>
     <line x1="430" y1="180" x2="468" y2="180" stroke="#000" stroke-width="2.5" marker-end="url(#a)"/>
 
     <line x1="680" y1="220" x2="680" y2="238" stroke="#000" stroke-width="2.5"/>
@@ -92,13 +91,13 @@
 
     <rect x="10" y="260" width="880" height="80" fill="#fff" stroke="#000" stroke-width="2.5"/>
     <text x="450" y="292">useInstrumentFrame(trackId, cb) — one per mounted copy</text>
-    <text x="450" y="322" font-weight="normal" font-size="19">signature gate: cb runs only when beat / params / notes / size changed</text>
+    <text x="450" y="322" font-weight="normal" font-size="23">signature gate: cb runs only when beat / params / notes / size changed</text>
 
     <line x1="450" y1="340" x2="450" y2="378" stroke="#000" stroke-width="2.5" marker-end="url(#a)"/>
 
     <rect x="10" y="380" width="880" height="80" fill="#eee" stroke="#000" stroke-width="2.5"/>
     <text x="450" y="412">VisualScene useFrame: scene → composite → bloom → grade → screen</text>
-    <text x="450" y="442" font-weight="normal" font-size="19">RenderGovernor: 'always' while playing, 'demand' (one frame per change) while paused</text>
+    <text x="450" y="442" font-weight="normal" font-size="23">RenderGovernor: 'always' while playing, 'demand' (one frame per change) while paused</text>
   </g>
 </svg>
 <figcaption>Figure 1 — One frame. The engine is a module singleton, not React: per-frame state never triggers re-renders. Only the structural object <em>list</em> (which objects exist) is a React-visible store.</figcaption>
@@ -129,27 +128,24 @@ subscribeObjects(() => invalidate())                     // re-resolve landed �
 useTimeStore.subscribe((s, prev) => {
   if (!s.isPlaying &amp;&amp; (s.currentBeat !== prev.currentBeat || prev.isPlaying)) invalidate()
 })</pre>
-<p>Measured on a real project, paused: <b>0 GL frames, 0 ambient-bleed copies per 3 s</b>; the profiler shows ~88 % idle. Every other loop in the editor follows the same contract: the ambient bleed painter parks itself 300 ms after the last change; canvas vignettes in the library pause offscreen; the timeline’s glow sweep early-exits once cleared.</p>
+<p>Measured on a real project, paused: <b>0 GL frames, 0 bleed copies per 3 s</b>, ~88 % idle. Every other loop follows the same contract: the ambient-bleed painter parks 300 ms after the last change; library vignettes pause offscreen; the timeline glow sweep early-exits once cleared.</p>
 
 <h2>4. Where the per-frame JS goes (and how it was cut)</h2>
 <table>
 <tr><th>Stage</th><th>File</th><th>What it costs / what governs it</th></tr>
-<tr><td>Engine state</td><td><code>core/visual/VisualEngine.ts</code> + <code>noteWindow.ts</code></td><td><code>computeAtBeat</code> per object: active notes, pulse energy, ADSR, transform. Every note scan is a <b>bisected window</b> over the sorted stream — 11 k-note project: 450 → 80 µs/frame. State objects are reused per track (no per-frame allocation).</td></tr>
-<tr><td>Copies</td><td><code>core/visualCopies/resolveVisualCopies.ts</code></td><td>Movers/splitters produce N copies per object. One context object per chain step, padding copies pooled. 24 tracks × splitter: 0.93 → 0.12 ms/frame.</td></tr>
-<tr><td>Instruments</td><td><code>core/visual/instrumentFrame.ts</code></td><td>Signature gate (§2). Canvas instruments (Midi Roll, Text Display) repaint only when their inputs change; Midi Roll indexes its notes (1.0 → 0.44 ms/frame on the 11 k-note project); Text Display pre-draws upcoming words 1–2 beats early so the on-beat frame is a texture pointer swap.</td></tr>
-<tr><td>React</td><td><code>components/visual/ObjectRenderer.tsx</code></td><td>Memoized per copy: a structural re-publish (~12/s during a block drag) no longer re-renders instrument components. Group-effect selectors are answered once per store write and shared by all copies.</td></tr>
+<tr><td>Engine state</td><td><code>core/visual/VisualEngine.ts</code> + <code>noteWindow.ts</code></td><td><code>computeAtBeat</code> per object: active notes, pulse, ADSR, transform. Note scans are <b>bisected windows</b> (11 k notes: 450 → 80 µs/frame); state objects reused per track.</td></tr>
+<tr><td>Copies</td><td><code>core/visualCopies/resolveVisualCopies.ts</code></td><td>N copies per object. One context per chain step, padding pooled: 0.93 → 0.12 ms/frame (24 tracks × splitter).</td></tr>
+<tr><td>Instruments</td><td><code>core/visual/instrumentFrame.ts</code></td><td>Signature gate (§2). Canvas instruments repaint only on change; Midi Roll indexes its notes (1.0 → 0.44 ms/frame); Text Display pre-draws upcoming words so the on-beat frame is a pointer swap.</td></tr>
+<tr><td>React</td><td><code>components/visual/ObjectRenderer.tsx</code></td><td>Memoized per copy: a structural re-publish (~12/s during a drag) no longer re-renders instruments; selectors answered once per store write.</td></tr>
 </table>
 
-<span class="path">src/editor/core/visual/noteWindow.ts</span>
-<pre>// [first onset ≥ beat − lookback, first onset &gt; beat) by bisection; callers keep their exact test.
-const { start, end } = soundingNoteWindow(notes, beat)
-for (let i = start; i &lt; end; i++) if (sounding(notes[i], beat)) active.push(notes[i])</pre>
+
 
 <h2 class="pb">5. The render passes</h2>
 <figure>
 <svg viewBox="0 0 900 340" role="img" aria-label="Render pass chain">
   <defs><marker id="b" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000"/></marker></defs>
-  <g font-size="19" text-anchor="middle">
+  <g font-size="23" text-anchor="middle">
     <rect x="10" y="20" width="190" height="100" fill="#fff" stroke="#000" stroke-width="2.5"/>
     <text x="105" y="52" font-weight="bold">scene pass</text>
     <text x="105" y="80">per composited</text><text x="105" y="106">scene → target</text>
@@ -175,7 +171,7 @@ for (let i = start; i &lt; end; i++) if (sounding(notes[i], beat)) active.push(n
     <text x="450" y="226">shader effects / crop masks: object rendered offscreen, one pass per effect</text>
     <text x="450" y="256">targets scaled by preview quality, POOLED across copies (16 copies: 68 → 38 textures)</text>
     <text x="450" y="286">shadow depth pass only when a casting instrument is mounted (def.castsShadows)</text>
-    <text x="450" y="316" font-size="16">components/visual/ShaderWrapper.tsx · shaderScratchPool.ts · useRenderTargetScale.ts · VisualScene.tsx</text>
+    <text x="450" y="316" font-size="19">components/visual/ShaderWrapper.tsx · shaderScratchPool.ts · useRenderTargetScale.ts · VisualScene.tsx</text>
   </g>
 </svg>
 <figcaption>Figure 2 — A typical project is ~13 GPU passes/frame (was 17: bloom went from seven mip levels to five, pixel-identical; the empty shadow pass was removed). Empty front/invert passes are skipped.</figcaption>
@@ -220,7 +216,7 @@ return exportPinned ? 1 : previewQualityScale(previewQuality, isPlaying)</pre>
 <tr><td><code>paint-probe.mjs</code> (<code>HEADED=1</code>)</td><td>Paint/layout/commit ms per second and frame count — headed = the real GPU compositor.</td></tr>
 <tr><td><code>shot.mjs</code>, <code>mr-hash.mjs</code>, <code>roll-rows-check.mjs</code></td><td>Output identity: canvas screenshots (PSNR ∞ = identical), Midi Roll canvas hashes, piano-roll DOM identity.</td></tr>
 </table>
-<p>Real projects load through the dev-only <code>window.__cabinHydrate</code> hook; the software rasterizer makes GPU <em>time</em> meaningless but pass counts, uploads and JS time are exact, and <code>HEADED=1</code> uses the real GPU. The rule for any rendering change: prove PSNR ∞ (or match a known two-state flip) before merging.</p>
+<p>Real projects load via the dev-only <code>window.__cabinHydrate</code> hook. Headless = exact counts and JS time (GPU time meaningless); <code>HEADED=1</code> = the real GPU. Rule for any rendering change: prove PSNR ∞ before merging.</p>
 
 </body>
 </html>
