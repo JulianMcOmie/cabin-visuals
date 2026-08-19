@@ -4,8 +4,9 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { useUIStore } from '../../store/UIStore'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { computeRulerGrid } from '../rulerGrid'
-import { midiEditorChrome, midiNoteColor, midiRowLabelColor } from '../../utils/midiEditorPalette'
+import { midiEditorChrome, midiNoteColor } from '../../utils/midiEditorPalette'
 import type { Block, Note } from '../../types'
+import { LoopGhosts, NoteRect, RowLabels, RowStripes } from './rollParts'
 import { useNoteGestures } from './useNoteGestures'
 import { useMidiBlockGestures } from './useMidiBlockGestures'
 import { loopLengthBeats, tileLoopNotes } from '../../core/visual/noteFlatten'
@@ -218,6 +219,14 @@ export function MidiEditor({
     setSelectedNoteIds,
   })
   const vimOn = vimEnabled && rows.length > 0
+  // The gutter's key map, memoized on its own so the (memoized) label column
+  // keeps its identity across the per-render `vim` object below - null while
+  // the mode is off, which is also what tells RowLabels to draw note names.
+  const vimAnchorRow = vimApi.state.anchorRow
+  const vimRowKeys = useMemo(
+    () => (vimOn ? rowKeyLabels(rows, vimRegime, vimAnchorRow) : null),
+    [vimOn, rows, vimRegime, vimAnchorRow],
+  )
   const vim = useMemo(() => ({
     active: vimOn,
     cursorBeat: vimApi.state.cursorBeat,
@@ -225,7 +234,6 @@ export function MidiEditor({
     stepBeats: quantize,
     noteLengthBeats: vimApi.state.noteLengthBeats,
     staged: vimApi.state.staged,
-    rowKeys: rowKeyLabels(rows, vimRegime, vimApi.state.anchorRow),
     ghosts: vimApi.draftGhosts,
     ghostKind: vimApi.state.draft?.kind ?? null,
     selection: vimApi.selectionSpanRows,
@@ -233,7 +241,7 @@ export function MidiEditor({
     loopSlots: vimApi.state.loopSlots,
     accent: VIM_ACCENT,
     onCursorSet: vimApi.setCursorFromPointer,
-  }), [vimOn, vimApi, quantize, rows, vimRegime, beatsPerBar])
+  }), [vimOn, vimApi, quantize, beatsPerBar])
 
   // Block move/resize via the ruler clip header (separate from note gestures).
   const { handleHeaderPointerDown, handleHeaderPointerMove, handleResizePointerDown } = useMidiBlockGestures({
@@ -377,12 +385,38 @@ export function MidiEditor({
   const chrome = useMemo(() => midiEditorChrome(trackColor), [trackColor])
 
   // Rows holding a selected note light their gutter label up in the row color.
-  // Computed from the live local notes so labels follow notes mid-drag.
-  const selectedPitches = useMemo(() => {
+  // Computed from the live local notes so labels follow notes mid-drag - as a
+  // sorted STRING, so the memoized label column only re-renders when the set of
+  // lit rows actually changes, not on every drag frame that recomputes it.
+  const selectedPitchKey = useMemo(() => {
     const pitches = new Set<number>()
     for (const n of allNotes) if (selectedNoteIds.has(n.id)) pitches.add(n.pitch)
-    return pitches
+    return Array.from(pitches).sort((a, b) => a - b).join(',')
   }, [allNotes, selectedNoteIds])
+
+  // Per-note and per-row callbacks handed to the memoized NoteRect / RowLabels.
+  // They must be referentially stable across drag frames (or the memo is moot),
+  // so each reads whatever it needs from this ref, refreshed every render, and
+  // notes are looked up by id rather than closed over.
+  const notesById = useMemo(() => new Map(allNotes.map((n) => [n.id, n])), [allNotes])
+  const partsLatest = useRef({ notesById, onNoteSelect, handleNotePointerDown, handleHoverChange, onNoteWordEdit, onLaneRowClick })
+  partsLatest.current = { notesById, onNoteSelect, handleNotePointerDown, handleHoverChange, onNoteWordEdit, onLaneRowClick }
+  const onNoteRectPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>, noteId: string) => {
+    const l = partsLatest.current
+    const note = l.notesById.get(noteId)
+    if (!note) return
+    l.onNoteSelect?.(note)
+    l.handleNotePointerDown(e, note)
+  }, [])
+  const onNoteRectPointerOut = useCallback(() => { partsLatest.current.handleHoverChange(null) }, [])
+  const onWordEditStart = useCallback((noteId: string, value: string) => { setWordEdit({ noteId, value }) }, [])
+  const onWordEditChange = useCallback((noteId: string, value: string) => { setWordEdit({ noteId, value }) }, [])
+  const onWordEditCommit = useCallback((noteId: string, value: string) => {
+    partsLatest.current.onNoteWordEdit?.(noteId, value)
+    setWordEdit(null)
+  }, [])
+  const onWordEditCancel = useCallback(() => { setWordEdit(null) }, [])
+  const onLaneRowClickStable = useCallback((laneIndex: number) => { partsLatest.current.onLaneRowClick?.(laneIndex) }, [])
 
   // Loop ghosts: the pattern's repeats, dimmed and non-interactive, computed from
   // the live local notes so they track in-flight edits. repeat 0 is the authored
@@ -539,99 +573,17 @@ export function MidiEditor({
             if (dragStateRef.current.type === 'none') setCursor('default')
           }}
         >
-          {rows.map((row, rowIndex) => {
-            const isLane = row.laneIndex !== undefined && !!onLaneRowClick
-            const laneActive = isLane && row.laneIndex === activeLaneIndex
-            // In vim the gutter teaches its own key map: each row shows the
-            // letter that writes it. It takes the note-name slot, because while
-            // you're typing that IS the more useful name for the row - and it's
-            // the only way an arbitrary row vocabulary can explain itself.
-            const vimKey = vimOn ? vim.rowKeys.get(rowIndex) : undefined
-            const onCursorRow = vimOn && rowIndex === vim.cursorRow
-            return (
-            <div
-              key={row.pitch}
-              title={row.noteLabel ? `${row.label} (${row.noteLabel})` : isLane ? `${row.label} - click to edit this style lane` : row.label}
-              onClick={isLane ? () => onLaneRowClick!(row.laneIndex!) : undefined}
-              role={isLane ? 'button' : undefined}
-              aria-pressed={isLane ? laneActive : undefined}
-              style={{
-                height: rowHeight,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 4,
-                paddingLeft: 6,
-                paddingRight: 8,
-                borderBottom: '1px solid rgba(255,255,255,0.05)',
-                backgroundColor: onCursorRow
-                  ? 'rgba(255,255,255,0.07)'
-                  : laneActive
-                  ? 'rgba(255,255,255,0.09)'
-                  : rowIndex % 2 === 1 ? 'rgba(0,0,0,0.08)' : 'transparent',
-                boxSizing: 'border-box',
-                overflow: 'hidden',
-                cursor: isLane ? 'pointer' : undefined,
-              }}
-            >
-              <span
-                style={{
-                  // A style-lane row IS its style preview: the lane's own
-                  // face, color and (clamped) size - what you read here is
-                  // what a note at this height wears.
-                  fontSize: row.sizeScale !== undefined
-                    ? Math.min(rowHeight - 6, Math.max(9, 10 + row.sizeScale * 3.5))
-                    : row.noteLabel ? 11 : 13,
-                  fontFamily: row.fontFamily,
-                  // Selection feedback: rows holding a selected note light up
-                  // in the row's color. Emphasized rows (octave anchors,
-                  // flagship instrument rows) sit a step brighter than the
-                  // rest, but stay neutral so color always means selection.
-                  color: row.laneIndex !== undefined
-                    ? row.color
-                    : selectedPitches.has(row.pitch)
-                      ? midiRowLabelColor(row.color)
-                      : row.emphasized ? '#9a9aa3' : '#666666',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  minWidth: 0,
-                }}
-              >
-                {row.label}
-              </span>
-              {vimKey ? (
-                <span
-                  style={{
-                    fontSize: 9,
-                    fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-                    lineHeight: '13px',
-                    minWidth: 13,
-                    textAlign: 'center',
-                    borderRadius: 3,
-                    padding: '0 3px',
-                    flexShrink: 0,
-                    color: onCursorRow ? '#0b0d12' : 'rgba(255,255,255,0.55)',
-                    backgroundColor: onCursorRow ? vim.accent : 'rgba(255,255,255,0.09)',
-                  }}
-                >
-                  {vimKey}
-                </span>
-              ) : row.noteLabel && (
-                <span
-                  style={{
-                    fontSize: 10,
-                    color: 'rgba(255,255,255,0.35)',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0,
-                  }}
-                >
-                  {row.noteLabel}
-                </span>
-              )}
-            </div>
-            )
-          })}
+          <RowLabels
+            rows={rows}
+            rowHeight={rowHeight}
+            selectedPitchKey={selectedPitchKey}
+            laneRowsClickable={!!onLaneRowClick}
+            activeLaneIndex={activeLaneIndex}
+            onLaneRowClick={onLaneRowClickStable}
+            vimRowKeys={vimRowKeys}
+            vimCursorRow={vimOn ? vim.cursorRow : -1}
+            vimAccent={vim.accent}
+          />
           {/* Range label annotations */}
           {rangeLabelPositions.map((rl, i) => (
             <div
@@ -733,22 +685,7 @@ export function MidiEditor({
 
           {/* Alternating row bands + dividers make neighboring MIDI lanes easy
               to track across the labels and time grid without adding visual weight. */}
-          {rows.map((_, i) => (
-            <div
-              key={i}
-              style={{
-                position: 'absolute',
-                top: i * rowHeight,
-                left: 0,
-                right: 0,
-                height: rowHeight,
-                backgroundColor: i % 2 === 1 ? 'rgba(0,0,0,0.08)' : 'transparent',
-                borderBottom: '1px solid rgba(255,255,255,0.05)',
-                boxSizing: 'border-box',
-                pointerEvents: 'none',
-              }}
-            />
-          ))}
+          <RowStripes count={rows.length} rowHeight={rowHeight} />
 
           {/* Midi block region: tint + edge lines. Painted ABOVE the row
               stripes so the track hue reads cleanly instead of being greyed
@@ -795,29 +732,14 @@ export function MidiEditor({
           {/* Ghost repeats: where the pattern plays again, read-only (edit the
               pattern; every repeat follows). Rendered before the notes so real
               notes always sit on top. */}
-          {loopGhosts.map((t) => {
-            const rowIndex = pitchToRowIndex(t.note.pitch)
-            if (rowIndex === -1) return null
-            const row = rows[rowIndex]
-            const ghostLeft = Math.round(blockStartPx + beatToX(t.startBeat, pixelsPerBeat))
-            const ghostRight = Math.round(blockStartPx + beatToX(t.startBeat + t.durationBeats, pixelsPerBeat))
-            return (
-              <div
-                key={`${t.note.id}:${t.repeat}`}
-                style={{
-                  position: 'absolute',
-                  left: ghostLeft,
-                  top: rowIndexToY(rowIndex, rowHeight) + 2,
-                  width: Math.max(ghostRight - ghostLeft, 8),
-                  height: rowHeight - 4,
-                  backgroundColor: midiNoteColor(row.color, t.note.velocity),
-                  opacity: 0.3,
-                  borderRadius: 3,
-                  pointerEvents: 'none',
-                }}
-              />
-            )
-          })}
+          <LoopGhosts
+            ghosts={loopGhosts}
+            rows={rows}
+            pitchToRowIndex={pitchToRowIndex}
+            blockStartPx={blockStartPx}
+            pixelsPerBeat={pixelsPerBeat}
+            rowHeight={rowHeight}
+          />
 
           {/* Drag ghosts: the footprint each dragged note LEFT. Read from the
               gesture's captured origins, which are frozen for the whole drag,
@@ -883,72 +805,27 @@ export function MidiEditor({
             const noteColor = midiNoteColor(row.color, note.velocity, isSelected)
 
             return (
-              <div
+              <NoteRect
                 key={note.id}
-                data-note-id={note.id}
-                style={{
-                  position: 'absolute',
-                  left,
-                  top: y,
-                  width: w,
-                  height: h,
-                  backgroundColor: noteColor,
-                  borderRadius: 3,
-                  boxShadow: isLive
-                    ? `0 0 14px ${noteColor}, 0 0 6px ${noteColor}`
-                    : 'none',
-                  cursor: 'inherit',
-                  zIndex: isSelected ? 6 : 5,
-                }}
-                onPointerDown={(e) => { onNoteSelect?.(note); handleNotePointerDown(e, note) }}
+                noteId={note.id}
+                left={left}
+                top={y}
+                width={w}
+                height={h}
+                color={noteColor}
+                isSelected={isSelected}
+                isLive={isLive}
+                word={noteWords ? (noteWords[note.id] ?? '') : undefined}
+                wordEditable={!!(onNoteWordEdit && noteWords)}
+                editValue={wordEdit?.noteId === note.id ? wordEdit.value : null}
+                onPointerDown={onNoteRectPointerDown}
                 onPointerMove={handleNotePointerMove}
-                onPointerOut={() => handleHoverChange(null)}
-                onDoubleClick={onNoteWordEdit && noteWords ? (e) => { e.stopPropagation(); setWordEdit({ noteId: note.id, value: noteWords[note.id] === '∅' ? '' : (noteWords[note.id] ?? '') }) } : undefined}
-              >
-                {noteWords && wordEdit?.noteId !== note.id && (
-                  <span
-                    style={{
-                      position: 'absolute',
-                      inset: '0 3px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      overflow: 'hidden',
-                      whiteSpace: 'nowrap',
-                      fontSize: Math.min(11, h - 4),
-                      fontWeight: 700,
-                      color: noteWords[note.id] === '∅' ? '#f0a0a0' : 'rgba(10,12,16,0.9)',
-                      pointerEvents: 'none',
-                    }}
-                  >{noteWords[note.id] ?? ''}</span>
-                )}
-                {wordEdit?.noteId === note.id && (
-                  <input
-                    autoFocus
-                    value={wordEdit.value}
-                    onChange={(e) => setWordEdit({ noteId: note.id, value: e.target.value })}
-                    onBlur={() => { onNoteWordEdit?.(note.id, wordEdit.value); setWordEdit(null) }}
-                    onKeyDown={(e) => {
-                      e.stopPropagation()
-                      if (e.key === 'Enter') { onNoteWordEdit?.(note.id, wordEdit.value); setWordEdit(null) }
-                      if (e.key === 'Escape') setWordEdit(null)
-                    }}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    aria-label="Word"
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      width: '100%',
-                      background: 'rgba(10,12,16,0.92)',
-                      color: '#fff',
-                      border: '1px solid rgba(255,255,255,0.6)',
-                      borderRadius: 3,
-                      fontSize: 11,
-                      padding: '0 3px',
-                      outline: 'none',
-                    }}
-                  />
-                )}
-              </div>
+                onPointerOut={onNoteRectPointerOut}
+                onWordEditStart={onWordEditStart}
+                onWordEditChange={onWordEditChange}
+                onWordEditCommit={onWordEditCommit}
+                onWordEditCancel={onWordEditCancel}
+              />
             )
           })}
 
