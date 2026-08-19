@@ -217,31 +217,46 @@ export function MaterialWrapper({
       ? `${active?.inst.id ?? '-'}|${deformers.map((d) => d.suffix).join(',')}`
       : ''
 
-    // Deformers move vertices, so they need vertices to move: a boxGeometry has
-    // eight. The swap happens here rather than in the plugin because only the
-    // wrapper knows the mesh set, and it must be undone exactly like the
-    // material patch (see subdivideCore.ts for the whole argument).
-    group.traverse((node) => {
-      if (!(node instanceof Mesh)) return
-      const mesh = node as Tessellatable
-      const wanted = deformers.length > 0 ? detail : 0
-      const current = mesh[TESSELLATED]
-      if (current?.detail === wanted) return
-      // Always restore first: the original is what the next level subdivides
-      // from, so re-subdividing our own clone would compound the count.
-      restoreGeometry(mesh)
-      tessellatedRef.current.delete(mesh)
-      if (wanted <= 0) return
-      const original = mesh.geometry
-      const generated = tessellate(original, wanted)
-      if (!generated) return
-      mesh.geometry = generated
-      mesh[TESSELLATED] = { original, generated, detail: wanted }
-      tessellatedRef.current.add(mesh)
-    })
+    // Nothing to inject and nothing of ours left on any material or mesh: the
+    // walk below could only ever undo, and there is nothing to undo. Skipped
+    // outright - the common state of a wrapper whose effect is switched off.
+    // (A wrapper with an ACTIVE effect still walks every frame: instruments
+    // swap materials and spawn meshes at any depth - Cube trades poster for
+    // gloss on a param flip, Emoji Display adds a mesh per note - so a stamp
+    // on the top-level child count would miss exactly the changes the walk
+    // exists to catch. Cheaper than two walks: the two jobs share ONE.)
+    if (!signature && patchedRef.current.size === 0 && tessellatedRef.current.size === 0) return
+
+    const wanted = deformers.length > 0 ? detail : 0
+    const surface = active
+    // Captured once per frame for the patch closures below, not per material.
+    const chain = deformers.slice()
 
     group.traverse((node) => {
       if (!(node instanceof Mesh)) return
+
+      // Deformers move vertices, so they need vertices to move: a boxGeometry has
+      // eight. The swap happens here rather than in the plugin because only the
+      // wrapper knows the mesh set, and it must be undone exactly like the
+      // material patch (see subdivideCore.ts for the whole argument).
+      const mesh = node as Tessellatable
+      const current = mesh[TESSELLATED]
+      if (current?.detail !== wanted) {
+        // Always restore first: the original is what the next level subdivides
+        // from, so re-subdividing our own clone would compound the count.
+        restoreGeometry(mesh)
+        tessellatedRef.current.delete(mesh)
+        if (wanted > 0) {
+          const original = mesh.geometry
+          const generated = tessellate(original, wanted)
+          if (generated) {
+            mesh.geometry = generated
+            mesh[TESSELLATED] = { original, generated, detail: wanted }
+            tessellatedRef.current.add(mesh)
+          }
+        }
+      }
+
       const materials = Array.isArray(node.material) ? node.material : [node.material]
       for (const material of materials as Patchable[]) {
         if (!material) continue
@@ -260,8 +275,6 @@ export function MaterialWrapper({
         if (material[PATCHED]?.signature === signature) continue
 
         const previous = material[PATCHED]?.previous ?? material.onBeforeCompile
-        const surface = active
-        const chain = deformers.slice()
         material.onBeforeCompile = (shader, renderer) => {
           previous?.(shader, renderer)
           if (surface) Object.assign(shader.uniforms, surface.uniforms)

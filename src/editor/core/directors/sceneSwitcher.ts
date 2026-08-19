@@ -1,4 +1,4 @@
-import { flattenTrackNotes } from '../visual/noteFlatten'
+import { flattenTrackNotesMemo } from '../visual/noteFlatten'
 import type { SelectParamDef } from '../../instruments/types'
 import type { Track } from '../../types'
 import type { CompositionInstrumentDef } from './types'
@@ -62,7 +62,7 @@ export const sceneSwitcherDirector: CompositionInstrumentDef = {
   resolve: (track, context) => {
     const bindings = orderedSceneBindings(track, context.scenes, context.sceneOrder)
     const byPitch = new Map(bindings.map((b) => [b.pitch, b.sceneId]))
-    const notes = flattenTrackNotes(track, context.beatsPerBar, context.totalBars)
+    const notes = flattenTrackNotesMemo(track, context.beatsPerBar, context.totalBars)
     const latching = sceneSwitcherLatches(track)
     let selected: string | null = null
     let latestBeat = -Infinity

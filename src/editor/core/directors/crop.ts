@@ -1,4 +1,4 @@
-import { flattenTrackNotes } from '../visual/noteFlatten'
+import { flattenTrackNotesMemo } from '../visual/noteFlatten'
 import type { MidiRowDef, ParamDef } from '../../instruments/types'
 import type { Track } from '../../types'
 import type { CompositionInstrumentDef } from './types'
@@ -139,7 +139,7 @@ function sliceOnsetBeats(
   totalBars: number,
 ): Map<number, number> {
   const onsets = new Map<number, number>()
-  for (const note of flattenTrackNotes(track, beatsPerBar, totalBars)) {
+  for (const note of flattenTrackNotesMemo(track, beatsPerBar, totalBars)) {
     if (beat < note.beat || beat >= note.beat + note.durationBeats) continue
     const previous = onsets.get(note.pitch)
     if (previous === undefined || note.beat > previous) onsets.set(note.pitch, note.beat)

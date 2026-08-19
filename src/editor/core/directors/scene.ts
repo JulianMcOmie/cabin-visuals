@@ -1,4 +1,4 @@
-import { flattenTrackNotes } from '../visual/noteFlatten'
+import { flattenTrackNotesMemo } from '../visual/noteFlatten'
 import type { MidiRowDef } from '../../instruments/types'
 import type { Track } from '../../types'
 import type { CompositionInstrumentDef } from './types'
@@ -34,7 +34,7 @@ export function sceneVisibleAt(
   beatsPerBar: number,
   totalBars: number,
 ): boolean {
-  const notes = flattenTrackNotes(track, beatsPerBar, totalBars)
+  const notes = flattenTrackNotesMemo(track, beatsPerBar, totalBars)
   if (notes.length === 0) return true
   return notes.some((note) => beat >= note.beat && beat < note.beat + note.durationBeats)
 }
