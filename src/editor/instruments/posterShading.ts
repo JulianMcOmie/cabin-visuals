@@ -70,6 +70,13 @@ void main() {
 `
 
 const POSTER_INSTANCED_FRAGMENT = /* glsl */ `
+// This include is a MARKER, not used for shading: @three.ez/instanced-mesh
+// only injects USE_INSTANCING_COLOR_INDIRECT (and binds its colors texture)
+// into materials whose fragment shader contains the color_pars_fragment include.
+// Without it the vertex shader's getColorTexture() branch is never compiled in
+// and every instance renders uColor (white) - the "I chose a color and nothing
+// happens" bug on the Matte finish. The chunk only declares an unused varying.
+#include <color_pars_fragment>
 uniform vec3 uColor;
 uniform float uShade;
 uniform float uEnergy;
