@@ -3,6 +3,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import * as projectStorage from '../../persistence/projectStorage'
 import { hydrate } from '../../persistence/serialize'
 import { emptyDocument } from '../../persistence/types'
+import { upgradeDocument } from '../../persistence/upgrade'
 import { startAutosave, useSaveStatus } from '../../persistence/autosave'
 import { justAdopted } from '../../persistence/adoptionHandoff'
 import { rememberLastProject, forgetLastProject } from '../../persistence/lastProject'
@@ -39,7 +40,11 @@ export function useProjectPersistence() {
     const tpl = getTemplate(templateId)
     if (!tpl) return
     hydrate(emptyDocument())
-    hydrate(structuredClone(tpl.document))
+    // Same upgrade walk applyTemplate does: template documents are authored
+    // against an older schema (schemaVersion 8 - text params, no lyric
+    // clips), and hydrating them raw left every Text Display track with no
+    // clip notes, so the demo showed no words at all.
+    hydrate(upgradeDocument(structuredClone(tpl.document)))
     useUIStore.getState().setProjectName(tpl.name)
     useHistoryStore.getState().reset()
     return () => {
