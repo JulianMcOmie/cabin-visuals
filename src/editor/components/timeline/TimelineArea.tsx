@@ -580,7 +580,6 @@ export function TimelineArea() {
                   onNestDragStart={startNestDrag}
                   onLabelContextMenu={handleLabelContextMenu}
                   barWidthPx={barWidthPx}
-                  timelineWidthPx={timelineWidthPx}
                   pickupPx={pickupPx}
                   selectedBlockIds={selectedBlockIds}
                   onBlockPointerDown={handleBlockPointerDown}
