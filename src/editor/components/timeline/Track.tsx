@@ -46,7 +46,6 @@ function startMsPaint(kind: 'mute' | 'solo', value: boolean) {
 interface TrackProps {
   track: TrackType
   barWidthPx: number
-  timelineWidthPx: number
   /** Pickup width (px): musical bar 0 sits this far into the lane. All block
    *  space is shifted right by this much; audio in the pickup has startBar < 0. */
   pickupPx: number
@@ -92,8 +91,9 @@ interface TrackProps {
  *  props stay referentially stable across foreign edits - `track` by the
  *  store's per-track immutability, `guides` via TimelineArea's rowsKey memo,
  *  handlers via useCallback - and the row's own store subscriptions all
- *  select primitives. */
-export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, pickupPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, depth = 0, guides, dividerInset, descendantRows = 0, liftOffset, dimmed, dropInto, replacePreview, onCopyDragStart, onNestDragStart, onLabelContextMenu }: TrackProps) {
+ *  select primitives. `trackPropsEqual` (below) is memo's shallow compare
+ *  plus one refinement for the selection Set. */
+export const Track = memo(function Track({ track, barWidthPx, pickupPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, depth = 0, guides, dividerInset, descendantRows = 0, liftOffset, dimmed, dropInto, replacePreview, onCopyDragStart, onNestDragStart, onLabelContextMenu }: TrackProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   // Audio lanes only need this for the selection spill's geometry (an audio
   // block's width is derived from its trimmed seconds at the current tempo).
@@ -639,10 +639,17 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
 
       <div
         data-track-lane={track.id}
-        className={`relative flex-shrink-0 ${isDarkenedRow ? 'bg-black/10' : ''} ${isLast ? '' : 'border-b border-[var(--timeline-row-line,var(--border))]'}`}
+        // flex-1, not an explicit `width: timelineWidthPx`: the row's flex
+        // parent already has the full content width, so the lane filling the
+        // remainder is the same pixels - without the row taking a prop that
+        // changes whenever the project auto-grows. During a block drag toward
+        // the song end every totalBars bump re-rendered EVERY row for what is
+        // purely a CSS width change (measured 2026-08-19: 4 bumps x the whole
+        // stack, the bulk of the drag's foreign-row renders).
+        className={`relative flex-1 ${isDarkenedRow ? 'bg-black/10' : ''} ${isLast ? '' : 'border-b border-[var(--timeline-row-line,var(--border))]'}`}
         // A muted track's blocks go gray (hue stripped, alpha kept) so the mute
         // state reads from the MIDI side without the blocks fading into the lane.
-        style={{ width: timelineWidthPx, filter: track.muted ? 'grayscale(1)' : undefined }}
+        style={{ filter: track.muted ? 'grayscale(1)' : undefined }}
         // Audio lanes have no MIDI gestures (no right-click block drawing / marquee),
         // but clicking their empty space still deselects blocks, like any lane.
         onPointerDown={track.type === 'audio'
@@ -739,4 +746,26 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
       )}
     </div>
   )
-})
+}, trackPropsEqual)
+
+/** memo's shallow compare, except `selectedBlockIds`: the row reads the
+ *  selection only through its own blocks (`has(id)` for each Block's
+ *  isSelected and the spill geometry), so a new Set that agrees with the old
+ *  one about every block ON THIS ROW must not re-render it. Compared by
+ *  identity, one selection write swept every row in the timeline - measured
+ *  2026-08-19: one whole-stack Track render per selection change during a
+ *  block drag. The membership check is only reached when `track` is identical
+ *  (the loop above), so both sides are asked about the same block list. */
+function trackPropsEqual(prev: TrackProps, next: TrackProps) {
+  for (const k of Object.keys(next) as (keyof TrackProps)[]) {
+    if (k === 'selectedBlockIds') continue
+    if (!Object.is(prev[k], next[k])) return false
+  }
+  if (prev.selectedBlockIds !== next.selectedBlockIds) {
+    const blocks = next.track.type === 'audio' ? next.track.audioBlocks ?? [] : next.track.blocks
+    for (const b of blocks) {
+      if (prev.selectedBlockIds.has(b.id) !== next.selectedBlockIds.has(b.id)) return false
+    }
+  }
+  return true
+}

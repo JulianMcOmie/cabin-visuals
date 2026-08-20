@@ -22,7 +22,13 @@ move. Two rules keep it fixed:
    silently undo it: inline closures in TimelineArea's row map, per-render arrays
    (`previewRowPitches`, `guides` — both flow into `Block`'s activity-registry effect
    deps, so instability also re-registers every block per move), and the palette
-   object in `Block`. A NEW prop must come with a stability story; `npx eslint` won't
+   object in `Block`. Two whole-stack sweeps were measured and fixed 2026-08-19:
+   rows do NOT take `timelineWidthPx` (the lane is `flex-1` in the row, so the
+   project auto-growing under a drag is a CSS reflow, not a re-render of every
+   row), and `Track`'s comparator (`trackPropsEqual`) treats `selectedBlockIds`
+   as equal when membership over the row's OWN blocks is unchanged - the Set's
+   identity legitimately changes on every selection write, and by identity one
+   click re-rendered all rows. A NEW prop must come with a stability story; `npx eslint` won't
    catch it, a re-measure will (workspace CLAUDE.md has the MessageChannel probe;
    steady state ≈11ms/edit at 30 dense tracks in dev — regressions read as a jump
    back toward hundreds).
