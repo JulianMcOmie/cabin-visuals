@@ -32,7 +32,7 @@ import {
   type CopyTargetRule,
 } from '../core/visualCopies/copyTargets'
 import { resolveTrackIdentityColor } from '../utils/trackDisplayColor'
-import { Console, PreviewWindow, Segmented, GutterRow } from './console'
+import { Console, PreviewWindow, Segmented, GutterRow, usePreviewLoop } from './console'
 import { hexToHsv, hsvToHex, towardWhite, withAlpha } from './colorWheel'
 import type { CopyTargets } from '../types'
 import { clamp } from '../utils/math'
@@ -91,7 +91,6 @@ function FormationWindow({
   onCount: (count: number) => void
   onPickCopy: (index: number, count: number) => void
 }) {
-  const hostRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const viewRef = useRef({ yaw: -0.5, pitch: 0.32, auto: true })
   const dragRef = useRef<{ x: number; y: number; yaw: number; pitch: number; moved: boolean } | null>(null)
@@ -111,14 +110,22 @@ function FormationWindow({
   const live = useRef({ prefix, targets, accent, onCount })
   live.current = { prefix, targets, accent, onCount }
 
+  // The draw closes over the 2D context built in the effect; the shared loop
+  // (~30fps, offscreen-gated) calls whatever the current mount stashed here.
+  const drawImpl = useRef<((tSec: number) => void) | null>(null)
+  const hostRef = usePreviewLoop<HTMLDivElement>((tSec) => drawImpl.current?.(tSec))
+
   useEffect(() => {
     const canvas = canvasRef.current
     const ctx = canvas?.getContext('2d')
     if (!canvas || !ctx) return
-    let raf = 0
+    // The auto-orbit advances by elapsed TIME, not by frame count, so the
+    // shared loop's frame rate is not also the orbit's speed.
+    let lastT = 0
 
-    const draw = () => {
-      raf = requestAnimationFrame(draw)
+    drawImpl.current = (tSec: number) => {
+      const dt = tSec - lastT
+      lastT = tSec
       const host = hostRef.current
       if (!host) return
       const w = host.clientWidth
@@ -144,7 +151,7 @@ function FormationWindow({
       const slices = current.targets ? copyTargetSlices(current.targets, total) : 1
 
       const view = viewRef.current
-      if (view.auto) view.yaw += 0.0022
+      if (view.auto) view.yaw += 0.132 * dt // 0.0022/frame at the old 60fps
       const cy = Math.cos(view.yaw), sy = Math.sin(view.yaw)
       const cp = Math.cos(view.pitch), sp = Math.sin(view.pitch)
 
@@ -209,9 +216,9 @@ function FormationWindow({
       }
     }
 
-    raf = requestAnimationFrame(draw)
-    return () => cancelAnimationFrame(raf)
-  }, [])
+    return () => { drawImpl.current = null }
+    // hostRef is the loop hook's stable ref - listed only to satisfy the lint.
+  }, [hostRef])
 
   return (
     <PreviewWindow height={PREVIEW_HEIGHT} className="cursor-grab active:cursor-grabbing">

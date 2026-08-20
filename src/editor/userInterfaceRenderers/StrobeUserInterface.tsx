@@ -19,7 +19,7 @@
 // math on real pixels, not a lookalike, and it costs one style write per frame
 // instead of a WebGL context.
 
-import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { useRef, useState, type ReactElement } from 'react'
 import {
   STROBE_RATE_ROWS,
   STROBE_REFERENCE_FPS,
@@ -39,6 +39,7 @@ import {
   ParameterList,
   PreviewWindow,
   Segmented,
+  usePreviewLoop,
   type SelectBinding,
 } from './console'
 import type { UserInterfaceRendererDefinition } from './types'
@@ -99,36 +100,27 @@ function StrobePreview({ style, depth, width, secondsPerCycle }: {
   const live = useRef({ style, depth, width, secondsPerCycle })
   live.current = { style, depth, width, secondsPerCycle }
 
-  useEffect(() => {
-    let frame = 0
-    let origin = 0
-    // Styles are written imperatively, never through state: at the fastest rate
-    // this fires ~32 times a second, and re-rendering the panel that often to
-    // flash a div would be absurd. The stage mutates; React owns the layout.
-    const tick = (now: number) => {
-      if (!origin) origin = now
-      // Seconds, not beats: strobeGate is unit-agnostic, and seconds is the axis
-      // both row kinds already agree on here.
-      const seconds = (now - origin) / 1000
-      const current = live.current
-      const lit = strobeGate(seconds, current.secondsPerCycle, current.width) * current.depth
-      const stage = stageRef.current
-      const veil = veilRef.current
-      if (stage && veil) {
-        const inverting = current.style === STROBE_STYLE_INVERT
-        stage.style.filter = inverting && lit > 0 ? `invert(${lit})` : 'none'
-        veil.style.background = current.style === STROBE_STYLE_FLASH ? '#ffffff' : '#000000'
-        veil.style.opacity = inverting ? '0' : String(lit)
-      }
-      frame = requestAnimationFrame(tick)
+  // Styles are written imperatively, never through state: at the fastest rate
+  // this fires ~32 times a second, and re-rendering the panel that often to
+  // flash a div would be absurd. The stage mutates; React owns the layout.
+  const hostRef = usePreviewLoop((tSec) => {
+    // Seconds, not beats: strobeGate is unit-agnostic, and seconds is the axis
+    // both row kinds already agree on here.
+    const current = live.current
+    const lit = strobeGate(tSec, current.secondsPerCycle, current.width) * current.depth
+    const stage = stageRef.current
+    const veil = veilRef.current
+    if (stage && veil) {
+      const inverting = current.style === STROBE_STYLE_INVERT
+      stage.style.filter = inverting && lit > 0 ? `invert(${lit})` : 'none'
+      veil.style.background = current.style === STROBE_STYLE_FLASH ? '#ffffff' : '#000000'
+      veil.style.opacity = inverting ? '0' : String(lit)
     }
-    frame = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(frame)
-  }, [])
+  })
 
   return (
     <PreviewWindow height={76} testId="strobe-preview">
-      <div ref={stageRef} className="absolute inset-0">
+      <div ref={(el) => { stageRef.current = el; hostRef.current = el }} className="absolute inset-0">
         <PreviewStage />
       </div>
       <div ref={veilRef} className="pointer-events-none absolute inset-0 opacity-0" />

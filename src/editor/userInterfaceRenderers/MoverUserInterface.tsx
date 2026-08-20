@@ -14,12 +14,12 @@
 // only differ when there is somewhere else to stand). Nine seeds run through
 // the definition's real resolve() - the same closure the engine calls - on a
 // looping demo phrase in the mover's own vocabulary, so the picture cannot
-// drift from playback. Rendered with plain DOM matrix3d transforms off one
-// rAF, NOT an r3f canvas: per this directory's CLAUDE.md a panel canvas stays
-// black until the transport plays, and choosing a motion is exactly the thing
-// you do while parked.
+// drift from playback. Rendered with plain DOM matrix3d transforms off the
+// shared preview loop (console/previewLoop.ts), NOT an r3f canvas: per this
+// directory's CLAUDE.md a panel canvas stays black until the transport plays,
+// and choosing a motion is exactly the thing you do while parked.
 
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import { Matrix4 } from 'three'
 import { BURST_EASINGS } from '../core/visualCopies/burstEasings'
 import { MOVER_COLOR } from '../core/visualCopies/identityColors'
@@ -47,6 +47,7 @@ import {
   Segmented,
   spillOf,
   towardWhite,
+  usePreviewLoop,
   withAlpha,
   type SelectBinding,
 } from './console'
@@ -144,28 +145,22 @@ function FieldWindow({ settings }: { settings: MoverSettings }) {
     return { transform: toCssMatrix(copy.transform), opacity: copy.opacity }
   })
 
-  useEffect(() => {
-    let raf = 0
-    const seedMatrix = new Matrix4()
-    const tick = () => {
-      const beat = ((performance.now() / 1000) * BEATS_PER_SECOND) % LOOP_BEATS
-      for (let i = 0; i < FIELD_SEEDS.length; i++) {
-        const element = objectRefs.current[i]
-        if (!element) continue
-        const seed = identityVisualCopy()
-        const [x, y, z] = FIELD_SEEDS[i]
-        seed.transform.copy(seedMatrix.makeTranslation(x, y, z))
-        const copy = liveRef.current.apply(seed, { beat, index: 0, count: 1 })[0]
-        element.style.transform = toCssMatrix(copy.transform)
-        element.style.opacity = String(copy.opacity)
-      }
-      const progress = progressRef.current
-      if (progress) progress.style.left = `${(beat / LOOP_BEATS) * 100}%`
-      raf = requestAnimationFrame(tick)
+  const seedMatrix = useRef(new Matrix4())
+  const stageRef = usePreviewLoop((tSec) => {
+    const beat = (tSec * BEATS_PER_SECOND) % LOOP_BEATS
+    for (let i = 0; i < FIELD_SEEDS.length; i++) {
+      const element = objectRefs.current[i]
+      if (!element) continue
+      const seed = identityVisualCopy()
+      const [x, y, z] = FIELD_SEEDS[i]
+      seed.transform.copy(seedMatrix.current.makeTranslation(x, y, z))
+      const copy = liveRef.current.apply(seed, { beat, index: 0, count: 1 })[0]
+      element.style.transform = toCssMatrix(copy.transform)
+      element.style.opacity = String(copy.opacity)
     }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [])
+    const progress = progressRef.current
+    if (progress) progress.style.left = `${(beat / LOOP_BEATS) * 100}%`
+  })
 
   return (
     <PreviewWindow height={128} testId="mover-window">
@@ -190,8 +185,10 @@ function FieldWindow({ settings }: { settings: MoverSettings }) {
         />
       )}
       {/* perspective lives on this wrapper (the transformed objects' parent)
-          so the Z axis has depth - it used to sit on the window div itself. */}
-      <div aria-hidden="true" className="absolute inset-0" style={{ transformStyle: 'preserve-3d', perspective: '800px' }}>
+          so the Z axis has depth - it used to sit on the window div itself.
+          It is also the loop's visibility host: scrolled offscreen, the field
+          stops animating. */}
+      <div ref={stageRef} aria-hidden="true" className="absolute inset-0" style={{ transformStyle: 'preserve-3d', perspective: '800px' }}>
         {FIELD_SEEDS.map((seed, i) => {
           const center = seed[0] === 0 && seed[1] === 0
           return (

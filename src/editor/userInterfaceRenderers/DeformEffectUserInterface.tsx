@@ -18,9 +18,10 @@
 //
 // The preview runs the plugin's REAL GLSL (deformFieldGlsl) over a subdivided
 // cube, so the picture cannot drift from what the viewport renders - the same
-// call KaleidoSolid's panel makes. It is raw WebGL on its own rAF rather than an
-// r3f <Canvas> because a panel Canvas stays black until the transport plays, and
-// a deformation is precisely what you dial in while parked.
+// call KaleidoSolid's panel makes. It is raw WebGL on the shared preview loop
+// (console/previewLoop.ts) rather than an r3f <Canvas> because a panel Canvas
+// stays black until the transport plays, and a deformation is precisely what
+// you dial in while parked.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { DEFORM_ACCENT } from '../effects/deform/deform'
@@ -35,7 +36,7 @@ import {
 } from '../effects/deform/deformOps'
 import { subdivideAttributes } from '../effects/deform/subdivideCore'
 import { uniformName } from '../effects/uniforms'
-import { Console, ControlRow, Knob, PreviewWindow, Segmented, bindPanel } from './console'
+import { Console, ControlRow, Knob, PreviewWindow, Segmented, bindPanel, usePreviewLoop } from './console'
 import { ParameterList } from './ParametersUserInterface'
 import type { UserInterfaceRendererDefinition } from './types'
 
@@ -215,12 +216,16 @@ function view(yaw: number, pitch: number, distance: number): Float32Array {
 }
 
 function DeformPreview({ settings }: { settings: PreviewSettings }) {
-  const hostRef = useRef<HTMLDivElement>(null)
   const [failed, setFailed] = useState(false)
-  // The rAF loop reads the LATEST settings without re-running the effect: a
+  // The loop reads the LATEST settings without re-running the effect: a
   // knob drag must not tear down and rebuild the GL context per pointermove.
   const settingsRef = useRef(settings)
   settingsRef.current = settings
+
+  // The real draw closes over GL state built in the effect below; the shared
+  // loop calls whatever the current mount stashed here.
+  const drawImpl = useRef<((tSec: number) => void) | null>(null)
+  const hostRef = usePreviewLoop((tSec) => drawImpl.current?.(tSec))
 
   useEffect(() => {
     const host = hostRef.current
@@ -279,9 +284,7 @@ function DeformPreview({ settings }: { settings: PreviewSettings }) {
     gl.useProgram(program)
 
     const vertexCount = PREVIEW_MESH.positions.length / 3
-    let frame = 0
-    const start = performance.now()
-    const draw = () => {
+    drawImpl.current = (elapsed: number) => {
       // Re-read the size every frame instead of using a ResizeObserver: those
       // starve in a hidden pane, and the inspector's width glides.
       const dpr = Math.min(2, window.devicePixelRatio || 1)
@@ -295,7 +298,6 @@ function DeformPreview({ settings }: { settings: PreviewSettings }) {
       gl.clearColor(0, 0, 0, 0)
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-      const elapsed = (performance.now() - start) / 1000
       const current = settingsRef.current
       gl.uniformMatrix4fv(uniforms.uProj, false, perspective(0.85, width / height, 0.1, 40))
       gl.uniformMatrix4fv(uniforms.uView, false, view(elapsed * 0.4, -0.32, 4.4))
@@ -306,12 +308,10 @@ function DeformPreview({ settings }: { settings: PreviewSettings }) {
         if (location) gl.uniform1f(location, current[key] ?? 0)
       }
       gl.drawArrays(gl.TRIANGLES, 0, vertexCount)
-      frame = requestAnimationFrame(draw)
     }
-    frame = requestAnimationFrame(draw)
 
     return () => {
-      cancelAnimationFrame(frame)
+      drawImpl.current = null
       gl.deleteBuffer(positionBuffer)
       gl.deleteBuffer(normalBuffer)
       gl.deleteProgram(program)
@@ -320,7 +320,8 @@ function DeformPreview({ settings }: { settings: PreviewSettings }) {
       gl.getExtension('WEBGL_lose_context')?.loseContext()
       canvas.remove()
     }
-  }, [])
+    // hostRef is the loop hook's stable ref - listed only to satisfy the lint.
+  }, [hostRef])
 
   return (
     <div ref={hostRef} className="h-full w-full">

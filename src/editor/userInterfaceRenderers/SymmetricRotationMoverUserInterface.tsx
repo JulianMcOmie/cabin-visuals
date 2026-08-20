@@ -34,6 +34,7 @@ import {
   ParameterList,
   PreviewWindow,
   Segmented,
+  usePreviewLoop,
   type NumBinding,
   type SelectBinding,
 } from './console'
@@ -91,7 +92,6 @@ function demoPhrase(mode: number, drive: number): { notes: ResolvedNote[]; loopB
 }
 
 function TwistPreview({ settings }: { settings: SymmetricRotationSettings }) {
-  const hostRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const viewRef = useRef({ yaw: -0.5, pitch: 0.3, auto: true })
   const dragRef = useRef<{ x: number; y: number; yaw: number; pitch: number } | null>(null)
@@ -108,15 +108,19 @@ function TwistPreview({ settings }: { settings: SymmetricRotationSettings }) {
   const live = useRef(scene)
   live.current = scene
 
+  // The draw closes over the 2D context built in the effect; the shared loop
+  // (~30fps, offscreen-gated) calls whatever the current mount stashed here.
+  const drawImpl = useRef<((tSec: number) => void) | null>(null)
+  const hostRef = usePreviewLoop<HTMLDivElement>((tSec) => drawImpl.current?.(tSec))
+
   useEffect(() => {
     const canvas = canvasRef.current
     const ctx = canvas?.getContext('2d')
     if (!canvas || !ctx) return
     const [ar, ag, ab] = hexToRgb(ACCENT)
-    let raf = 0
 
-    const draw = (now: number) => {
-      raf = requestAnimationFrame(draw)
+    drawImpl.current = (tSec: number) => {
+      const now = tSec * 1000
       const host = hostRef.current
       if (!host) return
       // Size re-derived per frame: the pane is user-resizable and
@@ -215,9 +219,9 @@ function TwistPreview({ settings }: { settings: SymmetricRotationSettings }) {
       }
     }
 
-    raf = requestAnimationFrame(draw)
-    return () => cancelAnimationFrame(raf)
-  }, [])
+    return () => { drawImpl.current = null }
+    // hostRef is the loop hook's stable ref - listed only to satisfy the lint.
+  }, [hostRef])
 
   return (
     <PreviewWindow height={118} testId="symmetric-rotation-window" title="Drag to orbit" className="cursor-grab touch-none select-none active:cursor-grabbing">

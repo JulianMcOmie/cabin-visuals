@@ -10,6 +10,7 @@ import {
 import { isNumberParam, type NumberParamDef } from '../instruments/types'
 import { ParamControl, ParamHueSlider, ParamSlider, ParamStepper } from './ParameterControl'
 import { ParameterList } from './ParametersUserInterface'
+import { usePreviewLoop } from './console'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 
 // Kaleido Solid settings: a geometry row, a live preview, then the four knobs.
@@ -106,11 +107,15 @@ function KaleidoPreview({ facets, scale, drift, hue }: {
   // loseContext(), which permanently kills that canvas's context, and StrictMode
   // double-invokes effects in dev - a React-owned canvas would come back with a
   // dead context and every compile would fail with an empty info log.
-  const hostRef = useRef<HTMLDivElement>(null)
   const [failed, setFailed] = useState(false)
 
   const paramsRef = useRef({ facets, scale, drift, hue })
   paramsRef.current = { facets, scale, drift, hue }
+
+  // The real draw closes over GL state built in the effect below; the shared
+  // loop (~30fps, offscreen-gated) calls whatever the current mount stashed.
+  const drawImpl = useRef<((tSec: number) => void) | null>(null)
+  const hostRef = usePreviewLoop((tSec) => drawImpl.current?.(tSec))
 
   useEffect(() => {
     const host = hostRef.current
@@ -156,25 +161,21 @@ function KaleidoPreview({ facets, scale, drift, hue }: {
     gl.viewport(0, 0, size, size)
     gl.useProgram(program)
 
-    let frame = 0
-    const start = performance.now()
-    const draw = () => {
+    drawImpl.current = (tSec: number) => {
       const p = paramsRef.current
       gl.clearColor(0, 0, 0, 0)
       gl.clear(gl.COLOR_BUFFER_BIT)
-      gl.uniform1f(U.beat, ((performance.now() - start) / 1000) * BEATS_PER_SECOND)
+      gl.uniform1f(U.beat, tSec * BEATS_PER_SECOND)
       gl.uniform1f(U.facets, p.facets)
       gl.uniform1f(U.scale, p.scale)
       gl.uniform1f(U.drift, p.drift)
       gl.uniform1f(U.hue, p.hue)
       gl.uniform1f(U.twist, 0)
       gl.drawArrays(gl.TRIANGLES, 0, 3)
-      frame = requestAnimationFrame(draw)
     }
-    frame = requestAnimationFrame(draw)
 
     return () => {
-      cancelAnimationFrame(frame)
+      drawImpl.current = null
       gl.deleteBuffer(quad)
       gl.deleteProgram(program)
       // Panels mount and unmount on every track selection; without this the
@@ -183,7 +184,8 @@ function KaleidoPreview({ facets, scale, drift, hue }: {
       gl.getExtension('WEBGL_lose_context')?.loseContext()
       canvas.remove()
     }
-  }, [])
+    // hostRef is the loop hook's stable ref - listed only to satisfy the lint.
+  }, [hostRef])
 
   return (
     <div className="mb-3 flex justify-center rounded-[3px] border border-[var(--border)] bg-[var(--bg-canvas-deep)] py-2.5">
