@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react'
+import { memo, useCallback, useEffect, useState, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react'
 import { useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { useInstantNavigation } from '../../components/instantNavigation'
@@ -15,9 +15,14 @@ import { listCompositionInstruments } from '../core/directors'
 import { canPreview } from './instrumentPreviewStore'
 import { preloadInstrument } from '../instruments'
 // The two preview components pull their own r3f Canvas + Bloom stack; they
-// load after first paint so the shell doesn't wait on them.
-const InstrumentCardPreview = dynamic(() => import('./InstrumentHoverPreview').then((m) => m.InstrumentCardPreview), { ssr: false })
-const InstrumentPreviewLayer = dynamic(() => import('./InstrumentHoverPreview').then((m) => m.InstrumentPreviewLayer), { ssr: false })
+// load after first paint so the shell doesn't wait on them. Both are memo'd
+// AROUND the dynamic wrapper: the sidebar re-renders on tab clicks and on the
+// droppable/ghost flips of a drag, and without the memo each of those walked
+// the r3f preview canvas (the layer) and every visible card's loadable shell.
+// The layer takes no props and a card's `item` is a module constant, so the
+// memo bails them all out.
+const InstrumentCardPreview = memo(dynamic(() => import('./InstrumentHoverPreview').then((m) => m.InstrumentCardPreview), { ssr: false }))
+const InstrumentPreviewLayer = memo(dynamic(() => import('./InstrumentHoverPreview').then((m) => m.InstrumentPreviewLayer), { ssr: false }))
 import { TEMPLATES, LISTED_TEMPLATES, LYRIC_STYLES, isLyricTemplateId } from '../../templates'
 import { TemplatePreviewVideo } from '../../components/TemplatePreviewVideo'
 import { TemplateSlideshowPreview } from '../../components/TemplateSlideshowPreview'
@@ -651,8 +656,12 @@ function ItemGrid({ items, onItemPointerDown, onItemDoubleClick }: { items: Inst
 /** Logic-style drill-down browser. Every folder is a plain row you click
  *  into; a sticky back row returns one level; instrument cards appear only at
  *  the level that holds them. `rootItems` lets a view keep items at the very
- *  top level (the Main scene's directors) without a folder to click through. */
-function FolderBrowser({ folders, rootItems = [], onItemPointerDown, onItemDoubleClick }: { folders: LibraryFolder[]; rootItems?: InstrumentItem[] } & ItemHandlers) {
+ *  top level (the Main scene's directors) without a folder to click through.
+ *  Memoized: the sidebar re-renders on every droppable/ghost flip of a drag,
+ *  and this subtree (cards, previews) is by far its heaviest part. The folder
+ *  trees are module constants and both handlers are stable (useCallback), so
+ *  the memo holds across those flips. */
+const FolderBrowser = memo(function FolderBrowser({ folders, rootItems = [], onItemPointerDown, onItemDoubleClick }: { folders: LibraryFolder[]; rootItems?: InstrumentItem[] } & ItemHandlers) {
   // The trail of entered folders, root-first. The folder trees are module
   // constants, so a held reference can never go stale.
   const [path, setPath] = useState<LibraryFolder[]>([])
@@ -702,7 +711,7 @@ function FolderBrowser({ folders, rootItems = [], onItemPointerDown, onItemDoubl
       </div>
     </div>
   )
-}
+})
 
 type LibraryTab = LibraryTabId
 
@@ -965,7 +974,9 @@ export function LeftSidebar() {
   const setTrackMover = useProjectStore((s) => s.setTrackMover)
   const wrapTracksInSwitcher = useProjectStore((s) => s.wrapTracksInSwitcher)
   const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
-  const onItemDoubleClick = (item: InstrumentItem) => {
+  // Stable (the deps are store actions): it is FolderBrowser's memo contract -
+  // an inline closure here would re-render every card on each sidebar render.
+  const onItemDoubleClick = useCallback((item: InstrumentItem) => {
     const selectedTrackId = useUIStore.getState().selectedTrackId
     if (!selectedTrackId) return
     // Composition instruments (the 'director' library kind) go through the
@@ -981,7 +992,7 @@ export function LeftSidebar() {
     }
     else if (item.kind === 'mover' || item.kind === 'splitter' || item.kind === 'colorizer') setTrackMover(selectedTrackId, item.id, item.name)
     else setTrackInstrument(selectedTrackId, item.id, item.name)
-  }
+  }, [wrapTracksInSwitcher, setTrackMover, setTrackInstrument])
 
   // No border-r on the root: the PanelResizeHandle beside this panel already
   // draws a 1px --border line, and having both made the library's divider twice

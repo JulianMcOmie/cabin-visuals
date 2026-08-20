@@ -99,6 +99,79 @@ const RulerTicks = memo(function RulerTicks({ pixelsPerBeat, beatsPerBar, totalB
   )
 })
 
+/** The numbered bar lines (and their loop-band inversions). Memoized for the
+ *  same reason as RulerTicks above: the Ruler re-renders on every store write
+ *  of a drag (its callers subscribe broadly, and the timeline's `corner` prop
+ *  is inline JSX, so the Ruler function itself can never bail) - but the bar
+ *  forest only depends on these primitives, which are all stable across a
+ *  param-knob drag or a block drag. Loop fields arrive as primitives, not the
+ *  region object, so a re-armed identical region can't re-render it either. */
+const RulerBars = memo(function RulerBars({ bars, barWidthPx, beatsPerBar, pixelsPerBeat, loopStartBeat, loopEndBeat, loopEnabled }: {
+  bars: number[]
+  barWidthPx: number
+  beatsPerBar: number
+  pixelsPerBeat: number
+  loopStartBeat: number | null
+  loopEndBeat: number | null
+  loopEnabled: boolean
+}) {
+  const hasLoop = loopStartBeat != null && loopEndBeat != null
+  return (
+    <>
+      {bars.map((bar) => {
+        const barBeat = bar * beatsPerBar
+        // Lines strictly inside the band (its edges already draw borders)
+        // get a dark top-half segment drawn OVER the solid band.
+        const inLoopBand = hasLoop && barBeat > loopStartBeat && barBeat < loopEndBeat
+        // Band extent relative to this bar's origin - for the clipped black
+        // copy of the number (dynamic per-pixel inversion at the band edges).
+        const bandStartRel = hasLoop ? loopStartBeat * pixelsPerBeat - bar * barWidthPx : 0
+        const bandEndRel = hasLoop ? loopEndBeat * pixelsPerBeat - bar * barWidthPx : 0
+        // Only bars whose number (at x 4px, ~30px wide max) can touch the band.
+        const numberTouchesBand = hasLoop && loopEnabled && bandEndRel > 4 && bandStartRel < 34
+        return (
+          <div key={bar} className="absolute top-0 bottom-0" style={{ left: bar * barWidthPx }}>
+            <>
+                {/* Top half: bar number - 10px/500 mono, one step brighter
+                    than faint so it reads at a glance */}
+                <span
+                  className="absolute left-1 font-mono text-[10px] font-medium leading-none text-[var(--ruler-number,var(--text-3))]"
+                  style={{ top: 3, zIndex: 6 }}
+                >
+                  {bar + 1}
+                </span>
+                {/* Black copy of the number, clipped to the band's extent -
+                    a number straddling the band edge inverts only the part
+                    actually sitting on the highlight. */}
+                {numberTouchesBand && (
+                  <div
+                    className="absolute top-0 overflow-clip pointer-events-none"
+                    style={{ left: Math.max(0, bandStartRel), width: bandEndRel - Math.max(0, bandStartRel), height: '50%', zIndex: 7 }}
+                  >
+                    <span
+                      className="absolute font-mono text-[10px] font-medium leading-none text-black"
+                      style={{ top: 3, left: 4 - Math.max(0, bandStartRel) }}
+                    >
+                      {bar + 1}
+                    </span>
+                  </div>
+                )}
+                {/* Near-full-height line beside the number - stops a hair
+                    below the ruler's top edge (matches other DAWs). */}
+                <div className="absolute bottom-0 w-px bg-[var(--ruler-line,var(--border-strong))]" style={{ top: 2 }} />
+                {/* Its top-half restated above the loop band, darkened to
+                    read against the solid fill. */}
+                {inLoopBand && (
+                  <div className="absolute w-px" style={{ top: 2, height: 'calc(50% - 2px)', backgroundColor: 'rgba(0, 0, 0, 0.4)', zIndex: 6 }} />
+                )}
+            </>
+          </div>
+        )
+      })}
+    </>
+  )
+})
+
 /**
  * The shared Logic-style ruler: lighter top half with the loop lane + bar numbers,
  * darker bottom half with tick lines and the playhead triangle. Used by both the
@@ -249,56 +322,15 @@ export function Ruler({
 
           <RulerTicks pixelsPerBeat={pixelsPerBeat} beatsPerBar={beatsPerBar} totalBars={totalBars} beatExtent={beatExtent} />
 
-          {bars.map((bar) => {
-            const barBeat = bar * beatsPerBar
-            // Lines strictly inside the band (its edges already draw borders)
-            // get a dark top-half segment drawn OVER the solid band.
-            const inLoopBand = !!loopRegion && barBeat > loopRegion.startBeat && barBeat < loopRegion.endBeat
-            // Band extent relative to this bar's origin - for the clipped black
-            // copy of the number (dynamic per-pixel inversion at the band edges).
-            const bandStartRel = loopRegion ? loopRegion.startBeat * pixelsPerBeat - bar * barWidthPx : 0
-            const bandEndRel = loopRegion ? loopRegion.endBeat * pixelsPerBeat - bar * barWidthPx : 0
-            // Only bars whose number (at x 4px, ~30px wide max) can touch the band.
-            const numberTouchesBand = !!loopRegion?.enabled && bandEndRel > 4 && bandStartRel < 34
-            return (
-              <div key={bar} className="absolute top-0 bottom-0" style={{ left: bar * barWidthPx }}>
-                <>
-                    {/* Top half: bar number - 10px/500 mono, one step brighter
-                        than faint so it reads at a glance */}
-                    <span
-                      className="absolute left-1 font-mono text-[10px] font-medium leading-none text-[var(--ruler-number,var(--text-3))]"
-                      style={{ top: 3, zIndex: 6 }}
-                    >
-                      {bar + 1}
-                    </span>
-                    {/* Black copy of the number, clipped to the band's extent -
-                        a number straddling the band edge inverts only the part
-                        actually sitting on the highlight. */}
-                    {numberTouchesBand && (
-                      <div
-                        className="absolute top-0 overflow-clip pointer-events-none"
-                        style={{ left: Math.max(0, bandStartRel), width: bandEndRel - Math.max(0, bandStartRel), height: '50%', zIndex: 7 }}
-                      >
-                        <span
-                          className="absolute font-mono text-[10px] font-medium leading-none text-black"
-                          style={{ top: 3, left: 4 - Math.max(0, bandStartRel) }}
-                        >
-                          {bar + 1}
-                        </span>
-                      </div>
-                    )}
-                    {/* Near-full-height line beside the number - stops a hair
-                        below the ruler's top edge (matches other DAWs). */}
-                    <div className="absolute bottom-0 w-px bg-[var(--ruler-line,var(--border-strong))]" style={{ top: 2 }} />
-                    {/* Its top-half restated above the loop band, darkened to
-                        read against the solid fill. */}
-                    {inLoopBand && (
-                      <div className="absolute w-px" style={{ top: 2, height: 'calc(50% - 2px)', backgroundColor: 'rgba(0, 0, 0, 0.4)', zIndex: 6 }} />
-                    )}
-                </>
-              </div>
-            )
-          })}
+          <RulerBars
+            bars={bars}
+            barWidthPx={barWidthPx}
+            beatsPerBar={beatsPerBar}
+            pixelsPerBeat={pixelsPerBeat}
+            loopStartBeat={loopRegion ? loopRegion.startBeat : null}
+            loopEndBeat={loopRegion ? loopRegion.endBeat : null}
+            loopEnabled={!!loopRegion?.enabled}
+          />
 
           {/* Caller-specific content-space layers (e.g. the MIDI block header) -
               below the playhead triangle. */}
