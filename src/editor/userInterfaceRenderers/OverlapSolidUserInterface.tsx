@@ -7,7 +7,7 @@
 // controls, a knob row (SIZE / PULSE / SHADE) and the color pills. A radial
 // highlight on each projection is the one 3D tell the flat stage allows.
 
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import {
   DEFAULT_OVERLAP_SOLID_BASE_COLOR,
   DEFAULT_OVERLAP_SOLID_OVERLAP_COLOR,
@@ -22,6 +22,7 @@ import {
 import { isNumberParam } from '../instruments/types'
 import { ParameterList } from './ParametersUserInterface'
 import { ColorWheelPill, hexToHsv, hsvToHex, towardWhite, withAlpha } from './colorWheel'
+import { usePreviewLoop } from './console'
 import { LaserKnob } from './laserKnob'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 
@@ -82,28 +83,21 @@ function OverlapSolidPreview({ solid, mode, baseColor, overlapColor }: {
   const live = useRef({ solid })
   live.current = { solid }
 
-  useEffect(() => {
-    let raf = 0
-    const start = performance.now()
-    const tick = (now: number) => {
-      const t = (now - start) / 1000
-      const spread = (STAGE_R * 0.72) * Math.sin(t * 0.9)
-      const lift = STAGE_R * 0.16 * Math.sin(t * 0.53)
-      const a = solidProjection(live.current.solid, STAGE_W / 2 - spread, STAGE_H / 2 - lift, STAGE_R)
-      const b = solidProjection(live.current.solid, STAGE_W / 2 + spread, STAGE_H / 2 + lift, STAGE_R)
-      // Underlay per copy (evenodd each) so the torus's own hole stays a hole;
-      // the top path carries both outlines for the parity fill.
-      underARef.current?.setAttribute('d', a)
-      underBRef.current?.setAttribute('d', b)
-      xorRef.current?.setAttribute('d', `${a} ${b}`)
-      raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [])
+  const hostRef = usePreviewLoop((t) => {
+    const spread = (STAGE_R * 0.72) * Math.sin(t * 0.9)
+    const lift = STAGE_R * 0.16 * Math.sin(t * 0.53)
+    const a = solidProjection(live.current.solid, STAGE_W / 2 - spread, STAGE_H / 2 - lift, STAGE_R)
+    const b = solidProjection(live.current.solid, STAGE_W / 2 + spread, STAGE_H / 2 + lift, STAGE_R)
+    // Underlay per copy (evenodd each) so the torus's own hole stays a hole;
+    // the top path carries both outlines for the parity fill.
+    underARef.current?.setAttribute('d', a)
+    underBRef.current?.setAttribute('d', b)
+    xorRef.current?.setAttribute('d', `${a} ${b}`)
+  })
 
   return (
     <div
+      ref={hostRef}
       data-testid="overlap-solid-preview"
       className="relative h-[112px] overflow-hidden rounded-t-[9px] border-b border-white/[0.06] bg-[#05070c]"
     >

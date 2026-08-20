@@ -10,7 +10,7 @@
 // rAF - panel chrome, exempt from the pause invariant (the guide's
 // DOM-transform pattern).
 
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import {
   DEFAULT_OVERLAP_SHAPE_BASE_COLOR,
   DEFAULT_OVERLAP_SHAPE_OVERLAP_COLOR,
@@ -20,6 +20,7 @@ import { OVERLAP_SHAPE_OPTIONS, overlapShapeIndex, overlapShapePoints } from '..
 import { isNumberParam } from '../instruments/types'
 import { ParameterList } from './ParametersUserInterface'
 import { ColorWheelPill, hexToHsv, hsvToHex, towardWhite, withAlpha } from './colorWheel'
+import { usePreviewLoop } from './console'
 import { LaserKnob } from './laserKnob'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 
@@ -68,26 +69,19 @@ function OverlapPreview({ shape, mode, baseColor, overlapColor }: {
   const live = useRef({ shape })
   live.current = { shape }
 
-  useEffect(() => {
-    let raf = 0
-    const start = performance.now()
-    const tick = (now: number) => {
-      const t = (now - start) / 1000
-      const spread = (STAGE_R * 0.72) * Math.sin(t * 0.9)
-      const lift = STAGE_R * 0.16 * Math.sin(t * 0.53)
-      const a = shapeSubpath(live.current.shape, STAGE_W / 2 - spread, STAGE_H / 2 - lift, STAGE_R)
-      const b = shapeSubpath(live.current.shape, STAGE_W / 2 + spread, STAGE_H / 2 + lift, STAGE_R)
-      const d = `${a} ${b}`
-      underRef.current?.setAttribute('d', d)
-      xorRef.current?.setAttribute('d', d)
-      raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [])
+  const hostRef = usePreviewLoop((t) => {
+    const spread = (STAGE_R * 0.72) * Math.sin(t * 0.9)
+    const lift = STAGE_R * 0.16 * Math.sin(t * 0.53)
+    const a = shapeSubpath(live.current.shape, STAGE_W / 2 - spread, STAGE_H / 2 - lift, STAGE_R)
+    const b = shapeSubpath(live.current.shape, STAGE_W / 2 + spread, STAGE_H / 2 + lift, STAGE_R)
+    const d = `${a} ${b}`
+    underRef.current?.setAttribute('d', d)
+    xorRef.current?.setAttribute('d', d)
+  })
 
   return (
     <div
+      ref={hostRef}
       data-testid="overlap-shape-preview"
       className="relative h-[112px] overflow-hidden rounded-t-[9px] border-b border-white/[0.06] bg-[#05070c]"
     >

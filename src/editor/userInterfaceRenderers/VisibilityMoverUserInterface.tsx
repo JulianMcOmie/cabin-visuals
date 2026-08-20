@@ -14,9 +14,9 @@
 // - including the hold = max(duration, attack) rule and the gradual release
 // tail.
 
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { PreviewCanvas } from './console'
+import { PreviewCanvas, usePreviewLoop } from './console'
 import { OrbitControls } from '@react-three/drei'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { MeshStandardMaterial } from 'three'
@@ -210,24 +210,18 @@ function EnvelopeEditor({
   const liveRef = useRef({ a, d, s, r, gate, total, windowBeats })
   liveRef.current = { a, d, s, r, gate, total, windowBeats }
 
-  useEffect(() => {
-    let raf = 0
-    const tick = () => {
-      const live = liveRef.current
-      const beat = loopBeat(performance.now(), live.total)
-      const inGap = beat > live.total
-      const opacity = inGap ? 0 : sampleEnvelope(live.a, live.d, live.s, live.r, live.gate, beat)
-      const dot = dotRef.current
-      if (dot) {
-        dot.style.left = `${ENV_X0 + (Math.min(beat, live.total) / live.windowBeats) * (ENV_X1 - ENV_X0)}%`
-        dot.style.top = `${ENV_Y_BASE - opacity * (ENV_Y_BASE - ENV_Y_TOP)}%`
-        dot.style.opacity = inGap ? '0' : '1'
-      }
-      raf = requestAnimationFrame(tick)
+  const hostRef = usePreviewLoop((tSec) => {
+    const live = liveRef.current
+    const beat = loopBeat(tSec * 1000, live.total)
+    const inGap = beat > live.total
+    const opacity = inGap ? 0 : sampleEnvelope(live.a, live.d, live.s, live.r, live.gate, beat)
+    const dot = dotRef.current
+    if (dot) {
+      dot.style.left = `${ENV_X0 + (Math.min(beat, live.total) / live.windowBeats) * (ENV_X1 - ENV_X0)}%`
+      dot.style.top = `${ENV_Y_BASE - opacity * (ENV_Y_BASE - ENV_Y_TOP)}%`
+      dot.style.opacity = inGap ? '0' : '1'
     }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [])
+  })
 
   const startDrag = (kind: DragKind) => (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault()
@@ -313,6 +307,7 @@ function EnvelopeEditor({
 
   return (
     <div
+      ref={hostRef}
       data-testid="visibility-envelope-editor"
       className="relative h-[96px] select-none overflow-hidden border-b border-white/[0.06]"
       style={{ background: ROOM }}

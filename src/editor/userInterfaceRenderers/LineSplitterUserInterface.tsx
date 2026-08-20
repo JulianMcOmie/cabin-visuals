@@ -34,6 +34,7 @@ import { lineSplitter, type LineSettings } from '../core/visualCopies/library'
 import { resolveVisualCopies } from '../core/visualCopies/resolveVisualCopies'
 import { isNumberParam, type NumberParamDef } from '../instruments/types'
 import { withAlpha } from './colorWheel'
+import { usePreviewLoop } from './console'
 import { LaserKnob } from './laserKnob'
 import { ParameterList } from './ParametersUserInterface'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
@@ -92,7 +93,6 @@ function resolveLayout(settings: LineSettings) {
 }
 
 function FormationPreview({ settings }: { settings: LineSettings }) {
-  const hostRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const viewRef = useRef({ yaw: -0.55, pitch: 0.38, auto: true })
   const dragRef = useRef<{ x: number; y: number; yaw: number; pitch: number } | null>(null)
@@ -101,15 +101,23 @@ function FormationPreview({ settings }: { settings: LineSettings }) {
   const live = useRef(layout)
   live.current = layout
 
+  // The draw closes over the 2D context built in the effect; the shared loop
+  // (~30fps, offscreen-gated) calls whatever the current mount stashed here.
+  const drawImpl = useRef<((tSec: number) => void) | null>(null)
+  const hostRef = usePreviewLoop<HTMLDivElement>((tSec) => drawImpl.current?.(tSec))
+
   useEffect(() => {
     const canvas = canvasRef.current
     const ctx = canvas?.getContext('2d')
     if (!canvas || !ctx) return
     const [ar, ag, ab] = hexToRgb(ACCENT)
-    let raf = 0
+    // The auto-orbit advances by elapsed TIME, not by frame count, so the
+    // shared loop's frame rate is not also the orbit's speed.
+    let lastT = 0
 
-    const draw = () => {
-      raf = requestAnimationFrame(draw)
+    drawImpl.current = (tSec: number) => {
+      const dt = tSec - lastT
+      lastT = tSec
       const host = hostRef.current
       if (!host) return
       // Size is re-derived per frame (the pane is user-resizable, and
@@ -126,7 +134,7 @@ function FormationPreview({ settings }: { settings: LineSettings }) {
       ctx.clearRect(0, 0, w, h)
 
       const view = viewRef.current
-      if (view.auto) view.yaw += 0.0035
+      if (view.auto) view.yaw += 0.21 * dt // 0.0035/frame at the old 60fps
       const cy = Math.cos(view.yaw), sy = Math.sin(view.yaw)
       const cp = Math.cos(view.pitch), sp = Math.sin(view.pitch)
       const { matrices, reach } = live.current
@@ -185,9 +193,9 @@ function FormationPreview({ settings }: { settings: LineSettings }) {
       }
     }
 
-    raf = requestAnimationFrame(draw)
-    return () => cancelAnimationFrame(raf)
-  }, [])
+    return () => { drawImpl.current = null }
+    // hostRef is the loop hook's stable ref - listed only to satisfy the lint.
+  }, [hostRef])
 
   return (
     <div

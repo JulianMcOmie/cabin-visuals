@@ -22,7 +22,7 @@
 // and a size pulse is exactly the thing you need to see while parked. Plain
 // DOM transforms always animate.
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import {
   PULSE_EVEN,
@@ -38,6 +38,7 @@ import { IMPACT_PULSE_COLOR } from '../core/visualCopies/identityColors'
 import { isNumberParam } from '../instruments/types'
 import { ParameterList } from './ParametersUserInterface'
 import { hexToHsv, hsvToHex, towardWhite, withAlpha } from './colorWheel'
+import { usePreviewLoop } from './console'
 import { LaserKnob } from './laserKnob'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 import { clamp } from '../utils/math'
@@ -150,54 +151,48 @@ function PulseWindow({ settings }: { settings: ImpactPulseSettings }) {
   const liveRef = useRef({ settings, total })
   liveRef.current = { settings, total }
 
-  useEffect(() => {
-    let raf = 0
-    const tick = () => {
-      const live = liveRef.current
-      const beat = loopBeat(performance.now(), live.total)
+  const hostRef = usePreviewLoop((tSec) => {
+    const live = liveRef.current
+    const beat = loopBeat(tSec * 1000, live.total)
 
-      const dot = dotRef.current
-      if (dot) {
-        dot.style.left = `${PLOT_X0 + (beat / live.total) * (PLOT_X1 - PLOT_X0)}%`
-        dot.style.top = `${toPlotY(plotHeight(live.settings, beat))}%`
-      }
-
-      const pulse = samplePulse(live.settings, beat, 0)
-      const [across, up] = impactPulseScale(pulse, live.settings.hit, live.settings.stretch)
-      const subject = subjectRef.current
-      if (subject) {
-        subject.style.transform = `scale(${across.toFixed(4)}, ${up.toFixed(4)})`
-        // The face brightens with the hit - the object is what is lit, so the
-        // eye lands on it even when HIT is small enough to barely move it.
-        subject.style.background = withAlpha(STRIKE, 0.24 + Math.max(0, pulse) * 0.5)
-      }
-      // The room is lit BY the instrument: a pool of light around the object
-      // that blooms with the hit. This is what makes a subtle pulse legible -
-      // at the default HIT the object itself only moves a few pixels, but the
-      // light around it visibly flares.
-      const glow = glowRef.current
-      if (glow) {
-        const lit = Math.max(0, pulse)
-        glow.style.transform = `scale(${(0.85 + lit * 0.6).toFixed(4)})`
-        glow.style.opacity = `${(0.18 + lit * 0.72).toFixed(3)}`
-      }
-
-      for (let i = 0; i < GHOST_COUNT; i++) {
-        const ghost = ghostRefs.current[i]
-        if (!ghost) continue
-        const ghostPulse = samplePulse(live.settings, beat, i + 1)
-        const [gx, gy] = impactPulseScale(ghostPulse, live.settings.hit, live.settings.stretch)
-        ghost.style.transform = `scale(${gx.toFixed(4)}, ${gy.toFixed(4)})`
-      }
-
-      raf = requestAnimationFrame(tick)
+    const dot = dotRef.current
+    if (dot) {
+      dot.style.left = `${PLOT_X0 + (beat / live.total) * (PLOT_X1 - PLOT_X0)}%`
+      dot.style.top = `${toPlotY(plotHeight(live.settings, beat))}%`
     }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [])
+
+    const pulse = samplePulse(live.settings, beat, 0)
+    const [across, up] = impactPulseScale(pulse, live.settings.hit, live.settings.stretch)
+    const subject = subjectRef.current
+    if (subject) {
+      subject.style.transform = `scale(${across.toFixed(4)}, ${up.toFixed(4)})`
+      // The face brightens with the hit - the object is what is lit, so the
+      // eye lands on it even when HIT is small enough to barely move it.
+      subject.style.background = withAlpha(STRIKE, 0.24 + Math.max(0, pulse) * 0.5)
+    }
+    // The room is lit BY the instrument: a pool of light around the object
+    // that blooms with the hit. This is what makes a subtle pulse legible -
+    // at the default HIT the object itself only moves a few pixels, but the
+    // light around it visibly flares.
+    const glow = glowRef.current
+    if (glow) {
+      const lit = Math.max(0, pulse)
+      glow.style.transform = `scale(${(0.85 + lit * 0.6).toFixed(4)})`
+      glow.style.opacity = `${(0.18 + lit * 0.72).toFixed(3)}`
+    }
+
+    for (let i = 0; i < GHOST_COUNT; i++) {
+      const ghost = ghostRefs.current[i]
+      if (!ghost) continue
+      const ghostPulse = samplePulse(live.settings, beat, i + 1)
+      const [gx, gy] = impactPulseScale(ghostPulse, live.settings.hit, live.settings.stretch)
+      ghost.style.transform = `scale(${gx.toFixed(4)}, ${gy.toFixed(4)})`
+    }
+  })
 
   return (
     <div
+      ref={hostRef}
       data-testid="impact-pulse-window"
       className="relative flex h-[120px] overflow-hidden border-b border-white/[0.06]"
       style={{ background: ROOM }}

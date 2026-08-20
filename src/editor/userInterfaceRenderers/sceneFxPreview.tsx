@@ -18,14 +18,15 @@
 // only guaranteed until the task yields (see the workspace guide's note about
 // reading the WebGL canvas). Never split those two across an await or a rAF.
 //
-// Raw WebGL on its own rAF rather than an r3f <Canvas>, per the guide: a panel
-// Canvas stays black until the transport plays, and a look is exactly what you
-// dial in while parked. The rAF clock is panel chrome, not a rendered visual.
+// Raw WebGL on the shared preview loop (console/previewLoop.ts) rather than an
+// r3f <Canvas>, per the guide: a panel Canvas stays black until the transport
+// plays, and a look is exactly what you dial in while parked. The loop's clock
+// is panel chrome, not a rendered visual.
 
 import { useEffect, useRef, useState } from 'react'
 import { sceneFxPreviewFragment, sceneFxPreviewUniformNames } from '../effects/scene/previewFrame'
 import type { VisualEffect } from '../effects/types'
-import { PreviewWindow } from './console'
+import { PreviewWindow, usePreviewLoop } from './console'
 
 /** Compact, because these stack: a rack of devices is read as a column, and a
  *  148px room per device pushes the third one off the pane. */
@@ -173,44 +174,60 @@ export function SceneFxPreview({ plugin, settings, testId }: {
   settings: Record<string, number>
   testId?: string
 }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
   const [failed, setFailed] = useState(false)
-  // Read through a ref so the rAF loop never restarts on a param change - a
+  // Read through refs so the loop never restarts on a param change - a
   // remounting loop would re-read the clock and stutter the animated devices.
   const settingsRef = useRef(settings)
   settingsRef.current = settings
+  const pluginRef = useRef(plugin)
+  pluginRef.current = plugin
+  const failedRef = useRef(false)
+
+  // The canvas's device-pixel size, fed by a ResizeObserver instead of being
+  // re-read per frame (clientWidth/Height are layout reads, and two of them
+  // per frame per stacked device add up). Cleared when the canvas remounts;
+  // the draw falls back to one direct read while the cache is empty.
+  const sizeRef = useRef<{ width: number; height: number } | null>(null)
+  const measure = (canvas: HTMLCanvasElement) => {
+    const dpr = Math.min(2, window.devicePixelRatio || 1)
+    sizeRef.current = {
+      width: Math.max(1, Math.round(canvas.clientWidth * dpr)),
+      height: Math.max(1, Math.round(canvas.clientHeight * dpr)),
+    }
+    return sizeRef.current
+  }
+
+  const canvasRef = usePreviewLoop<HTMLCanvasElement>((tSec) => {
+    if (failedRef.current) return
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const context = canvas.getContext('2d')
+    if (!context) { failedRef.current = true; setFailed(true); return }
+    const { width, height } = sizeRef.current ?? measure(canvas)
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width
+      canvas.height = height
+    }
+    const beat = tSec * BEATS_PER_SECOND
+    const source = renderDevice(pluginRef.current, settingsRef.current, beat, width, height)
+    if (!source) { failedRef.current = true; setFailed(true); return }
+    // Same task as the draw above - see the header note.
+    // (No loseContext() anywhere here, unlike the per-panel previews: the GL
+    // context is the family's, not this panel's, and it outlives every mount.)
+    context.drawImage(source, 0, source.height - height, width, height, 0, 0, width, height)
+  })
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const context = canvas.getContext('2d')
-    if (!context) { setFailed(true); return }
-
-    let frame = 0
-    const start = performance.now()
-    const draw = () => {
-      frame = requestAnimationFrame(draw)
-      const dpr = Math.min(2, window.devicePixelRatio || 1)
-      // Re-read per frame rather than through a ResizeObserver: observers
-      // starve in a hidden pane, and the inspector's width changes on every
-      // frame of a sidebar glide.
-      const width = Math.max(1, Math.round(canvas.clientWidth * dpr))
-      const height = Math.max(1, Math.round(canvas.clientHeight * dpr))
-      if (canvas.width !== width || canvas.height !== height) {
-        canvas.width = width
-        canvas.height = height
-      }
-      const beat = ((performance.now() - start) / 1000) * BEATS_PER_SECOND
-      const source = renderDevice(plugin, settingsRef.current, beat, width, height)
-      if (!source) { setFailed(true); cancelAnimationFrame(frame); return }
-      // Same task as the draw above - see the header note.
-      context.drawImage(source, 0, source.height - height, width, height, 0, 0, width, height)
+    const observer = new ResizeObserver(() => measure(canvas))
+    observer.observe(canvas)
+    return () => {
+      observer.disconnect()
+      sizeRef.current = null
     }
-    frame = requestAnimationFrame(draw)
-    // No loseContext() here, unlike the per-panel previews: the context is the
-    // family's, not this panel's, and it outlives every mount.
-    return () => cancelAnimationFrame(frame)
-  }, [plugin])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [failed])
 
   return (
     <PreviewWindow height={PREVIEW_HEIGHT} testId={testId} title={`${plugin.name} — live preview`}>

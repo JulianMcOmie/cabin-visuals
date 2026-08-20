@@ -13,6 +13,7 @@ import { Console, ControlRow } from './console/Console'
 import { Knob } from './console/Knob'
 import { Segmented } from './console/Segmented'
 import { More } from './console/More'
+import { usePreviewLoop } from './console/previewLoop'
 import { ParameterList } from './ParametersUserInterface'
 import { ColorWheelPopover, hexToHsv, hsvToHex } from './colorWheel'
 import {
@@ -175,7 +176,6 @@ export const WireframeUserInterfaceRenderer: UserInterfaceRendererDefinition = (
   const spin = b.num('spin')
 
   const [category, setCategory] = useState(0)
-  const shelfRef = useRef<HTMLDivElement>(null)
   const cellCanvases = useRef(new Map<number, HTMLCanvasElement>())
   const selected = Math.round(shape?.value ?? 0)
   const accent = color?.value ?? '#7dd3fc'
@@ -184,18 +184,13 @@ export const WireframeUserInterfaceRenderer: UserInterfaceRendererDefinition = (
   const selectedRef = useRef(selected)
   selectedRef.current = selected
 
-  // One rAF for every visible cell - panel chrome, exempt from the pause rule.
-  useEffect(() => {
-    let raf = 0
-    const tick = (now: number) => {
-      for (const [index, canvas] of cellCanvases.current) {
-        drawShapePreview(canvas, index, now, accentRef.current, index === selectedRef.current)
-      }
-      raf = requestAnimationFrame(tick)
+  // One shared loop tick for every visible cell - panel chrome, exempt from
+  // the pause rule. The shelf div is the loop's visibility host.
+  const shelfRef = usePreviewLoop((tSec) => {
+    for (const [index, canvas] of cellCanvases.current) {
+      drawShapePreview(canvas, index, tSec * 1000, accentRef.current, index === selectedRef.current)
     }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [])
+  })
 
   // Land the shelf on the current shape when the panel opens.
   useEffect(() => {

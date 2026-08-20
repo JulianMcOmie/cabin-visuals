@@ -8,10 +8,11 @@
 // an ADSR knob row with the color pill on the far right, and a surface row
 // (IDLE / GAP / TEXTURE) with the color-mode segments. Every control takes its
 // accent from the color param; zone colors come from the same zoneColorHex the
-// wall renders with. The preview animates on rAF - panel chrome, exempt from the
-// pause invariant (per the design guide's DOM-transform pattern).
+// wall renders with. The preview animates on the shared preview loop - panel
+// chrome, exempt from the pause invariant (per the design guide's DOM-transform
+// pattern).
 
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import {
   DEFAULT_FLASH_WALL_COLOR,
   DEFAULT_FLASH_WALL_COLOR2,
@@ -25,6 +26,7 @@ import {
 import { isNumberParam } from '../instruments/types'
 import { ParameterList } from './ParametersUserInterface'
 import { ColorWheelPill, hexToHsv, hsvToHex, towardWhite, withAlpha } from './colorWheel'
+import { usePreviewLoop } from './console'
 import { LaserKnob } from './laserKnob'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 import { clamp } from '../utils/math'
@@ -77,32 +79,26 @@ function WallPreview({ zones, layout, env, idle, gap, texture, cellColors }: {
   const live = useRef({ zones, env, idle, colors: cellColors.map(hexToRgbObject) })
   live.current = { zones, env, idle, colors: cellColors.map(hexToRgbObject) }
 
-  useEffect(() => {
-    let raf = 0
-    const start = performance.now()
-    const tick = (now: number) => {
-      const { zones, env, idle, colors } = live.current
-      const total = Math.max(1, zones) * PREVIEW_STEP_SEC
-      const cycleT = ((now - start) / 1000) % total
-      for (let i = 0; i < zones; i++) {
-        const el = cellRefs.current[i]
-        const c = colors[i]
-        if (!el || !c) continue
-        let t = cycleT - i * PREVIEW_STEP_SEC
-        if (t < 0) t += total
-        const level = flashEnvelopeAt(env, t, PREVIEW_HELD_SEC)
-        el.style.backgroundColor = `rgba(${c.r}, ${c.g}, ${c.b}, ${Math.min(1, idle * 0.7 + level).toFixed(3)})`
-        el.style.boxShadow = `0 0 ${Math.round(22 * level)}px rgba(${c.r}, ${c.g}, ${c.b}, ${(0.5 * level).toFixed(3)})`
-      }
-      raf = requestAnimationFrame(tick)
+  const hostRef = usePreviewLoop((tSec) => {
+    const { zones, env, idle, colors } = live.current
+    const total = Math.max(1, zones) * PREVIEW_STEP_SEC
+    const cycleT = tSec % total
+    for (let i = 0; i < zones; i++) {
+      const el = cellRefs.current[i]
+      const c = colors[i]
+      if (!el || !c) continue
+      let t = cycleT - i * PREVIEW_STEP_SEC
+      if (t < 0) t += total
+      const level = flashEnvelopeAt(env, t, PREVIEW_HELD_SEC)
+      el.style.backgroundColor = `rgba(${c.r}, ${c.g}, ${c.b}, ${Math.min(1, idle * 0.7 + level).toFixed(3)})`
+      el.style.boxShadow = `0 0 ${Math.round(22 * level)}px rgba(${c.r}, ${c.g}, ${c.b}, ${(0.5 * level).toFixed(3)})`
     }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [])
+  })
 
   const { cols, rows } = flashWallGrid(zones, layout)
   return (
     <div
+      ref={hostRef}
       data-testid="flash-wall-preview"
       className="relative h-[112px] overflow-hidden rounded-t-[9px] border-b border-white/[0.06] bg-[#05070c]"
     >
