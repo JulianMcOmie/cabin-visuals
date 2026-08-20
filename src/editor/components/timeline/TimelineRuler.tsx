@@ -1,4 +1,4 @@
-import type { PointerEvent as ReactPointerEvent, ReactNode, RefObject } from 'react'
+import { memo, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { Ruler } from '../Ruler'
@@ -33,7 +33,7 @@ interface TimelineRulerProps {
 
 /** The main timeline's ruler - a thin adapter over the shared Ruler (also used by
  *  the MIDI editor), fed from the project/UI stores. All ruler UI lives in Ruler. */
-export function TimelineRuler({ onScrubStart, onLoopDragStart, onLoopMoveStart, onLoopResizeStart, barWidthPx, timelineWidthPx, displayBars, pickupPx, gutterPx, contentRef, playheadHeadRef, corner }: TimelineRulerProps) {
+export const TimelineRuler = memo(function TimelineRuler({ onScrubStart, onLoopDragStart, onLoopMoveStart, onLoopResizeStart, barWidthPx, timelineWidthPx, displayBars, pickupPx, gutterPx, contentRef, playheadHeadRef, corner }: TimelineRulerProps) {
   const totalBars = useProjectStore((s) => s.totalBars)
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
@@ -63,4 +63,4 @@ export function TimelineRuler({ onScrubStart, onLoopDragStart, onLoopMoveStart, 
       onLoopResizeStart={onLoopResizeStart}
     />
   )
-}
+})

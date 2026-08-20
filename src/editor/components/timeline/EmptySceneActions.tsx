@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { memo, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { AudioLines, LayoutTemplate, Music4, Plus } from 'lucide-react'
 import { useUIStore } from '../../store/UIStore'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
@@ -52,7 +52,7 @@ type Action = {
   run: () => void
 }
 
-export function EmptySceneActions({
+export const EmptySceneActions = memo(function EmptySceneActions({
   empty,
   labelWidth,
   isMain,
@@ -204,4 +204,4 @@ export function EmptySceneActions({
       />
     </div>
   )
-}
+})

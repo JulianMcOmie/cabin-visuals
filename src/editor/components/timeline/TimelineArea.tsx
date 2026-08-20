@@ -342,7 +342,9 @@ export function TimelineArea() {
     }
   })
 
-  function insertTrack(opts?: { withStarterBlock?: boolean }) {
+  // useCallback: this is a prop of the memoized ruler corner and the empty-scene
+  // list; it only reads live state, so it never needs to re-bind.
+  const insertTrack = useCallback((opts?: { withStarterBlock?: boolean }) => {
     const state = useProjectStore.getState()
     const isMain = !!state.scenes[state.activeSceneId]?.isMain
     const id = crypto.randomUUID()
@@ -375,7 +377,7 @@ export function TimelineArea() {
     })
     // A new instrument becomes the selection; blocks deselect.
     selectNewTrack(id)
-  }
+  }, [])
 
   // OS-file drops moved to the editor-wide MediaFileDropLayer (App root) -
   // files can land anywhere in the editor, not just this section. Only the
@@ -393,6 +395,22 @@ export function TimelineArea() {
       useProjectStore.getState().setTotalBars(widthPx / barWidthPx)
     })
   }
+
+  const handleAddTrackWithBlock = useCallback(() => insertTrack({ withStarterBlock: true }), [insertTrack])
+  const handleAddTrack = useCallback(() => insertTrack(), [insertTrack])
+  // A stable element: an inline JSX corner prop re-rendered the memoized ruler
+  // (and its whole tick strip) on every store write TimelineArea absorbs.
+  const rulerCorner = useMemo(() => (
+    <div className="flex items-center gap-2 px-3 w-full">
+      <button
+        className="flex items-center justify-center w-4 h-4 rounded-[3px] bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors cursor-pointer"
+        onClick={handleAddTrack}
+        title={`Add track`}
+      >
+        <Plus size={11} />
+      </button>
+    </div>
+  ), [handleAddTrack])
 
   return (
     <div className="timeline-neon relative flex flex-col h-full border-t border-[var(--border)] bg-[#08090d]">
@@ -414,17 +432,7 @@ export function TimelineArea() {
           gutterPx={0}
           contentRef={rulerContentRef}
           playheadHeadRef={playheadHeadRef}
-          corner={
-            <div className="flex items-center gap-2 px-3 w-full">
-              <button
-                className="flex items-center justify-center w-4 h-4 rounded-[3px] bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors cursor-pointer"
-                onClick={() => insertTrack()}
-                title={`Add track`}
-              >
-                <Plus size={11} />
-              </button>
-            </div>
-          }
+          corner={rulerCorner}
         />
       </div>
 
@@ -515,7 +523,7 @@ export function TimelineArea() {
           empty={rootTrackIds.every(isSceneTrackId)}
           labelWidth={labelWidth}
           isMain={activeSceneIsMain}
-          onAddTrack={() => insertTrack({ withStarterBlock: true })}
+          onAddTrack={handleAddTrackWithBlock}
         />
         <div
           ref={scrollRef}

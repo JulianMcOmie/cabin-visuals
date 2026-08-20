@@ -22,9 +22,11 @@ await page.addInitScript(() => {
   const countFiber = (fiber) => {
     // actualDuration is set on fibers that rendered in this commit (profiling
     // fields exist in dev). treeBaseTime alone would count everything.
-    // Skip memo WRAPPER fibers (elementType.compare): their "render" is just
-    // the props comparator; counting them made memoized trees look hot.
-    if (fiber.actualDuration !== undefined && fiber.actualStartTime > window.__lastCommit && !(fiber.elementType && fiber.elementType.compare)) {
+    // PerformedWork flag (1): set only when the component function actually
+    // ran this commit. actualStartTime alone counts default-memo() fibers
+    // whose shallow compare BAILED (beginWork visits them), inflating
+    // memoized trees by rows x commits.
+    if (fiber.actualDuration !== undefined && fiber.actualStartTime > window.__lastCommit && (fiber.flags & 1) && !(fiber.elementType && fiber.elementType.compare)) {
       const t = fiber.elementType || fiber.type
       let name = typeof t === 'function' ? (t.displayName || t.name || '(anon fn)') : typeof t === 'string' ? null : t && t.$$typeof ? (t.displayName || (t.type && (t.type.displayName || t.type.name)) || String(t.$$typeof).slice(7, 30)) : null
       if (name) {
