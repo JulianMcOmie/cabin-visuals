@@ -96,9 +96,14 @@ export function LandingClassic() {
   // Shared cached auth (not a private per-mount fetch), so navigating back to
   // the landing page renders the known sign-in state instead of re-running the
   // login/signup -> profile flip.
-  const { user } = useAuth()
-  const last = user ? getLastProjectId(user.id) : null
-  const destination = user ? (last ? `/editor?project=${last}` : '/projects') : '/start'
+  const { user, isAnonymous } = useAuth()
+  // Real accounts only - an anonymous session is a Supabase user too, and
+  // the bare `user` check showed signed-out visitors "Continue creating".
+  // Signed out (anon included) routes to the login screen: login is
+  // required to use the editor.
+  const signedIn = !!user && !isAnonymous
+  const last = signedIn && user ? getLastProjectId(user.id) : null
+  const destination = signedIn ? (last ? `/editor?project=${last}` : '/projects') : '/login'
   // The loading screen paints in the click itself, before the route is fetched.
   const { go } = useInstantNavigation(destination)
 
@@ -152,7 +157,7 @@ export function LandingClassic() {
             </p>
           </Appear>
           <Appear delay={0.1} className="flex flex-col items-center gap-[18px]">
-                {user ? (
+                {signedIn ? (
               // Logged in: straight back into the last project they opened
               // on this device; /projects only when there's nothing to resume.
               <CtaGlow>
@@ -167,12 +172,11 @@ export function LandingClassic() {
                 </button>
               </CtaGlow>
             ) : (
-              // Not logged in: pick a template first (/start), which creates a
-              // real project on an anonymous session - the Lyric Video pipeline
-              // needs one to upload the song at all.
+              // Not logged in (anonymous sessions included): the login screen
+              // first - login is required to use the editor.
               <CtaGlow>
                 <Link
-                  href="/start"
+                  href="/login"
                   onClick={() => track('try_it_out_clicked')}
                   className={CTA_CLASSES}
                 >

@@ -96,11 +96,13 @@ export default function PricingPage() {
                 </li>
               ))}
             </ul>
-            {/* Cold visitors get the accent path INTO the product; people
-                with accounts already know it - their accent lives on Pro. */}
+            {/* Cold visitors get the accent path INTO the product - via the
+                login screen, since login is required to use the editor;
+                people with accounts already know it - their accent lives on
+                Pro. */}
             <Link
-              href={hasAccount ? '/projects' : '/editor'}
-              onClick={() => track('pricing_start_creating_clicked', { destination: hasAccount ? 'projects' : 'editor' })}
+              href={hasAccount ? '/projects' : '/login'}
+              onClick={() => track('pricing_start_creating_clicked', { destination: hasAccount ? 'projects' : 'login' })}
               className={`mt-7 flex h-[42px] items-center justify-center rounded-[99px] text-[14px] transition-colors cursor-pointer ${
                 hasAccount
                   ? 'border border-[var(--border)] font-semibold text-[var(--text-2)] hover:border-[var(--border-strong)] hover:text-[var(--text)]'

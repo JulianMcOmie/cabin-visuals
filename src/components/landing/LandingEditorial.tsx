@@ -21,17 +21,22 @@ const EYEBROW_CLASSES =
 const CTA_PILL_CLASSES =
   "inline-flex h-[52px] items-center justify-center whitespace-nowrap rounded-[99px] bg-[var(--lp-accent)] px-9 text-[17px] font-semibold text-[#12141a] cursor-pointer [transition:box-shadow_.5s_ease,transform_.3s_ease] hover:shadow-[0_0_60px_rgba(158,232,245,0.5)] hover:-translate-y-0.5"
 
-/** The hero + closing CTA. Logged-in users resume their last project (same
- *  routing as the classic cover); everyone else starts at /start, which
- *  creates a project on an anonymous session. The loading screen is painted
- *  in the click itself, before the navigation starts (useInstantNavigation). */
+/** The hero + closing CTA. Users with a REAL account resume their last
+ *  project ("Continue creating"); everyone else - signed out OR riding an
+ *  anonymous session - sees "Start creating" and lands on the login screen
+ *  (login is required to use the editor; /login redirects to /projects).
+ *  The account check is `user && !isAnonymous`, never bare `user`: an anon
+ *  session is a Supabase user too, and the bare check greeted signed-out
+ *  visitors with "Continue creating". The loading screen is painted in the
+ *  click itself, before the navigation starts (useInstantNavigation). */
 function CreateCta({ children }: { children?: ReactNode }) {
-  const { user } = useAuth()
-  const last = user ? getLastProjectId(user.id) : null
-  const destination = user ? (last ? `/editor?project=${last}` : "/projects") : "/start"
+  const { user, isAnonymous } = useAuth()
+  const signedIn = !!user && !isAnonymous
+  const last = signedIn && user ? getLastProjectId(user.id) : null
+  const destination = signedIn ? (last ? `/editor?project=${last}` : "/projects") : "/login"
   const { go } = useInstantNavigation(destination)
 
-  if (user) {
+  if (signedIn) {
     return (
       <button
         onClick={() => {
@@ -45,7 +50,7 @@ function CreateCta({ children }: { children?: ReactNode }) {
     )
   }
   return (
-    <Link href="/start" onClick={() => track("try_it_out_clicked")} className={CTA_PILL_CLASSES}>
+    <Link href="/login" onClick={() => track("try_it_out_clicked")} className={CTA_PILL_CLASSES}>
       {children ?? "Start creating"}
     </Link>
   )
