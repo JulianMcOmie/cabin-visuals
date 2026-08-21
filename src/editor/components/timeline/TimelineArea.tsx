@@ -10,7 +10,6 @@ import { Track } from './Track'
 import { TrackContextMenu } from './TrackContextMenu'
 import { TimelineRuler } from './TimelineRuler'
 import { EmptySceneActions } from './EmptySceneActions'
-import { LoadingCabin } from '../../../components/LoadingScreen'
 import { usePlayhead } from '../../hooks/usePlayhead'
 import { useScrub } from '../../hooks/useScrub'
 import { useLoopDrag, type LoopDragGuide } from '../../hooks/useLoopDrag'
@@ -525,11 +524,25 @@ export function TimelineArea() {
             the shared smoking-cabin loading mark sits in its spot) until the
             hydrate lands and the scene is verified empty. */}
         {documentLoading && (
-          <div
-            className="pointer-events-none absolute inset-y-0 right-0 z-20 flex items-start justify-start pt-5"
-            style={{ left: labelWidth + PLAYHEAD_TRIANGLE_HALF }}
-          >
-            <div className="pl-4"><LoadingCabin /></div>
+          // Skeleton rows in the projects-grid's pulse voice: ghost tracks
+          // shaped like the rows that are about to land - a label stub in
+          // the frozen column, a block in the lane - staggered so the pulse
+          // reads as loading, not as dead chrome.
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-20">
+            {([[96, 8, 180], [72, 90, 140], [84, 40, 220]] as const).map(([nameW, blockX, blockW], i) => (
+              <div key={i} className="flex items-center" style={{ height: rowHeight }}>
+                <div className="flex h-full flex-shrink-0 items-center gap-2 pl-3" style={{ width: labelWidth }}>
+                  <div className="h-4 w-4 animate-pulse rounded bg-[var(--bg-elevated)]" style={{ animationDelay: `${i * 150}ms` }} />
+                  <div className="h-3 animate-pulse rounded bg-[var(--bg-elevated)]" style={{ width: nameW, animationDelay: `${i * 150}ms` }} />
+                </div>
+                <div className="relative h-full flex-1" style={{ marginLeft: PLAYHEAD_TRIANGLE_HALF }}>
+                  <div
+                    className="absolute top-1/2 h-[62%] -translate-y-1/2 animate-pulse rounded-[5px] bg-[var(--bg-panel-raised)]"
+                    style={{ left: blockX, width: blockW, animationDelay: `${i * 150}ms` }}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         )}
         <EmptySceneActions
