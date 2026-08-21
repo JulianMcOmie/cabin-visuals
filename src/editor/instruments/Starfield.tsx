@@ -19,17 +19,20 @@ import type { ObjectInstrumentDef, ParamDef } from './types'
 const PARAMS: ParamDef[] = [
   { key: 'color', label: 'Star Color', type: 'color', default: '#ffffff' },
   // 0.4 = the roll's old default (68 dots); the scale matches its Starfield
-  // knob 1:1 so a value carried over reads identically.
-  { key: 'density', label: 'Density', min: 0, max: 2.5, step: 0.05, default: 0.4 },
-  { key: 'size', label: 'Dot Size', min: 0.4, max: 3, step: 0.05, default: 1 },
-  // Parallax spread across the depth layers: how much a star's seeded depth
-  // separates it from the others. 0 flattens the field into one uniform
-  // plane; 1 is the roll's classic look. Above 2 only the MOTION spread
-  // keeps growing (near stars streak far ahead of the deep field) - the
-  // brightness/size spread caps at 2, or a deep field is just giant white
-  // squares. Quadratic slider (curve) so the useful 0-2 band keeps its
-  // resolution under the 100 ceiling.
-  { key: 'depth', label: 'Depth', min: 0, max: 100, step: 0.05, default: 1, curve: 2 },
+  // knob 1:1 so a value carried over reads identically. Quadratic sliders
+  // (curve) on both: the everyday sub-1 band keeps its resolution under
+  // the tall ceilings.
+  { key: 'density', label: 'Density', min: 0, max: 20, step: 0.05, default: 0.4, curve: 2 },
+  { key: 'size', label: 'Dot Size', min: 0.4, max: 10, step: 0.05, default: 1, curve: 2 },
+  // How far back the field stretches BEHIND the nearest stars. The front of
+  // the field is the anchor: it keeps the classic near-star drift at every
+  // depth, and raising the knob pushes the far stars away - slower and
+  // slower, toward frozen at 100 - so the field gets deeper, not faster.
+  // 0 collapses everything onto the front plane; 1 is the classic look
+  // (bit-identical). Brightness/size spread caps at the 2x band so a deep
+  // field stays a starfield. Quadratic slider (curve) so the everyday 0-2
+  // band keeps its resolution under the 100 ceiling.
+  { key: 'depth', label: 'Depth', min: 0, max: 200, step: 0.05, default: 1, curve: 2 },
   // Multiplies the drift rate; the base speed is the roll's scroll-matched
   // constant, so 1 beside a Midi Roll moves exactly like its old backdrop.
   { key: 'speed', label: 'Drift Speed', min: 0, max: 4, step: 0.05, default: 1 },
@@ -48,10 +51,10 @@ const PARAMS: ParamDef[] = [
 ]
 
 const TEXTURE_HEIGHT = 1024
-/** Density 2.5 fills the table; the seeded layer/x/y of star i never changes,
- *  so they are rolled once instead of three seededRand calls per star per
- *  frame (the same memo Midi Roll's starfield carried). */
-const MAX_STARS = 425
+/** Density 20 fills the table (20 x 170 dots); the seeded layer/x/y of star i
+ *  never changes, so they are rolled once instead of three seededRand calls
+ *  per star per frame (the same memo Midi Roll's starfield carried). */
+const MAX_STARS = 3400
 let starTable: Float64Array | null = null
 function starConsts(): Float64Array {
   if (starTable) return starTable
@@ -129,19 +132,28 @@ function StarfieldVisual({ trackId }: { trackId: string }) {
 
     const count = Math.min(MAX_STARS, Math.round(density * 170))
     const table = starConsts()
+    // Depth anchors the FRONT of the field: the nearest star always drifts
+    // at the classic near-star rate, and the knob stretches the field away
+    // behind it - the farthest star's rate divides down toward zero as
+    // depth grows. Chosen over multiplying the near end up, which read as
+    // "everything gets faster" instead of "the field gets deeper". At
+    // depth 1 `backRate + span * t` is exactly the classic `0.3 + t`, so
+    // the default look is bit-identical; depth 0 collapses everyone onto
+    // the front plane (uniform near-star speed).
+    const FRONT_RATE = 1.3
+    const backRate = FRONT_RATE / (1 + (FRONT_RATE / 0.3 - 1) * depth)
+    const rateSpan = FRONT_RATE - backRate
+    const lookDepth = Math.min(depth, 2)
     for (let i = 0; i < count; i++) {
-      // The star's seeded depth, scaled by the Depth knob. MOTION takes the
-      // full multiplier (a depth of 100 is near stars streaking a hundred
-      // times faster than the deep field); brightness and dot size cap at
-      // 2× so a deep field stays a starfield instead of giant hot squares.
-      // Depth 0 collapses the field to one plane; ≤2 is bit-identical to
-      // the original 0-2 knob.
-      const layer = table[i * 3] * Math.min(depth, 2) // look: brighter = closer
-      const motionLayer = table[i * 3] * depth
+      const t = table[i * 3] // seeded depth position: 0 = far, 1 = near
+      // Brightness/size anchor at the front too, capped at the 2x band so a
+      // deep field dims toward the back without turning near stars into
+      // giant hot squares.
+      const layer = Math.max(0, 1 - (1 - t) * lookDepth) // look: brighter = closer
       const sx = table[i * 3 + 1]
       const sy = table[i * 3 + 2]
-      // The roll's scroll-matched drift constant, deeper layers moving faster.
-      const drift = beat * 0.0035 * speed * (0.3 + motionLayer)
+      // The roll's scroll-matched drift constant, nearer layers moving faster.
+      const drift = beat * 0.0035 * speed * (backRate + rateSpan * t)
       let x = sx
       let y = sy
       if (direction === 0) x = sx - drift
