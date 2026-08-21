@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, Upload } from 'lucide-react'
+import { ArrowDownToLine, Check, Upload } from 'lucide-react'
 import { track } from '../../analytics/analytics'
 import { EditorDialog } from './EditorDialog'
 import { SignupCard } from './SignupCard'
@@ -319,6 +319,10 @@ function AspectCard({ aspect, selected, onPick }: { aspect: ExportAspect; select
 export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => void; isPro: boolean; canExport: boolean }) {
   const [settings, setSettings] = useState<ExportSettings>(() => loadSavedSettings(isPro))
   const [phase, setPhase] = useState<Phase>({ kind: 'settings' })
+  // The receipt's "it already downloaded" line: set when the auto-download
+  // fires on completion (and again on the manual button, which is the retry
+  // path for browsers that block the automatic one). Reset per export.
+  const [downloaded, setDownloaded] = useState(false)
   const [audioOk, setAudioOk] = useState(true)
   const [rangeNote, setRangeNote] = useState<string | null>(null)
   const bpm = useProjectStore((s) => s.bpm)
@@ -381,6 +385,7 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
 
     const ctrl = new AbortController()
     abortRef.current = ctrl
+    setDownloaded(false)
     setPhase({ kind: 'running', frame: 0, total: 1, startedAt: performance.now() })
     try {
       const { blob, poster } = await runExport(
@@ -396,6 +401,7 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
         setPhase({ kind: 'done', fileName: effective.fileName, blob, poster })
         // The receipt screen is the retry path when the browser blocks this.
         downloadBlob(blob, effective.fileName)
+        setDownloaded(true)
       } else {
         setPhase({ kind: 'settings' })
       }
@@ -679,20 +685,34 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
             )}
             {rangeNote && <p className="text-[11px] leading-snug text-[var(--text-muted)]">{rangeNote}</p>}
             <div className="flex items-center justify-between gap-4">
-              <span className="flex min-w-0 items-center gap-2.5">
-                <span className="flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded-full bg-[var(--accent)]">
-                  <Check size={12} strokeWidth={3} className="text-[#0c0d12]" />
+              <span className="flex min-w-0 flex-col gap-1">
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <span className="flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded-full bg-[var(--accent)]">
+                    <Check size={12} strokeWidth={3} className="text-[#0c0d12]" />
+                  </span>
+                  <span className="truncate font-mono text-[12px] text-[var(--text-2)]">
+                    {phase.fileName}.mp4
+                    <span className="text-[var(--text-muted)]"> · {(phase.blob.size / 1e6).toFixed(1)} MB</span>
+                  </span>
                 </span>
-                <span className="truncate font-mono text-[12px] text-[var(--text-2)]">
-                  {phase.fileName}.mp4
-                  <span className="text-[var(--text-muted)]"> · {(phase.blob.size / 1e6).toFixed(1)} MB</span>
-                </span>
+                {/* The file already left: the export auto-downloads on
+                    completion, and without saying so the receipt reads as
+                    "now click Download" - a second copy nobody wanted. */}
+                {downloaded && (
+                  <span className="flex items-center gap-1.5 pl-[28.5px] text-[11px] text-[var(--text-muted)]">
+                    <ArrowDownToLine size={11} strokeWidth={2.5} className="text-[var(--accent)]" />
+                    Saved to your Downloads folder
+                  </span>
+                )}
               </span>
               <button
-                onClick={() => downloadBlob(phase.blob, phase.fileName)}
+                onClick={() => {
+                  downloadBlob(phase.blob, phase.fileName)
+                  setDownloaded(true)
+                }}
                 className="h-9 flex-shrink-0 rounded-full bg-[var(--accent-button)] px-6 text-[12px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] cursor-pointer"
               >
-                Download
+                {downloaded ? 'Download again' : 'Download'}
               </button>
             </div>
           </div>
