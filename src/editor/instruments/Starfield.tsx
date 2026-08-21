@@ -23,10 +23,13 @@ const PARAMS: ParamDef[] = [
   { key: 'density', label: 'Density', min: 0, max: 2.5, step: 0.05, default: 0.4 },
   { key: 'size', label: 'Dot Size', min: 0.4, max: 3, step: 0.05, default: 1 },
   // Parallax spread across the depth layers: how much a star's seeded depth
-  // separates it from the others in speed, brightness and size. 0 flattens
-  // the field into one uniform plane; 1 is the roll's classic look; 2
-  // exaggerates the near/far split.
-  { key: 'depth', label: 'Depth', min: 0, max: 2, step: 0.05, default: 1 },
+  // separates it from the others. 0 flattens the field into one uniform
+  // plane; 1 is the roll's classic look. Above 2 only the MOTION spread
+  // keeps growing (near stars streak far ahead of the deep field) - the
+  // brightness/size spread caps at 2, or a deep field is just giant white
+  // squares. Quadratic slider (curve) so the useful 0-2 band keeps its
+  // resolution under the 100 ceiling.
+  { key: 'depth', label: 'Depth', min: 0, max: 100, step: 0.05, default: 1, curve: 2 },
   // Multiplies the drift rate; the base speed is the roll's scroll-matched
   // constant, so 1 beside a Midi Roll moves exactly like its old backdrop.
   { key: 'speed', label: 'Drift Speed', min: 0, max: 4, step: 0.05, default: 1 },
@@ -127,15 +130,18 @@ function StarfieldVisual({ trackId }: { trackId: string }) {
     const count = Math.min(MAX_STARS, Math.round(density * 170))
     const table = starConsts()
     for (let i = 0; i < count; i++) {
-      // The star's seeded depth, scaled by the Depth knob: everything the
-      // layer separates (drift rate, brightness, dot size) reads this, so
-      // depth 0 collapses the field to one plane and 1 is bit-identical to
-      // the pre-knob look.
-      const layer = table[i * 3] * depth // depth: brighter = faster
+      // The star's seeded depth, scaled by the Depth knob. MOTION takes the
+      // full multiplier (a depth of 100 is near stars streaking a hundred
+      // times faster than the deep field); brightness and dot size cap at
+      // 2× so a deep field stays a starfield instead of giant hot squares.
+      // Depth 0 collapses the field to one plane; ≤2 is bit-identical to
+      // the original 0-2 knob.
+      const layer = table[i * 3] * Math.min(depth, 2) // look: brighter = closer
+      const motionLayer = table[i * 3] * depth
       const sx = table[i * 3 + 1]
       const sy = table[i * 3 + 2]
       // The roll's scroll-matched drift constant, deeper layers moving faster.
-      const drift = beat * 0.0035 * speed * (0.3 + layer)
+      const drift = beat * 0.0035 * speed * (0.3 + motionLayer)
       let x = sx
       let y = sy
       if (direction === 0) x = sx - drift
