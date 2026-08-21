@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useLayoutEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import * as projectStorage from '../../persistence/projectStorage'
 import { hydrate } from '../../persistence/serialize'
@@ -52,6 +52,20 @@ export function useProjectPersistence() {
     }
   }, [projectId, templateId])
 
+  // The loading flag goes up BEFORE first paint (layout effect): the bind
+  // blanks the stores below, and without this the timeline paints the
+  // empty-scene "Let's start composing" list for the whole load window - an
+  // empty store while the row is on the wire is a loading state, not an
+  // empty project. Cleared when hydrate lands (or the load fails) in the
+  // effect below; the cleanup covers unmounts and rebinds mid-flight.
+  useLayoutEffect(() => {
+    if (!projectId) return
+    useUIStore.getState().setDocumentLoading(true)
+    return () => {
+      useUIStore.getState().setDocumentLoading(false)
+    }
+  }, [projectId])
+
   useEffect(() => {
     if (!projectId) return
 
@@ -74,6 +88,8 @@ export function useProjectPersistence() {
     // first-run tutorial snaps back a step, the timeline empties for a beat).
     const handoff = justAdopted(projectId)
     if (handoff) {
+      // Memory already holds the document - nothing is loading.
+      useUIStore.getState().setDocumentLoading(false)
       useUIStore.getState().setProjectName(handoff.name)
       remember()
       // The row was inserted moments ago and nothing has saved over it, so its
@@ -105,6 +121,9 @@ export function useProjectPersistence() {
         // The hydrate setState must not be undoable - Ctrl+Z right after open
         // would otherwise restore an empty project.
         useHistoryStore.getState().reset()
+        // Only now may the timeline judge emptiness: a truly blank project's
+        // empty-scene list appears here, after verification, never before.
+        useUIStore.getState().setDocumentLoading(false)
         stop = startAutosave(projectId, rev)
       } catch (err) {
         if (cancelled) return
@@ -123,6 +142,7 @@ export function useProjectPersistence() {
           return
         }
         console.error('Failed to load project', err)
+        useUIStore.getState().setDocumentLoading(false)
         useSaveStatus.setState({ status: 'load-failed' })
       }
     })()

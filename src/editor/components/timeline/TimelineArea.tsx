@@ -10,6 +10,7 @@ import { Track } from './Track'
 import { TrackContextMenu } from './TrackContextMenu'
 import { TimelineRuler } from './TimelineRuler'
 import { EmptySceneActions } from './EmptySceneActions'
+import { LoadingCabin } from '../../../components/LoadingScreen'
 import { usePlayhead } from '../../hooks/usePlayhead'
 import { useScrub } from '../../hooks/useScrub'
 import { useLoopDrag, type LoopDragGuide } from '../../hooks/useLoopDrag'
@@ -58,6 +59,7 @@ export function TimelineArea() {
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
   const rowHeight = useUIStore((s) => s.tracksRowHeight)
   const loopDragging = useUIStore((s) => !!s.loopDrag)
+  const documentLoading = useUIStore((s) => s.documentLoading)
   const maxBeat = totalBars * beatsPerBar
   const barWidthPx = beatsPerBar * pixelsPerBeat
   const projectWidthPx = totalBars * barWidthPx
@@ -517,10 +519,22 @@ export function TimelineArea() {
             appeared again - instead of silently reusing the settled one. */}
         {/* `empty` ignores the scene instrument's own row: it is a root track
             when it's showing (core/sceneTrack.ts), but a scene wearing nothing
-            else is still empty and needs the add-a-track list. */}
+            else is still empty and needs the add-a-track list.
+            While the project document is still LOADING the stores are blanked
+            on purpose, and that is not emptiness - the list stays away (and
+            the shared smoking-cabin loading mark sits in its spot) until the
+            hydrate lands and the scene is verified empty. */}
+        {documentLoading && (
+          <div
+            className="pointer-events-none absolute inset-y-0 right-0 z-20 flex items-start justify-start pt-5"
+            style={{ left: labelWidth + PLAYHEAD_TRIANGLE_HALF }}
+          >
+            <div className="pl-4"><LoadingCabin /></div>
+          </div>
+        )}
         <EmptySceneActions
           key={activeSceneId}
-          empty={rootTrackIds.every(isSceneTrackId)}
+          empty={!documentLoading && rootTrackIds.every(isSceneTrackId)}
           labelWidth={labelWidth}
           isMain={activeSceneIsMain}
           onAddTrack={handleAddTrackWithBlock}

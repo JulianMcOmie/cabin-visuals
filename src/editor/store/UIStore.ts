@@ -178,6 +178,14 @@ interface UIState {
   projectName: string | null
   setProjectName: (name: string | null) => void
 
+  // True from a ?project= bind until its document has hydrated (or failed).
+  // The timeline reads it to show a loading mark instead of the empty-scene
+  // "Let's start composing" list - the stores are deliberately blanked while
+  // the row is on the wire, and an empty store during that window is a
+  // loading state, not an empty project. Session-only, never serialized.
+  documentLoading: boolean
+  setDocumentLoading: (v: boolean) => void
+
   // True while a modal dialog (export, clip picker) is up. Editor surfaces with
   // document/window-level pointer handling that an overlay div can't block -
   // e.g. react-resizable-panels' hit-testing - must check this and stand down.
@@ -288,6 +296,9 @@ export const useUIStore = create<UIState>((set) => ({
 
   projectName: null,
   setProjectName: (name) => set({ projectName: name }),
+
+  documentLoading: false,
+  setDocumentLoading: (v) => set({ documentLoading: v }),
 
   modalOpen: false,
   setModalOpen: (v) => set({ modalOpen: v }),
