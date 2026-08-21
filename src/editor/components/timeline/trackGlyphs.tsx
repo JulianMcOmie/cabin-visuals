@@ -218,6 +218,18 @@ const G = {
       <path d="M8 6.4 9.6 8 8 9.6 6.4 8Z" fill="currentColor" stroke="none" />
     </>
   ),
+  // A scatter of varied dots - no ring, no row, so it can't be mistaken for
+  // Particle Burst's radial spray or the roll's bars at 15px.
+  starfield: (
+    <>
+      <circle cx="3.4" cy="3.8" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="11.6" cy="2.9" r="0.7" fill="currentColor" stroke="none" fillOpacity="0.6" />
+      <circle cx="7.2" cy="7.4" r="0.95" fill="currentColor" stroke="none" fillOpacity="0.85" />
+      <circle cx="12.6" cy="10.4" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="3.2" cy="12" r="0.7" fill="currentColor" stroke="none" fillOpacity="0.6" />
+      <circle cx="8.6" cy="12.6" r="0.85" fill="currentColor" stroke="none" fillOpacity="0.75" />
+    </>
+  ),
   waterDrop: (
     <>
       <path d="M8 2.4c2.2 2.6 3.4 4.2 3.4 5.8a3.4 3.4 0 0 1-6.8 0c0-1.6 1.2-3.2 3.4-5.8Z" />

@@ -8,9 +8,11 @@ import type { ResolvedNote } from '../core/visual/types'
 
 // Midi Roll: the track's notes as a scrolling piano roll, modeled on a VIDI
 // Studio reference capture - hollow neon bars drifting right-to-left past a
-// fixed playhead at center, where a glowing diamond marks each sounding note,
-// the played stretch of a bar fills in bright, and a faint starfield drifts
-// behind. PURE VISUAL: no chrome, no UI, nothing interactive in the frame.
+// fixed playhead at center, where a glowing diamond marks each sounding note
+// and the played stretch of a bar fills in bright. PURE VISUAL: no chrome, no
+// UI, nothing interactive in the frame. (The drifting starfield that used to
+// draw behind the notes is its own instrument now - Starfield - so the roll
+// is just the notes; pair the two tracks for the old look.)
 //
 // Pitch AUTO-FIT: the vertical layout is derived from the whole track's pitch
 // range - adjacent semitones sit at most `Max Note Spacing` apart (a 3-note
@@ -117,7 +119,6 @@ const PARAMS: ParamDef[] = [
   // is here because the reference APP offers ripple styles.
   { key: 'ripple', label: 'Ripple', min: 0, max: 1, step: 0.05, default: 0 },
   { key: 'glow', label: 'Glow', min: 0, max: 1, step: 0.05, default: 0.6 },
-  { key: 'stars', label: 'Starfield', min: 0, max: 1, step: 0.05, default: 0.4 },
   { key: 'playhead', label: 'Playhead Line', type: 'boolean', default: 0 },
 ]
 
@@ -233,22 +234,6 @@ function notesOnsetWithin(idx: NoteIndex, lo: number, hi: number, out: number[])
 /** Slack on the search bounds: they are derived from the per-note pixel test
  *  by algebra, and float rounding must never drop a note the test would keep. */
 const SEARCH_EPS = 1e-6
-
-/** Starfield constants: the seeded layer/x/y of star i never changes, so they
- *  are rolled once for the maximum count instead of three sines per star per
- *  frame. Same doubles, just remembered. */
-const MAX_STARS = 170
-let starTable: Float64Array | null = null
-function starConsts(): Float64Array {
-  if (starTable) return starTable
-  starTable = new Float64Array(MAX_STARS * 3)
-  for (let i = 0; i < MAX_STARS; i++) {
-    starTable[i * 3] = seededRand(i * 3.7 + 2.2)
-    starTable[i * 3 + 1] = seededRand(i * 3.7 + 0.4)
-    starTable[i * 3 + 2] = seededRand(i * 3.7 + 1.3)
-  }
-  return starTable
-}
 
 function MidiRollVisual({ trackId }: { trackId: string }) {
   const { viewport, invalidate } = useThree()
@@ -374,7 +359,6 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
     const hitFlash = p.hitFlash ?? 0.6
     const ripple = p.ripple ?? 0.25
     const glow = p.glow ?? 0.6
-    const stars = p.stars ?? 0.4
     const showPlayhead = (p.playhead ?? 0) >= 0.5
 
     // Any styled play mode dims the idle roll: a lit note only reads as
@@ -403,26 +387,6 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
       emissiveDirtyRef.current = false
     }
     let emitted = false
-
-    // --- Starfield: deterministic dots, drifting slowly with the roll ---
-    if (stars > 0) {
-      const count = Math.round(stars * 170)
-      const table = starConsts()
-      for (let i = 0; i < count; i++) {
-        const cached = i < MAX_STARS
-        const layer = cached ? table[i * 3] : seededRand(i * 3.7 + 2.2) // depth: brighter = faster
-        const sx = cached ? table[i * 3 + 1] : seededRand(i * 3.7 + 0.4)
-        const sy = cached ? table[i * 3 + 2] : seededRand(i * 3.7 + 1.3)
-        const drift = beat * 0.0035 * (0.3 + layer)
-        const x = (((sx - drift) % 1) + 1) % 1
-        // A sprinkle of warm dust among the white, like the reference.
-        ctx.fillStyle = i % 7 === 0 ? '#cfc39a' : '#ffffff'
-        ctx.globalAlpha = 0.16 + layer * 0.42
-        const size = 1 + layer * 1.6
-        ctx.fillRect(x * W, sy * H, size, size)
-      }
-      ctx.globalAlpha = 1
-    }
 
     // --- Pitch auto-fit over the WHOLE track ---
     const noteIndex = noteIndexFor(state.notes)

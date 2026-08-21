@@ -358,6 +358,16 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <path d="M6 5.3 L7 6.3 L6 7.3 L5 6.3 Z" fill="#67e8f9" />
     </svg>
   )},
+  { id: 'starfield', name: 'Starfield', description: 'A full-frame field of drifting dots - Midi Roll’s old backdrop as its own layer, with density, drift and twinkle knobs.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <circle cx="2.6" cy="3" r="1" fill="#e2e8f0" />
+      <circle cx="8.6" cy="2.2" r="0.6" fill="#94a3b8" />
+      <circle cx="5.4" cy="6.2" r="0.8" fill="#cbd5e1" />
+      <circle cx="10.2" cy="8.2" r="1" fill="#e2e8f0" />
+      <circle cx="3" cy="9.6" r="0.6" fill="#cfc39a" />
+      <circle cx="7.2" cy="10" r="0.7" fill="#94a3b8" />
+    </svg>
+  )},
 ])
 
 // The curated core: a few good shapes, kept deliberately short so the library
