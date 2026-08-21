@@ -22,8 +22,14 @@ const PARAMS: ParamDef[] = [
   // knob 1:1 so a value carried over reads identically. Quadratic sliders
   // (curve) on both: the everyday sub-1 band keeps its resolution under
   // the tall ceilings.
-  { key: 'density', label: 'Density', min: 0, max: 20, step: 0.05, default: 0.4, curve: 2 },
+  { key: 'density', label: 'Density', min: 0, max: 100, step: 0.05, default: 0.4, curve: 2 },
   { key: 'size', label: 'Dot Size', min: 0.4, max: 10, step: 0.05, default: 1, curve: 2 },
+  // How star size runs front to back, front-anchored like Depth: the nearest
+  // stars keep their Dot Size and the trend shapes the far field. 1 = the
+  // classic taper (far stars smaller), 0 = uniform size, above 1 shrinks the
+  // deep field toward nothing, negative GROWS it (big soft far dots behind
+  // small near ones).
+  { key: 'sizeTrend', label: 'Size Trend', min: -2, max: 4, step: 0.05, default: 1 },
   // How far back the field stretches BEHIND the nearest stars. The front of
   // the field is the anchor: it keeps the classic near-star drift at every
   // depth, and raising the knob pushes the far stars away - slower and
@@ -51,10 +57,10 @@ const PARAMS: ParamDef[] = [
 ]
 
 const TEXTURE_HEIGHT = 1024
-/** Density 20 fills the table (20 x 170 dots); the seeded layer/x/y of star i
- *  never changes, so they are rolled once instead of three seededRand calls
+/** Density 100 fills the table (100 x 170 dots); the seeded layer/x/y of star
+ *  i never changes, so they are rolled once instead of three seededRand calls
  *  per star per frame (the same memo Midi Roll's starfield carried). */
-const MAX_STARS = 3400
+const MAX_STARS = 17000
 let starTable: Float64Array | null = null
 function starConsts(): Float64Array {
   if (starTable) return starTable
@@ -121,6 +127,7 @@ function StarfieldVisual({ trackId }: { trackId: string }) {
     const color = state.stringParams.color || '#ffffff'
     const density = p.density ?? 0.4
     const sizeK = p.size ?? 1
+    const sizeTrend = p.sizeTrend ?? 1
     const depth = p.depth ?? 1
     const speed = p.speed ?? 1
     const direction = Math.round(p.direction ?? 0)
@@ -171,7 +178,12 @@ function StarfieldVisual({ trackId }: { trackId: string }) {
         alpha *= 1 - twinkle * 0.8 * shimmer
       }
       ctx.globalAlpha = alpha
-      const size = (1 + layer * 1.6) * sizeK
+      // Size runs front to back on its own trend, front-anchored: the near
+      // size (1 + 1.6 at layer 1) is fixed, and the trend scales how far
+      // the back falls from it. Trend 1 is exactly the classic
+      // (1 + layer * 1.6); 0 is uniform; negative grows the far field.
+      const size = Math.max(0, 2.6 - (1 - layer) * 1.6 * sizeTrend) * sizeK
+      if (size < 0.2) continue
       ctx.fillRect(x * W, y * H, size, size)
     }
     ctx.globalAlpha = 1
