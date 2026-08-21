@@ -22,6 +22,11 @@ const PARAMS: ParamDef[] = [
   // knob 1:1 so a value carried over reads identically.
   { key: 'density', label: 'Density', min: 0, max: 2.5, step: 0.05, default: 0.4 },
   { key: 'size', label: 'Dot Size', min: 0.4, max: 3, step: 0.05, default: 1 },
+  // Parallax spread across the depth layers: how much a star's seeded depth
+  // separates it from the others in speed, brightness and size. 0 flattens
+  // the field into one uniform plane; 1 is the roll's classic look; 2
+  // exaggerates the near/far split.
+  { key: 'depth', label: 'Depth', min: 0, max: 2, step: 0.05, default: 1 },
   // Multiplies the drift rate; the base speed is the roll's scroll-matched
   // constant, so 1 beside a Midi Roll moves exactly like its old backdrop.
   { key: 'speed', label: 'Drift Speed', min: 0, max: 4, step: 0.05, default: 1 },
@@ -110,6 +115,7 @@ function StarfieldVisual({ trackId }: { trackId: string }) {
     const color = state.stringParams.color || '#ffffff'
     const density = p.density ?? 0.4
     const sizeK = p.size ?? 1
+    const depth = p.depth ?? 1
     const speed = p.speed ?? 1
     const direction = Math.round(p.direction ?? 0)
     const twinkle = p.twinkle ?? 0
@@ -121,7 +127,11 @@ function StarfieldVisual({ trackId }: { trackId: string }) {
     const count = Math.min(MAX_STARS, Math.round(density * 170))
     const table = starConsts()
     for (let i = 0; i < count; i++) {
-      const layer = table[i * 3] // depth: brighter = faster
+      // The star's seeded depth, scaled by the Depth knob: everything the
+      // layer separates (drift rate, brightness, dot size) reads this, so
+      // depth 0 collapses the field to one plane and 1 is bit-identical to
+      // the pre-knob look.
+      const layer = table[i * 3] * depth // depth: brighter = faster
       const sx = table[i * 3 + 1]
       const sy = table[i * 3 + 2]
       // The roll's scroll-matched drift constant, deeper layers moving faster.

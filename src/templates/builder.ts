@@ -166,6 +166,10 @@ export function doc(opts: {
    *  document field); applyTemplate deliberately never reshapes an existing
    *  project's canvas. */
   viewAspect?: ViewAspect
+  /** The visual scene's backdrop color. Default is the app's cabin blue -
+   *  a template whose look depends on a dark room (transparent full-frame
+   *  layers especially) must say so. */
+  background?: string
 }): ProjectDocument {
   const tracks: Record<string, Track> = {}
   const rootTrackIds: string[] = []
@@ -193,7 +197,7 @@ export function doc(opts: {
     totalBars: opts.totalBars ?? 16,
     scenes: {
       [mainId]: { id: mainId, name: 'Composite', isMain: true, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: {}, rootTrackIds: [] },
-      [sceneId]: { id: sceneId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks, rootTrackIds },
+      [sceneId]: { id: sceneId, name: 'Scene 1', isMain: false, backgroundColor: opts.background ?? DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks, rootTrackIds },
     },
     sceneOrder: [mainId, sceneId],
     ...(opts.audio?.length
