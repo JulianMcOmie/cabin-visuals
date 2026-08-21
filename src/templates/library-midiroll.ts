@@ -6,12 +6,12 @@ import type { TemplateDef } from './library'
 // drifting starfield.
 //
 // Every setting is copied verbatim from Julia's "midirollsettings" project
-// (77598003-4129-42db-b724-cdaa733fa1bb, 2026-08-21): the roll's green
-// (#69a366), thin outline bars (style 0, thickness 0.012) with small dot
-// markers, a 4-beat window, glow 0.55 with ripple 0.6 - and behind it the
-// standalone Starfield instrument (density 0.55, size 1.35, speed 4, warm
-// dust) over a black room, which replaced the earlier Wormhole + Parametric
-// Pattern lattice when the starfield split out of the roll. The Starfield
+// (77598003-4129-42db-b724-cdaa733fa1bb, resynced 2026-08-21 10:51): deep
+// indigo Line-style bars (#241d49, style 2, hair-thin 0.006) with small dot
+// markers across a wide 22-beat window, glow 0.55 with ripple 0.6 - and
+// behind it the standalone Starfield in near-black indigo (#130240): a DENSE
+// field (density 316), stretched deep (depth 419) with an inverted size
+// trend (-3.15, far dots larger than near), warm dust off. The Starfield
 // track has no blocks on purpose: it is presence-driven, so it drifts for
 // the whole timeline. Only the notes are placeholder - her real project's
 // notes came from her own MIDI file, which is exactly what the /midi-setup
@@ -56,18 +56,19 @@ function midiRollDocument() {
         instrumentId: 'midiRoll',
         color: '#2f86ee',
         params: {
-          style: 0,
-          thickness: 0.012,
+          style: 2,
+          thickness: 0.006,
           rounded: 0,
-          window: 4,
+          window: 22,
           maxGap: 0.085,
           marker: 2,
           markerSize: 0.8,
-          hitFlash: 0.45,
+          hitFlash: 0.55,
           ripple: 0.6,
           glow: 0.55,
+          playPower: 0.2,
         },
-        stringParams: { color: '#69a366' },
+        stringParams: { color: '#241d49' },
         blocks: [block(0, BARS, every(16, BARS * 4, FIGURE))],
       }),
       // The ambient backdrop: the standalone Starfield, blockless so its
@@ -77,10 +78,14 @@ function midiRollDocument() {
         instrumentId: 'starfield',
         color: '#2f3aee',
         params: {
-          density: 0.55,
-          size: 1.35,
-          speed: 4,
+          density: 316,
+          size: 0.587,
+          speed: 1.7,
+          depth: 419,
+          sizeTrend: -3.15,
+          warmDust: 0,
         },
+        stringParams: { color: '#130240' },
       }),
     ],
   })
