@@ -147,6 +147,23 @@ matrix-identical to the plain ring and none of them needed a persistence upgrade
   the copies keep the object's own orientation AND a burst sends them all the same way.
   Along path is a quarter turn on, aiming each copy down the tangent. The fix rides
   INSIDE the slot (after the translation), so it re-aims without moving anything.
+- **RINGS (2026-08-21) repeats the whole slot set outward**, with three
+  INDEPENDENT per-ring amounts — SPACING (radius), RING SIZE (the copies), RING
+  DEPTH (along the axis) — all anchored at ring 0, so ring 0 IS the single ring that
+  was there before and `rings: 1` makes every one of them inert. That is what let it
+  ship with no persistence upgrade even though SPACING's default is 1 rather than 0
+  (`radial.test.ts` pins a keyless save as matrix-identical). **SPACING is ADDITIVE
+  where the spiral's GROWTH is a ratio**, and that is not an inconsistency: growth
+  walks a radius that is already there, while ring spacing has to work from the
+  DEFAULT radius of 0, where every ratio collapses to one point. It clamps at the
+  center rather than passing through — a negative radius re-emerges on the far side
+  and reads as a flipped ring, not one that ran out of room. RING SIZE is a ratio on
+  the shared SIZE knob, floored at that knob's own minimum so a long shrinking stack
+  can't reach a degenerate scale; RING DEPTH joins RISE's translation, for RISE's
+  reason. Copies come out **RING-MAJOR** (ring 0's whole slot set, then ring 1's), so
+  a ring is a contiguous run of indices and copy targeting's `runs` rule addresses one
+  directly. The lane still samples ONE radius: the ring offsets ride on top of it, so
+  a swelling lane moves the whole stack and keeps its spacing.
 
 **`physics` — a VALUE lane joined by mechanics instead of by an easing curve.**
 Pitch names a scalar through the automation 36–84 encoding (as Radial's radius

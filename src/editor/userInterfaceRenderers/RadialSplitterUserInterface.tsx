@@ -14,11 +14,15 @@
 // 2. Three rows, in the order the ring is built: the geometry knobs (COPIES /
 //    RADIUS primary / SIZE), then the polar modifiers (SWEEP / RISE, plus
 //    GROWTH once SHAPE is spiral - the segment is what turns that knob on,
-//    exactly as the definition reads it), then the three KINDS as segmented
-//    controls (SHAPE / PLANE / FACING). Kinds last is Grid's and Line's
-//    grammar: amounts first, modifiers, then the selects. The kinds row wraps
-//    because eight segments overrun a narrow inspector pane, and a fixed row
-//    clips rather than shrinking (Tunnel's lesson).
+//    exactly as the definition reads it), then the RINGS row, then the three
+//    KINDS as segmented controls (SHAPE / PLANE / FACING). Kinds last is
+//    Grid's and Line's grammar: amounts first, modifiers, then the selects.
+//    The kinds row wraps because eight segments overrun a narrow inspector
+//    pane, and a fixed row clips rather than shrinking (Tunnel's lesson).
+//    RINGS carries its own three knobs the way SHAPE carries GROWTH: the
+//    per-ring amounts render only above one ring, because that is exactly
+//    when the definition stops ignoring them (ring 0 anchors all three), and
+//    a single ring is the common case that should stay a short panel.
 //
 // The old drag-the-ring pad, header chrome, reset-all and mute map are gone
 // (2026-08 rework, same pass that turned the lane into a value lane - see the
@@ -277,12 +281,19 @@ interface RadialBindings {
   growth: NumBinding | null
   rise: NumBinding | null
   facing: SelectBinding | null
+  rings: NumBinding | null
+  ringSpacing: NumBinding | null
+  ringSize: NumBinding | null
+  ringDepth: NumBinding | null
   rest: UserInterfaceParameter[]
 }
 
 /** Hooks live here, below the renderer's fallback branch. */
 function RadialConsole({ bound }: { bound: RadialBindings }) {
-  const { copies, radius, size, plane, sweep, shape, growth, rise, facing, rest } = bound
+  const {
+    copies, radius, size, plane, sweep, shape, growth, rise, facing,
+    rings, ringSpacing, ringSize, ringDepth, rest,
+  } = bound
   const { value: copiesValue } = copies
   const { value: radiusValue } = radius
   const { value: sizeValue } = size
@@ -294,7 +305,14 @@ function RadialConsole({ bound }: { bound: RadialBindings }) {
   const growthValue = growth?.value
   const riseValue = rise?.value
   const facingValue = facing?.value
+  const ringsValue = rings?.value
+  const ringSpacingValue = ringSpacing?.value
+  const ringSizeValue = ringSize?.value
+  const ringDepthValue = ringDepth?.value
   const spiral = shapeValue === RADIAL_SHAPE_SPIRAL
+  // One ring means the definition ignores all three per-ring amounts, so the
+  // panel hides them - the RINGS knob is what turns them on.
+  const stacked = (ringsValue ?? 1) > 1
 
   const settings = useMemo(() => {
     const base = mergeDefinitionSettings(radialSplitter, undefined) as unknown as RadialSettings
@@ -309,10 +327,15 @@ function RadialConsole({ bound }: { bound: RadialBindings }) {
       growth: growthValue ?? base.growth,
       rise: riseValue ?? base.rise,
       facing: facingValue ?? base.facing,
+      rings: ringsValue ?? base.rings,
+      ringSpacing: ringSpacingValue ?? base.ringSpacing,
+      ringSize: ringSizeValue ?? base.ringSize,
+      ringDepth: ringDepthValue ?? base.ringDepth,
     }
   }, [
     copiesValue, radiusValue, sizeValue, planeValue,
     sweepValue, shapeValue, growthValue, riseValue, facingValue,
+    ringsValue, ringSpacingValue, ringSizeValue, ringDepthValue,
   ])
 
   return (
@@ -331,6 +354,15 @@ function RadialConsole({ bound }: { bound: RadialBindings }) {
         <Knob b={sweep} label="SWEEP" format={(v) => `${Math.round(v)}°`} />
         <Knob b={rise} label="RISE" bipolar />
         {spiral ? <Knob b={growth} label="GROWTH" /> : null}
+      </ControlRow>
+      {/* RINGS and, once there is more than one, the three independent per-ring
+          amounts: how much further out each ring sits, how much bigger or
+          smaller its copies are, and how far along the axis it steps. */}
+      <ControlRow className="justify-center gap-5 px-4 pt-2">
+        <Knob b={rings} label="RINGS" format={(v) => `${Math.round(v)}`} />
+        {stacked ? <Knob b={ringSpacing} label="SPACING" bipolar /> : null}
+        {stacked ? <Knob b={ringSize} label="SCALE" /> : null}
+        {stacked ? <Knob b={ringDepth} label="DEPTH" bipolar /> : null}
       </ControlRow>
       <div className="flex flex-wrap items-start justify-center gap-4 px-4 pb-3 pt-2.5">
         {shape ? <KindSegmented b={shape} caption="SHAPE" testId="radial-shape" /> : null}
@@ -367,12 +399,17 @@ export const RadialSplitterUserInterfaceRenderer: UserInterfaceRendererDefinitio
   const growth = pool.num('growth', { optional: true })
   const rise = pool.num('rise', { optional: true })
   const facing = pool.select('facing', { optional: true })
+  const rings = pool.num('rings', { optional: true })
+  const ringSpacing = pool.num('ringSpacing', { optional: true })
+  const ringSize = pool.num('ringSize', { optional: true })
+  const ringDepth = pool.num('ringDepth', { optional: true })
 
   if (!copies || !radius || !size || !plane) return <ParameterList parameters={parameters} />
 
   return (
     <RadialConsole bound={{
-      copies, radius, size, plane, sweep, shape, growth, rise, facing, rest: pool.rest(),
+      copies, radius, size, plane, sweep, shape, growth, rise, facing,
+      rings, ringSpacing, ringSize, ringDepth, rest: pool.rest(),
     }} />
   )
 }

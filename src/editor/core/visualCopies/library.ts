@@ -40,7 +40,7 @@ import { tunnelSplitter } from './tunnel'
 import { duplicateTrailSplitter } from './duplicateTrail'
 import { approachSplitter } from './approach'
 import { noteDisablesSplitterSlot, splitterMidiRows } from './splitterMidi'
-import { applySplitterSize, splitterSize, SPLITTER_SIZE_PARAM } from './splitterSize'
+import { applySplitterSize, splitterSize, SPLITTER_SIZE_MIN, SPLITTER_SIZE_PARAM } from './splitterSize'
 import { GRID_COLOR, LINE_COLOR, RADIAL_COLOR } from './identityColors'
 
 // ── Burst (RETIRED) ──────────────────────────────────────────────────────────
@@ -156,6 +156,33 @@ export const burstMover: MoverOrSplitterDefinition<BurstSettings> = {
 //   orientation and the movers below get unrotated axes; Along path aims
 //   each copy down the ring's tangent.
 //
+// RINGS (2026-08) repeats that whole ring outward: N concentric copies of the
+// same slot set, each ring stepped by three INDEPENDENT per-ring amounts, all
+// anchored at ring 0 so the innermost ring is exactly the single ring that was
+// there before. Rings default to 1, which makes all three inert - an old save
+// is matrix-identical whatever the three amounts merge to, so none of this
+// needed a persistence upgrade either (radial.test.ts pins it).
+//
+// - SPACING is a radius STEP, additive (radius + spacing·ring), not a ratio.
+//   A ratio is right for the spiral's GROWTH because it walks a radius that
+//   is already there; ring spacing has to work from the DEFAULT radius of 0,
+//   where every ratio collapses to the same point. Negative spacing marches
+//   the rings inward and CLAMPS at the center rather than passing through it
+//   - a negative radius would re-emerge on the far side, reading as a ring
+//   that flipped rather than one that ran out of room.
+// - RING SIZE is a ratio on the shared SIZE knob (size · ringSize^ring),
+//   independent of spacing on purpose: shrinking copies while the rings
+//   spread, or growing them while the rings close in, are both the point.
+//   Floored at the shared knob's own minimum so a long ring stack can't reach
+//   a degenerate scale.
+// - RING DEPTH steps each ring along the ring's axis, exactly as RISE steps
+//   each copy - it joins the same translation, for the same reason (the slot
+//   rotation is ABOUT that axis, so it leaves the axial component alone).
+//
+// Copies come out RING-MAJOR - ring 0's whole slot set, then ring 1's - so
+// each ring is a contiguous run of indices and copy targeting's `runs` rule
+// addresses a ring directly.
+//
 // Everything still composes LOCALLY and the offsets stay inside one
 // translation, so SIZE keeps scaling each copy about its own center and the
 // ring radius stays exactly the sampled radius.
@@ -177,9 +204,18 @@ export interface RadialSettings {
   rise: number
   /** 0 = outward, 1 = upright (no slot rotation), 2 = along the path. */
   facing: number
+  /** Concentric copies of the whole ring. 1 = the plain single ring. */
+  rings: number
+  /** Radius step between rings, in world units (additive, anchored at ring 0). */
+  ringSpacing: number
+  /** Per-ring size ratio on the SIZE knob, anchored at ring 0. */
+  ringSize: number
+  /** Per-ring step along the ring's axis, in world units. 0 = flat stack. */
+  ringDepth: number
 }
 
 const RADIAL_MAX_COPIES = 32
+const RADIAL_MAX_RINGS = 8
 const RADIAL_RADIUS_MIN = 0
 const RADIAL_RADIUS_MAX = 10
 const RADIAL_AXES = [new Vector3(0, 0, 1), new Vector3(0, 1, 0), new Vector3(1, 0, 0)]
@@ -239,6 +275,10 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
     { key: 'growth', label: 'Growth', min: 0.5, max: 2, step: 0.01, default: 1 },
     { key: 'sweep', label: 'Sweep', min: 0, max: 1440, step: 5, default: 360 },
     { key: 'rise', label: 'Rise', min: -2, max: 2, step: 0.05, default: 0 },
+    { key: 'rings', label: 'Rings', min: 1, max: RADIAL_MAX_RINGS, step: 1, default: 1 },
+    { key: 'ringSpacing', label: 'Ring spacing', min: -5, max: 5, step: 0.1, default: 1 },
+    { key: 'ringSize', label: 'Ring size', min: 0.25, max: 2, step: 0.01, default: 1 },
+    { key: 'ringDepth', label: 'Ring depth', min: -4, max: 4, step: 0.05, default: 0 },
     {
       key: 'facing',
       label: 'Facing',
@@ -265,10 +305,19 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
     const facing = settings.facing === RADIAL_FACING_UPRIGHT || settings.facing === RADIAL_FACING_PATH
       ? settings.facing
       : RADIAL_FACING_OUTWARD
-    // Structural slots, in slot order (slot 0 is unrotated and unscaled - it is
-    // the spiral's anchor and the arc's first end). Everything here is
-    // beat-independent; only the radius the translation is built from moves.
-    const slots = Array.from({ length: count }, (_, slot) => {
+    const rings = Math.max(1, Math.min(RADIAL_MAX_RINGS, Math.round(settings.rings ?? 1)))
+    const ringSpacing = settings.ringSpacing ?? 1
+    const ringSize = Math.max(0.05, settings.ringSize ?? 1)
+    const ringDepth = settings.ringDepth ?? 0
+    // Structural slots, RING-MAJOR (ring 0's whole slot set first, so a ring is
+    // a contiguous run of copy indices). Within a ring, slot 0 is unrotated and
+    // sits at the ring's own radius - it is the spiral's anchor and the arc's
+    // first end. Everything here is beat-independent; only the radius the
+    // translation is built from moves, so the three per-ring amounts are all
+    // resolved once, here.
+    const slots = Array.from({ length: rings * count }, (_, i) => {
+      const ring = Math.floor(i / count)
+      const slot = i % count
       const angle = radialSweepFraction(slot, count, sweep) * (sweep * Math.PI) / 180
       const rotation = new Matrix4().makeRotationAxis(axis, angle)
       // The facing fix rides INSIDE the slot (after the translation), so it
@@ -280,7 +329,18 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
         : facing === RADIAL_FACING_PATH
           ? new Matrix4().makeRotationAxis(axis, Math.PI / 2)
           : null
-      return { rotation, faceFix, radiusFactor: Math.pow(growth, slot), rise: rise * slot }
+      return {
+        rotation,
+        faceFix,
+        radiusFactor: Math.pow(growth, slot),
+        // Additive radius step, and the ring's axial step joins RISE's - both
+        // are world distances along the axis the slot rotation leaves alone.
+        radiusOffset: ringSpacing * ring,
+        rise: rise * slot + ringDepth * ring,
+        // Ratio on the shared knob, floored at the knob's own minimum so a
+        // shrinking stack can't reach a degenerate scale.
+        size: Math.max(SPLITTER_SIZE_MIN, size * Math.pow(ringSize, ring)),
+      }
     })
     // The shared value-lane grammar (valueLane.ts): pitch-mapped cycle gates,
     // radius swelling 0 -> r -> 0 between onsets, resting at the knob outside.
@@ -295,7 +355,9 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
         // slot rotation is ABOUT the axis, so the axial component is
         // untouched by it and one translation says both.
         return slots.map((slot) => {
-          const slotRadius = radius * slot.radiusFactor
+          // Rings step the radius additively and CLAMP at the center: a
+          // negative radius would come back out on the opposite side.
+          const slotRadius = Math.max(0, radius + slot.radiusOffset) * slot.radiusFactor
           const transform = visualCopy.transform.clone()
             .multiply(slot.rotation)
             .multiply(new Matrix4().makeTranslation(
@@ -305,7 +367,7 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
             ))
           if (slot.faceFix) transform.multiply(slot.faceFix)
           return {
-            transform: applySplitterSize(transform, size),
+            transform: applySplitterSize(transform, slot.size),
             opacity: visualCopy.opacity,
             colorShift: { ...visualCopy.colorShift },
           }

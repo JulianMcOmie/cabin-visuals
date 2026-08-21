@@ -272,6 +272,113 @@ test('the polar options all default to the plain ring, and an old save merges to
   })
 })
 
+test('rings default to 1, which makes all three per-ring amounts inert', () => {
+  assert.equal(DEFAULTS.rings, 1)
+
+  // A save written before RINGS existed carries none of the four keys - and
+  // because ring 0 anchors all three amounts, it stays matrix-identical even
+  // though SPACING merges to a non-zero default. That is what let the family
+  // ship with no persistence upgrade.
+  const legacy = { copies: 4, radius: 2, size: 1, plane: 0, sweep: 360 } as RadialSettings
+  const before = resolveVisualCopies([radialSplitter.resolve({ settings: legacy, notes: [] })], 0)
+  const after = resolveVisualCopies([
+    radialSplitter.resolve({ settings: settings({ copies: 4, radius: 2 }), notes: [] }),
+  ], 0)
+  assert.equal(before.length, 4)
+  assert.equal(after.length, 4)
+  before.forEach((copy, index) => {
+    assert.deepEqual(Array.from(copy.transform.elements), Array.from(after[index].transform.elements))
+  })
+
+  // Explicitly stacking the amounts on a single ring is still the plain ring.
+  const inert = resolveVisualCopies([
+    radialSplitter.resolve({
+      settings: settings({ copies: 4, radius: 2, rings: 1, ringSpacing: 3, ringSize: 0.5, ringDepth: 2 }),
+      notes: [],
+    }),
+  ], 0)
+  assert.deepEqual(inert.map(positionOf), after.map(positionOf))
+  assert.deepEqual(inert.map(scaleOf), after.map(scaleOf))
+})
+
+test('rings repeat the ring outward, ring-major, spaced ADDITIVELY from the radius', () => {
+  const copies = resolveVisualCopies([
+    radialSplitter.resolve({
+      settings: settings({ copies: 2, radius: 1, rings: 3, ringSpacing: 2 }),
+      notes: [],
+    }),
+  ], 0)
+  // Ring 0's whole slot set first, then ring 1's, then ring 2's - so a ring is
+  // a contiguous RUN of copy indices (what copy targeting's `runs` rule cuts).
+  assert.deepEqual(copies.map(positionOf), [
+    [1, 0, 0], [-1, 0, 0],
+    [3, 0, 0], [-3, 0, 0],
+    [5, 0, 0], [-5, 0, 0],
+  ])
+  assert.equal(copies.length, 6)
+
+  // Negative spacing marches inward and CLAMPS at the center rather than
+  // re-emerging on the far side.
+  const inward = resolveVisualCopies([
+    radialSplitter.resolve({
+      settings: settings({ copies: 2, radius: 2, rings: 3, ringSpacing: -1.5 }),
+      notes: [],
+    }),
+  ], 0)
+  assert.deepEqual(inward.map(positionOf), [
+    [2, 0, 0], [-2, 0, 0],
+    [0.5, 0, 0], [-0.5, 0, 0],
+    [0, 0, 0], [0, 0, 0],
+  ])
+})
+
+test('ring size and ring depth are independent of spacing and of each other', () => {
+  const copies = resolveVisualCopies([
+    radialSplitter.resolve({
+      settings: settings({ copies: 1, radius: 1, size: 2, rings: 3, ringSpacing: 0, ringSize: 0.5, ringDepth: -1 }),
+      notes: [],
+    }),
+  ], 0)
+  // SIZE is a ratio ON the shared knob, anchored at ring 0: 2, 1, 0.5.
+  assert.deepEqual(copies.map(scaleOf), [[2, 2, 2], [1, 1, 1], [0.5, 0.5, 0.5]])
+  // Zero spacing leaves every ring at the same radius - shrinking copies do
+  // not pull the ring in - while DEPTH steps along the ring's own axis (Z in
+  // the XY plane), exactly as RISE does per copy.
+  assert.deepEqual(copies.map(positionOf), [[1, 0, 0], [1, 0, -1], [1, 0, -2]])
+
+  // And the two really are separable: spacing alone moves nothing but radius.
+  const spread = resolveVisualCopies([
+    radialSplitter.resolve({
+      settings: settings({ copies: 1, radius: 1, rings: 2, ringSpacing: 1 }),
+      notes: [],
+    }),
+  ], 0)
+  assert.deepEqual(spread.map(scaleOf), [[1, 1, 1], [1, 1, 1]])
+  assert.deepEqual(spread.map(positionOf), [[1, 0, 0], [2, 0, 0]])
+})
+
+test('every ring rides the MIDI radius lane, and the spiral anchors per ring', () => {
+  // The lane samples ONE radius; the ring offsets ride on top of it, so a
+  // swelling lane moves the whole stack and keeps its spacing.
+  const swelling = resolveVisualCopies([
+    radialSplitter.resolve({
+      settings: settings({ copies: 1, radius: 0, rings: 2, ringSpacing: 1 }),
+      notes: [note(0, 84), note(4, 84)],
+    }),
+  ], 2)
+  // Mid-interval the swell is at its peak (4u(1-u) at u = 0.5 = 1) -> radius 10.
+  assert.deepEqual(swelling.map(positionOf), [[10, 0, 0], [11, 0, 0]])
+
+  // Spiral GROWTH stays per COPY, anchored at each ring's own first slot.
+  const spiral = resolveVisualCopies([
+    radialSplitter.resolve({
+      settings: settings({ copies: 2, radius: 1, sweep: 0, shape: 1, growth: 2, rings: 2, ringSpacing: 1 }),
+      notes: [],
+    }),
+  ], 0)
+  assert.deepEqual(spiral.map(positionOf), [[1, 0, 0], [2, 0, 0], [2, 0, 0], [4, 0, 0]])
+})
+
 test('sweep under a full turn is an OPEN arc with a copy on each end', () => {
   const copies = resolveVisualCopies([
     radialSplitter.resolve({ settings: settings({ copies: 3, radius: 2, sweep: 180 }), notes: [] }),
