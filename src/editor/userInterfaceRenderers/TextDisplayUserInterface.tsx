@@ -11,12 +11,13 @@ import type { LyricClipLayout, LyricLayoutKind, StyleLaneFx } from '../types'
 import { placeTranscription } from '../utils/lyricPlacement'
 import { firstAudioBlock, transcribeActiveSong, type TranscribePhase } from '../utils/transcribeSong'
 import { ParamControl, ParamSlider, ParamToggle } from './ParameterControl'
+import { ColorWheelPopover, useColorPopoverDismiss } from './colorWheel'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 
 // Bespoke settings for the Text Display instrument. Since the clips redesign
 // the panel's subjects are the track's STYLE LANES (what each piano-roll row
-// makes a word look like - rendered font cards, swatches, size chips, no
-// sliders) and its LYRIC CLIPS (the words + each clip's layout), then the
+// makes a word look like - rendered font cards, swatches plus a free colour
+// wheel, size chips, no sliders) and its LYRIC CLIPS (the words + each clip's layout), then the
 // animation controls grouped the way you think about them (Motion / Echo /
 // Flight / Particles). Gated params (showIf) never reach this component -
 // each group renders whatever of its members are present, so headers stay
@@ -115,9 +116,65 @@ function ColorWell({ bound, label, dimmed }: { bound: UserInterfaceParameter | u
 
 // ── Style lanes: pitch = lane = look ────────────────────────────────────────
 
+// Eight one-click looks, not the vocabulary: the chip after them opens the
+// shared wheel, so a lane's colour is ANY colour. The presets stay because
+// most lanes want white or one of the accents and a wheel is a worse way to
+// ask for white.
 const LANE_COLOR_SWATCHES = ['#ffffff', '#facc15', '#f472b6', '#38bdf8', '#4ade80', '#f87171', '#c084fc', '#9aa1ab']
 const LANE_SIZE_CHIPS = [0.55, 0.8, 1, 1.45, 2.1]
 const LANE_FX: StyleLaneFx[] = ['shake', 'rainbow', 'outline']
+
+/**
+ * The swatch row's last chip: the lane's colour, picked freely. It reads as
+ * SELECTED exactly when the current colour is not one of the presets - the same
+ * white ring the presets wear - so the row always shows one lit chip and the
+ * lit one is always the colour in force.
+ *
+ * The wheel opens DOWNWARD (`edge="bottom"`): the thing you judge a lane colour
+ * against is the live name preview at the TOP of this card, and the default
+ * upward popover would cover it.
+ *
+ * It sits FIRST in the row, not last, and that is a clipping constraint rather
+ * than a taste call. Both hosts clip - the roll's sidecar is `w-[236px]
+ * overflow-y-auto`, and a box that scrolls on one axis scrolls on both - and
+ * the row WRAPS, so a trailing chip has no predictable x to open from: hugging
+ * either edge puts the 158px popover outside one host or the other. Pinned to
+ * the row's start with `align="left"` it always opens inward.
+ */
+function LaneColorSwatch({ value, onChange }: { value: string; onChange: (hex: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const hostRef = useColorPopoverDismiss(open, () => setOpen(false))
+  const custom = !LANE_COLOR_SWATCHES.includes(value.toLowerCase())
+  return (
+    <div ref={hostRef} className="relative">
+      <button
+        data-testid="lane-color-custom"
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Custom lane color"
+        aria-expanded={open}
+        aria-pressed={custom}
+        title={`Custom color${custom ? ` ${value}` : ''}`}
+        className={`flex h-6 w-6 cursor-pointer items-center justify-center rounded border-2 ${custom ? 'border-white' : 'border-transparent'}`}
+        style={{ background: 'conic-gradient(#f00, #ff0 60deg, #0f0 120deg, #0ff 180deg, #00f 240deg, #f0f 300deg, #f00 360deg)' }}
+      >
+        {/* The picked colour sits in the middle of the wheel once it IS the
+            lane's colour, so the chip is a swatch and an invitation at once. */}
+        {custom && (
+          <span className="h-3 w-3 rounded-full border border-black/40" style={{ background: value }} />
+        )}
+      </button>
+      {open && (
+        <ColorWheelPopover
+          value={value}
+          onChange={onChange}
+          align="left"
+          edge="bottom"
+          testId="lane-color-wheel"
+        />
+      )}
+    </div>
+  )
+}
 
 function StyleLanesSection({ trackId }: { trackId: string }) {
   const trackSlice = useProjectStore((s) => s.tracks[trackId])
@@ -262,7 +319,11 @@ export function StyleLaneEditorCard({ trackId, laneIndex, frameless }: { trackId
           )
         })}
       </div>
-      <div className="mb-2 flex flex-wrap gap-1.5">
+      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        <LaneColorSwatch
+          value={lane.color}
+          onChange={(hex) => updateStyleLane(trackId, open, { color: hex })}
+        />
         {LANE_COLOR_SWATCHES.map((c) => (
           <button
             key={c}

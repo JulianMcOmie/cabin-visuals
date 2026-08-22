@@ -47,6 +47,11 @@ test('resolveStyleLanes defaults absent, clamps stored', () => {
   assert.equal(lanes[0].font, 0)
   assert.equal(lanes[0].color, '#ffffff')
   assert.equal(lanes[0].size, 4)
+
+  // A lane colour is an arbitrary hex, not one of the panel's preset swatches -
+  // the picker offers presets plus a wheel, and only an EMPTY string defaults.
+  const picked = resolveStyleLanes([{ name: 'MOOD', font: 1, color: '#3b0d4e', size: 1 }])
+  assert.equal(picked[0].color, '#3b0d4e')
 })
 
 test('parseTextEntries keeps the classic grammar', () => {

@@ -179,6 +179,35 @@ export function ColorWheelPopover({ value, onChange, align = 'right', edge = 'to
   )
 }
 
+/**
+ * Close-on-outside-pointer / Escape for an anchor that opens a
+ * `ColorWheelPopover`. Returns the ref to hang on the anchor's positioned host:
+ * a pointerdown INSIDE that host is the picker being used, not a dismissal, so
+ * the wheel and its bar keep working while the listener is armed. Shared so a
+ * second anchor (Text Display's per-lane swatch) can't drift from the pill's
+ * behaviour - the `close` callback is read through a ref, so passing an inline
+ * arrow doesn't re-arm the listeners on every render.
+ */
+export function useColorPopoverDismiss(open: boolean, close: () => void) {
+  const hostRef = useRef<HTMLDivElement>(null)
+  const closeRef = useRef(close)
+  closeRef.current = close
+
+  useEffect(() => {
+    if (!open) return
+    const controller = new AbortController()
+    window.addEventListener('pointerdown', (event) => {
+      if (!hostRef.current?.contains(event.target as Node)) closeRef.current()
+    }, { signal: controller.signal, capture: true })
+    window.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeRef.current()
+    }, { signal: controller.signal })
+    return () => controller.abort()
+  }, [open])
+
+  return hostRef
+}
+
 export function ColorWheelPill({ value, onChange, label, ariaLabel, title, halo, align = 'right', dimmed = false, pillTestId, wheelTestId }: {
   value: string
   onChange: (hex: string) => void
@@ -195,20 +224,8 @@ export function ColorWheelPill({ value, onChange, label, ariaLabel, title, halo,
   pillTestId?: string
   wheelTestId?: string
 }) {
-  const hostRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
-
-  useEffect(() => {
-    if (!open) return
-    const controller = new AbortController()
-    window.addEventListener('pointerdown', (event) => {
-      if (!hostRef.current?.contains(event.target as Node)) setOpen(false)
-    }, { signal: controller.signal, capture: true })
-    window.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') setOpen(false)
-    }, { signal: controller.signal })
-    return () => controller.abort()
-  }, [open])
+  const hostRef = useColorPopoverDismiss(open, () => setOpen(false))
 
   return (
     <div ref={hostRef} className="relative flex min-w-0 flex-col items-center">

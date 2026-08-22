@@ -215,6 +215,19 @@ with COPIES/SPACING while GROWTH drops to the modifier row, and Tunnel's geometr
 gained a fourth knob and therefore `flex-wrap` — four knobs plus its stepper column
 overrun a narrow inspector pane, and a fixed-size knob row CLIPS rather than shrinking.
 
+**A `ColorWheelPopover` anchor owes two decisions, and both are about what CLIPS
+it.** Text Display's per-lane colour chip (`LaneColorSwatch`, 2026-08-21 — the eight
+preset swatches are quick looks, the chip is any colour at all) is the worked example.
+It opens `edge="bottom"` because the thing you judge a lane colour against is the live
+name preview at the TOP of that card, and the default upward popover covers it. And it
+sits FIRST in a wrapping swatch row rather than last, because the card renders in two
+hosts and the tighter one — the piano roll's sidecar, `w-[236px] overflow-y-auto`, and
+**a box that scrolls on one axis scrolls on both** — leaves a trailing chip with no
+predictable x to open from: hugging either edge puts the ~158px popover outside one host
+or the other. Pinned to the row's start with `align="left"` it always opens inward.
+Dismissal (outside pointerdown / Escape) is the shared `useColorPopoverDismiss` hook in
+`colorWheel.tsx` — `ColorWheelPill` uses it too, so a second anchor cannot drift.
+
 **SVG can only say INTERSECTION by nesting clipPaths, and that is enough to preview a
 set operation honestly.** `OverlapShapeUserInterface`'s counted preview paints one group
 per subset of its shapes — a chain of `<g clip-path>` per member with the painting path
