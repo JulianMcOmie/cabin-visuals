@@ -9,7 +9,9 @@ import {
   OVERLAP_PARITY_BIT,
   OVERLAP_SHAPE_OPTIONS,
   OVERLAP_SHAPE_PASSES,
+  OVERLAP_RAMP_GRADIENT,
   overlapShapeCounted,
+  overlapShapeDepthColors,
   overlapShapeFillParam,
   overlapShapeIndex,
   overlapShapeOrders,
@@ -221,6 +223,43 @@ describe('overlap shape pass recipe', () => {
       [1, 2, 3, 4, 5].map(overlapShapeFillParam),
       ['baseColor', 'overlapColor', 'overlapColor3', 'overlapColor4', 'overlapColor5'],
     )
+  })
+
+  it('the depth ramp spans the OVERLAP depths, endpoints exact', () => {
+    const read = (key: string) => ({
+      baseColor: '#ff5470',
+      overlapColor: '#2dd4bf',
+      overlapColorDeep: '#a855f7',
+    } as Record<string, string>)[key] ?? '#000000'
+
+    const four = overlapShapeDepthColors(4, true, read)
+    // Depth 1 is the shape's own color and is NOT a stop: a ramp starting there
+    // would make two crossing shapes nearly the color of one.
+    assert.equal(four[0], '#ff5470')
+    assert.equal(four.length, 5)
+    assert.equal(four[1], '#2dd4bf', 'depth 2 is exactly the near color')
+    assert.equal(four[4], '#a855f7', 'the deepest is exactly the far color')
+    // The stops between are neither endpoint, and they are distinct.
+    assert.equal(new Set(four.slice(1)).size, 4)
+
+    // Two orders is just the two ends; one is the parity flip, where a ramp has
+    // nothing to span - so the overlap color is handed back untouched.
+    assert.deepEqual(overlapShapeDepthColors(2, true, read), ['#ff5470', '#2dd4bf', '#a855f7'])
+    assert.deepEqual(overlapShapeDepthColors(1, true, read), ['#ff5470', '#2dd4bf'])
+  })
+
+  it('per-depth mode reads one param per depth, keyed by that depth', () => {
+    const seen: string[] = []
+    const read = (key: string) => { seen.push(key); return `#${key.length.toString(16).padStart(6, '0')}` }
+    const colors = overlapShapeDepthColors(3, false, read)
+    assert.equal(colors.length, 4)
+    assert.deepEqual(seen, ['baseColor', 'overlapColor', 'overlapColor3', 'overlapColor4'])
+    // Never the ramp's far end - that param belongs to the other mode.
+    assert.ok(!seen.includes('overlapColorDeep'))
+  })
+
+  it('gradient is mode 0, so an absent stored value reads as the ramp', () => {
+    assert.equal(OVERLAP_RAMP_GRADIENT, 0)
   })
 
   it('only the depth prepass writes depth', () => {

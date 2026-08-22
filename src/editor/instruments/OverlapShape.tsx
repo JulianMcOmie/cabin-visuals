@@ -1,4 +1,9 @@
-import { OVERLAP_MAX_ORDERS, OVERLAP_SHAPE_OPTIONS } from './overlapShapeCore'
+import {
+  OVERLAP_MAX_ORDERS,
+  OVERLAP_RAMP_GRADIENT,
+  OVERLAP_RAMP_PER_DEPTH,
+  OVERLAP_SHAPE_OPTIONS,
+} from './overlapShapeCore'
 import { lazyInstrument } from './lazyInstrument'
 import type { MidiRowDef, ObjectInstrumentDef, ParamDef } from './types'
 
@@ -18,6 +23,15 @@ import type { MidiRowDef, ObjectInstrumentDef, ParamDef } from './types'
 // with one stop" and why every project written before ORDERS existed renders
 // exactly as it did.
 //
+// Those colors are a GRADIENT by default: two ends, and the depths in between
+// are the OKLCH stops between them. Picking a color per depth is the other
+// mode, kept for the looks a ramp cannot say - the point of the default is
+// that "deeper = further along" is the thing you almost always mean, and it
+// stays true when ORDERS changes, where four hand-picked colors have to be
+// re-dialled. The ramp deliberately starts at the FIRST OVERLAP color rather
+// than the shape's own: running it from the base would make two crossing
+// shapes nearly the color of one.
+//
 // The whole mechanism is the five-pass stencil recipe in overlapShapeCore.ts
 // (see the essay there); ./OverlapShapeVisual (lazy: fetched when a project
 // mounts the instrument) maps that pure spec onto three.js materials - a
@@ -31,6 +45,9 @@ export const DEFAULT_OVERLAP_SHAPE_OVERLAP_COLOR = '#2dd4bf'
  *  a warm near-white), so raising ORDERS shows a ramp rather than four pills
  *  of the same teal that all have to be dialled before anything reads. */
 export const DEFAULT_OVERLAP_SHAPE_DEEP_COLORS = ['#3b82f6', '#a855f7', '#fff1c9'] as const
+/** The ramp's far end. Teal → violet travels enough hue that three or four
+ *  stops are told apart at a glance, which is the whole job of the default. */
+export const DEFAULT_OVERLAP_SHAPE_DEEP_COLOR = '#a855f7'
 
 export const OVERLAP_MODE = { cutOut: 0, color: 1 } as const
 
@@ -74,6 +91,27 @@ const PARAMS: ParamDef[] = [
     max: OVERLAP_MAX_ORDERS,
     step: 1,
     default: 1,
+    showIf: 'overlapMode=1',
+  },
+  // Gradient is the primary mode, so it is 0 and it is the default: a save
+  // written before this (only possible since ORDERS shipped the same week)
+  // reads as a ramp between its first overlap color and this deep default.
+  {
+    key: 'overlapColorMode',
+    label: 'Overlap Colors',
+    type: 'select' as const,
+    options: [
+      { value: OVERLAP_RAMP_GRADIENT, label: 'Gradient' },
+      { value: OVERLAP_RAMP_PER_DEPTH, label: 'Per depth' },
+    ],
+    default: OVERLAP_RAMP_GRADIENT,
+    showIf: 'overlapMode=1',
+  },
+  {
+    key: 'overlapColorDeep',
+    label: 'Deep Color',
+    type: 'color' as const,
+    default: DEFAULT_OVERLAP_SHAPE_DEEP_COLOR,
     showIf: 'overlapMode=1',
   },
   ...DEFAULT_OVERLAP_SHAPE_DEEP_COLORS.map((hex, i) => ({

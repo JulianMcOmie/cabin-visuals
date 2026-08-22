@@ -242,6 +242,16 @@ that cost time to establish, for the next instrument that wants set operations:
   each other's writes as their own (only which fill lands last is then unpredictable);
   and **a count cannot be shifted into spare bits the way a flag can**, because the
   increment carries — that asymmetry is why the flags moved rather than the tally.
+- **The depth colours resolve through ONE function** (`overlapShapeDepthColors`), read by
+  the fills, the panel's ramp strip and its preview alike — a panel that built its own
+  copy of the ramp could promise a colour the stage never paints. The primary mode is a
+  GRADIENT: two ends, and `gradientStops` (moved to `utils/oklch.ts` for this, re-exported
+  from `gradientColorizer` for its own consumers — importing the definition would drag
+  `three` into the instrument's eager bundle) fills the depths between them in OKLCH with
+  both endpoints literal. Picking a colour per depth is the second mode. **The ramp spans
+  the OVERLAP depths only, never starting at the shape's own colour** — running it from
+  the base makes two crossing shapes nearly the colour of one, which is the single thing
+  an overlap colour exists to avoid.
 - **A pass list that varies with a param is still a MESH list, so mount the union and
   toggle `visible`.** Deriving the passes from ORDERS would mean re-rendering React from
   a param (invariant 4); both recipes hang off one list and `overlapShapePassActive`

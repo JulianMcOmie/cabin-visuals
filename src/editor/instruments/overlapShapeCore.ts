@@ -47,6 +47,8 @@
 // depth-sort against anything, so it stays invisible.)
 // overlapShapeCore.test.ts pins all of these orderings and masks.
 
+import { gradientStops } from '../utils/oklch'
+
 // The parity recipe's four flags live in the HIGH nibble so the counted
 // recipe's tally can own the LOW one outright: a count is ARITHMETIC (the
 // increment carries), so it cannot be shifted into spare high bits the way a
@@ -266,11 +268,46 @@ export function overlapShapePassActive(
   return true
 }
 
-/** The instrument's colour param a fill pass paints with: depth 1 is the shape
- *  itself, and each depth past it wears its own overlap colour. Returned as a
- *  param KEY so the caller reads the shifted value the frame already resolved. */
+/** The instrument's colour param a fill pass paints with in PER-DEPTH mode:
+ *  depth 1 is the shape itself, and each depth past it wears its own overlap
+ *  colour. Returned as a param KEY so the caller reads the shifted value the
+ *  frame already resolved. */
 export function overlapShapeFillParam(order: number): string {
   return order <= 1 ? 'baseColor' : order === 2 ? 'overlapColor' : `overlapColor${order}`
+}
+
+/** How the overlap depths get their colours. GRADIENT is the primary one: two
+ *  ends and the depths between them are the ramp. */
+export const OVERLAP_RAMP_GRADIENT = 0
+export const OVERLAP_RAMP_PER_DEPTH = 1
+
+/**
+ * Every coverage depth's colour, indexed by depth − 1 (so entry 0 is the lone
+ * shape's own colour and entry k−1 is what k crossing shapes wear). ONE
+ * function for the fills, the panel's swatches and its preview, so the picture,
+ * the ramp strip and the pixels cannot disagree.
+ *
+ * The ramp spans the OVERLAP depths only — it starts at the first overlap
+ * colour, not at the shape's own. Running it from the base would make two
+ * crossing shapes nearly the colour of one, which is the one thing an overlap
+ * colour exists to avoid. `gradientStops` walks OKLCH and keeps both endpoints
+ * literal, so the first and last depth are exactly the two picked colours.
+ *
+ * `read` hands back a resolved hex for a param key — each host has its own idea
+ * of what an absent value falls back to (the frame's shifted string params vs
+ * the panel's bindings), and neither is this module's business.
+ */
+export function overlapShapeDepthColors(
+  orders: number,
+  gradient: boolean,
+  read: (key: string) => string,
+): string[] {
+  const count = overlapShapeOrders(orders)
+  const base = read('baseColor')
+  // One overlap colour is the parity flip, where a ramp has nothing to span.
+  if (count <= 1) return [base, read('overlapColor')]
+  if (gradient) return [base, ...gradientStops(read('overlapColor'), read('overlapColorDeep'), count)]
+  return [base, ...Array.from({ length: count }, (_, i) => read(overlapShapeFillParam(i + 2)))]
 }
 
 // ── The shape vocabulary ────────────────────────────────────────────────────

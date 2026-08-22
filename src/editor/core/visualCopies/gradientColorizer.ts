@@ -26,10 +26,16 @@
 
 import { Vector3 } from 'three'
 import type { ParamDef } from '../../instruments/types'
-import { colorToOklch, oklchToHex } from '../../utils/oklch'
+import { gradientStops } from '../../utils/oklch'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { GRADIENT_COLORIZER_COLOR } from './identityColors'
 import { clamp01 } from '../../utils/math'
+
+// The ramp itself lives in utils/oklch (a leaf module) so a second consumer
+// can walk the same stops without importing this definition - and therefore
+// three - into its bundle. Re-exported here because it is still THIS
+// definition's ramp as far as its panel and its test are concerned.
+export { gradientStops } from '../../utils/oklch'
 
 export const GRADIENT_MODE_POSITION = 0
 export const GRADIENT_MODE_INDEX = 1
@@ -87,43 +93,6 @@ const GRADIENT_PARAMS: ParamDef[] = [
 /** Below this chroma a color has no meaningful hue of its own (grey/black/
  *  white), so it adopts the other stop's hue instead of contributing an
  *  arbitrary one to the arc. */
-const ACHROMATIC = 0.005
-
-/**
- * The gradient as `count` evenly spaced '#rrggbb' stops, OKLCH-interpolated.
- * The literal endpoint strings are preserved (no roundtrip through the color
- * math), so t=0 and t=1 are exactly the picked colors. Unparseable input
- * degrades to a hard A|B split at the midpoint rather than throwing.
- *
- * Exported for the settings panel: the preview strip renders these same stops,
- * so the picture cannot drift from what the stage samples.
- */
-export function gradientStops(colorA: string, colorB: string, count: number): string[] {
-  const steps = Math.max(2, Math.round(count))
-  const a = colorToOklch(colorA)
-  const b = colorToOklch(colorB)
-  const stops: string[] = new Array(steps)
-  stops[0] = colorA
-  stops[steps - 1] = colorB
-  if (!a || !b) {
-    for (let i = 1; i < steps - 1; i++) stops[i] = i / (steps - 1) < 0.5 ? colorA : colorB
-    return stops
-  }
-  const hueA = a.c < ACHROMATIC ? (b.c < ACHROMATIC ? 0 : b.h) : a.h
-  const hueB = b.c < ACHROMATIC ? hueA : b.h
-  // Shortest arc around the wheel, in -180..180.
-  const hueDelta = ((hueB - hueA + 540) % 360) - 180
-  for (let i = 1; i < steps - 1; i++) {
-    const t = i / (steps - 1)
-    stops[i] = oklchToHex(
-      a.l + (b.l - a.l) * t,
-      a.c + (b.c - a.c) * t,
-      hueA + hueDelta * t,
-    )
-  }
-  return stops
-}
-
 /**
  * Where one copy sits on the ramp, 0..1 (0 = color A, 1 = color B).
  *

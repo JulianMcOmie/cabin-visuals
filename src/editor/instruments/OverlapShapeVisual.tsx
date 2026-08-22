@@ -30,9 +30,10 @@ import { useInstancedCopyFrame } from '../core/visual/instancedFrame'
 import { applyColorShiftToColor } from '../core/visual/instrumentColor'
 import type { VisualCopy } from '../core/visualCopies/types'
 import {
+  OVERLAP_RAMP_GRADIENT,
   OVERLAP_SHAPE_OPTIONS,
   OVERLAP_SHAPE_PASSES,
-  overlapShapeFillParam,
+  overlapShapeDepthColors,
   overlapShapeIndex,
   overlapShapePassActive,
   overlapShapePoints,
@@ -120,13 +121,25 @@ function materialFor(pass: OverlapShapePass): Material {
   return material
 }
 
-/** The colour every fill pass paints with, read through the pass's declared
- *  coverage depth. `state.stringParams` already carries any Colorizer shift
- *  (useInstrumentFrame applies it over the declared colour params - all five
- *  of them), and the fallback reads the schema rather than a repeated literal. */
-function fillHexOf(stringParams: Record<string, string>, pass: OverlapShapePass): string {
-  const key = overlapShapeFillParam(pass.order ?? 1)
-  return stringParams[key] || stringParamDefault(overlapShapeInstrument, key)
+/** Every coverage depth's colour for this frame, indexed by depth - 1. The
+ *  ramp (or the per-depth picks) is resolved ONCE per frame rather than per
+ *  pass, and `state.stringParams` already carries any Colorizer shift -
+ *  useInstrumentFrame applies it over the declared colour params, all six of
+ *  them, so shifting the ramp's ends shifts every stop between them. Absent
+ *  values fall back to the SCHEMA, never a repeated literal. */
+function depthColorsOf(state: { params: Record<string, number>; stringParams: Record<string, string> }): string[] {
+  const par = (key: string) => state.params[key] ?? paramDefault(overlapShapeInstrument, key)
+  return overlapShapeDepthColors(
+    par('overlapOrders'),
+    par('overlapColorMode') === OVERLAP_RAMP_GRADIENT,
+    (key) => state.stringParams[key] || stringParamDefault(overlapShapeInstrument, key),
+  )
+}
+
+/** The colour a fill pass paints with: its declared coverage depth, held at the
+ *  deepest the ramp reaches (the same hold its stencil gate performs). */
+function fillHexOf(depthColors: string[], pass: OverlapShapePass): string {
+  return depthColors[Math.min(pass.order ?? 1, depthColors.length) - 1]
 }
 
 /** Which recipe is live, from the two params that pick it. */
@@ -164,13 +177,14 @@ export function OverlapShapeVisual({ trackId }: { trackId: string }) {
     // undrawn, so the scene behind shows through) and a fill deeper than the
     // last colour stands down so that depth holds the colour above it.
     const gate = passGate(par)
+    const depthColors = depthColorsOf(state)
     OVERLAP_SHAPE_PASSES.forEach((pass, i) => {
       const mesh = meshRefs.current[i]
       if (!mesh) return
       const active = overlapShapePassActive(pass, gate)
       mesh.visible = active
       if (active && pass.writesColor) {
-        ;(materials[i] as MeshBasicMaterial).color.set(fillHexOf(state.stringParams, pass))
+        ;(materials[i] as MeshBasicMaterial).color.set(fillHexOf(depthColors, pass))
       }
     })
 
@@ -334,13 +348,14 @@ export function OverlapShapeInstanced({ trackId }: { trackId: string }) {
     // fill is the same gate, exactly as the per-copy path leaves that mesh
     // invisible.)
     const gate = passGate(par)
+    const depthColors = depthColorsOf(state)
     const active: { mesh: InstancedMesh2; hex: string | null }[] = []
     for (let p = 0; p < OVERLAP_SHAPE_PASSES.length; p++) {
       const pass = OVERLAP_SHAPE_PASSES[p]
       const on = overlapShapePassActive(pass, gate)
       meshes[p].visible = on && !state.blackedOut
       if (on) {
-        active.push({ mesh: meshes[p], hex: pass.writesColor ? fillHexOf(state.stringParams, pass) : null })
+        active.push({ mesh: meshes[p], hex: pass.writesColor ? fillHexOf(depthColors, pass) : null })
       }
     }
 

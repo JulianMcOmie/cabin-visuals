@@ -7,6 +7,13 @@
 // universal "this is transparency" signal. The preview animates on rAF - panel
 // chrome, exempt from the pause invariant (the guide's DOM-transform pattern).
 //
+// The depth colors are a GRADIENT first (two ends and a strip of the resolved
+// stops between them) with PER DEPTH as the second mode, because "deeper =
+// further along" is what the control almost always means and it survives ORDERS
+// moving, where four hand-picked pills have to be re-dialled. Both the strip and
+// the preview below read `overlapShapeDepthColors` - the same resolver the
+// stencil fills use - so the panel cannot promise a color the stage won't paint.
+//
 // THE PREVIEW IS TWO PREVIEWS, because the instrument is two rules. At ORDERS 1
 // it is the shipped one: two copies gliding across each other, drawn with SVG's
 // evenodd fill rule, which IS the parity rule, so the picture can't lie about
@@ -21,13 +28,17 @@
 import { useId, useMemo, useRef } from 'react'
 import {
   DEFAULT_OVERLAP_SHAPE_BASE_COLOR,
+  DEFAULT_OVERLAP_SHAPE_DEEP_COLOR,
   DEFAULT_OVERLAP_SHAPE_DEEP_COLORS,
   DEFAULT_OVERLAP_SHAPE_OVERLAP_COLOR,
   OVERLAP_MODE,
 } from '../instruments/OverlapShape'
 import {
+  OVERLAP_RAMP_GRADIENT,
+  OVERLAP_RAMP_PER_DEPTH,
   OVERLAP_SHAPE_OPTIONS,
   overlapShapeCounted,
+  overlapShapeDepthColors,
   overlapShapeFillParam,
   overlapShapeIndex,
   overlapShapeOrders,
@@ -300,6 +311,8 @@ export const OverlapShapeUserInterfaceRenderer: UserInterfaceRendererDefinition 
   // them here.
   const overlapColor = parameter(parameters, 'overlapColor')
   const overlapOrders = parameter(parameters, 'overlapOrders')
+  const overlapColorMode = parameter(parameters, 'overlapColorMode')
+  const overlapColorDeep = parameter(parameters, 'overlapColorDeep')
   const deepColors = [3, 4, 5].map((depth) => parameter(parameters, overlapShapeFillParam(depth)))
 
   if (!shape || !size || !pulse || !baseColor || !overlapMode) {
@@ -317,17 +330,23 @@ export const OverlapShapeUserInterfaceRenderer: UserInterfaceRendererDefinition 
   const overlapHex = stringValue(overlapColor, DEFAULT_OVERLAP_SHAPE_OVERLAP_COLOR)
   const ordersN = overlapShapeOrders(numericValue(overlapOrders, 1))
   const counted = overlapShapeCounted(modeN >= OVERLAP_MODE.color, ordersN)
-  // The pills the count actually reaches, deepest last: depth 1 is the shape's
-  // own COLOR pill above, so this ramp starts at the first overlap color.
-  const depthPills = counted
+  const gradient = numericValue(overlapColorMode, OVERLAP_RAMP_GRADIENT) === OVERLAP_RAMP_GRADIENT
+  const deepHex = stringValue(overlapColorDeep, DEFAULT_OVERLAP_SHAPE_DEEP_COLOR)
+  // The depth colors come from the SAME resolver the stencil fills read, so the
+  // strip, the rosette and the pixels cannot drift. Index 0 is depth 1 (the
+  // shape's own COLOR pill above); the rest are what crossing copies wear.
+  const rampHexes = overlapShapeDepthColors(ordersN, gradient, (key) => {
+    if (key === 'baseColor') return accent
+    if (key === 'overlapColor') return overlapHex
+    if (key === 'overlapColorDeep') return deepHex
+    const i = Number(key.slice('overlapColor'.length)) - 3
+    return stringValue(deepColors[i], DEFAULT_OVERLAP_SHAPE_DEEP_COLORS[i])
+  })
+  // Per-depth mode's pills, deepest last. Gradient mode replaces them with the
+  // two ends and the strip that shows what they resolve to.
+  const depthPills = counted && !gradient
     ? [overlapColor, ...deepColors].slice(0, ordersN).filter((p) => p != null)
     : []
-  // The rosette needs the whole ramp INCLUDING the base, indexed by depth.
-  const rampHexes = [
-    accent,
-    overlapHex,
-    ...deepColors.map((p, i) => stringValue(p, DEFAULT_OVERLAP_SHAPE_DEEP_COLORS[i])),
-  ].slice(0, ordersN + 1)
 
   return (
     <section
@@ -400,9 +419,66 @@ export const OverlapShapeUserInterfaceRenderer: UserInterfaceRendererDefinition 
           />
         )}
       </div>
-      {/* The ramp: one pill per coverage depth the count colors, labelled by
-          how many shapes have to cross to reach it. The deepest wears a "+"
-          because everything past it holds that color. */}
+      {/* How the depths get their colors. Gradient first, because "deeper =
+          further along" is what you almost always mean and it survives ORDERS
+          moving, where hand-picked colors have to be re-dialled. */}
+      {counted && overlapColorMode && (
+        <div className="px-4 pb-2">
+          <Segmented
+            ariaLabel="Overlap color source"
+            options={[
+              { value: OVERLAP_RAMP_GRADIENT, label: 'GRADIENT', title: 'Two ends; the depths between them are the ramp' },
+              { value: OVERLAP_RAMP_PER_DEPTH, label: 'PER DEPTH', title: 'Pick a color for every depth' },
+            ]}
+            value={gradient ? OVERLAP_RAMP_GRADIENT : OVERLAP_RAMP_PER_DEPTH}
+            accent={accent}
+            onChange={(v) => overlapColorMode.setValue(v)}
+          />
+        </div>
+      )}
+      {/* The ramp itself: its two ends, with the RESOLVED per-depth stops
+          between them. The strip is discrete on purpose - the fills are - so
+          it doubles as the readout of what each depth actually gets. */}
+      {counted && gradient && overlapColor && overlapColorDeep && (
+        <div
+          data-testid="overlap-shape-gradient-ramp"
+          className="flex items-end gap-3 px-4 pb-4"
+        >
+          <ColorWheelPill
+            value={overlapHex}
+            onChange={(hex) => overlapColor.setValue(hex)}
+            label="2×"
+            ariaLabel="Color for two shapes crossing"
+            halo={`0 0 10px ${withAlpha(overlapHex, 0.35)}`}
+            align="left"
+            pillTestId="overlap-shape-ramp-near-pill"
+          />
+          <div className="flex min-w-0 flex-1 flex-col gap-[3px] pb-3">
+            <div className="flex h-4 overflow-clip rounded-[3px] border border-white/10">
+              {rampHexes.slice(1).map((hex, i) => (
+                <span
+                  key={i}
+                  className="flex-1"
+                  style={{ background: hex }}
+                  title={`${i + 2}${i === ordersN - 1 ? '+' : ''} shapes crossing · ${hex}`}
+                />
+              ))}
+            </div>
+            <span className="text-center text-[8px] font-semibold tracking-[0.12em] text-white/40">
+              DEPTH RAMP
+            </span>
+          </div>
+          <ColorWheelPill
+            value={deepHex}
+            onChange={(hex) => overlapColorDeep.setValue(hex)}
+            label={`${ordersN + 1}×+`}
+            ariaLabel={`Color for ${ordersN + 1} or more shapes crossing`}
+            halo={`0 0 10px ${withAlpha(deepHex, 0.35)}`}
+            align="right"
+            pillTestId="overlap-shape-ramp-far-pill"
+          />
+        </div>
+      )}
       {depthPills.length > 0 && (
         <div
           data-testid="overlap-shape-depth-ramp"

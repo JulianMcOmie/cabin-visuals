@@ -114,6 +114,43 @@ export function oklchCss(l: number, c: number, h: number, alpha?: number): strin
 
 /** Anything with linear-sRGB r/g/b channels. A three.js `Color` satisfies it
  *  structurally, which is how this module stays free of a three import. */
+const ACHROMATIC = 0.005
+
+/**
+ * The gradient as `count` evenly spaced '#rrggbb' stops, OKLCH-interpolated.
+ * The literal endpoint strings are preserved (no roundtrip through the color
+ * math), so t=0 and t=1 are exactly the picked colors. Unparseable input
+ * degrades to a hard A|B split at the midpoint rather than throwing.
+ *
+ * Exported for the settings panel: the preview strip renders these same stops,
+ * so the picture cannot drift from what the stage samples.
+ */
+export function gradientStops(colorA: string, colorB: string, count: number): string[] {
+  const steps = Math.max(2, Math.round(count))
+  const a = colorToOklch(colorA)
+  const b = colorToOklch(colorB)
+  const stops: string[] = new Array(steps)
+  stops[0] = colorA
+  stops[steps - 1] = colorB
+  if (!a || !b) {
+    for (let i = 1; i < steps - 1; i++) stops[i] = i / (steps - 1) < 0.5 ? colorA : colorB
+    return stops
+  }
+  const hueA = a.c < ACHROMATIC ? (b.c < ACHROMATIC ? 0 : b.h) : a.h
+  const hueB = b.c < ACHROMATIC ? hueA : b.h
+  // Shortest arc around the wheel, in -180..180.
+  const hueDelta = ((hueB - hueA + 540) % 360) - 180
+  for (let i = 1; i < steps - 1; i++) {
+    const t = i / (steps - 1)
+    stops[i] = oklchToHex(
+      a.l + (b.l - a.l) * t,
+      a.c + (b.c - a.c) * t,
+      hueA + hueDelta * t,
+    )
+  }
+  return stops
+}
+
 export interface LinearRgb {
   r: number
   g: number
