@@ -214,6 +214,14 @@ export function paramDefault(def: ObjectInstrumentDef, key: string): number {
   return p && typeof p.default === 'number' ? p.default : 0
 }
 
+/** The same fallback for a string-valued (color / string) param, for the same
+ *  reason: a component that needs one default reads the SCHEMA rather than
+ *  repeating the literal the def already declares. */
+export function stringParamDefault(def: ObjectInstrumentDef, key: string): string {
+  const p = def.params.find((p) => p.key === key)
+  return p && typeof p.default === 'string' ? p.default : ''
+}
+
 /**
  * Is this track full-frame RIGHT NOW - a viewport-filling plane pinned to the
  * camera, with the placement transform and the transform/clone chain skipped?

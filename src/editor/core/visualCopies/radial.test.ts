@@ -272,11 +272,12 @@ test('the polar options all default to the plain ring, and an old save merges to
   })
 })
 
-test('rings default to 1, which makes all three per-ring amounts inert', () => {
+test('rings default to 1, which makes all four per-ring amounts inert', () => {
   assert.equal(DEFAULTS.rings, 1)
+  assert.equal(DEFAULTS.ringTwist, 0)
 
-  // A save written before RINGS existed carries none of the four keys - and
-  // because ring 0 anchors all three amounts, it stays matrix-identical even
+  // A save written before RINGS existed carries none of the keys - and
+  // because ring 0 anchors all four amounts, it stays matrix-identical even
   // though SPACING merges to a non-zero default. That is what let the family
   // ship with no persistence upgrade.
   const legacy = { copies: 4, radius: 2, size: 1, plane: 0, sweep: 360 } as RadialSettings
@@ -293,7 +294,9 @@ test('rings default to 1, which makes all three per-ring amounts inert', () => {
   // Explicitly stacking the amounts on a single ring is still the plain ring.
   const inert = resolveVisualCopies([
     radialSplitter.resolve({
-      settings: settings({ copies: 4, radius: 2, rings: 1, ringSpacing: 3, ringSize: 0.5, ringDepth: 2 }),
+      settings: settings({
+        copies: 4, radius: 2, rings: 1, ringSpacing: 3, ringSize: 0.5, ringDepth: 2, ringTwist: 45,
+      }),
       notes: [],
     }),
   ], 0)
@@ -355,6 +358,58 @@ test('ring size and ring depth are independent of spacing and of each other', ()
   ], 0)
   assert.deepEqual(spread.map(scaleOf), [[1, 1, 1], [1, 1, 1]])
   assert.deepEqual(spread.map(positionOf), [[1, 0, 0], [2, 0, 0]])
+})
+
+test('ring twist turns each ring about the axis, changing bearing and nothing else', () => {
+  // Degrees PER RING, anchored at ring 0: half a slot (180°/copies) is the
+  // interleave that makes a stack read as one denser formation.
+  const copies = resolveVisualCopies([
+    radialSplitter.resolve({
+      settings: settings({ copies: 2, radius: 1, rings: 2, ringSpacing: 0, ringTwist: 90 }),
+      notes: [],
+    }),
+  ], 0)
+  assert.deepEqual(copies.map(positionOf), [
+    [1, 0, 0], [-1, 0, 0],
+    [0, 1, 0], [0, -1, 0],
+  ])
+
+  // It rides the slot ANGLE, so it leaves the radius, the axial steps (RISE
+  // and RING DEPTH) and the size alone - only the bearing moves.
+  const stacked = resolveVisualCopies([
+    radialSplitter.resolve({
+      settings: settings({
+        copies: 2, radius: 2, rings: 2, ringSpacing: 1, ringSize: 0.5, ringDepth: -1, rise: 0.5, ringTwist: 90,
+      }),
+      notes: [],
+    }),
+  ], 0)
+  const plain = resolveVisualCopies([
+    radialSplitter.resolve({
+      settings: settings({
+        copies: 2, radius: 2, rings: 2, ringSpacing: 1, ringSize: 0.5, ringDepth: -1, rise: 0.5, ringTwist: 0,
+      }),
+      notes: [],
+    }),
+  ], 0)
+  // Same radii, same axial positions, same scales - the twisted ring's copies
+  // are the untwisted ones turned about the axis (Z, in the XY plane).
+  assert.deepEqual(
+    stacked.map((copy) => positionOf(copy).map((n) => Math.round(Math.abs(n) * 1e6) / 1e6).sort()),
+    plain.map((copy) => positionOf(copy).map((n) => Math.round(Math.abs(n) * 1e6) / 1e6).sort()),
+  )
+  assert.deepEqual(stacked.map((copy) => positionOf(copy)[2]), plain.map((copy) => positionOf(copy)[2]))
+  assert.deepEqual(stacked.map(scaleOf), plain.map(scaleOf))
+
+  // UPRIGHT cancels the FULL bearing, twist included, so a twisted stack still
+  // hands every mover below it the object's own unrotated axes.
+  const upright = resolveVisualCopies([
+    radialSplitter.resolve({
+      settings: settings({ copies: 2, radius: 1, rings: 2, ringTwist: 37, facing: 1 }),
+      notes: [],
+    }),
+  ], 0)
+  upright.forEach((copy) => assert.deepEqual(localXOf(copy), [1, 0, 0]))
 })
 
 test('every ring rides the MIDI radius lane, and the spiral anchors per ring', () => {

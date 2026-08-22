@@ -157,10 +157,10 @@ export const burstMover: MoverOrSplitterDefinition<BurstSettings> = {
 //   each copy down the ring's tangent.
 //
 // RINGS (2026-08) repeats that whole ring outward: N concentric copies of the
-// same slot set, each ring stepped by three INDEPENDENT per-ring amounts, all
+// same slot set, each ring stepped by four INDEPENDENT per-ring amounts, all
 // anchored at ring 0 so the innermost ring is exactly the single ring that was
-// there before. Rings default to 1, which makes all three inert - an old save
-// is matrix-identical whatever the three amounts merge to, so none of this
+// there before. Rings default to 1, which makes all four inert - an old save
+// is matrix-identical whatever the four amounts merge to, so none of this
 // needed a persistence upgrade either (radial.test.ts pins it).
 //
 // - SPACING is a radius STEP, additive (radius + spacing·ring), not a ratio.
@@ -178,6 +178,13 @@ export const burstMover: MoverOrSplitterDefinition<BurstSettings> = {
 // - RING DEPTH steps each ring along the ring's axis, exactly as RISE steps
 //   each copy - it joins the same translation, for the same reason (the slot
 //   rotation is ABOUT that axis, so it leaves the axial component alone).
+// - RING TWIST is degrees per ring about that same axis, and it is added to
+//   the SLOT ANGLE rather than applied as a rotation of its own. That is what
+//   keeps it a pure bearing change: a twist matrix wrapped around the slot
+//   would also carry the copy's rise and its facing fix, where joining the
+//   angle leaves the radius, the axial step and UPRIGHT's cancellation
+//   (which subtracts the FULL bearing) exactly as they were. Half a slot's
+//   worth - 180°/copies - interleaves the rings; anything else fans them.
 //
 // Copies come out RING-MAJOR - ring 0's whole slot set, then ring 1's - so
 // each ring is a contiguous run of indices and copy targeting's `runs` rule
@@ -212,6 +219,8 @@ export interface RadialSettings {
   ringSize: number
   /** Per-ring step along the ring's axis, in world units. 0 = flat stack. */
   ringDepth: number
+  /** Per-ring rotation about the ring's axis, in degrees. 0 = rings aligned. */
+  ringTwist: number
 }
 
 const RADIAL_MAX_COPIES = 32
@@ -279,6 +288,7 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
     { key: 'ringSpacing', label: 'Ring spacing', min: -5, max: 5, step: 0.1, default: 1 },
     { key: 'ringSize', label: 'Ring size', min: 0.25, max: 2, step: 0.01, default: 1 },
     { key: 'ringDepth', label: 'Ring depth', min: -4, max: 4, step: 0.05, default: 0 },
+    { key: 'ringTwist', label: 'Ring twist', min: -180, max: 180, step: 1, default: 0 },
     {
       key: 'facing',
       label: 'Facing',
@@ -309,6 +319,7 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
     const ringSpacing = settings.ringSpacing ?? 1
     const ringSize = Math.max(0.05, settings.ringSize ?? 1)
     const ringDepth = settings.ringDepth ?? 0
+    const ringTwist = ((settings.ringTwist ?? 0) * Math.PI) / 180
     // Structural slots, RING-MAJOR (ring 0's whole slot set first, so a ring is
     // a contiguous run of copy indices). Within a ring, slot 0 is unrotated and
     // sits at the ring's own radius - it is the spiral's anchor and the arc's
@@ -318,7 +329,11 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
     const slots = Array.from({ length: rings * count }, (_, i) => {
       const ring = Math.floor(i / count)
       const slot = i % count
-      const angle = radialSweepFraction(slot, count, sweep) * (sweep * Math.PI) / 180
+      // TWIST turns each whole ring about the axis before its slots are laid
+      // out, so it joins the slot angle rather than becoming a second rotation:
+      // the copies stay on their radius and only their bearing moves, and
+      // UPRIGHT still cancels the FULL bearing below.
+      const angle = radialSweepFraction(slot, count, sweep) * (sweep * Math.PI) / 180 + ringTwist * ring
       const rotation = new Matrix4().makeRotationAxis(axis, angle)
       // The facing fix rides INSIDE the slot (after the translation), so it
       // re-aims the copy without moving it: cancelling the slot rotation

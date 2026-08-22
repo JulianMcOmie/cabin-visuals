@@ -6,9 +6,11 @@ import {
   DoubleSide,
   EqualDepth,
   EqualStencilFunc,
+  IncrementWrapStencilOp,
   InvertStencilOp,
   KeepStencilOp,
   LessEqualDepth,
+  LessEqualStencilFunc,
   Matrix4,
   MeshBasicMaterial,
   Quaternion,
@@ -30,24 +32,30 @@ import type { VisualCopy } from '../core/visualCopies/types'
 import {
   OVERLAP_SHAPE_OPTIONS,
   OVERLAP_SHAPE_PASSES,
+  overlapShapeFillParam,
   overlapShapeIndex,
+  overlapShapePassActive,
   overlapShapePoints,
   overlapShapeScale,
   type OverlapShapePass,
 } from './overlapShapeCore'
-import { paramDefault } from './types'
-import {
-  DEFAULT_OVERLAP_SHAPE_BASE_COLOR,
-  DEFAULT_OVERLAP_SHAPE_OVERLAP_COLOR,
-  overlapShapeInstrument,
-} from './OverlapShape'
+import { paramDefault, stringParamDefault } from './types'
+import { overlapShapeInstrument } from './OverlapShape'
 
 // The Overlap Shape visuals - the lazy half of ./OverlapShape (see that file
 // for the def and the instrument's "why"; the pass recipe itself lives in
 // ./overlapShapeCore.ts). Two render paths, exactly like CubeVisual:
 // OverlapShapeVisual draws ONE occurrence (mounted per copy by ObjectRenderer),
 // OverlapShapeInstanced draws every VisualCopy occurrence of a track through
-// seven InstancedMesh2 objects - one per stencil pass.
+// one InstancedMesh2 object per stencil pass.
+//
+// BOTH recipes are mounted at once and the frame makes one of them visible
+// (`overlapShapePassActive`). The pass list IS the mesh list, so deriving it
+// from the ORDERS param instead would mean re-rendering React whenever a knob
+// moved - invariant 4 in the root guide. An idle pass costs a material and a
+// (skipped) draw-list entry; the per-frame loops below skip the inactive ones
+// outright, so a plain parity track pays nothing per copy for the counted
+// fills hanging beside it.
 
 function geometryFor(shape: number): ShapeGeometry {
   const points = overlapShapePoints(shape)
@@ -92,21 +100,39 @@ function materialFor(pass: OverlapShapePass): Material {
   const stencil = pass.stencil
   if (stencil) {
     material.stencilWrite = true
-    material.stencilFunc = stencil.func === 'always' ? AlwaysStencilFunc : EqualStencilFunc
+    material.stencilFunc = stencil.func === 'always'
+      ? AlwaysStencilFunc
+      : stencil.func === 'lequal' ? LessEqualStencilFunc : EqualStencilFunc
     material.stencilRef = stencil.ref
     material.stencilFuncMask = stencil.funcMask
     material.stencilFail = KeepStencilOp
     material.stencilZFail = KeepStencilOp
     material.stencilZPass = stencil.zPass === 'invert'
       ? InvertStencilOp
-      : stencil.zPass === 'replace' ? ReplaceStencilOp : ZeroStencilOp
+      : stencil.zPass === 'replace'
+        ? ReplaceStencilOp
+        // Wrap rather than saturate: the counted tally lives under a four-bit
+        // write mask, where GL's saturating INCR would carry out of the field
+        // anyway - so both ops wrap at 16 and only this one says so.
+        : stencil.zPass === 'increment' ? IncrementWrapStencilOp : ZeroStencilOp
     material.stencilWriteMask = stencil.writeMask
   }
   return material
 }
 
-const OVERLAP_PASS_INDEX = OVERLAP_SHAPE_PASSES.findIndex((p) => p.name === 'overlap')
-const BASE_PASS_INDEX = OVERLAP_SHAPE_PASSES.findIndex((p) => p.name === 'base')
+/** The colour every fill pass paints with, read through the pass's declared
+ *  coverage depth. `state.stringParams` already carries any Colorizer shift
+ *  (useInstrumentFrame applies it over the declared colour params - all five
+ *  of them), and the fallback reads the schema rather than a repeated literal. */
+function fillHexOf(stringParams: Record<string, string>, pass: OverlapShapePass): string {
+  const key = overlapShapeFillParam(pass.order ?? 1)
+  return stringParams[key] || stringParamDefault(overlapShapeInstrument, key)
+}
+
+/** Which recipe is live, from the two params that pick it. */
+function passGate(par: (key: string) => number) {
+  return { overlapOn: par('overlapMode') >= 0.5, orders: par('overlapOrders') }
+}
 
 export function OverlapShapeVisual({ trackId }: { trackId: string }) {
   const groupRef = useRef<Group>(null)
@@ -133,19 +159,20 @@ export function OverlapShapeVisual({ trackId }: { trackId: string }) {
       }
     }
 
-    // These already carry any Colorizer shift (useInstrumentFrame applies
-    // applyColorShiftToInstrumentParams over declared color params). The two
-    // fill passes are the only MeshBasicMaterials with a visible color.
-    ;(materials[BASE_PASS_INDEX] as MeshBasicMaterial).color.set(
-      state.stringParams.baseColor || DEFAULT_OVERLAP_SHAPE_BASE_COLOR,
-    )
-    ;(materials[OVERLAP_PASS_INDEX] as MeshBasicMaterial).color.set(
-      state.stringParams.overlapColor || DEFAULT_OVERLAP_SHAPE_OVERLAP_COLOR,
-    )
-    // Cut-out mode simply never mounts the overlap fill: the even-covered
-    // region stays undrawn, so the scene behind shows through.
-    const overlapMesh = meshRefs.current[OVERLAP_PASS_INDEX]
-    if (overlapMesh) overlapMesh.visible = par('overlapMode') >= 0.5
+    // One recipe draws, the other stands down - and inside the live one,
+    // cut-out withholds the overlap fill (the even-covered region stays
+    // undrawn, so the scene behind shows through) and a fill deeper than the
+    // last colour stands down so that depth holds the colour above it.
+    const gate = passGate(par)
+    OVERLAP_SHAPE_PASSES.forEach((pass, i) => {
+      const mesh = meshRefs.current[i]
+      if (!mesh) return
+      const active = overlapShapePassActive(pass, gate)
+      mesh.visible = active
+      if (active && pass.writesColor) {
+        ;(materials[i] as MeshBasicMaterial).color.set(fillHexOf(state.stringParams, pass))
+      }
+    })
 
     group.scale.setScalar(overlapShapeScale(par('size'), state.energy, par('pulse')))
   })
@@ -154,7 +181,7 @@ export function OverlapShapeVisual({ trackId }: { trackId: string }) {
     <group ref={groupRef}>
       {OVERLAP_SHAPE_PASSES.map((pass, i) => (
         <mesh
-          key={pass.name}
+          key={`${pass.name}${pass.order ?? ''}`}
           ref={(mesh) => { meshRefs.current[i] = mesh }}
           renderOrder={pass.renderOrder}
           material={materials[i]}
@@ -166,17 +193,19 @@ export function OverlapShapeVisual({ trackId }: { trackId: string }) {
 
 // ── Instanced path ──────────────────────────────────────────────────────────
 // ONE mount per track drawing every VisualCopy occurrence: a splitter's 360
-// coplanar shapes are seven InstancedMesh2 draws (one per stencil pass) instead
-// of 360 mounted components × 7 meshes. The parity look survives untouched
+// coplanar shapes are one InstancedMesh2 draw per stencil pass instead
+// of 360 mounted components × a mesh each. The parity look survives untouched
 // because it never depended on per-copy mounts - it depends on renderOrder
 // interleaving the passes ACROSS occurrences (every copy's depth prepass
 // before any copy's parity pass, and so on), and one instanced mesh per pass
 // holding every copy IS that interleaving. Within one pass the copies' mutual
 // order can't change the pixels: depth is a LessEqual min, mark/cleanup are
-// idempotent writes, parity is a commutative invert, and the DONE/BASE bits
-// mean a contested pixel takes exactly one fill whichever copy rasterizes
-// first - the only tie is WHICH copy's (color-shifted) fill wins, and
-// instances draw in copy order, so that stays deterministic.
+// idempotent writes, parity is a commutative invert, the counted tally is a
+// commutative increment, and the DONE/BASE bits - or, in the counted recipe,
+// zeroing the tally as the fill lands - mean a contested pixel takes exactly
+// one fill whichever copy rasterizes first. The only tie is WHICH copy's
+// (color-shifted) fill wins, and instances draw in copy order, so that stays
+// deterministic.
 //
 // Kept pixel-faithful to the per-copy path above:
 // - Fill colors reproduce useInstrumentFrame's string-param shift exactly:
@@ -299,13 +328,21 @@ export function OverlapShapeInstanced({ trackId }: { trackId: string }) {
       }
     }
 
-    const baseHex = state.stringParams.baseColor || DEFAULT_OVERLAP_SHAPE_BASE_COLOR
-    const overlapHex = state.stringParams.overlapColor || DEFAULT_OVERLAP_SHAPE_OVERLAP_COLOR
-    const overlapMesh = meshes[OVERLAP_PASS_INDEX]
-    const baseMesh = meshes[BASE_PASS_INDEX]
-    // Cut-out mode: the overlap fill never draws, exactly as the per-copy
-    // path leaves its overlap mesh invisible.
-    const overlapOn = par('overlapMode') >= 0.5
+    // The live recipe's passes, resolved once: everything below - matrices,
+    // per-instance visibility, fills - runs over THESE meshes only, so the
+    // idle recipe costs nothing per copy. (Cut-out withholding the overlap
+    // fill is the same gate, exactly as the per-copy path leaves that mesh
+    // invisible.)
+    const gate = passGate(par)
+    const active: { mesh: InstancedMesh2; hex: string | null }[] = []
+    for (let p = 0; p < OVERLAP_SHAPE_PASSES.length; p++) {
+      const pass = OVERLAP_SHAPE_PASSES[p]
+      const on = overlapShapePassActive(pass, gate)
+      meshes[p].visible = on && !state.blackedOut
+      if (on) {
+        active.push({ mesh: meshes[p], hex: pass.writesColor ? fillHexOf(state.stringParams, pass) : null })
+      }
+    }
 
     const s = overlapShapeScale(par('size'), state.energy, par('pulse'))
     _scaleM.makeScale(s, s, s)
@@ -314,7 +351,7 @@ export function OverlapShapeInstanced({ trackId }: { trackId: string }) {
     for (let i = 0; i < count; i++) {
       const fade = f.copyFade(i)
       const visible = fade > 0.001
-      for (const mesh of meshes) mesh.setVisibilityAt(i, visible)
+      for (const { mesh } of active) mesh.setVisibilityAt(i, visible)
       if (!visible) continue
       if (fade < 0.999) anyFaded = true
       f.composeCopyMatrix(i, _mat)
@@ -326,22 +363,20 @@ export function OverlapShapeInstanced({ trackId }: { trackId: string }) {
       // The size/pulse swell is a child-group scale in the per-copy path -
       // multiplied after placement, exactly as here.
       _mat.multiply(_scaleM)
-      for (const mesh of meshes) mesh.setMatrixAt(i, _mat)
-      baseMesh.setColorAt(i, copyFillColor(_fill, baseHex, copies[i]?.colorShift, _tint))
-      baseMesh.setOpacityAt(i, Math.min(1, fade))
-      if (overlapOn) {
-        overlapMesh.setColorAt(i, copyFillColor(_fill, overlapHex, copies[i]?.colorShift, _tint))
-        overlapMesh.setOpacityAt(i, Math.min(1, fade))
+      const shift = copies[i]?.colorShift
+      const opacity = Math.min(1, fade)
+      for (const { mesh, hex } of active) {
+        mesh.setMatrixAt(i, _mat)
+        if (hex === null) continue
+        mesh.setColorAt(i, copyFillColor(_fill, hex, shift, _tint))
+        mesh.setOpacityAt(i, opacity)
       }
     }
-    for (const mesh of meshes) {
-      mesh.visible = !state.blackedOut
-      // Mirror applyMaterialOpacity's rule: any mid-fade copy flips the whole
-      // seven-pass stack into the transparent list TOGETHER (renderOrder is
-      // honored in both lists, so the pass order survives the move).
-      ;(mesh.material as Material).transparent = anyFaded
-    }
-    overlapMesh.visible = overlapOn && !state.blackedOut
+    // Mirror applyMaterialOpacity's rule: any mid-fade copy flips the whole
+    // pass stack into the transparent list TOGETHER (renderOrder is honored in
+    // both lists, so the pass order survives the move). The idle recipe comes
+    // along - it is one `visible` flag away from drawing again.
+    for (const mesh of meshes) (mesh.material as Material).transparent = anyFaded
   })
 
   return (

@@ -19,7 +19,7 @@
 //    Grid's and Line's grammar: amounts first, modifiers, then the selects.
 //    The kinds row wraps because eight segments overrun a narrow inspector
 //    pane, and a fixed row clips rather than shrinking (Tunnel's lesson).
-//    RINGS carries its own three knobs the way SHAPE carries GROWTH: the
+//    RINGS carries its own four knobs the way SHAPE carries GROWTH: the
 //    per-ring amounts render only above one ring, because that is exactly
 //    when the definition stops ignoring them (ring 0 anchors all three), and
 //    a single ring is the common case that should stay a short panel.
@@ -285,6 +285,7 @@ interface RadialBindings {
   ringSpacing: NumBinding | null
   ringSize: NumBinding | null
   ringDepth: NumBinding | null
+  ringTwist: NumBinding | null
   rest: UserInterfaceParameter[]
 }
 
@@ -292,7 +293,7 @@ interface RadialBindings {
 function RadialConsole({ bound }: { bound: RadialBindings }) {
   const {
     copies, radius, size, plane, sweep, shape, growth, rise, facing,
-    rings, ringSpacing, ringSize, ringDepth, rest,
+    rings, ringSpacing, ringSize, ringDepth, ringTwist, rest,
   } = bound
   const { value: copiesValue } = copies
   const { value: radiusValue } = radius
@@ -309,6 +310,7 @@ function RadialConsole({ bound }: { bound: RadialBindings }) {
   const ringSpacingValue = ringSpacing?.value
   const ringSizeValue = ringSize?.value
   const ringDepthValue = ringDepth?.value
+  const ringTwistValue = ringTwist?.value
   const spiral = shapeValue === RADIAL_SHAPE_SPIRAL
   // One ring means the definition ignores all three per-ring amounts, so the
   // panel hides them - the RINGS knob is what turns them on.
@@ -331,11 +333,12 @@ function RadialConsole({ bound }: { bound: RadialBindings }) {
       ringSpacing: ringSpacingValue ?? base.ringSpacing,
       ringSize: ringSizeValue ?? base.ringSize,
       ringDepth: ringDepthValue ?? base.ringDepth,
+      ringTwist: ringTwistValue ?? base.ringTwist,
     }
   }, [
     copiesValue, radiusValue, sizeValue, planeValue,
     sweepValue, shapeValue, growthValue, riseValue, facingValue,
-    ringsValue, ringSpacingValue, ringSizeValue, ringDepthValue,
+    ringsValue, ringSpacingValue, ringSizeValue, ringDepthValue, ringTwistValue,
   ])
 
   return (
@@ -355,14 +358,17 @@ function RadialConsole({ bound }: { bound: RadialBindings }) {
         <Knob b={rise} label="RISE" bipolar />
         {spiral ? <Knob b={growth} label="GROWTH" /> : null}
       </ControlRow>
-      {/* RINGS and, once there is more than one, the three independent per-ring
+      {/* RINGS and, once there is more than one, the four independent per-ring
           amounts: how much further out each ring sits, how much bigger or
-          smaller its copies are, and how far along the axis it steps. */}
-      <ControlRow className="justify-center gap-5 px-4 pt-2">
+          smaller its copies are, how far along the axis it steps and how far
+          round it turns. Five knobs overrun a narrow inspector, so this row
+          WRAPS (the kinds row's rule) rather than clipping its last knob. */}
+      <ControlRow className="flex-wrap justify-center gap-x-5 gap-y-2 px-4 pt-2">
         <Knob b={rings} label="RINGS" format={(v) => `${Math.round(v)}`} />
         {stacked ? <Knob b={ringSpacing} label="SPACING" bipolar /> : null}
         {stacked ? <Knob b={ringSize} label="SCALE" /> : null}
         {stacked ? <Knob b={ringDepth} label="DEPTH" bipolar /> : null}
+        {stacked ? <Knob b={ringTwist} label="TWIST" bipolar format={(v) => `${Math.round(v)}°`} /> : null}
       </ControlRow>
       <div className="flex flex-wrap items-start justify-center gap-4 px-4 pb-3 pt-2.5">
         {shape ? <KindSegmented b={shape} caption="SHAPE" testId="radial-shape" /> : null}
@@ -403,13 +409,14 @@ export const RadialSplitterUserInterfaceRenderer: UserInterfaceRendererDefinitio
   const ringSpacing = pool.num('ringSpacing', { optional: true })
   const ringSize = pool.num('ringSize', { optional: true })
   const ringDepth = pool.num('ringDepth', { optional: true })
+  const ringTwist = pool.num('ringTwist', { optional: true })
 
   if (!copies || !radius || !size || !plane) return <ParameterList parameters={parameters} />
 
   return (
     <RadialConsole bound={{
       copies, radius, size, plane, sweep, shape, growth, rise, facing,
-      rings, ringSpacing, ringSize, ringDepth, rest: pool.rest(),
+      rings, ringSpacing, ringSize, ringDepth, ringTwist, rest: pool.rest(),
     }} />
   )
 }

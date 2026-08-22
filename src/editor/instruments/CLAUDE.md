@@ -226,6 +226,31 @@ These four render `null` and post-process their scene's render target instead. T
 stencil stack (spec + essay in `overlapShapeCore.ts`, pinned by its test). Facts
 that cost time to establish, for the next instrument that wants set operations:
 
+- **Parity and COUNTING are two different recipes, and the instrument ships both**
+  (ORDERS, 2026-08-21). Parity inverts one bit; per-depth colours need the actual
+  coverage depth, so that recipe INCREMENTS a nibble instead and each fill tests
+  `lequal` (GL puts the ref on the LEFT, so `ref <= stencil` is "covered at least this
+  deep") and ZEROES the tally as it paints — that zero is what makes one pixel take
+  exactly one fill, replacing parity's DONE/BASE bits. Fills run **deepest first**, which
+  is the whole implementation of "depth past the last colour holds it": the first
+  threshold met owns the pixel. Three consequences worth knowing before touching it:
+  **the counted recipe needs no depth-clear pass** (it only runs in colour mode, where
+  the depth-1 fill catches everything the deeper ones missed, so there is no
+  owned-but-unpainted region — firing the clear there would punch a hole in painted
+  depth); **the parity flags moved to the HIGH nibble** so a counted track's tally can
+  own the low one, and two tracks running different recipes can cross without reading
+  each other's writes as their own (only which fill lands last is then unpredictable);
+  and **a count cannot be shifted into spare bits the way a flag can**, because the
+  increment carries — that asymmetry is why the flags moved rather than the tally.
+- **A pass list that varies with a param is still a MESH list, so mount the union and
+  toggle `visible`.** Deriving the passes from ORDERS would mean re-rendering React from
+  a param (invariant 4); both recipes hang off one list and `overlapShapePassActive`
+  picks per frame. The same switch expresses the two gates inside a recipe — cut-out
+  withholding the overlap fill, and a fill deeper than the last colour standing down —
+  so "which depths have colours" needs no separate mechanism at all. The instanced path
+  resolves the active set ONCE per frame and loops only those meshes, so the idle recipe
+  costs nothing per copy.
+
 - **Multi-pass = multiple sibling meshes with consecutive `renderOrder`s**, one
   material each. Because renderOrder interleaves ACROSS objects, the passes
   compose over every occurrence of every track of the instrument — which is

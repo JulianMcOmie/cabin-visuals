@@ -47,10 +47,25 @@
 // depth-sort against anything, so it stays invisible.)
 // overlapShapeCore.test.ts pins all of these orderings and masks.
 
-export const OVERLAP_PARITY_BIT = 0x01
-export const OVERLAP_DONE_BIT = 0x02
-export const OVERLAP_BASE_BIT = 0x04
-export const OVERLAP_OWNED_BIT = 0x08
+// The parity recipe's four flags live in the HIGH nibble so the counted
+// recipe's tally can own the LOW one outright: a count is ARITHMETIC (the
+// increment carries), so it cannot be shifted into spare high bits the way a
+// flag can, and two tracks running different recipes must not scribble on each
+// other's meaning where their shapes cross.
+export const OVERLAP_PARITY_BIT = 0x10
+export const OVERLAP_DONE_BIT = 0x20
+export const OVERLAP_BASE_BIT = 0x40
+export const OVERLAP_OWNED_BIT = 0x80
+
+/** The counted recipe's tally field: coverage depth, 0-15. A 16th coplanar
+ *  shape wraps the nibble back to 0 (the write mask keeps the carry out of the
+ *  parity flags), which reads as uncovered - the honest ceiling of counting in
+ *  four bits, and far past any formation worth colouring. */
+export const OVERLAP_COUNT_MASK = 0x0f
+
+/** How many overlap colours the instrument can hold past the base one, i.e.
+ *  coverage depths 2 … OVERLAP_MAX_ORDERS + 1. */
+export const OVERLAP_MAX_ORDERS = 4
 
 /** Render-order base for the pass stack. Above the default 0 so the depth
  *  prepass sees the scene's ordinary opaque objects already in the buffer,
@@ -58,7 +73,15 @@ export const OVERLAP_OWNED_BIT = 0x08
 export const OVERLAP_SHAPE_RENDER_ORDER = 20
 
 export interface OverlapShapePass {
-  name: 'depth' | 'mark' | 'parity' | 'overlap' | 'base' | 'depthClear' | 'cleanup'
+  name: 'depth' | 'mark' | 'parity' | 'count' | 'overlap' | 'base' | 'fill' | 'depthClear' | 'cleanup'
+  /** Which rule this pass serves. Both recipes are MOUNTED at once and one is
+   *  made visible per frame (see `overlapShapePassActive`): the pass list is
+   *  the mesh list, and rebuilding meshes from a param would mean re-rendering
+   *  React per frame - the engine's invariant 4. */
+  recipe: 'parity' | 'counted' | 'both'
+  /** For a colour-writing pass: the coverage depth it paints. 1 = the lone
+   *  shape (the base colour), 2 = two shapes crossing, and so on. */
+  order?: number
   renderOrder: number
   writesColor: boolean
   /** prepass = write depth (LessEqual); equal = test-only against the prepass;
@@ -67,23 +90,52 @@ export interface OverlapShapePass {
    *  (the cleanup must reach occluded pixels). */
   depth: 'prepass' | 'equal' | 'clear' | 'ignore'
   stencil?: {
-    func: 'always' | 'equal'
+    /** GL puts the REFERENCE on the left: `lequal` passes where ref <= stencil,
+     *  which is how a fill says "covered at least this deep". */
+    func: 'always' | 'equal' | 'lequal'
     ref: number
     funcMask: number
-    zPass: 'invert' | 'zero' | 'replace'
+    zPass: 'invert' | 'zero' | 'replace' | 'increment'
     writeMask: number
+  }
+}
+
+/** The counted recipe's fill for coverage depth `order`: paint where the tally
+ *  has reached at least `order`, then ZERO the tally. Zeroing is what makes one
+ *  pixel take exactly one fill - the sibling occurrences drawing the same pass
+ *  find nothing left to paint, and the shallower fills below skip it too. That
+ *  is also why the fills run DEEPEST FIRST: the first one whose threshold is
+ *  met owns the pixel, so depths past the last colour hold that colour instead
+ *  of falling through to the base. */
+function countedFill(order: number, renderOrder: number): OverlapShapePass {
+  return {
+    name: 'fill',
+    recipe: 'counted',
+    order,
+    renderOrder,
+    writesColor: true,
+    depth: 'equal',
+    stencil: {
+      func: 'lequal',
+      ref: order,
+      funcMask: OVERLAP_COUNT_MASK,
+      zPass: 'zero',
+      writeMask: OVERLAP_COUNT_MASK,
+    },
   }
 }
 
 export const OVERLAP_SHAPE_PASSES: readonly OverlapShapePass[] = [
   {
     name: 'depth',
+    recipe: 'both',
     renderOrder: OVERLAP_SHAPE_RENDER_ORDER,
     writesColor: false,
     depth: 'prepass',
   },
   {
     name: 'mark',
+    recipe: 'parity',
     renderOrder: OVERLAP_SHAPE_RENDER_ORDER + 1,
     writesColor: false,
     depth: 'equal',
@@ -93,14 +145,28 @@ export const OVERLAP_SHAPE_PASSES: readonly OverlapShapePass[] = [
   },
   {
     name: 'parity',
+    recipe: 'parity',
     renderOrder: OVERLAP_SHAPE_RENDER_ORDER + 2,
     writesColor: false,
     depth: 'equal',
     stencil: { func: 'always', ref: 0, funcMask: 0xff, zPass: 'invert', writeMask: OVERLAP_PARITY_BIT },
   },
   {
-    name: 'overlap',
+    // The counted recipe's answer to `parity`: tally coverage instead of
+    // toggling it. Same Equal-depth gate, so it counts exactly the coplanar
+    // set the parity bit would have flipped.
+    name: 'count',
+    recipe: 'counted',
     renderOrder: OVERLAP_SHAPE_RENDER_ORDER + 3,
+    writesColor: false,
+    depth: 'equal',
+    stencil: { func: 'always', ref: 0, funcMask: 0xff, zPass: 'increment', writeMask: OVERLAP_COUNT_MASK },
+  },
+  {
+    name: 'overlap',
+    recipe: 'parity',
+    order: 2,
+    renderOrder: OVERLAP_SHAPE_RENDER_ORDER + 4,
     writesColor: true,
     depth: 'equal',
     // Passes only where coverage is even AND not yet filled (parity and DONE
@@ -116,7 +182,9 @@ export const OVERLAP_SHAPE_PASSES: readonly OverlapShapePass[] = [
   },
   {
     name: 'base',
-    renderOrder: OVERLAP_SHAPE_RENDER_ORDER + 4,
+    recipe: 'parity',
+    order: 1,
+    renderOrder: OVERLAP_SHAPE_RENDER_ORDER + 5,
     writesColor: true,
     depth: 'equal',
     // Odd parity, not yet drawn (BASE still 0); setting BASE makes a triple-
@@ -131,14 +199,22 @@ export const OVERLAP_SHAPE_PASSES: readonly OverlapShapePass[] = [
       writeMask: OVERLAP_BASE_BIT,
     },
   },
+  // The counted fills, DEEPEST FIRST - see countedFill. The deepest ones sit
+  // idle until ORDERS reaches them (a hidden fill is exactly "this depth holds
+  // the colour above it"), and the shallowest, depth 1, is the counted
+  // recipe's base fill.
+  ...Array.from({ length: OVERLAP_MAX_ORDERS + 1 }, (_, i) =>
+    countedFill(OVERLAP_MAX_ORDERS + 1 - i, OVERLAP_SHAPE_RENDER_ORDER + 6 + i)),
   {
     name: 'depthClear',
-    renderOrder: OVERLAP_SHAPE_RENDER_ORDER + 5,
+    recipe: 'parity',
+    renderOrder: OVERLAP_SHAPE_RENDER_ORDER + 6 + OVERLAP_MAX_ORDERS + 1,
     writesColor: false,
     depth: 'clear',
     // Exactly OWNED across all four bits = our plane, nothing painted = a
     // cutout. Zeroing as it clears retires the pixel so sibling depth-clear
-    // passes skip it.
+    // passes skip it. The counted recipe needs no such pass: it only runs in
+    // colour mode, where every owned pixel takes a fill.
     stencil: {
       func: 'equal',
       ref: OVERLAP_OWNED_BIT,
@@ -149,12 +225,53 @@ export const OVERLAP_SHAPE_PASSES: readonly OverlapShapePass[] = [
   },
   {
     name: 'cleanup',
-    renderOrder: OVERLAP_SHAPE_RENDER_ORDER + 6,
+    recipe: 'both',
+    renderOrder: OVERLAP_SHAPE_RENDER_ORDER + 6 + OVERLAP_MAX_ORDERS + 2,
     writesColor: false,
     depth: 'ignore',
     stencil: { func: 'always', ref: 0, funcMask: 0xff, zPass: 'zero', writeMask: 0xff },
   },
 ]
+
+/** How many overlap colours are in play: 1 is the parity flip the instrument
+ *  shipped with, 2+ switches the whole track to the counted recipe. */
+export function overlapShapeOrders(value: number): number {
+  const n = Math.round(value)
+  return Math.max(1, Math.min(OVERLAP_MAX_ORDERS, Number.isFinite(n) ? n : 1))
+}
+
+/** Whether the counted recipe (per-depth colours) is the one running: colour
+ *  mode with more than one overlap colour. Cut-out has no colours to grade, so
+ *  it always keeps the parity rule. */
+export function overlapShapeCounted(overlapOn: boolean, orders: number): boolean {
+  return overlapOn && overlapShapeOrders(orders) > 1
+}
+
+/**
+ * Which of the mounted passes draw this frame. Both recipes hang off one mesh
+ * list (the type's note on `recipe` says why), so this is the switch between
+ * them - plus the two gates inside a recipe: the parity overlap fill is what
+ * cut-out mode withholds, and a counted fill deeper than the last colour stays
+ * dark so its depth holds that colour.
+ */
+export function overlapShapePassActive(
+  pass: OverlapShapePass,
+  { overlapOn, orders }: { overlapOn: boolean; orders: number },
+): boolean {
+  const counted = overlapShapeCounted(overlapOn, orders)
+  if (pass.recipe === 'parity' && counted) return false
+  if (pass.recipe === 'counted' && !counted) return false
+  if (pass.name === 'overlap') return overlapOn
+  if (pass.name === 'fill') return (pass.order ?? 1) <= overlapShapeOrders(orders) + 1
+  return true
+}
+
+/** The instrument's colour param a fill pass paints with: depth 1 is the shape
+ *  itself, and each depth past it wears its own overlap colour. Returned as a
+ *  param KEY so the caller reads the shifted value the frame already resolved. */
+export function overlapShapeFillParam(order: number): string {
+  return order <= 1 ? 'baseColor' : order === 2 ? 'overlapColor' : `overlapColor${order}`
+}
 
 // ── The shape vocabulary ────────────────────────────────────────────────────
 

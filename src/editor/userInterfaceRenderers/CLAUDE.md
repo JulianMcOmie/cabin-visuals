@@ -215,6 +215,18 @@ with COPIES/SPACING while GROWTH drops to the modifier row, and Tunnel's geometr
 gained a fourth knob and therefore `flex-wrap` — four knobs plus its stepper column
 overrun a narrow inspector pane, and a fixed-size knob row CLIPS rather than shrinking.
 
+**SVG can only say INTERSECTION by nesting clipPaths, and that is enough to preview a
+set operation honestly.** `OverlapShapeUserInterface`'s counted preview paints one group
+per subset of its shapes — a chain of `<g clip-path>` per member with the painting path
+innermost — walked in ASCENDING depth, so the deeper region simply covers the shallower
+one containing it and each ends up wearing its own depth's colour. It is the same
+"deepest wins" the instrument's stencil fills get from running deepest-first, which is
+the point: the panel demonstrates the rule rather than illustrating it. That panel also
+shows **a preview may be two previews** — the instrument has two rules (a parity flip, a
+per-depth count) and one picture cannot make both claims, so the parity mode keeps its
+two-shape `evenodd` glide and the counted mode gets a rosette of `orders + 1` copies
+breathing through each other with every depth on screen at once.
+
 **Give a stage zone a FIXED width, never a percentage.** The settings panel is
 user-resizable; a `w-[38%]` stage that looked right in a 300px sidebar became a wide
 empty field with a 34px object marooned in the middle of it the moment the panel was

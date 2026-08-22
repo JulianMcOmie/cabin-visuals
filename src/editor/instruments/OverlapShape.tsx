@@ -1,4 +1,4 @@
-import { OVERLAP_SHAPE_OPTIONS } from './overlapShapeCore'
+import { OVERLAP_MAX_ORDERS, OVERLAP_SHAPE_OPTIONS } from './overlapShapeCore'
 import { lazyInstrument } from './lazyInstrument'
 import type { MidiRowDef, ObjectInstrumentDef, ParamDef } from './types'
 
@@ -7,6 +7,16 @@ import type { MidiRowDef, ObjectInstrumentDef, ParamDef } from './types'
 // splitter copies, mover-driven passes, even another Overlap Shape track), the
 // overlap region flips: a clean cutout to whatever is behind, or a second
 // picked color. Shapes at different depths just occlude like any solid.
+//
+// ORDERS is how many overlap colors that second one grows into. At 1 the rule
+// is the parity flip it shipped with - odd coverage base, even coverage
+// overlap, so three stacked shapes come back to the base color. Past 1 the
+// instrument stops flipping and starts COUNTING: two crossing shapes wear the
+// first overlap color, three the second, and coverage deeper than the last
+// color HOLDS it. The two rules are different stencil recipes (parity inverts
+// a bit; counting tallies a nibble), which is why 1 is not merely "the ramp
+// with one stop" and why every project written before ORDERS existed renders
+// exactly as it did.
 //
 // The whole mechanism is the five-pass stencil recipe in overlapShapeCore.ts
 // (see the essay there); ./OverlapShapeVisual (lazy: fetched when a project
@@ -17,6 +27,10 @@ import type { MidiRowDef, ObjectInstrumentDef, ParamDef } from './types'
 
 export const DEFAULT_OVERLAP_SHAPE_BASE_COLOR = '#ff5470'
 export const DEFAULT_OVERLAP_SHAPE_OVERLAP_COLOR = '#2dd4bf'
+/** Depths 3, 4 and 5+, defaulted as a continuing walk (teal → blue → violet →
+ *  a warm near-white), so raising ORDERS shows a ramp rather than four pills
+ *  of the same teal that all have to be dialled before anything reads. */
+export const DEFAULT_OVERLAP_SHAPE_DEEP_COLORS = ['#3b82f6', '#a855f7', '#fff1c9'] as const
 
 export const OVERLAP_MODE = { cutOut: 0, color: 1 } as const
 
@@ -48,6 +62,29 @@ const PARAMS: ParamDef[] = [
     default: DEFAULT_OVERLAP_SHAPE_OVERLAP_COLOR,
     showIf: 'overlapMode=1',
   },
+  // How many overlap colors deep the count goes. showIf pins it to Color mode
+  // (cut-out has nothing to grade); the per-depth colors below can only gate
+  // on the same mode - `showIf` compares against 0.5 or pins ONE select value,
+  // so "orders >= 3" is not sayable - and the bespoke panel reveals them one
+  // by one from the knob, exactly as Radial's RINGS reveals its own knobs.
+  {
+    key: 'overlapOrders',
+    label: 'Orders',
+    min: 1,
+    max: OVERLAP_MAX_ORDERS,
+    step: 1,
+    default: 1,
+    showIf: 'overlapMode=1',
+  },
+  ...DEFAULT_OVERLAP_SHAPE_DEEP_COLORS.map((hex, i) => ({
+    // Keyed by the coverage DEPTH they paint (overlapColor is depth 2), so a
+    // key says what it colors: overlapColor3 is three shapes crossing.
+    key: `overlapColor${i + 3}`,
+    label: `${i + 3}× Color`,
+    type: 'color' as const,
+    default: hex,
+    showIf: 'overlapMode=1',
+  })),
 ]
 
 // The basic-shapes pulse vocabulary: notes swell the shape, pitch = strength.
