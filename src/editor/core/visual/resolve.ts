@@ -36,7 +36,7 @@ import { orderedSwitcherBindings } from '../switcherBindings'
 import { identitySV } from './stateVector'
 import { flattenTrackNotes as flattenTrackNotesRaw } from './noteFlatten'
 import { isSceneTrackId } from '../sceneTrack'
-import { clipsFromNotes, isLyricClipNote } from './lyricClips'
+import { carriesLyricClips, clipsFromNotes, isLyricClipNote } from './lyricClips'
 
 /** The slice of the project the resolver reads. ProjectStore's state satisfies it
  *  structurally, so the engine never imports the store's internals. */
@@ -1202,8 +1202,11 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       // performance notes they always were — a clip must never register as note
       // energy or activity — while the clips arrive already flattened, so a
       // looped block tiles its phrases and a moved block carries them.
+      // Gated on the INSTRUMENT, not the pitch alone: on every other
+      // instrument a pitch-61 note is just C#4, and filtering by pitch
+      // deleted that note from every Midi Roll and cube in the app.
       const flatNotes = flattenTrackNotes(track, p)
-      const hasLyricClipNotes = flatNotes.some(isLyricClipNote)
+      const hasLyricClipNotes = carriesLyricClips(track) && flatNotes.some(isLyricClipNote)
       base = {
         trackId: id,
         instrumentId: track.instrumentId,

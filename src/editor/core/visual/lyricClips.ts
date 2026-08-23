@@ -51,6 +51,17 @@ export const PITCH_LYRIC_CLIP = STYLE_PITCH_TOP + 1
 
 export const isLyricClipNote = (note: { pitch: number }) => note.pitch === PITCH_LYRIC_CLIP
 
+/**
+ * The ONE instrument whose pitch-61 notes are lyric clips. Every other
+ * instrument's C#4 is an ordinary note, and the engine must treat it as one:
+ * keying the clip split on pitch alone silently deleted C#4 from every Midi
+ * Roll, cube and laser in the app (found 2026-08-22 - "some of the notes
+ * don't show"). Anything that special-cases `isLyricClipNote` outside a text
+ * track's own editor must gate on this first.
+ */
+export const LYRIC_INSTRUMENT_ID = 'textDisplay'
+export const carriesLyricClips = (track: { instrumentId?: string }) => track.instrumentId === LYRIC_INSTRUMENT_ID
+
 /** The default phrase payload a freshly drawn clip note carries. */
 export function emptyLyricPayload(): LyricNotePayload {
   return { words: [], layout: { kind: 'one' } }

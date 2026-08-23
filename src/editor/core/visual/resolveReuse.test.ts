@@ -125,3 +125,16 @@ test('an unchanged global mover keeps one shared instance across resolves', () =
   assert.equal(first.moverAndSplitterChain.length, 1)
   assert.equal(first.moverAndSplitterChain[0], second.moverAndSplitterChain[0])
 })
+
+// Regression (2026-08-22): the lyric-clip split keyed on pitch alone, so a
+// C#4 (pitch 61) vanished from every Midi Roll and cube - only Text Display
+// owns clip notes, and only there may pitch 61 leave the note stream.
+test('pitch 61 stays a note on every instrument but Text Display', () => {
+  const roll = track({ id: 'roll', instrumentId: 'midiRoll', blocks: [block([{ pitch: 61, startBeat: 0 }, { pitch: 60, startBeat: 1 }])] })
+  const text = track({ id: 'text', instrumentId: 'textDisplay', blocks: [block([{ pitch: 61, startBeat: 0 }, { pitch: 58, startBeat: 1 }])] })
+  const p = snapshot([roll, text], ['roll', 'text'])
+  assert.deepEqual(findObj(p, 'roll').notes.map((n) => n.pitch), [61, 60])
+  assert.equal(findObj(p, 'roll').lyricClips, undefined)
+  assert.deepEqual(findObj(p, 'text').notes.map((n) => n.pitch), [58])
+  assert.equal(findObj(p, 'text').lyricClips?.length, 1)
+})

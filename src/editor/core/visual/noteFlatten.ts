@@ -1,6 +1,6 @@
 import type { Block, Note, Track } from '../../types'
 import type { ResolvedNote } from './types'
-import { isLyricClipNote } from './lyricClips'
+import { carriesLyricClips, isLyricClipNote } from './lyricClips'
 
 /** Hard ceiling on notes emitted per block, so a tiny pattern stretched across a
  *  huge block can never hang the resolve. */
@@ -59,8 +59,12 @@ export function tileLoopNotes(notes: Note[], loopBeats: number, blockBeats: numb
   return out
 }
 
-/** Flatten block-local notes into absolute project beats, expanding looped blocks at resolve time. */
-export function flattenBlocks(blocks: Block[], beatsPerBar: number, totalBars?: number): ResolvedNote[] {
+/** Flatten block-local notes into absolute project beats, expanding looped
+ *  blocks at resolve time. `lyricClips` says the blocks belong to a TEXT
+ *  track, whose pitch-61 notes are phrase spans with block-edge exemptions
+ *  (below); off - the default, and what every other caller wants - a
+ *  pitch-61 note is C#4 and is culled and truncated like any other. */
+export function flattenBlocks(blocks: Block[], beatsPerBar: number, totalBars?: number, lyricClips = false): ResolvedNote[] {
   const notes: ResolvedNote[] = []
   const projectEndBeat = totalBars == null ? Infinity : totalBars * beatsPerBar
   for (const block of blocks) {
@@ -93,7 +97,7 @@ export function flattenBlocks(blocks: Block[], beatsPerBar: number, totalBars?: 
         // before they became notes (schema v16), and a phrase that reaches past
         // its block must keep working rather than going silently inert. It still
         // RIDES the block - its beat is block-relative like any note.
-        const isClip = isLyricClipNote(note)
+        const isClip = lyricClips && isLyricClipNote(note)
         if (!isClip && (beat < blockStartBeat || beat >= blockEndBeat)) continue
         notes.push({
           id: note.id,
@@ -113,7 +117,7 @@ export function flattenBlocks(blocks: Block[], beatsPerBar: number, totalBars?: 
 }
 
 export function flattenTrackNotes(track: Track, beatsPerBar: number, totalBars?: number): ResolvedNote[] {
-  return flattenBlocks(track.blocks, beatsPerBar, totalBars)
+  return flattenBlocks(track.blocks, beatsPerBar, totalBars, carriesLyricClips(track))
 }
 
 // The composition instruments (core/directors) flatten their track's notes on
@@ -129,15 +133,19 @@ export function flattenTrackNotes(track: Track, beatsPerBar: number, totalBars?:
 interface FlattenMemo {
   beatsPerBar: number
   totalBars: number | undefined
+  /** Part of the key: an instrument swap keeps the blocks' identity but can
+   *  change whether pitch 61 is a clip or a note. */
+  lyricClips: boolean
   notes: ResolvedNote[]
 }
 const flattenMemo = new WeakMap<Block[], FlattenMemo>()
 
 export function flattenTrackNotesMemo(track: Track, beatsPerBar: number, totalBars?: number): ResolvedNote[] {
   const blocks = track.blocks
+  const lyricClips = carriesLyricClips(track)
   const hit = flattenMemo.get(blocks)
-  if (hit && hit.beatsPerBar === beatsPerBar && hit.totalBars === totalBars) return hit.notes
-  const notes = flattenBlocks(blocks, beatsPerBar, totalBars)
-  flattenMemo.set(blocks, { beatsPerBar, totalBars, notes })
+  if (hit && hit.beatsPerBar === beatsPerBar && hit.totalBars === totalBars && hit.lyricClips === lyricClips) return hit.notes
+  const notes = flattenBlocks(blocks, beatsPerBar, totalBars, lyricClips)
+  flattenMemo.set(blocks, { beatsPerBar, totalBars, lyricClips, notes })
   return notes
 }

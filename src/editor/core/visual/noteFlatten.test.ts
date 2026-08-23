@@ -152,3 +152,15 @@ test('tileLoopNotes marks repeat indices and preserves in-window phases exactly'
   assert.deepEqual(tileLoopNotes([note('a', 0, 1)], 0, 8), [])
   assert.deepEqual(tileLoopNotes([note('a', 0, 1)], 4, 0), [])
 })
+
+// Pitch 61 is C#4 on every instrument but Text Display, whose lyric CLIPS
+// live there. The clip exemptions (no block-edge cull, no truncation) must
+// only apply when the caller says the blocks belong to a text track -
+// keying them on the pitch alone silently special-cased C#4 everywhere.
+test('pitch 61 is an ordinary note unless the blocks carry lyric clips', () => {
+  const blocks = [block({ durationBars: 1, notes: [note('c#4', 3, 4, 61), note('past', 5, 1, 61)] })]
+  const plain = flattenBlocks(blocks, 4)
+  assert.deepEqual(plain.map((n) => [n.beat, n.durationBeats]), [[3, 1]])
+  const text = flattenBlocks(blocks, 4, undefined, true)
+  assert.deepEqual(text.map((n) => [n.beat, n.durationBeats]), [[3, 4], [5, 1]])
+})

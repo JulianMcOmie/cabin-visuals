@@ -14,6 +14,7 @@ import { selectTrack, selectTrackRange, shouldSuppressTrackSelect, toggleTrackIn
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { canPreview, clearInstrumentPreviewFor, setInstrumentPreview } from '../instrumentPreviewStore'
 import { flattenBlocks } from '../../core/visual/noteFlatten'
+import { carriesLyricClips } from '../../core/visual/lyricClips'
 import { resolveDeclaredMidiRows } from '../midi/resolveDeclaredRows'
 import type { InstrumentItem } from '../LeftSidebar'
 import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react'
@@ -187,7 +188,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
       // fallback when the row can't resolve to an object (e.g. an unrouted
       // mover), which drops to the generic library preview.
       const { beatsPerBar, totalBars } = useProjectStore.getState()
-      const notes = flattenBlocks(track.blocks, beatsPerBar, totalBars)
+      const notes = flattenBlocks(track.blocks, beatsPerBar, totalBars, carriesLyricClips(track))
       setInstrumentPreview({
         item: previewItem,
         anchor: { left: rect.right, top: rect.top },
