@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { Matrix4, Vector3 } from 'three'
 import type { ResolvedNote } from '../visual/types'
 import { identityVisualCopy } from './identityVisualCopy'
 import { resolveVisualCopies } from './resolveVisualCopies'
@@ -31,6 +32,15 @@ function localXOf(copy: VisualCopy): [number, number, number] {
   const len = Math.hypot(e[0], e[1], e[2]) || 1
   const r = (n: number) => Math.round((n / len) * 1e9) / 1e9 || 0
   return [r(e[0]), r(e[1]), r(e[2])]
+}
+
+/** The copy's own +Z direction in world axes - three's FORWARD, the one
+ *  `lookAt` aims and therefore the one "facing the center" is about. */
+function localZOf(copy: VisualCopy): [number, number, number] {
+  const e = copy.transform.elements
+  const len = Math.hypot(e[8], e[9], e[10]) || 1
+  const r = (n: number) => Math.round((n / len) * 1e9) / 1e9 || 0
+  return [r(e[8]), r(e[9]), r(e[10])]
 }
 
 /** Per-axis scale: the lengths of the matrix's three basis columns. */
@@ -256,6 +266,7 @@ test('the polar options all default to the plain ring, and an old save merges to
   assert.equal(DEFAULTS.shape, 0)
   assert.equal(DEFAULTS.growth, 1)
   assert.equal(DEFAULTS.rise, 0)
+  assert.equal(DEFAULTS.tilt, 0)
   assert.equal(DEFAULTS.facing, 0)
 
   // A save written before the options existed carries none of the keys; it
@@ -552,4 +563,143 @@ test('facing re-aims each copy without moving it, and picks the frame movers bel
     [-1, 0, 0],
     [1, -2, 0],
   ])
+})
+
+
+test('tilt nods every copy about its OWN tangent - the ring closes, it does not lean', () => {
+  const tilted = (overrides: Partial<RadialSettings>) => resolveVisualCopies([
+    radialSplitter.resolve({ settings: settings({ copies: 4, radius: 2, ...overrides }), notes: [] }),
+  ], 0)
+
+  // A quarter turn tips every copy's outward +X onto the ring's OWN axis: the
+  // umbrella fully closed. That the four copies agree in world space is the
+  // whole point - a uniform world-axis rotation would send them four ways.
+  assert.deepEqual(tilted({ tilt: 90 }).map(localXOf), [
+    [0, 0, 1], [0, 0, 1], [0, 0, 1], [0, 0, 1],
+  ])
+  // The opposite sign opens it the other way, so the knob is genuinely bipolar.
+  assert.deepEqual(tilted({ tilt: -90 }).map(localXOf), [
+    [0, 0, -1], [0, 0, -1], [0, 0, -1], [0, 0, -1],
+  ])
+  // Half way is half way, per copy: the outward radial lifted 45 deg toward +Z.
+  const h = Math.SQRT1_2
+  const near = (a: number[], b: number[]) => a.every((v, i) => Math.abs(v - b[i]) < 1e-9)
+  const diagonal = tilted({ tilt: 45 }).map(localXOf)
+  assert.ok(near(diagonal[0], [h, 0, h]))
+  assert.ok(near(diagonal[1], [0, h, h]))
+  assert.ok(near(diagonal[2], [-h, 0, h]))
+  assert.ok(near(diagonal[3], [0, -h, h]))
+
+  // Like FACING, it rides inside the slot: nothing moves.
+  for (const tilt of [30, 90, 180, -120]) {
+    assert.deepEqual(tilted({ tilt }).map(positionOf), [[2, 0, 0], [0, 2, 0], [-2, 0, 0], [0, -2, 0]])
+  }
+})
+
+test('the tilt is a turn about the tangent LINE through each copy, in every plane and facing mode', () => {
+  // The invariant the composition order exists to protect: whatever FACING
+  // does, a tilted copy is the untilted copy turned about the ring's tangent
+  // where it SITS - anchored on its own center, so it never moves. Upright is
+  // the case that would break under the other order (it cancels the slot
+  // rotation, so a tilt applied after it would lean all the copies the same
+  // way in world space instead of closing the ring).
+  const AXES = [new Vector3(0, 0, 1), new Vector3(0, 1, 0), new Vector3(1, 0, 0)]
+  const DIRS = [new Vector3(1, 0, 0), new Vector3(1, 0, 0), new Vector3(0, 1, 0)]
+  const tilt = 37
+
+  // RINGS is in the sweep because it is the one thing that can change which
+  // bearing a slot wears - ring-major indices plus RING TWIST added to the
+  // angle - and the tilt has to follow the bearing, not the copy's ordinal.
+  const rings = 2
+  const ringTwist = 25
+
+  for (const plane of [0, 1, 2]) {
+    const base = settings({
+      copies: 5, radius: 2, plane, sweep: 360, rings, ringSpacing: 1, ringDepth: 0.4, ringTwist,
+    })
+    for (const facing of [0, 1, 2, 3]) {
+      const flat = resolveVisualCopies([
+        radialSplitter.resolve({ settings: { ...base, facing }, notes: [] }),
+      ], 0)
+      const nodded = resolveVisualCopies([
+        radialSplitter.resolve({ settings: { ...base, facing, tilt }, notes: [] }),
+      ], 0)
+      assert.equal(flat.length, rings * 5)
+      flat.forEach((copy, index) => {
+        const angle = ((index % 5) / 5) * Math.PI * 2
+          + (Math.floor(index / 5) * ringTwist * Math.PI) / 180
+        // The tangent where this copy sits: the slot's own local tangent
+        // carried around the ring by the slot rotation.
+        const tangent = DIRS[plane].clone().cross(AXES[plane])
+          .applyMatrix4(new Matrix4().makeRotationAxis(AXES[plane], angle))
+        const [x, y, z] = positionOf(copy)
+        const home = new Matrix4().makeTranslation(x, y, z)
+        const expected = home.clone()
+          .multiply(new Matrix4().makeRotationAxis(tangent, (tilt * Math.PI) / 180))
+          .multiply(home.clone().invert())
+          .multiply(copy.transform)
+        nodded[index].transform.elements.forEach((value, i) => {
+          assert.ok(
+            Math.abs(value - expected.elements[i]) < 1e-9,
+            `plane ${plane} facing ${facing} copy ${index} element ${i}: ${value} vs ${expected.elements[i]}`,
+          )
+        })
+      })
+    }
+  }
+})
+
+test('facing the center aims each copy\'s forward axis at the ring center, in every plane', () => {
+  for (const plane of [0, 1, 2]) {
+    const copies = resolveVisualCopies([
+      radialSplitter.resolve({
+        settings: settings({ copies: 5, radius: 2, plane, facing: 3 }),
+        notes: [],
+      }),
+    ], 0)
+    copies.forEach((copy) => {
+      // "Faces the center" IS this: local +Z along the inward radial, which
+      // for a centered ring is the copy's own position negated.
+      const position = positionOf(copy)
+      const length = Math.hypot(...position) || 1
+      const inward = position.map((v) => -v / length)
+      localZOf(copy).forEach((value, i) => {
+        assert.ok(Math.abs(value - inward[i]) < 1e-9, `plane ${plane}: ${value} vs ${inward[i]}`)
+      })
+    })
+
+    // And it re-aims without moving anything - the same rule the other three
+    // facing modes follow.
+    const outward = resolveVisualCopies([
+      radialSplitter.resolve({ settings: settings({ copies: 5, radius: 2, plane }), notes: [] }),
+    ], 0)
+    assert.deepEqual(copies.map(positionOf), outward.map(positionOf))
+  }
+
+  // What the fix costs differs by plane, and only because of where local +Z
+  // starts. On a ring seen EDGE-ON the fix turns about the ring's own axis, so
+  // the copies just swivel and the axis-aligned basis vector is untouched...
+  const swivel = (plane: number, column: number) => {
+    const copy = resolveVisualCopies([
+      radialSplitter.resolve({ settings: settings({ copies: 3, radius: 2, plane, facing: 3 }), notes: [] }),
+    ], 0)[1]
+    return [copy.transform.elements[column], copy.transform.elements[column + 1], copy.transform.elements[column + 2]]
+  }
+  // XZ turns about +Y, so the copy's own UP survives: it stands and swivels.
+  swivel(1, 4).forEach((value, i) => assert.ok(Math.abs(value - [0, 1, 0][i]) < 1e-9))
+  // YZ turns about +X, so the copy's own +X survives.
+  swivel(2, 0).forEach((value, i) => assert.ok(Math.abs(value - [1, 0, 0][i]) < 1e-9))
+  // ...but a ring seen FACE-ON (XY) has local +Z pointing at the camera, so
+  // the only way to aim it inward is to pitch OUT of the ring plane: the
+  // copies go edge-on, their up swung onto the tangent. Stated, not an
+  // oversight - TILT is the knob that dials that back.
+  const faceOn = resolveVisualCopies([
+    radialSplitter.resolve({ settings: settings({ copies: 4, radius: 2, facing: 3 }), notes: [] }),
+  ], 0)
+  const upOf = (copy: VisualCopy) => {
+    const e = copy.transform.elements
+    const r = (n: number) => Math.round(n * 1e9) / 1e9 || 0
+    return [r(e[4]), r(e[5]), r(e[6])]
+  }
+  assert.deepEqual(faceOn.map(upOf), [[0, 1, 0], [-1, 0, 0], [0, -1, 0], [1, 0, 0]])
 })

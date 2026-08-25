@@ -12,7 +12,8 @@
 //    until touched it turns on its own. No readouts or captions in the window:
 //    the knobs already say the numbers.
 // 2. Three rows, in the order the ring is built: the geometry knobs (COPIES /
-//    RADIUS primary / SIZE), then the polar modifiers (SWEEP / RISE, plus
+//    RADIUS primary / SIZE), then the polar modifiers (SWEEP / RISE / TILT -
+//    the ring's own nod, a polar modifier even though it moves nothing - plus
 //    GROWTH once SHAPE is spiral - the segment is what turns that knob on,
 //    exactly as the definition reads it), then the RINGS row, then the three
 //    KINDS as segmented controls (SHAPE / PLANE / FACING). Kinds last is
@@ -35,6 +36,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
 import { RADIAL_COLOR } from '../core/visualCopies/identityColors'
 import {
+  RADIAL_FACING_CENTER,
   RADIAL_FACING_OUTWARD,
   RADIAL_FACING_PATH,
   RADIAL_FACING_UPRIGHT,
@@ -280,6 +282,7 @@ interface RadialBindings {
   shape: SelectBinding | null
   growth: NumBinding | null
   rise: NumBinding | null
+  tilt: NumBinding | null
   facing: SelectBinding | null
   rings: NumBinding | null
   ringSpacing: NumBinding | null
@@ -292,7 +295,7 @@ interface RadialBindings {
 /** Hooks live here, below the renderer's fallback branch. */
 function RadialConsole({ bound }: { bound: RadialBindings }) {
   const {
-    copies, radius, size, plane, sweep, shape, growth, rise, facing,
+    copies, radius, size, plane, sweep, shape, growth, rise, tilt, facing,
     rings, ringSpacing, ringSize, ringDepth, ringTwist, rest,
   } = bound
   const { value: copiesValue } = copies
@@ -305,6 +308,7 @@ function RadialConsole({ bound }: { bound: RadialBindings }) {
   const shapeValue = shape?.value
   const growthValue = growth?.value
   const riseValue = rise?.value
+  const tiltValue = tilt?.value
   const facingValue = facing?.value
   const ringsValue = rings?.value
   const ringSpacingValue = ringSpacing?.value
@@ -328,6 +332,7 @@ function RadialConsole({ bound }: { bound: RadialBindings }) {
       shape: shapeValue ?? base.shape,
       growth: growthValue ?? base.growth,
       rise: riseValue ?? base.rise,
+      tilt: tiltValue ?? base.tilt,
       facing: facingValue ?? base.facing,
       rings: ringsValue ?? base.rings,
       ringSpacing: ringSpacingValue ?? base.ringSpacing,
@@ -337,7 +342,7 @@ function RadialConsole({ bound }: { bound: RadialBindings }) {
     }
   }, [
     copiesValue, radiusValue, sizeValue, planeValue,
-    sweepValue, shapeValue, growthValue, riseValue, facingValue,
+    sweepValue, shapeValue, growthValue, riseValue, tiltValue, facingValue,
     ringsValue, ringSpacingValue, ringSizeValue, ringDepthValue, ringTwistValue,
   ])
 
@@ -352,10 +357,12 @@ function RadialConsole({ bound }: { bound: RadialBindings }) {
       </ControlRow>
       {/* The polar modifiers: what the ring does on top of being a ring.
           GROWTH renders only in spiral mode - the SHAPE segment is what turns
-          it on, matching the definition (a stored growth is inert until then). */}
-      <ControlRow className="justify-center gap-5 px-4 pt-2">
+          it on, matching the definition (a stored growth is inert until then).
+          Spiral makes this four knobs, so it WRAPS like the rings row below. */}
+      <ControlRow className="flex-wrap justify-center gap-x-5 gap-y-2 px-4 pt-2">
         <Knob b={sweep} label="SWEEP" format={(v) => `${Math.round(v)}°`} />
         <Knob b={rise} label="RISE" bipolar />
+        <Knob b={tilt} label="TILT" bipolar format={(v) => `${Math.round(v)}°`} />
         {spiral ? <Knob b={growth} label="GROWTH" /> : null}
       </ControlRow>
       {/* RINGS and, once there is more than one, the four independent per-ring
@@ -381,6 +388,7 @@ function RadialConsole({ bound }: { bound: RadialBindings }) {
               [RADIAL_FACING_OUTWARD]: 'OUT',
               [RADIAL_FACING_UPRIGHT]: 'UP',
               [RADIAL_FACING_PATH]: 'PATH',
+              [RADIAL_FACING_CENTER]: 'IN',
             }}
             testId="radial-facing"
           />
@@ -404,6 +412,7 @@ export const RadialSplitterUserInterfaceRenderer: UserInterfaceRendererDefinitio
   const shape = pool.select('shape', { optional: true })
   const growth = pool.num('growth', { optional: true })
   const rise = pool.num('rise', { optional: true })
+  const tilt = pool.num('tilt', { optional: true })
   const facing = pool.select('facing', { optional: true })
   const rings = pool.num('rings', { optional: true })
   const ringSpacing = pool.num('ringSpacing', { optional: true })
@@ -415,7 +424,7 @@ export const RadialSplitterUserInterfaceRenderer: UserInterfaceRendererDefinitio
 
   return (
     <RadialConsole bound={{
-      copies, radius, size, plane, sweep, shape, growth, rise, facing,
+      copies, radius, size, plane, sweep, shape, growth, rise, tilt, facing,
       rings, ringSpacing, ringSize, ringDepth, ringTwist, rest: pool.rest(),
     }} />
   )

@@ -149,12 +149,22 @@ export const burstMover: MoverOrSplitterDefinition<BurstSettings> = {
 // - RISE steps each copy along the ring's own axis - also per copy, so it
 //   reads like Line's spacing. Ring + sweep > 360 + rise = a helix; add
 //   spiral growth and it is a cone or a vortex.
+// - TILT nods every copy about its OWN tangent to the ring - the one rotation
+//   a ring can wear that is still radially symmetric, so the formation reads
+//   as an umbrella opening and closing (and, past 90 deg, turning itself
+//   inside out) rather than as a rigid lean. Signed: + leans each copy's
+//   outward side toward the ring's +axis, - away from it. It is stated ONCE,
+//   in the slot's frame, and the slot rotation carries it around the ring for
+//   free; it rides inside the slot like FACING, so nothing moves.
 // - FACING says what each copy's frame does, which is a bigger decision than
 //   it looks: it also picks the axes every mover BELOW the splitter works in.
 //   Outward is the shipped behavior (local +X points away from the center);
 //   Upright cancels the slot rotation so copies keep the object's own
 //   orientation and the movers below get unrotated axes; Along path aims
-//   each copy down the ring's tangent.
+//   each copy down the ring's tangent; Face center turns the object's own
+//   FORWARD axis (local +Z, what lookAt aims) onto the center, which is the
+//   one an oriented instrument - a plane, a photo, text - actually reads as
+//   "pointing at" something.
 //
 // RINGS (2026-08) repeats that whole ring outward: N concentric copies of the
 // same slot set, each ring stepped by four INDEPENDENT per-ring amounts, all
@@ -209,7 +219,11 @@ export interface RadialSettings {
   growth: number
   /** Per-copy step along the ring's axis, in world units. 0 = flat ring. */
   rise: number
-  /** 0 = outward, 1 = upright (no slot rotation), 2 = along the path. */
+  /** Nod about each copy's own tangent, in degrees. + leans the copy's
+   *  outward side toward the ring's +axis; - leans it away. 0 = flat. */
+  tilt: number
+  /** 0 = outward, 1 = upright (no slot rotation), 2 = along the path,
+   *  3 = facing the center. */
   facing: number
   /** Concentric copies of the whole ring. 1 = the plain single ring. */
   rings: number
@@ -229,11 +243,25 @@ const RADIAL_RADIUS_MIN = 0
 const RADIAL_RADIUS_MAX = 10
 const RADIAL_AXES = [new Vector3(0, 0, 1), new Vector3(0, 1, 0), new Vector3(1, 0, 0)]
 const RADIAL_DIRECTIONS: [number, number, number][] = [[1, 0, 0], [1, 0, 0], [0, 1, 0]]
+// Each plane's LOCAL tangent and its face-the-center fix. Both are constants
+// per plane because the slot rotation is about `axis` and the outward radial is
+// the fixed basis vector `direction`, so the slot frame's own axes never
+// depend on the angle - which is exactly what makes both effects radially
+// symmetric for free (see the TILT and FACING notes above).
+//   tangent = direction x axis, so a POSITIVE tilt leans every copy's outward
+//   side toward the ring's +axis (the umbrella closing) whichever plane it is.
+const RADIAL_TANGENTS = RADIAL_AXES.map((axis, plane) => new Vector3(...RADIAL_DIRECTIONS[plane]).cross(axis))
+//   the face-center fix is the quarter turn taking local +Z (three's forward,
+//   what lookAt aims) onto the INWARD radial, -direction: about z x -direction.
+const RADIAL_FACE_CENTER_AXES = RADIAL_DIRECTIONS.map(
+  (direction) => new Vector3(0, 0, 1).cross(new Vector3(...direction).negate()),
+)
 export const RADIAL_SHAPE_CIRCULAR = 0
 export const RADIAL_SHAPE_SPIRAL = 1
 export const RADIAL_FACING_OUTWARD = 0
 export const RADIAL_FACING_UPRIGHT = 1
 export const RADIAL_FACING_PATH = 2
+export const RADIAL_FACING_CENTER = 3
 
 /** Where copy `index` sits along the sweep, in [0, 1]. A sweep of a whole
  *  number of turns is CLOSED - its two ends are the same place, so the copies
@@ -284,6 +312,7 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
     { key: 'growth', label: 'Growth', min: 0.5, max: 2, step: 0.01, default: 1 },
     { key: 'sweep', label: 'Sweep', min: 0, max: 1440, step: 5, default: 360 },
     { key: 'rise', label: 'Rise', min: -2, max: 2, step: 0.05, default: 0 },
+    { key: 'tilt', label: 'Tilt', min: -180, max: 180, step: 1, default: 0 },
     { key: 'rings', label: 'Rings', min: 1, max: RADIAL_MAX_RINGS, step: 1, default: 1 },
     { key: 'ringSpacing', label: 'Ring spacing', min: -5, max: 5, step: 0.1, default: 1 },
     { key: 'ringSize', label: 'Ring size', min: 0.25, max: 2, step: 0.01, default: 1 },
@@ -297,6 +326,7 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
         { value: RADIAL_FACING_OUTWARD, label: 'Outward' },
         { value: RADIAL_FACING_UPRIGHT, label: 'Upright' },
         { value: RADIAL_FACING_PATH, label: 'Along path' },
+        { value: RADIAL_FACING_CENTER, label: 'Face center' },
       ],
       default: RADIAL_FACING_OUTWARD,
     },
@@ -312,9 +342,21 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
     const sweep = Math.max(0, settings.sweep ?? 360)
     const rise = settings.rise ?? 0
     const growth = settings.shape === RADIAL_SHAPE_SPIRAL ? Math.max(0.05, settings.growth ?? 1) : 1
-    const facing = settings.facing === RADIAL_FACING_UPRIGHT || settings.facing === RADIAL_FACING_PATH
+    const facing = settings.facing === RADIAL_FACING_UPRIGHT
+      || settings.facing === RADIAL_FACING_PATH
+      || settings.facing === RADIAL_FACING_CENTER
       ? settings.facing
       : RADIAL_FACING_OUTWARD
+    // TILT is ONE rotation shared by every slot, because it is stated in the
+    // SLOT's frame: the same local nod becomes that slot's own tangent once the
+    // slot rotation places it (R . tilt . R^-1 = a turn about the WORLD
+    // tangent), so the formation keeps its radial symmetry with no per-copy
+    // math - RINGS and RING TWIST included, since both only change which
+    // bearing a slot wears. Identity at 0, which keeps an untouched save exact.
+    const tilt = settings.tilt ?? 0
+    const tiltFix = tilt === 0
+      ? null
+      : new Matrix4().makeRotationAxis(RADIAL_TANGENTS[plane], (tilt * Math.PI) / 180)
     const rings = Math.max(1, Math.min(RADIAL_MAX_RINGS, Math.round(settings.rings ?? 1)))
     const ringSpacing = settings.ringSpacing ?? 1
     const ringSize = Math.max(0.05, settings.ringSize ?? 1)
@@ -343,7 +385,15 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
         ? new Matrix4().makeRotationAxis(axis, -angle)
         : facing === RADIAL_FACING_PATH
           ? new Matrix4().makeRotationAxis(axis, Math.PI / 2)
-          : null
+          : facing === RADIAL_FACING_CENTER
+            // A quarter turn onto the INWARD radial, so the object's forward
+            // axis looks at the ring's center from wherever it sits. Same
+            // constant in every plane, because "which way is local +Z" is the
+            // only thing that decides it - which makes it a turn within the
+            // ring plane for a ring seen edge-on (XZ, YZ) and a pitch out of
+            // the ring plane for one seen face-on (XY).
+            ? new Matrix4().makeRotationAxis(RADIAL_FACE_CENTER_AXES[plane], Math.PI / 2)
+            : null
       return {
         rotation,
         faceFix,
@@ -380,6 +430,12 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
               direction[1] * slotRadius + axis.y * slot.rise,
               direction[2] * slotRadius + axis.z * slot.rise,
             ))
+          // TILT before FACING: the nod is measured on the slot's own frame,
+          // where it is radially symmetric, and the facing fix then re-aims
+          // whatever it left. The other order would let Upright cancel the
+          // slot rotation FIRST, and every copy would nod the same way in
+          // world space - a rigid lean, not a ring closing.
+          if (tiltFix) transform.multiply(tiltFix)
           if (slot.faceFix) transform.multiply(slot.faceFix)
           return {
             transform: applySplitterSize(transform, slot.size),

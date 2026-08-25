@@ -145,8 +145,17 @@ matrix-identical to the plain ring and none of them needed a persistence upgrade
   Outward (the default, and the only pre-2026-08-14 behavior) hands each copy its
   rotated axes, so a +X burst blooms the ring. Upright cancels the slot rotation, so
   the copies keep the object's own orientation AND a burst sends them all the same way.
-  Along path is a quarter turn on, aiming each copy down the tangent. The fix rides
-  INSIDE the slot (after the translation), so it re-aims without moving anything.
+  Along path is a quarter turn on, aiming each copy down the tangent. **Face center**
+  (2026-08-24) is the only one stated in terms of the object's FORWARD axis rather
+  than its +X: a quarter turn putting local +Z (what `lookAt` aims, so what an
+  oriented instrument — a plane, a photo, text — reads as "pointing at") on the
+  inward radial. One constant per plane, because where local +Z starts is the only
+  thing that decides it — which makes it a swivel *within* the ring plane on a ring
+  seen edge-on (XZ, YZ, and the copies stay upright) but a pitch OUT of the plane on
+  one seen face-on (XY, where +Z already points at the camera, so the copies go
+  edge-on with their up swung onto the tangent). That is geometry, not a bug; TILT is
+  the knob that dials it back. The fix rides INSIDE the slot (after the translation),
+  so it re-aims without moving anything.
 - **RINGS (2026-08-21) repeats the whole slot set outward**, with four
   INDEPENDENT per-ring amounts — SPACING (radius), RING SIZE (the copies), RING
   DEPTH (along the axis) and RING TWIST (degrees round it) — all anchored at ring 0, so ring 0 IS the single ring that
@@ -167,6 +176,19 @@ matrix-identical to the plain ring and none of them needed a persistence upgrade
   a ring is a contiguous run of indices and copy targeting's `runs` rule addresses one
   directly. The lane still samples ONE radius: the ring offsets ride on top of it, so
   a swelling lane moves the whole stack and keeps its spacing.
+- **TILT is the one rotation a ring can wear that stays radially symmetric** — a nod
+  about each copy's own TANGENT, so the ring opens and closes like an umbrella (and
+  turns itself inside out past 90°) instead of leaning rigidly. Signed: + leans each
+  copy's outward side toward the ring's +axis. It costs no per-copy math because it is
+  stated ONCE in the slot's frame and the slot rotation carries it around
+  (`R · tilt · R⁻¹` is a turn about the world tangent), which is exactly why
+  `RADIAL_TANGENTS` is a per-plane constant — the slot frame's own axes never depend
+  on the angle, RINGS and RING TWIST included, since both only change which bearing a
+  slot wears. **It composes BEFORE the facing fix**, and that order is load-bearing:
+  after it, Upright would have cancelled the slot rotation first and every copy would
+  nod the same way in world space. `radial.test.ts` pins the invariant across all
+  3 planes × 4 facings — a tilted copy is the untilted copy turned about the tangent
+  LINE THROUGH ITS OWN CENTER, so like facing it never moves anything.
 
 **`physics` — a VALUE lane joined by mechanics instead of by an easing curve.**
 Pitch names a scalar through the automation 36–84 encoding (as Radial's radius
