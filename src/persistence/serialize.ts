@@ -3,6 +3,7 @@ import { useAudioStore } from '../editor/store/AudioStore'
 import { useVideoStore } from '../editor/store/VideoStore'
 import { usePhotoStore } from '../editor/store/PhotoStore'
 import { useTimeStore } from '../editor/store/TimeStore'
+import { useUIStore } from '../editor/store/UIStore'
 import type { ProjectDocument } from './types'
 import { CURRENT_VERSION } from './upgrade'
 
@@ -63,4 +64,12 @@ export function hydrate(doc: ProjectDocument) {
   // through hydrate - undo restores ProjectStore directly - so undo never
   // yanks the playhead.
   useTimeStore.setState({ loopRegion: loopRegion ?? null, currentBeat: 0 })
+  // The timeline's scroll is the same kind of session-scoped module state, and
+  // needs the same reset for the same reason: TimelineArea restores it from
+  // here on mount (so returning from the MIDI editor lands where you left
+  // off), so without this a newly opened or freshly CREATED project inherits
+  // the previous one's scroll - and since an empty project is narrower, the
+  // browser clamps that offset to the end and the tracks area opens hard
+  // against its right edge, past the end of a song that isn't there yet.
+  useUIStore.setState({ tracksScrollLeft: 0, tracksScrollTop: 0 })
 }
