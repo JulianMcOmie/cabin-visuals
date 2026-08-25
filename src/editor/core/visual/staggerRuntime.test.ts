@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { Track } from '../../types'
+import { getInstrument } from '../../instruments'
+import { isNumberParam } from '../../instruments/types'
 import { identityVisualCopy } from '../visualCopies/identityVisualCopy'
 import { resolveVisualCopies } from '../visualCopies/resolveVisualCopies'
 import { STAGGER_SPAWN_PITCH } from '../visualCopies/stagger'
 import { resolveProject, type ProjectSnapshot } from './resolve'
+import { computeAtBeat, getObjectState, isTrackStaggered, setProject } from './VisualEngine'
 
 // The Stagger's WIRING: that a stagger track resolves into the chain through
 // resolveProject, that the copies below it latch per birth end to end, that
@@ -115,4 +118,78 @@ test('an automated stagger still emits its clocks (applyFramed survives the wrap
     assert.notEqual(copy.beatOffset, undefined)
     assert.notEqual(copy.birthBeat, undefined)
   }
+})
+
+// ── Per-copy object states: EVERYTHING below the emitter rides the copy clock ─
+
+test('a staggered track gets per-copy object states on each copy clock', () => {
+  const cubeParams = getInstrument('cube')?.params.filter(isNumberParam) ?? []
+  const paramKey = cubeParams[0]?.key
+  assert.ok(paramKey, 'cube declares a numeric param to automate')
+  const p = snapshot([
+    track({
+      id: 'cube', instrumentId: 'cube', childIds: ['st', 'auto', 'tfauto'],
+      blocks: [{
+        id: 'cube-b', startBar: 0, durationBars: 1, loop: false,
+        notes: [{ id: 'cube-n', startBeat: 0, durationBeats: 1, pitch: 60, velocity: 100 }],
+      }],
+    }),
+    track({ id: 'st', type: 'splitter', splitterId: 'stagger', parentId: 'cube', inputValues: { copies: 4, duration: 4 } }),
+    // An instrument-param lane: min at beat 0 → max at beat 4, so each copy
+    // reads a DIFFERENT value at its own age.
+    track({
+      id: 'auto', type: 'automation', parentId: 'cube', targetParam: paramKey,
+      blocks: [{
+        id: 'auto-b', startBar: 0, durationBars: 2, loop: false,
+        notes: [
+          { id: 'a1', startBeat: 0, durationBeats: 0.25, pitch: 36, velocity: 100 },
+          { id: 'a2', startBeat: 4, durationBeats: 0.25, pitch: 84, velocity: 100 },
+        ],
+      }],
+    }),
+    // A SPATIAL tf lane below every chain child: formation-as-one, so every
+    // copy state must read it at the OBJECT clock, identical across copies.
+    track({
+      id: 'tfauto', type: 'automation', parentId: 'cube', targetParam: 'tfX',
+      blocks: [{
+        id: 'tf-b', startBar: 0, durationBars: 3, loop: false,
+        notes: [
+          { id: 't1', startBeat: 0, durationBeats: 0.25, pitch: 36, velocity: 100 },
+          { id: 't2', startBeat: 12, durationBeats: 0.25, pitch: 84, velocity: 100 },
+        ],
+      }],
+    }),
+  ], ['cube'])
+  setProject(p)
+  assert.ok(isTrackStaggered('cube'))
+  computeAtBeat(10)
+  // Loop stagger(4, 4) at beat 10: ages [2, 1, 0, 3].
+  const objectState = getObjectState('cube')
+  assert.equal(objectState?.beat, 10)
+  const ages = [2, 1, 0, 3]
+  ages.forEach((age, i) => {
+    const s = getObjectState('cube', i)
+    assert.equal(s?.beat, age, `copy ${i} clock`)
+    // The cube's note at [0, 1) sounds only for the copy whose age is inside it.
+    assert.equal(s?.activeNotes.length, age < 1 ? 1 : 0, `copy ${i} active notes`)
+  })
+  // The instrument-param lane ramps over [0, 4]: distinct per copy, ordered by age.
+  const v = (i: number) => getObjectState('cube', i)!.params[paramKey!]
+  assert.ok(v(3) > v(0) && v(0) > v(1) && v(1) > v(2), 'param staggers per copy')
+  // The spatial tf lane stays on the object clock: identical across copies,
+  // equal to the shared state's value.
+  ages.forEach((_, i) => {
+    assert.equal(getObjectState('cube', i)!.params.tfX, objectState!.params.tfX, `copy ${i} tfX`)
+  })
+})
+
+test('unstaggered tracks answer any copy index with the shared state', () => {
+  const p = snapshot([
+    track({ id: 'plain', instrumentId: 'cube' }),
+  ], ['plain'])
+  setProject(p)
+  assert.equal(isTrackStaggered('plain'), false)
+  computeAtBeat(5)
+  assert.equal(getObjectState('plain', 0), getObjectState('plain'))
+  assert.equal(getObjectState('plain', 3), getObjectState('plain'))
 })

@@ -196,6 +196,10 @@ export const staggerSplitter: MoverOrSplitterDefinition<StaggerSettings> = {
     }
 
     return {
+      // Structural declaration, not a probe: a triggered Stagger emits no
+      // offsets before its first note, so the engine needs this to know the
+      // track carries per-copy clocks at all (see types.ts).
+      emitsCopyClocks: true,
       apply(visualCopy, { beat }) {
         return Array.from({ length: count }, (_, index) => slotAt(visualCopy, index, beat).visualCopy)
       },

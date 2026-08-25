@@ -415,6 +415,15 @@ Three more things to know:
 `birthBeat` is generic context, not a Colorizer feature: any sequenced device can grow a
 latch mode by reading it (size-at-birth, shape-at-birth via a switcher, word-at-birth).
 
+**The chain clock is only HALF of staggering — the engine's per-copy object states are
+the other half.** Chain entries below the Stagger ride `context.beat` here; everything
+the chain cannot see (instrument params and their lanes, tfOpacity, envelopes, energy,
+active notes, the instrument's own animation) staggers through per-copy ObjectStates in
+`core/visual/VisualEngine.ts`, keyed off the entry's `emitsCopyClocks` declaration
+(types.ts — structural on purpose; probing a beat proves nothing for a triggered
+Stagger). A new emitter definition must set it, and every wrapper that forwards
+`applyFramed` forwards it too.
+
 ## Hue Rotate, and the perceptual hue circle
 
 `hueRotate` is the RELATIVE colorizer: every other one sets an absolute `tint`

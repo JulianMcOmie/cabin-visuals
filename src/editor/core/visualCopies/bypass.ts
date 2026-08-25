@@ -150,6 +150,7 @@ export function bypassGated(
     },
   }
   if (entry.composition) gated.composition = entry.composition
+  if (entry.emitsCopyClocks) gated.emitsCopyClocks = true
   if (entry.applyFramed) {
     const applyFramed = entry.applyFramed.bind(entry)
     gated.applyFramed = (visualCopy, context) => (

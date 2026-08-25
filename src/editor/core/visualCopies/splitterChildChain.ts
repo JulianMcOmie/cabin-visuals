@@ -210,6 +210,9 @@ export function splitterWithChildChain(
   if (splitter.warpBeat || children.some((child) => child.warpBeat)) {
     wrapper.warpBeat = (beat) => warpChainBeat([splitter, ...children], beat)
   }
+  // The wrapped splitter's clocks ride this wrapper's applyFramed (slotTimes),
+  // so the structural declaration must ride with them.
+  if (splitter.emitsCopyClocks) wrapper.emitsCopyClocks = true
   // A child splitter (or an automated child) changes the copy count, so the
   // structural probe needs the composed entry at every variant rank - unlike
   // frames, which never change counts and skip their wrapper.

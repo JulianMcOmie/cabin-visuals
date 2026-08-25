@@ -151,7 +151,9 @@ export const ObjectRenderer = memo(function ObjectRenderer({
   useFrame(({ camera }) => {
     const g = groupRef.current
     if (!g) return
-    const state = getObjectState(trackId)
+    // Per-copy state for staggered occurrences: the copy's own world (its
+    // instrument animation on its own clock), meshScale and opacity.
+    const state = getObjectState(trackId, visualCopyIndex)
     // This occurrence's copy: transform composes with placement and opacity
     // multiplies. Color shifts are applied earlier, to the instrument's own
     // declared color params by useInstrumentFrame.

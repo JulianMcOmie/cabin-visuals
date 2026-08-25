@@ -24,8 +24,10 @@ import { SPATIAL_TRANSFORM_PARAM_DEFS, TF_X, TF_Y, TF_Z, TF_ROT_X, TF_ROT_Y, TF_
 const DEG = Math.PI / 180
 
 /** The tf params whose lane position among mover/splitter siblings matters: the
- *  spatial ones. tfOpacity multiplies scalars (order-free) and stays a placement
- *  overlay wherever its lane sits. */
+ *  spatial ones. tfOpacity stays a placement overlay wherever its lane sits -
+ *  under a time emitter it staggers through the engine's PER-COPY object
+ *  states like every other overlay value (see VisualEngine), so it needs no
+ *  weave of its own. */
 export const SPATIAL_TF_PARAMS: ReadonlySet<string> = new Set(
   SPATIAL_TRANSFORM_PARAM_DEFS.map((p) => p.key),
 )
@@ -70,3 +72,4 @@ export function tfAutomationChainEntry(lane: ResolvedAutomation, base: number): 
     },
   }
 }
+

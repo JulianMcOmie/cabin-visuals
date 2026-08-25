@@ -8,7 +8,8 @@ import { DEFAULT_ADSR, evaluateAdsrGain } from './adsr'
 import { composeMatrix, identitySV, localTransformToSV } from './stateVector'
 import { isIdentityTransform, readTrackTransform, trackOpacity } from '../transform'
 import { identityVisualCopy } from '../visualCopies/identityVisualCopy'
-import { resolveVisualCopies, structuralCopyCount, warpChainBeat } from '../visualCopies/resolveVisualCopies'
+import { chainEmitsCopyClocks, resolveVisualCopies, structuralCopyCount, warpChainBeat, type CopyClocks } from '../visualCopies/resolveVisualCopies'
+import { SPATIAL_TF_PARAMS } from './tfAutomationChain'
 import type { VisualCopy } from '../visualCopies/types'
 import type { ResolvedGraph, ResolvedGroup, ObjectState, ResolvedEnvelope, ResolvedNote } from './types'
 import { MIN_SOUNDING_BEATS, soundingNoteWindow } from './noteWindow'
@@ -76,6 +77,27 @@ const _tfSV = identitySV()
 const visualCopiesByTrack = new Map<string, VisualCopy[]>()
 const visualCopyCounts = new Map<string, number>()
 const copyCountWarned = new Set<string>()
+// ── Per-copy object states (time emitters) ──────────────────────────────────
+// A chain carrying a Stagger gives each copy its OWN CLOCK, and "the copy at
+// its clock" has to mean the WHOLE object, not just its chain: params, energy,
+// active notes, envelopes, the instrument's own local animation. For tracks
+// whose chain declares the time channel (`emitsCopyClocks` - structural, fixed
+// per resolve), computeAtBeat builds one extra ObjectState per shifted copy,
+// each a re-run of the same per-object assembly at `objBeat - offset`. Slots
+// whose offset is 0 stay null and fall through to the shared object state.
+// Purity holds: a copy state is a pure function of (beat - offset), so
+// pause/scrub/export agree exactly.
+//
+// Deliberately OBJECT-CLOCKED inside a copy state: the SPATIAL tf lanes (their
+// per-copy half lives in the chain weave, and sampling a below-the-chain lane
+// per copy would tear the formation-as-one placement apart) and the switcher
+// gate (`blackedOut`). Everything else - instrument params, tfOpacity,
+// envelopes, effect lanes, energy, active notes, localTransform - rides the
+// copy clock.
+let staggeredTracks = new Set<string>()
+const copyStatesByTrack = new Map<string, (ObjectState | null)[]>()
+const copyClocksScratch: CopyClocks = { beatOffsets: null, birthBeats: null }
+const _copySV = identitySV()
 // The hidden copies that pad a frame's output up to the structural pool size.
 // VisualCopies are immutable by contract (visualCopies/types.ts), so ONE
 // opacity-0 identity copy can stand in every padded slot of every track; the
@@ -211,6 +233,7 @@ export function setProject(input: ProjectState | ProjectSnapshot) {
   for (const id of visualCopiesByTrack.keys()) if (!live.has(id)) visualCopiesByTrack.delete(id)
   for (const id of visualCopyCounts.keys()) if (!live.has(id)) visualCopyCounts.delete(id)
   copyCountWarned.clear()
+  staggeredTracks = new Set()
   // Fix each track's STRUCTURAL copy count now. Counts are beat-independent by
   // contract, but automation can vary a chain entry's SETTINGS per beat, so the
   // probe (structuralCopyCount) also measures each entry at its lanes' maximum
@@ -223,7 +246,11 @@ export function setProject(input: ProjectState | ProjectSnapshot) {
     while (copies.length < structuralCount) copies.push(hiddenCopy(copies.length))
     visualCopyCounts.set(obj.trackId, structuralCount)
     visualCopiesByTrack.set(obj.trackId, copies)
+    if (chainEmitsCopyClocks(obj.moverAndSplitterChain)) staggeredTracks.add(obj.trackId)
   }
+  // Per-copy states exist exactly for the staggered set - a stale entry for a
+  // track whose chain lost its emitter would keep serving frozen clocks.
+  for (const id of copyStatesByTrack.keys()) if (!staggeredTracks.has(id)) copyStatesByTrack.delete(id)
   publishList()
 }
 
@@ -606,7 +633,10 @@ export function computeAtBeat(beat: number) {
     // OVERFLOWING the pool is still a contract violation - a definition varying
     // its count with the beat, or one non-monotonic in an automated param - so
     // warn and truncate rather than render copies that have no mount.
-    const copies = resolveVisualCopies(obj.moverAndSplitterChain, objBeat, world)
+    const staggered = staggeredTracks.has(obj.trackId)
+    const copies = resolveVisualCopies(
+      obj.moverAndSplitterChain, objBeat, world, staggered ? copyClocksScratch : undefined,
+    )
     const structuralCount = visualCopyCounts.get(obj.trackId) ?? copies.length
     if (copies.length > structuralCount) {
       if (!copyCountWarned.has(obj.trackId)) {
@@ -620,7 +650,151 @@ export function computeAtBeat(beat: number) {
     }
     while (copies.length < structuralCount) copies.push(hiddenCopy(copies.length))
     visualCopiesByTrack.set(obj.trackId, copies)
+    if (staggered) {
+      computeCopyStates(
+        obj, objBeat, structuralCount, copyClocksScratch,
+        secPerBeat, off, parentWorld, inheritedOpacity, blackedOut,
+      )
+    }
   }
+  }
+}
+
+/** One staggered object's per-copy states: for every copy whose chain clock is
+ *  shifted, the same per-object assembly computeAtBeat just ran - energy,
+ *  automation/envelope overlays, effect lanes, active notes, the instrument's
+ *  own localTransform - re-run at `objBeat - offset`. Offset-0 slots stay null
+ *  and read through to the shared object state. See the block comment at
+ *  `staggeredTracks` for what deliberately stays on the object clock. */
+function computeCopyStates(
+  obj: ResolvedGraph['objects'][number],
+  objBeat: number,
+  structuralCount: number,
+  clocks: CopyClocks,
+  secPerBeat: number,
+  off: boolean,
+  parentWorld: Matrix4 | undefined,
+  inheritedOpacity: number,
+  blackedOut: boolean,
+) {
+  let slots = copyStatesByTrack.get(obj.trackId)
+  if (!slots) { slots = []; copyStatesByTrack.set(obj.trackId, slots) }
+  slots.length = structuralCount
+  for (let i = 0; i < structuralCount; i++) {
+    // Padded hidden copies sit past the kernel's clock arrays and carry no
+    // shift; offset-0 copies need no state of their own.
+    const offset = clocks.beatOffsets?.[i] ?? 0
+    if (offset === 0) { slots[i] = null; continue }
+    const copyBeat = objBeat - offset
+
+    const energy = !off && obj.notes.length > 0 ? evaluatePulse(obj.notes, copyBeat) : 0
+    let params = obj.params
+    if (obj.automations.length) {
+      params = { ...obj.params }
+      for (const auto of obj.automations) {
+        // Spatial tf lanes keep the OBJECT clock (see `staggeredTracks`).
+        const laneBeat = SPATIAL_TF_PARAMS.has(auto.param) ? objBeat : copyBeat
+        const v = sampleAutomationLane(auto, laneBeat, params[auto.param] ?? auto.base ?? 0)
+        if (!Number.isNaN(v)) params[auto.param] = v
+      }
+    }
+    let opacityGate = 1
+    let fxEnvelopes: { env: ResolvedEnvelope; gain: number }[] | null = null
+    for (const env of obj.envelopes) {
+      if (env.notes.length === 0) continue
+      const gain = evaluateAdsrGain(env.notes, copyBeat, env.adsr)
+      if (env.kind === 'opacity') {
+        opacityGate *= 1 - env.depth + env.depth * gain
+      } else if (env.kind === 'param' && env.param !== undefined) {
+        if (params === obj.params) params = { ...obj.params }
+        const base = params[env.param] ?? env.paramDefault ?? 0
+        params[env.param] = base + (env.envTarget - base) * (gain * env.depth)
+      } else if (env.kind === 'fx') {
+        ;(fxEnvelopes ??= []).push({ env, gain })
+      }
+    }
+
+    let state = slots[i]
+    if (!state) {
+      // A copy state OWNS its world matrix and active-note scratch (the shared
+      // per-track ones belong to the object state); everything else is
+      // overwritten in place per frame, exactly like the object path.
+      state = {
+        beat: copyBeat, secPerBeat, beatsPerBar: 4,
+        params, energy,
+        videoPads: obj.videoPads, photoPads: obj.photoPads,
+        world: new Matrix4(), meshScale: 1, opacity: 1,
+        effectOverrides: undefined, blackedOut,
+        stringParams: obj.stringParams, abilityEvents: obj.abilityEvents,
+        lyricClips: obj.lyricClips, styleLanes: obj.styleLanes,
+        notes: obj.notes, activeNotes: [],
+        automations: obj.automations, baseParams: obj.params,
+      }
+      slots[i] = state
+    }
+
+    const local = obj.localTransform ? obj.localTransform({ params, energy, beat: copyBeat }) : {}
+    localTransformToSV(local, _copySV)
+    const meshScale = Math.exp(_copySV.logScale)
+    _copySV.logScale = 0
+    composeMatrix(_copySV, _local)
+    if (!isIdentityTransform(params)) {
+      localTransformToSV(readTrackTransform(params), _tfSV)
+      composeMatrix(_tfSV, _tfMat)
+      _local.premultiply(_tfMat)
+    }
+    if (parentWorld) state.world.multiplyMatrices(parentWorld, _local)
+    else state.world.copy(_local)
+    const opacity = clampOpacity(_copySV.opacity * opacityGate * trackOpacity(params) * inheritedOpacity)
+
+    let effectOverrides: Record<string, Record<string, number>> | undefined
+    if (obj.effectAutomations.length) {
+      effectOverrides = {}
+      for (const ea of obj.effectAutomations) {
+        const base = effectOverrides[ea.instanceId]?.[ea.key] ?? ea.base ?? 0
+        const v = sampleAutomationLane(ea, copyBeat, base)
+        if (!Number.isNaN(v)) (effectOverrides[ea.instanceId] ??= {})[ea.key] = v
+      }
+    }
+    if (fxEnvelopes) {
+      effectOverrides ??= {}
+      for (const { env, gain } of fxEnvelopes) {
+        if (env.instanceId === undefined || env.key === undefined) continue
+        const slot = (effectOverrides[env.instanceId] ??= {})
+        const base = slot[env.key] ?? env.fxBase ?? 0
+        slot[env.key] = base + (env.envTarget - base) * (gain * env.depth)
+      }
+    }
+
+    const activeNotes = state.activeNotes
+    activeNotes.length = 0
+    {
+      const notes = obj.notes
+      const { start, end } = soundingNoteWindow(notes, copyBeat)
+      for (let k = start; k < end; k++) {
+        const n = notes[k]
+        if (copyBeat >= n.beat && copyBeat < n.beat + (n.durationBeats || MIN_SOUNDING_BEATS)) activeNotes.push(n)
+      }
+    }
+
+    state.beat = copyBeat
+    state.secPerBeat = secPerBeat
+    state.beatsPerBar = project?.beatsPerBar ?? 4
+    state.params = params
+    state.energy = energy
+    state.videoPads = obj.videoPads
+    state.photoPads = obj.photoPads
+    state.meshScale = meshScale
+    state.opacity = opacity
+    state.effectOverrides = effectOverrides
+    state.blackedOut = blackedOut
+    state.stringParams = obj.stringParams
+    state.abilityEvents = obj.abilityEvents
+    state.lyricClips = obj.lyricClips
+    state.styleLanes = obj.styleLanes
+    state.notes = obj.notes
+    state.automations = obj.automations
+    state.baseParams = obj.params
   }
 }
 
@@ -795,9 +969,28 @@ export function setPreviewObjectState(trackId: string, state: ObjectState | null
   else previewStates.delete(trackId)
 }
 
-/** Pull API for the renderer. */
-export function getObjectState(trackId: string): ObjectState | undefined {
-  return previewStates.get(trackId) ?? (activeTrackIds.has(trackId) ? states.get(trackId) : undefined)
+/** Pull API for the renderer. Pass the occurrence's `visualCopyIndex` to read
+ *  a STAGGERED copy's own state - the whole object evaluated on that copy's
+ *  clock (see `staggeredTracks`). Unshifted copies, unstaggered tracks and
+ *  index-less callers all read the shared object state, exactly as before. */
+export function getObjectState(trackId: string, visualCopyIndex?: number): ObjectState | undefined {
+  const preview = previewStates.get(trackId)
+  if (preview) return preview
+  if (!activeTrackIds.has(trackId)) return undefined
+  if (visualCopyIndex !== undefined) {
+    const copyState = copyStatesByTrack.get(trackId)?.[visualCopyIndex]
+    if (copyState) return copyState
+  }
+  return states.get(trackId)
+}
+
+/** True when this track's chain carries a time emitter (structural, fixed per
+ *  resolve): its copies run on their own clocks, so per-copy renderers must
+ *  read `getObjectState(trackId, index)` and the instanced fast path must
+ *  stand down (one shared state cannot draw N differently-parameterized
+ *  copies). */
+export function isTrackStaggered(trackId: string): boolean {
+  return staggeredTracks.has(trackId)
 }
 
 /** Ordered final-frame layers. Multiple director tracks already concatenate here;

@@ -36,10 +36,27 @@ import type { MoverOrSplitter, MoverOrSplitterContext, VisualCopy } from './type
  * No MIDI, automation, envelope, project-track, React, or instrument logic
  * belongs here - definitions close over whatever resolved data they need.
  */
+/** The per-copy TIME channel of one kernel evaluation, for callers that need
+ *  it (VisualEngine's per-copy object states). Null arrays mean "0 / undefined
+ *  for every copy" - the common case, at zero cost. */
+export interface CopyClocks {
+  beatOffsets: readonly number[] | null
+  birthBeats: readonly (number | undefined)[] | null
+}
+
+/** True when any entry declares it may emit the per-copy time channel - the
+ *  STRUCTURAL question the engine sizes per-copy state against (see
+ *  `MoverOrSplitter.emitsCopyClocks`). */
+export function chainEmitsCopyClocks(moverAndSplitterChain: readonly MoverOrSplitter[]): boolean {
+  return moverAndSplitterChain.some((entry) => entry.emitsCopyClocks)
+}
+
 export function resolveVisualCopies(
   moverAndSplitterChain: MoverOrSplitter[],
   beat: number,
   placementTransform?: Matrix4,
+  /** Filled with the evaluation's per-copy clocks when provided. */
+  clocksOut?: CopyClocks,
 ): VisualCopy[] {
   let visualCopies = [identityVisualCopy()]
   // Parallel to visualCopies: each copy's accumulated internal motion, or null.
@@ -132,6 +149,11 @@ export function resolveVisualCopies(
     internals = nextInternals
     beatOffsets = nextOffsets
     birthBeats = nextBirths
+  }
+
+  if (clocksOut) {
+    clocksOut.beatOffsets = beatOffsets
+    clocksOut.birthBeats = birthBeats
   }
 
   if (!internals) return visualCopies

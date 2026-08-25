@@ -4,7 +4,7 @@ import { InstrumentPending } from '../../instruments/lazyInstrument'
 import { isFullFrameTrack } from '../../instruments/types'
 import { useProjectStore } from '../../store/ProjectStore'
 import { InstancedScaleContext } from '../../core/visual/instancedFrame'
-import type { ObjectListEntry } from '../../core/visual/VisualEngine'
+import { isTrackStaggered, type ObjectListEntry } from '../../core/visual/VisualEngine'
 import { ObjectRenderer } from './ObjectRenderer'
 
 const NO_SCALE: readonly [] = []
@@ -74,7 +74,12 @@ export function InstancedObjectRenderer({
   if (!def) return null
   const Instanced = def.instancedComponent
   const masked = entries.some((o) => o.maskSourceIds.length > 0)
-  if (!Instanced || hasFallbackEffects || masked || isFullFrameTrack(def, modeParams)) {
+  // A STAGGERED track's copies each run on their own clock with their own
+  // ObjectState (per-copy params/energy/animation) - one instanced mount
+  // reading one shared state cannot draw that, so it falls back per copy.
+  // Structural like the other triggers: the flag is fixed per resolve, and
+  // this component re-renders on every object-list publish.
+  if (!Instanced || hasFallbackEffects || masked || isFullFrameTrack(def, modeParams) || isTrackStaggered(trackId)) {
     return (
       <Fragment>
         {entries.map((o) => (

@@ -237,6 +237,18 @@ export interface MoverOrSplitter {
    */
   applyFramed?(visualCopy: VisualCopy, context: MoverOrSplitterContext): FramedVisualCopy[]
   /**
+   * OPTIONAL: declares that this entry's `applyFramed` may emit the TIME
+   * channel (`beatOffset`/`birthBeat`). STRUCTURAL, not per-beat: the engine
+   * reads it off the resolved chain to decide which tracks get PER-COPY object
+   * states (each copy's instrument evaluated on its own clock) and which
+   * renderers must skip the instanced fast path - both decisions that must not
+   * flip with the beat, which is why this is a declaration rather than a probe
+   * (a triggered Stagger emits no offsets before its first note, so probing a
+   * beat proves nothing). Every wrapper that forwards `applyFramed` forwards
+   * this with it.
+   */
+  emitsCopyClocks?: boolean
+  /**
    * OPTIONAL: alternative resolutions of this same entry whose output COUNTS
    * bracket everything `apply` can ever produce. The runtime attaches these
    * when an entry's settings vary with the beat (an automated mover), resolving

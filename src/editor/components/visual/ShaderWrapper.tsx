@@ -186,7 +186,9 @@ export function ShaderWrapper({
   useEffect(() => () => { passes.forEach((p) => p.mat.dispose()) }, [passes])
 
   useFrame(() => {
-    const state = getObjectState(trackId)
+    // Per-copy state for a staggered occurrence, so the offscreen pass renders
+    // the copy's own world/meshScale/effect overrides on its own clock.
+    const state = getObjectState(trackId, visualCopyIndex)
     if (outMeshRef.current) outMeshRef.current.visible = !!state && !state.blackedOut
     if (!state || state.blackedOut) return
 

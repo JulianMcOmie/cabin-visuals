@@ -684,6 +684,7 @@ function resolveOwnMoverOrSplitter(track: Track, p: ProjectSnapshot): MoverOrSpl
         : entry.apply(visualCopy, context).map((copy) => ({ visualCopy: copy }))
     }
   }
+  if (resolved.emitsCopyClocks) wrapped.emitsCopyClocks = true
   // A time remap is deliberately taken from the UN-automated resolution: it is
   // asked for the REAL beat (while apply is asked for the warped one), so
   // routing it through the memo above would thrash the cache every frame. The

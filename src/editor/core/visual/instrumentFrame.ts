@@ -72,7 +72,9 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
   const scratchColor = useRef(new Color()).current
   const scratchTint = useRef(new Color()).current
   useFrame((root) => {
-    const state = getObjectState(trackId)
+    // Per-copy state when this occurrence is a STAGGERED copy (the whole
+    // object at the copy's own clock); the shared object state otherwise.
+    const state = getObjectState(trackId, copyContext?.visualCopyIndex)
     const buf = sig.buf
     if (!state) {
       // Unresolved: clear so the first resolved frame always runs.
