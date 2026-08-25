@@ -10,6 +10,7 @@ import { handleSignInWithGoogle } from '../login/actions'; // Updated import
 import { stashAnonWork } from '../../../src/persistence/carryover';
 import { track } from '../../../src/analytics/analytics';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
+import { GOOGLE_SIGNIN_ENABLED } from '../../../src/utils/googleSignIn';
 import {
   AuthShell,
   AuthTitle,
@@ -123,6 +124,9 @@ function SignupPageContent() {
         <AuthSubmit busy={formBusy} busyLabel="Checking…">Continue</AuthSubmit>
       </form>
 
+      {/* The whole GSI apparatus (script included) stands down when no client
+          id is configured - see src/utils/googleSignIn.ts. */}
+      {GOOGLE_SIGNIN_ENABLED && (<>
       <OrDivider />
 
       <div className="flex flex-col items-center">
@@ -136,13 +140,16 @@ function SignupPageContent() {
              renderButton reads clientWidth before anything is in it. */}
          <div id="google-signin-button-container" className="gsi-host flex w-full justify-center"></div>
       </div>
+      </>)}
 
       <p className="mt-5 text-center text-[13px] text-[var(--text-3)]">
         Already have an account?{' '}
         <Link href="/login" className={authLinkClass}>Log in</Link>
       </p>
 
-      <Script src="https://accounts.google.com/gsi/client" async defer strategy="afterInteractive" onLoad={() => setGsiReady(true)}></Script>
+      {GOOGLE_SIGNIN_ENABLED && (
+        <Script src="https://accounts.google.com/gsi/client" async defer strategy="afterInteractive" onLoad={() => setGsiReady(true)}></Script>
+      )}
     </AuthShell>
   );
 }

@@ -8,6 +8,7 @@ import { track } from '../../analytics/analytics'
 import { initiateSignup } from '../../../app/(auth)/signup/actions'
 import { handleSignInWithGoogle } from '../../../app/(auth)/login/actions'
 import { stashAnonWork } from '../../persistence/carryover'
+import { GOOGLE_SIGNIN_ENABLED } from '../../utils/googleSignIn'
 
 /**
  * The signup form as it appears INSIDE the editor - email, Google, log-in
@@ -39,6 +40,7 @@ export function SignupCard({ page }: { page: string }) {
   // only scans the DOM at script load, and the script may already be loaded
   // by the time this card opens.
   useEffect(() => {
+    if (!GOOGLE_SIGNIN_ENABLED) return
     const google = (window as unknown as { google?: any }).google
     const container = document.getElementById(googleId)
     if (!google?.accounts?.id || !container || container.childElementCount > 0) return
@@ -78,13 +80,17 @@ export function SignupCard({ page }: { page: string }) {
         </button>
       </form>
 
-      <div className="my-4 flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-        <span className="flex-1 border-t border-[var(--border)]" />
-        or
-        <span className="flex-1 border-t border-[var(--border)]" />
-      </div>
+      {GOOGLE_SIGNIN_ENABLED && (
+        <>
+          <div className="my-4 flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+            <span className="flex-1 border-t border-[var(--border)]" />
+            or
+            <span className="flex-1 border-t border-[var(--border)]" />
+          </div>
 
-      <div id={googleId} className="gsi-host flex w-full justify-center" />
+          <div id={googleId} className="gsi-host flex w-full justify-center" />
+        </>
+      )}
 
       <p className="mt-4 text-center text-[13px] text-[var(--text-3)]">
         Already have an account?{' '}
@@ -104,7 +110,9 @@ export function SignupCard({ page }: { page: string }) {
         </div>
       )}
 
-      <Script src="https://accounts.google.com/gsi/client" async defer strategy="afterInteractive" onLoad={() => setGsiReady(true)} />
+      {GOOGLE_SIGNIN_ENABLED && (
+        <Script src="https://accounts.google.com/gsi/client" async defer strategy="afterInteractive" onLoad={() => setGsiReady(true)} />
+      )}
     </>
   )
 }
