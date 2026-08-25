@@ -24,6 +24,15 @@ import type { MoverOrSplitter, MoverOrSplitterContext, VisualCopy } from './type
  * build in: a second grid duplicates a spinning sub-grid rather than laying
  * its cells out in a spinning frame.
  *
+ * A framed entry may also emit the TIME channel (`beatOffset` / `birthBeat` on
+ * FramedVisualCopy - see types.ts): the kernel carries both per copy the same
+ * way and evaluates every LATER entry at `context.beat = beat - offset`, with
+ * `context.birthBeat` alongside. That is how an emitter (Canon) gives each
+ * copy its own clock: entries below it replay their material at each copy's
+ * age, and latching entries sample at its birth. Offsets from nested emitters
+ * sum; a later emitter's births overwrite an ancestor's; descendants of a copy
+ * inherit both.
+ *
  * No MIDI, automation, envelope, project-track, React, or instrument logic
  * belongs here - definitions close over whatever resolved data they need.
  */
@@ -40,19 +49,31 @@ export function resolveVisualCopies(
   // framed entry actually hands one over. Until then `internals` is null and
   // means "null for every copy".
   let internals: (Matrix4 | null)[] | null = null
+  // Two more lazy parallels, for the TIME channel a framed entry may emit
+  // (types.ts): each copy's accumulated chain-clock lag (entries below run at
+  // `beat - offset`; nested emitters SUM) and its latched birth beat (a later
+  // emitter OVERWRITES an ancestor's). Null means "0 / undefined for every
+  // copy", so ordinary chains pay nothing.
+  let beatOffsets: number[] | null = null
+  let birthBeats: (number | undefined)[] | null = null
 
   for (const moverOrSplitter of moverAndSplitterChain) {
     const previousVisualCopies = visualCopies
     const previousInternals = internals
+    const previousOffsets = beatOffsets
+    const previousBirths = birthBeats
     const count = previousVisualCopies.length
     const nextVisualCopies: VisualCopy[] = []
     let nextInternals: (Matrix4 | null)[] | null = null
+    let nextOffsets: number[] | null = null
+    let nextBirths: (number | undefined)[] | null = null
     const framed = moverOrSplitter.applyFramed
-    // ONE context per step, re-pointed at each copy: `index` is the only field
-    // that varies per copy, and the contract (types.ts) makes the context
-    // read-only for the entry, so nothing observes it mutating between calls.
-    // `formation` is the same reference for the whole step, which is what makes
-    // measuring it once per frame safe (see the contract in types.ts).
+    // ONE context per step, re-pointed at each copy: `index`, `beat` and
+    // `birthBeat` are the only fields that vary per copy, and the contract
+    // (types.ts) makes the context read-only for the entry, so nothing
+    // observes it mutating between calls. `formation` is the same reference
+    // for the whole step, which is what makes measuring it once per frame safe
+    // (see the contract in types.ts).
     const context: MoverOrSplitterContext = placementTransform
       ? { beat, index: 0, count, formation: previousVisualCopies, placementTransform }
       : { beat, index: 0, count, formation: previousVisualCopies }
@@ -60,9 +81,13 @@ export function resolveVisualCopies(
     for (let index = 0; index < count; index++) {
       const visualCopy = previousVisualCopies[index]
       context.index = index
+      const inheritedOffset = previousOffsets ? previousOffsets[index] : 0
+      const inheritedBirth = previousBirths ? previousBirths[index] : undefined
+      context.beat = beat - inheritedOffset
+      context.birthBeat = inheritedBirth
       const inherited = previousInternals ? previousInternals[index] : null
       if (framed) {
-        for (const { visualCopy: next, internalTransform } of framed.call(moverOrSplitter, visualCopy, context)) {
+        for (const { visualCopy: next, internalTransform, beatOffset, birthBeat } of framed.call(moverOrSplitter, visualCopy, context)) {
           const internal = inherited && internalTransform
             ? inherited.clone().multiply(internalTransform)
             : internalTransform ?? inherited
@@ -71,22 +96,42 @@ export function resolveVisualCopies(
             // copies already emitted, then track per copy from here on.
             nextInternals = new Array<Matrix4 | null>(nextVisualCopies.length).fill(null)
           }
+          const offset = inheritedOffset + (beatOffset ?? 0)
+          if (offset !== 0 && !nextOffsets) {
+            nextOffsets = new Array<number>(nextVisualCopies.length).fill(0)
+          }
+          const birth = birthBeat ?? inheritedBirth
+          if (birth !== undefined && !nextBirths) {
+            nextBirths = new Array<number | undefined>(nextVisualCopies.length).fill(undefined)
+          }
           nextVisualCopies.push(next)
           if (nextInternals) nextInternals.push(internal)
+          if (nextOffsets) nextOffsets.push(offset)
+          if (nextBirths) nextBirths.push(birth)
         }
       } else {
         for (const next of moverOrSplitter.apply(visualCopy, context)) {
           if (inherited && !nextInternals) {
             nextInternals = new Array<Matrix4 | null>(nextVisualCopies.length).fill(null)
           }
+          if (inheritedOffset !== 0 && !nextOffsets) {
+            nextOffsets = new Array<number>(nextVisualCopies.length).fill(0)
+          }
+          if (inheritedBirth !== undefined && !nextBirths) {
+            nextBirths = new Array<number | undefined>(nextVisualCopies.length).fill(undefined)
+          }
           nextVisualCopies.push(next)
           if (nextInternals) nextInternals.push(inherited)
+          if (nextOffsets) nextOffsets.push(inheritedOffset)
+          if (nextBirths) nextBirths.push(inheritedBirth)
         }
       }
     }
 
     visualCopies = nextVisualCopies
     internals = nextInternals
+    beatOffsets = nextOffsets
+    birthBeats = nextBirths
   }
 
   if (!internals) return visualCopies

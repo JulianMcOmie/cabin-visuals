@@ -79,15 +79,32 @@ export function splitterWithChildChain(
    *  transform in the splitter's frame with the child chain's deltas
    *  pre-composed and its opacity/colorShift folded on. `outputs` is null when
    *  the incoming frame is degenerate (a zero scale upstream has no inverse to
-   *  express slots in) - callers fall back to the bare slots. */
+   *  express slots in) - callers fall back to the bare slots. `slotTimes`
+   *  carries the splitter's own per-slot TIME channel (a Canon wearing a tf
+   *  lane or a nested child must not silently lose its offsets) - the child
+   *  chain itself still runs at the incoming beat, since children are internal
+   *  to the device rather than below it. */
   function evaluate(visualCopy: VisualCopy, context: MoverOrSplitterContext): {
     slots: VisualCopy[]
+    slotTimes: readonly FramedVisualCopy[] | null
     outputs: SlotLocalCopy[] | null
   } {
-    const slots = splitter.apply(visualCopy, context)
-    if (slots.length === 0) return { slots, outputs: [] }
+    const framedSlots = splitter.applyFramed?.call(splitter, visualCopy, context)
+    // A raw definition's applyFramed never carries an internalTransform (only
+    // this wrapper produces those, and it is never wrapped twice), so folding
+    // is defensive completeness, not a live path.
+    const slots = framedSlots
+      ? framedSlots.map((framed) => framed.internalTransform
+        ? {
+          ...framed.visualCopy,
+          transform: framed.visualCopy.transform.clone().multiply(framed.internalTransform),
+        }
+        : framed.visualCopy)
+      : splitter.apply(visualCopy, context)
+    const slotTimes = framedSlots ?? null
+    if (slots.length === 0) return { slots, slotTimes, outputs: [] }
     const previous = visualCopy.transform
-    if (isDegenerate(previous)) return { slots, outputs: null }
+    if (isDegenerate(previous)) return { slots, slotTimes, outputs: null }
     const previousInverse = previous.clone().invert()
     // The splitter's frame in the world: the object's placement composed with
     // everything above the splitter in the chain. World-placed children
@@ -131,11 +148,13 @@ export function splitterWithChildChain(
           })
       })
     }
-    return { slots, outputs: locals }
+    return { slots, slotTimes, outputs: locals }
   }
 
   const wrapper: MoverOrSplitter = {
     apply(visualCopy, context) {
+      // The immediate fold: time fields drop here exactly as the emitting
+      // definition's own `apply` drops them - unobservable as a last entry.
       const { slots, outputs } = evaluate(visualCopy, context)
       if (!outputs) return slots
       return outputs.map(({ copy }) => ({
@@ -145,8 +164,16 @@ export function splitterWithChildChain(
       }))
     },
     applyFramed(visualCopy, context) {
-      const { slots, outputs } = evaluate(visualCopy, context)
-      if (!outputs) return slots.map((copy) => ({ visualCopy: copy }))
+      const { slots, slotTimes, outputs } = evaluate(visualCopy, context)
+      // The parent slot's TIME channel rides every output derived from it - a
+      // child splitter's fan-out inherits its slot's clock, as the kernel
+      // would have it inherit down a chain.
+      const timeOf = (slot: number): Pick<FramedVisualCopy, 'beatOffset' | 'birthBeat'> | null => {
+        const time = slotTimes?.[slot]
+        if (!time || (time.beatOffset === undefined && time.birthBeat === undefined)) return null
+        return { beatOffset: time.beatOffset, birthBeat: time.birthBeat }
+      }
+      if (!outputs) return slots.map((copy, slot) => ({ visualCopy: copy, ...timeOf(slot) }))
       const previousInverse = visualCopy.transform.clone().invert()
       return outputs.map(({ copy, slot }): FramedVisualCopy => {
         const frame = slots[slot].transform
@@ -163,6 +190,7 @@ export function splitterWithChildChain(
               opacity: copy.opacity,
               colorShift: copy.colorShift,
             },
+            ...timeOf(slot),
           }
         }
         return {
@@ -172,6 +200,7 @@ export function splitterWithChildChain(
             colorShift: copy.colorShift,
           },
           internalTransform: slotLocal.clone().invert().multiply(copy.transform),
+          ...timeOf(slot),
         }
       })
     },

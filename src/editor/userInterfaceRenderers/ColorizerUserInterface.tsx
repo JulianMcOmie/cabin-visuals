@@ -324,6 +324,10 @@ export const ColorizerUserInterfaceRenderer: UserInterfaceRendererDefinition = (
   const staggerBeats = b.num('staggerBeats')
   const shape = b.select('shape')
   const blend = b.select('blend')
+  // Optional, like a showIf-gated key: a save (or test fixture) predating the
+  // Canon's latch mode must not knock the whole console back to the generic
+  // list over a missing select.
+  const sample = b.select('sample', { optional: true })
   const rainbowRate = b.num('rainbowRate')
   const rainbowSpread = b.num('rainbowSpread')
   const slots = COLORIZER_FLASH_SLOTS.map((slot) => b.color(slot.key))
@@ -369,7 +373,12 @@ export const ColorizerUserInterfaceRenderer: UserInterfaceRendererDefinition = (
         <Knob b={rainbowRate} label="SPIN" />
         <Knob b={rainbowSpread} label="SPREAD" />
         <ShapeSelector b={shape} />
-        <div className="ml-auto">
+        <div className="ml-auto flex items-start gap-2">
+          {/* SAMPLE only matters under a Canon (LIVE is exact pre-latch
+              behavior otherwise), but it renders unconditionally: the panel
+              cannot see the chain, and a control that comes and goes with
+              track nesting would read as broken. */}
+          {sample && <WordSelector b={sample} label="SAMPLE" />}
           <WordSelector b={blend} label="MIX" />
         </div>
       </ControlRow>

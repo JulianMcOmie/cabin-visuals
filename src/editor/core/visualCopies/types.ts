@@ -105,9 +105,27 @@ export interface VisualCopy {
  *  complete result of the PREVIOUS step, so downstream movers can react to the
  *  multiplicity created by upstream splitters. */
 export interface MoverOrSplitterContext {
+  /**
+   * The beat this copy's chain runs at. Usually the object's beat - but an
+   * emitter above (Canon) shifts it per copy via `FramedVisualCopy.beatOffset`,
+   * so entries below one see each copy's OWN clock (its age within the
+   * emitter's cycle). Entries never need to know which: evaluating at
+   * `context.beat` is always correct.
+   */
   beat: number
   index: number
   count: number
+  /**
+   * The absolute beat this copy was BORN at, when an emitter above declared
+   * one (Canon: the copy's last cycle wrap). Undefined on ordinary chains.
+   *
+   * This is the LATCH clock: a sequenced entry may sample its own notes at
+   * this instant instead of at `context.beat`, so every copy keeps the value
+   * its sequence held at its birth for its whole flight (the Colorizer's
+   * "At birth" sample mode). Expressed in the clock of the chain ABOVE the
+   * emitting entry - the real timeline unless emitters nest.
+   */
+  birthBeat?: number
   /**
    * The object's placement before this VisualCopy transform is applied. Runtime
    * evaluation supplies it so world-space movers can react to the actual object
@@ -148,6 +166,26 @@ export interface MoverOrSplitterContext {
 export interface FramedVisualCopy {
   visualCopy: VisualCopy
   internalTransform?: Matrix4
+  /**
+   * OPTIONAL: this copy's chain-clock LAG, in beats. The kernel evaluates every
+   * entry BELOW the emitting one at `context.beat = beat − offset` for this
+   * copy and its descendants; nested emitters' offsets SUM (each measures its
+   * own in the already-shifted clock it was handed). It shifts the CHAIN's
+   * clock only - never the instrument's own animation/notes/energy, the
+   * object-level automation overlay, envelopes, or `warpBeat` (which stays
+   * object-wide at the real beat). Purity holds: the offset is recomputed per
+   * evaluation as a function of the incoming beat, so a copy is still a pure
+   * function of the playhead.
+   */
+  beatOffset?: number
+  /**
+   * OPTIONAL: the absolute beat this copy was BORN at - the latch clock
+   * `MoverOrSplitterContext.birthBeat` carries to entries below. An emitter
+   * that loops copies through a cycle (Canon) sets it to each copy's last
+   * wrap; a later emitter OVERWRITES it (its births supersede an ancestor's),
+   * while ordinary entries inherit it untouched.
+   */
+  birthBeat?: number
 }
 
 /**
@@ -191,8 +229,11 @@ export interface MoverOrSplitter {
    * through the remaining steps, and folds it into the final transforms it
    * returns; `apply` must return the same copies with the internal motion
    * folded in immediately (`frame · internal`), which is what direct callers
-   * and a chain's LAST entry observe either way. Only splitterChildChain
-   * implements it today - ordinary definitions never need to.
+   * and a chain's LAST entry observe either way. Implemented by
+   * splitterChildChain (internal motion) and by TIME EMITTERS (Canon), whose
+   * per-copy `beatOffset`/`birthBeat` ride this channel - a time field dropped
+   * by `apply` is unobservable there, since it only steers entries below.
+   * Ordinary spatial definitions never need it.
    */
   applyFramed?(visualCopy: VisualCopy, context: MoverOrSplitterContext): FramedVisualCopy[]
   /**
