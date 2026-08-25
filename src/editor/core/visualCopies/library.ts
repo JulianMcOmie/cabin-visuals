@@ -9,6 +9,7 @@ import { cycleValueAt, extractValueGates, valueLaneRows } from './valueLane'
 import type { MoverOrSplitterDefinition } from './definitions'
 import type { VisualCopy } from './types'
 import { moverDefinition } from './mover'
+import { canonSplitter } from './canon'
 import { noteColorizer } from './colorizer'
 import { gradientColorizer } from './gradientColorizer'
 import { cosinePaletteColorizer } from './cosinePalette'
@@ -851,6 +852,7 @@ export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   hueRotateColorizer,
   radialSplitter,
   lineSplitter,
+  canonSplitter,
   symmetrySplitter,
   gridSplitter,
   polyhedronSplitter,

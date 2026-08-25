@@ -659,14 +659,30 @@ function resolveOwnMoverOrSplitter(track: Track, p: ProjectSnapshot): MoverOrSpl
   if (automation.length === 0) return resolved
   let cachedBeat = Number.NaN
   let cached = resolved
+  const resolveAtBeat = (beat: number): MoverOrSplitter => {
+    if (beat !== cachedBeat) {
+      cachedBeat = beat
+      cached = def.resolve({ settings: { ...settings, ...sampleAutomationLanes(automation, beat, settings) }, notes })
+    }
+    return cached
+  }
   const wrapped: MoverOrSplitter = {
     apply(visualCopy, context) {
-      if (context.beat !== cachedBeat) {
-        cachedBeat = context.beat
-        cached = def.resolve({ settings: { ...settings, ...sampleAutomationLanes(automation, context.beat, settings) }, notes })
-      }
-      return cached.apply(visualCopy, context)
+      return resolveAtBeat(context.beat).apply(visualCopy, context)
     },
+  }
+  // A definition-level applyFramed (a time emitter - Canon) must survive the
+  // automation wrapper, or automating its knobs silently drops every copy's
+  // clock. Same per-beat memo as apply; below an emitter the memo degrades to
+  // one re-resolve per distinct copy clock per frame, which is correct and
+  // merely un-memoized.
+  if (resolved.applyFramed) {
+    wrapped.applyFramed = (visualCopy, context) => {
+      const entry = resolveAtBeat(context.beat)
+      return entry.applyFramed
+        ? entry.applyFramed(visualCopy, context)
+        : entry.apply(visualCopy, context).map((copy) => ({ visualCopy: copy }))
+    }
   }
   // A time remap is deliberately taken from the UN-automated resolution: it is
   // asked for the REAL beat (while apply is asked for the warped one), so

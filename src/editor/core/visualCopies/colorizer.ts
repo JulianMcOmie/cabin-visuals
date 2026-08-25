@@ -57,6 +57,25 @@ export const SHAPE_SWELL = 2
 export const BLEND_PERCEPTUAL = 0
 export const BLEND_LINEAR = 1
 
+/** When the notes are read. LIVE is every colorizer ever saved: the copy shows
+ *  what is sounding right now. AT BIRTH reads the lane at the copy's
+ *  `birthBeat` instead (the latch clock a Canon above publishes - see
+ *  MoverOrSplitterContext), so each copy KEEPS the color its note said the
+ *  moment it was born, frozen for its whole flight - one note per birth is a
+ *  sequence of copy identities. Without an emitter above there is no birth to
+ *  latch, and the mode falls back to LIVE rather than going dark.
+ *
+ *  Latching asks which note OWNS the birth - onset ≤ birth < note end - and
+ *  deliberately ignores the attack/release envelope. The envelope shapes live
+ *  flashes; a latched copy holds a constant, and a release tail bleeding past
+ *  a note's end would otherwise tint every birth on the next note's downbeat
+ *  with a 50/50 blend of the outgoing and incoming colors (births and note
+ *  boundaries land on the same grid whenever the user quantizes, so that is
+ *  the COMMON case, not a corner). Velocity still scales the latched
+ *  strength; chords across rows still blend, exactly as live overlaps do. */
+export const SAMPLE_LIVE = 0
+export const SAMPLE_AT_BIRTH = 1
+
 /** The color slots, in panel and piano-roll order.
  *
  * Pitch 60 and the un-suffixed `color` key are the ORIGINAL single flash row,
@@ -109,6 +128,8 @@ export interface ColorizerSettings {
   color5: string
   /** BLEND_PERCEPTUAL or BLEND_LINEAR - how the mix toward the color walks. */
   blend: number
+  /** SAMPLE_LIVE or SAMPLE_AT_BIRTH - when the notes are read (see above). */
+  sample: number
   /** Which curve the envelope's ramps bend along (SHAPE_* above). */
   shape: number
   /** Rainbow row: turns of hue per beat. This is the "rapid fire" - the whole
@@ -153,6 +174,19 @@ const COLORIZER_PARAMS: ParamDef[] = [
       { value: SHAPE_SWELL, label: 'Swell' },
     ],
     default: SHAPE_SPIKE,
+  },
+  {
+    key: 'sample',
+    label: 'Sample',
+    type: 'select',
+    // 'Born' rather than 'At birth': the label is what the console's word
+    // segments render (four characters), and "the copy shows the color it was
+    // born with" is the sentence the word comes from.
+    options: [
+      { value: SAMPLE_LIVE, label: 'Live' },
+      { value: SAMPLE_AT_BIRTH, label: 'Born' },
+    ],
+    default: SAMPLE_LIVE,
   },
 ]
 
@@ -313,11 +347,21 @@ export function evaluateColorizer(
   index = 0,
   diagonal = 0,
   palette: ColorizerPalette = colorizerPalette(settings),
+  latched = false,
 ): ColorizerOutput {
   // STAGGER is a per-copy time offset, so the copy simply looks at a slightly
   // earlier (or later) point in the same performance. Everything downstream -
   // envelope, velocity - rolls with it for free.
   const localBeat = beat - settings.staggerBeats * Math.max(0, Math.floor(index))
+
+  // The latch's ownership gate (see SAMPLE_AT_BIRTH): a note owns its half-open
+  // span, so a birth landing exactly on a boundary belongs to the INCOMING note
+  // alone. A zero-length note owns exactly its onset instant.
+  const noteOwnsBeat = (note: ResolvedNote): boolean => (
+    note.durationBeats > 0
+      ? localBeat >= note.beat && localBeat < note.beat + note.durationBeats
+      : localBeat === note.beat
+  )
 
   // Per-slot gain, so the sounding rows can be weighed against each other. A
   // fixed-length scratch array would have to be closure- or module-scoped to
@@ -335,7 +379,9 @@ export function evaluateColorizer(
   let rainbowAge = 0
   for (const note of notes) {
     if (note.pitch === COLORIZER_RAINBOW_PITCH) {
-      const envelope = evaluateNoteEnvelope(note, localBeat, settings.attackBeats, settings.releaseBeats, settings.shape)
+      const envelope = latched
+        ? (noteOwnsBeat(note) ? 1 : 0)
+        : evaluateNoteEnvelope(note, localBeat, settings.attackBeats, settings.releaseBeats, settings.shape)
       if (envelope <= 0) continue
       const gain = envelope * normalizedVelocity(note.velocity)
       if (gain > rainbowGain) {
@@ -346,7 +392,9 @@ export function evaluateColorizer(
     }
     const slot = COLORIZER_FLASH_SLOTS.findIndex((s) => s.pitch === note.pitch)
     if (slot < 0) continue
-    const envelope = evaluateNoteEnvelope(note, localBeat, settings.attackBeats, settings.releaseBeats, settings.shape)
+    const envelope = latched
+      ? (noteOwnsBeat(note) ? 1 : 0)
+      : evaluateNoteEnvelope(note, localBeat, settings.attackBeats, settings.releaseBeats, settings.shape)
     if (envelope <= 0) continue
     const gain = envelope * normalizedVelocity(note.velocity)
     if (gain <= slotGains[slot]) continue
@@ -435,15 +483,24 @@ export const noteColorizer: MoverOrSplitterDefinition<ColorizerSettings> = {
     // so the palette is parsed once here rather than per copy per frame.
     const palette = colorizerPalette(settings)
     const perceptual = settings.blend !== BLEND_LINEAR
+    const latch = settings.sample === SAMPLE_AT_BIRTH
     return {
-      apply(visualCopy, { beat, index, placementTransform }) {
+      apply(visualCopy, { beat, index, placementTransform, birthBeat }) {
         // The copy's WORLD position. (P * T)'s translation column is P applied
         // to T's translation, so transforming the point is equivalent to
         // building the product matrix - and cheaper.
         scratchPosition.setFromMatrixPosition(visualCopy.transform)
         if (placementTransform) scratchPosition.applyMatrix4(placementTransform)
         const diagonal = rainbowDiagonal(scratchPosition.x, scratchPosition.y)
-        const output = evaluateColorizer(notes, settings, beat, index, diagonal, palette)
+        // AT BIRTH evaluates at the copy's birth instant with the ownership
+        // gate in place of the envelope (see SAMPLE_AT_BIRTH): the note whose
+        // span holds the birth colors the copy for its whole flight, at its
+        // velocity's strength; nothing owning it is honest silence. No birth
+        // above = LIVE fallback.
+        const latching = latch && birthBeat !== undefined
+        const output = evaluateColorizer(
+          notes, settings, latching ? birthBeat : beat, index, diagonal, palette, latching,
+        )
         return [{
           transform: visualCopy.transform.clone(),
           opacity: visualCopy.opacity,
