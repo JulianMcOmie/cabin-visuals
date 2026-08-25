@@ -410,6 +410,15 @@ const G = {
       <rect x="12" y="7.2" width="2.2" height="2.2" rx="0.4" strokeOpacity="0.5" />
     </>
   ),
+  // Three entries coming in one after another - the canon/round silhouette.
+  // Bars, not shapes, so it cannot be read as a layout splitter's formation.
+  stagger: (
+    <>
+      <path d="M2.2 4.2h5.4" />
+      <path d="M5.3 8h5.4" strokeOpacity="0.75" />
+      <path d="M8.4 11.8h5.4" strokeOpacity="0.5" />
+    </>
+  ),
   grid: (
     <g strokeOpacity="0.95">
       <rect x="2.2" y="2.2" width="3.4" height="3.4" rx="0.5" />

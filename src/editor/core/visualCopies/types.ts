@@ -107,7 +107,7 @@ export interface VisualCopy {
 export interface MoverOrSplitterContext {
   /**
    * The beat this copy's chain runs at. Usually the object's beat - but an
-   * emitter above (Canon) shifts it per copy via `FramedVisualCopy.beatOffset`,
+   * emitter above (Stagger) shifts it per copy via `FramedVisualCopy.beatOffset`,
    * so entries below one see each copy's OWN clock (its age within the
    * emitter's cycle). Entries never need to know which: evaluating at
    * `context.beat` is always correct.
@@ -117,7 +117,7 @@ export interface MoverOrSplitterContext {
   count: number
   /**
    * The absolute beat this copy was BORN at, when an emitter above declared
-   * one (Canon: the copy's last cycle wrap). Undefined on ordinary chains.
+   * one (Stagger: the copy's last cycle wrap). Undefined on ordinary chains.
    *
    * This is the LATCH clock: a sequenced entry may sample its own notes at
    * this instant instead of at `context.beat`, so every copy keeps the value
@@ -181,7 +181,7 @@ export interface FramedVisualCopy {
   /**
    * OPTIONAL: the absolute beat this copy was BORN at - the latch clock
    * `MoverOrSplitterContext.birthBeat` carries to entries below. An emitter
-   * that loops copies through a cycle (Canon) sets it to each copy's last
+   * that loops copies through a cycle (Stagger) sets it to each copy's last
    * wrap; a later emitter OVERWRITES it (its births supersede an ancestor's),
    * while ordinary entries inherit it untouched.
    */
@@ -230,7 +230,7 @@ export interface MoverOrSplitter {
    * returns; `apply` must return the same copies with the internal motion
    * folded in immediately (`frame · internal`), which is what direct callers
    * and a chain's LAST entry observe either way. Implemented by
-   * splitterChildChain (internal motion) and by TIME EMITTERS (Canon), whose
+   * splitterChildChain (internal motion) and by TIME EMITTERS (Stagger), whose
    * per-copy `beatOffset`/`birthBeat` ride this channel - a time field dropped
    * by `apply` is unobservable there, since it only steers entries below.
    * Ordinary spatial definitions never need it.

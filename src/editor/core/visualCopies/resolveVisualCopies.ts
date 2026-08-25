@@ -27,7 +27,7 @@ import type { MoverOrSplitter, MoverOrSplitterContext, VisualCopy } from './type
  * A framed entry may also emit the TIME channel (`beatOffset` / `birthBeat` on
  * FramedVisualCopy - see types.ts): the kernel carries both per copy the same
  * way and evaluates every LATER entry at `context.beat = beat - offset`, with
- * `context.birthBeat` alongside. That is how an emitter (Canon) gives each
+ * `context.birthBeat` alongside. That is how an emitter (Stagger) gives each
  * copy its own clock: entries below it replay their material at each copy's
  * age, and latching entries sample at its birth. Offsets from nested emitters
  * sum; a later emitter's births overwrite an ancestor's; descendants of a copy

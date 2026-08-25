@@ -150,10 +150,10 @@ export const MOTION_COLOR = '#e1c429'
 export const COSINE_PALETTE_COLOR = '#cdcc39'
 /** Hue 135° - the middle of the band the mover consolidation reopened. */
 export const LINE_COLOR = '#95db6c'
-/** Hue 142° - Canon, the time emitter, split into the Line→Wave Terrain gap
+/** Hue 142° - Stagger, the time emitter, split into the Line→Wave Terrain gap
  *  (the widest left on the wheel at 15°; 7° of separation each side, which
  *  the post-capacity rules allow). */
-export const CANON_COLOR = '#84de7a'
+export const STAGGER_COLOR = '#84de7a'
 /** Hue 150°. */
 export const WAVE_TERRAIN_COLOR = '#6de18b'
 // The Conveyor→Impact Scatter stretch, respaced at ~11.8° when Physics joined:

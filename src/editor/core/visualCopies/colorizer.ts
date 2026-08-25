@@ -59,7 +59,7 @@ export const BLEND_LINEAR = 1
 
 /** When the notes are read. LIVE is every colorizer ever saved: the copy shows
  *  what is sounding right now. AT BIRTH reads the lane at the copy's
- *  `birthBeat` instead (the latch clock a Canon above publishes - see
+ *  `birthBeat` instead (the latch clock a Stagger above publishes - see
  *  MoverOrSplitterContext), so each copy KEEPS the color its note said the
  *  moment it was born, frozen for its whole flight - one note per birth is a
  *  sequence of copy identities. Without an emitter above there is no birth to

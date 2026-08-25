@@ -671,7 +671,7 @@ function resolveOwnMoverOrSplitter(track: Track, p: ProjectSnapshot): MoverOrSpl
       return resolveAtBeat(context.beat).apply(visualCopy, context)
     },
   }
-  // A definition-level applyFramed (a time emitter - Canon) must survive the
+  // A definition-level applyFramed (a time emitter - Stagger) must survive the
   // automation wrapper, or automating its knobs silently drops every copy's
   // clock. Same per-beat memo as apply; below an emitter the memo degrades to
   // one re-resolve per distinct copy clock per frame, which is correct and

@@ -3,14 +3,16 @@ import test from 'node:test'
 import type { Track } from '../../types'
 import { identityVisualCopy } from '../visualCopies/identityVisualCopy'
 import { resolveVisualCopies } from '../visualCopies/resolveVisualCopies'
+import { STAGGER_SPAWN_PITCH } from '../visualCopies/stagger'
 import { resolveProject, type ProjectSnapshot } from './resolve'
 
-// The Canon's WIRING: that a canon track resolves into the chain through
-// resolveProject, that the copies below it latch per birth end to end, and
-// that the automation wrapper forwards applyFramed (dropping it would silently
+// The Stagger's WIRING: that a stagger track resolves into the chain through
+// resolveProject, that the copies below it latch per birth end to end, that
+// spawn notes written on the track's own lane reach the allocator, and that
+// the automation wrapper forwards applyFramed (dropping it would silently
 // strip every copy's clock the moment a knob is automated - the exact failure
 // the wrapper note in resolve.ts warns about). The clock arithmetic itself is
-// visualCopies/canon.test.ts's job.
+// visualCopies/stagger.test.ts's job.
 
 function track(partial: Partial<Track> & { id: string }): Track {
   return {
@@ -42,7 +44,7 @@ function chainOf(p: ProjectSnapshot, trackId: string) {
 }
 
 /** A latching colorizer lane: slot 1 (pitch 60) over beats [0, 2), slot 2
- *  (pitch 62) over [2, 4) - one note per birth at the canon defaults below. */
+ *  (pitch 62) over [2, 4) - one note per birth at the stagger defaults below. */
 function latchColorizerTrack(id: string, parentId: string): Track {
   return track({
     id, type: 'mover', moverId: 'calmHueRotate', parentId,
@@ -57,10 +59,10 @@ function latchColorizerTrack(id: string, parentId: string): Track {
   })
 }
 
-test('a canon in the document gives each copy the color its birth note said', () => {
+test('a stagger in the document gives each copy the color its birth note said', () => {
   const p = snapshot([
-    track({ id: 'cube', instrumentId: 'cube', childIds: ['cn', 'col'] }),
-    track({ id: 'cn', type: 'splitter', splitterId: 'canon', parentId: 'cube', inputValues: { copies: 2, period: 4 } }),
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['st', 'col'] }),
+    track({ id: 'st', type: 'splitter', splitterId: 'stagger', parentId: 'cube', inputValues: { copies: 2, duration: 4 } }),
     latchColorizerTrack('col', 'cube'),
   ], ['cube'])
   // At beat 3: copy 0 was born at 0 (slot 1 sounding), copy 1 at 2 (slot 2).
@@ -70,15 +72,35 @@ test('a canon in the document gives each copy the color its birth note said', ()
   assert.equal(copies[1].colorShift.tint, '#ef476f')
 })
 
-test('an automated canon still emits its clocks (applyFramed survives the wrapper)', () => {
+test('spawn notes on the stagger track trigger births end to end', () => {
   const p = snapshot([
-    track({ id: 'cube', instrumentId: 'cube', childIds: ['cn'] }),
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['st'] }),
     track({
-      id: 'cn', type: 'splitter', splitterId: 'canon', parentId: 'cube',
-      inputValues: { copies: 2, period: 4 }, childIds: ['auto'],
+      id: 'st', type: 'splitter', splitterId: 'stagger', parentId: 'cube',
+      inputValues: { copies: 2, duration: 4 },
+      blocks: [{
+        id: 'st-b', startBar: 0, durationBars: 2, loop: false,
+        notes: [{ id: 'st-n', startBeat: 1, durationBeats: 0.25, pitch: STAGGER_SPAWN_PITCH, velocity: 100 }],
+      }],
+    }),
+  ], ['cube'])
+  const chain = chainOf(p, 'cube')
+  // One note = a pool of one. Dark before the onset, flying for DURATION
+  // beats after it, dark again once the flight ends.
+  assert.deepEqual(resolveVisualCopies(chain, 0.5).map((c) => c.opacity), [0])
+  assert.deepEqual(resolveVisualCopies(chain, 2).map((c) => c.opacity), [1])
+  assert.deepEqual(resolveVisualCopies(chain, 5.5).map((c) => c.opacity), [0])
+})
+
+test('an automated stagger still emits its clocks (applyFramed survives the wrapper)', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['st'] }),
+    track({
+      id: 'st', type: 'splitter', splitterId: 'stagger', parentId: 'cube',
+      inputValues: { copies: 2, duration: 4 }, childIds: ['auto'],
     }),
     track({
-      id: 'auto', type: 'automation', parentId: 'cn', targetParam: 'period',
+      id: 'auto', type: 'automation', parentId: 'st', targetParam: 'duration',
       blocks: [{
         id: 'auto-b', startBar: 0, durationBars: 1, loop: false,
         notes: [{ id: 'auto-n', startBeat: 0, durationBeats: 1, pitch: 60, velocity: 100 }],

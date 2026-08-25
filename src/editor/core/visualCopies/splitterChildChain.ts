@@ -80,7 +80,7 @@ export function splitterWithChildChain(
    *  pre-composed and its opacity/colorShift folded on. `outputs` is null when
    *  the incoming frame is degenerate (a zero scale upstream has no inverse to
    *  express slots in) - callers fall back to the bare slots. `slotTimes`
-   *  carries the splitter's own per-slot TIME channel (a Canon wearing a tf
+   *  carries the splitter's own per-slot TIME channel (a Stagger wearing a tf
    *  lane or a nested child must not silently lose its offsets) - the child
    *  chain itself still runs at the incoming beat, since children are internal
    *  to the device rather than below it. */
