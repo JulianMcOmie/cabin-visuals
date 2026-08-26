@@ -70,10 +70,26 @@ function plotWindowBeats(mod: SynthMod): number {
   return Math.max(synthModSpanBeats(mod, noteBeats), 1e-3)
 }
 
+/** The EDITOR's window is wider than the envelope's span on purpose: sized
+ *  exactly to the span, the tail handle sits pinned to the right edge and
+ *  every rightward drag rescales it straight back - duration reads as
+ *  unchangeable (shipped that way once). Loop windows already end mid-cycle
+ *  pattern, so only the non-loop lives take the headroom. */
+function editWindowBeats(mod: SynthMod): number {
+  const win = plotWindowBeats(mod)
+  return mod.life === 'loop' ? win : win * 1.3
+}
+
+/** The beats one CYCLE of a bezier/points curve occupies. */
+function cycleBeats(mod: SynthMod): number {
+  if (mod.life === 'gate') return plotNoteBeats(mod)
+  return Math.max(mod.beats, 1e-3)
+}
+
 /** SVG path of the raw curve over the plot window, in a W×H box with the
  *  baseline sitting `padY` above the bottom edge. */
-function modPlotPath(mod: SynthMod, w: number, h: number, padY = 6): string {
-  const win = plotWindowBeats(mod)
+function modPlotPath(mod: SynthMod, w: number, h: number, padY = 6, winOverride?: number): string {
+  const win = winOverride ?? plotWindowBeats(mod)
   const noteBeats = plotNoteBeats(mod)
   const top = 5
   const y = (v: number) => top + (1 - Math.min(Math.max(v, 0), PLOT_CEIL) / PLOT_CEIL) * (h - top - padY)
@@ -114,40 +130,55 @@ function OverviewWindow({ mods, hoveredId, accent }: {
   )
 }
 
-interface HandleSpec { role: 'attack' | 'ds' | 'release' | 'p1' | 'p2' | 'pt'; index: number; x: number; y: number }
+interface HandleSpec { role: 'start' | 'attack' | 'ds' | 'release' | 'p1' | 'p2' | 'end' | 'pt'; index: number; x: number; y: number }
 
-/** The grabbable points of the expanded editor, in window-normalized coords. */
+/** The grabbable points of the expanded editor, in window-normalized coords.
+ *  START/END handles carry the curve's endpoint values; the tail handle
+ *  (release / end / last knot) also owns DURATION on the x axis for the lives
+ *  where duration is free. */
 function editorHandles(mod: SynthMod): HandleSpec[] {
-  const win = plotWindowBeats(mod)
+  const win = editWindowBeats(mod)
   if (mod.shape === 'adsr') {
     const relStart = mod.life === 'gate' ? plotNoteBeats(mod) : mod.attack + mod.decay
     return [
+      { role: 'start', index: 0, x: 0, y: mod.valueStart ?? 0 },
       { role: 'attack', index: 0, x: mod.attack / win, y: 1 },
       { role: 'ds', index: 0, x: (mod.attack + mod.decay) / win, y: mod.sustain },
-      { role: 'release', index: 0, x: Math.min((relStart + mod.release) / win, 1), y: 0 },
+      { role: 'release', index: 0, x: Math.min((relStart + mod.release) / win, 1), y: mod.valueEnd ?? 0 },
     ]
   }
-  // The bezier/points curve occupies one CYCLE of the window (the whole window
-  // except under loop, where the first of the three plotted cycles is edited).
-  const cycleFrac = mod.life === 'loop' ? 1 / LOOP_PLOT_CYCLES : 1
+  const cf = cycleBeats(mod) / win
   if (mod.shape === 'bezier') {
-    return mod.bezier.map((p, i): HandleSpec => ({ role: i === 0 ? 'p1' : 'p2', index: i, x: p.x * cycleFrac, y: p.y }))
+    return [
+      { role: 'start', index: 0, x: 0, y: mod.valueStart ?? 0 },
+      { role: 'p1', index: 0, x: mod.bezier[0].x * cf, y: mod.bezier[0].y },
+      { role: 'p2', index: 1, x: mod.bezier[1].x * cf, y: mod.bezier[1].y },
+      { role: 'end', index: 0, x: cf, y: mod.valueEnd ?? 0 },
+    ]
   }
-  return mod.points.map((p, i): HandleSpec => ({ role: 'pt', index: i, x: p.x * cycleFrac, y: p.y }))
+  return mod.points.map((p, i): HandleSpec => ({ role: 'pt', index: i, x: p.x * cf, y: p.y }))
 }
 
 function applyHandleDrag(mod: SynthMod, role: HandleSpec['role'], index: number, nx: number, ny: number): Partial<SynthMod> {
-  const win = plotWindowBeats(mod)
+  const win = editWindowBeats(mod)
   const t = nx * win
   const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
+  const cy01 = clamp(ny, 0, 1)
+  if (role === 'start') return { valueStart: cy01 }
   if (role === 'attack') return { attack: clamp(t, 0.01, 4) }
   if (role === 'ds') return { decay: clamp(t - mod.attack, 0.02, 4), sustain: clamp(ny, 0, 1) }
   if (role === 'release') {
     const relStart = mod.life === 'gate' ? plotNoteBeats(mod) : mod.attack + mod.decay
-    return { release: clamp(t - relStart, 0.02, 8) }
+    return { release: clamp(t - relStart, 0.02, 8), valueEnd: cy01 }
   }
-  const cycleFrac = mod.life === 'loop' ? 1 / LOOP_PLOT_CYCLES : 1
-  const cx = clamp(nx / cycleFrac, 0, 1)
+  if (role === 'end') {
+    // The tail handle IS the duration control where duration is free; under
+    // gate the flight is the note itself, so only the landing value moves.
+    if (mod.life === 'gate') return { valueEnd: cy01 }
+    return { beats: clamp(t, 0.25, 16), valueEnd: cy01 }
+  }
+  const cf = cycleBeats(mod) / win
+  const cx = clamp(nx / cf, 0, 1)
   const cy = clamp(ny, 0, PLOT_CEIL)
   if (role === 'p1') return { bezier: [{ x: cx, y: cy }, mod.bezier[1]] }
   if (role === 'p2') return { bezier: [mod.bezier[0], { x: cx, y: cy }] }
@@ -156,8 +187,14 @@ function applyHandleDrag(mod: SynthMod, role: HandleSpec['role'], index: number,
   if (!p) return {}
   if (index > 0 && index < pts.length - 1) {
     p.x = clamp(cx, pts[index - 1].x + 0.02, pts[index + 1].x - 0.02)
+    p.y = clamp(cy, 0, 1.05)
+    return { points: pts }
   }
   p.y = clamp(cy, 0, 1.05)
+  // The LAST knot doubles as the duration handle off gate life.
+  if (index === pts.length - 1 && mod.life !== 'gate') {
+    return { points: pts, beats: clamp(t, 0.25, 16) }
+  }
   return { points: pts }
 }
 
@@ -168,9 +205,9 @@ function CurveWindow({ mod, accent, onPatch }: {
 }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ role: HandleSpec['role']; index: number } | null>(null)
-  const win = plotWindowBeats(mod)
+  const win = editWindowBeats(mod)
   const noteBeats = plotNoteBeats(mod)
-  const d = modPlotPath(mod, 300, 110)
+  const d = modPlotPath(mod, 300, 110, 6, win)
   const top = 5, padY = 6, plotH = 110 - top - padY
 
   const beatLines: number[] = []

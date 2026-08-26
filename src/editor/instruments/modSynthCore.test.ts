@@ -77,6 +77,29 @@ describe('modSynthCore: bezier and points', () => {
   })
 })
 
+describe('modSynthCore: start/end values', () => {
+  it('ADSR departs from valueStart and lands on valueEnd, holding it after release', () => {
+    const m = adsrMod({ valueStart: 0.8, valueEnd: 0.4 })
+    assert.ok(Math.abs(sampleSynthMod(m, 0, 2) - 0.8) < 1e-9, 'attack departs from start value')
+    assert.ok(Math.abs(sampleSynthMod(m, 0.1, 2) - 0.9) < 1e-9, 'attack ramps start -> 1')
+    // Release halfway: from sustain 0.5 toward 0.4.
+    assert.ok(Math.abs(sampleSynthMod(m, 2.25, 2) - 0.45) < 1e-9)
+    assert.ok(Math.abs(sampleSynthMod(m, 5, 2) - 0.4) < 1e-9, 'holds valueEnd past release')
+  })
+
+  it('bezier endpoints ride valueStart/valueEnd', () => {
+    const m = adsrMod({ shape: 'bezier', life: 'oneshot', beats: 2, valueStart: 1, valueEnd: 0.5 })
+    assert.equal(sampleSynthMod(m, 0, 8), 1)
+    assert.equal(sampleSynthMod(m, 3, 8), 0.5, 'holds valueEnd past the flight')
+  })
+
+  it('a points modulator holds its last knot past the flight', () => {
+    const pts = [{ x: 0, y: 0 }, { x: 0.5, y: 1 }, { x: 1, y: 0.7 }]
+    const m = adsrMod({ shape: 'points', life: 'oneshot', beats: 1, points: pts })
+    assert.ok(Math.abs(sampleSynthMod(m, 2, 8) - 0.7) < 1e-9)
+  })
+})
+
 describe('modSynthCore: voices', () => {
   it('voice span is the longest enabled modulator; disabled ones are ignored', () => {
     const long = adsrMod({ shape: 'bezier', life: 'oneshot', beats: 6 })

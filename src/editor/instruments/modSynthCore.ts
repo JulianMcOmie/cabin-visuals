@@ -88,25 +88,29 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 
 // ── ADSR (beat-based: an attack must not stretch with note length) ──────────
 
-/** Envelope level before any release: attack ramp, decay to sustain, hold. */
+/** Envelope level before any release: attack ramp from valueStart, decay to
+ *  sustain, hold. */
 function adsrPre(mod: SynthMod, t: number): number {
   const a = Math.max(mod.attack, 1e-4)
   const d = Math.max(mod.decay, 1e-4)
-  if (t <= 0) return 0
-  if (t < a) return t / a
+  const y0 = mod.valueStart ?? 0
+  if (t <= 0) return y0
+  if (t < a) return y0 + (1 - y0) * (t / a)
   if (t < a + d) return 1 + (mod.sustain - 1) * ((t - a) / d)
   return mod.sustain
 }
 
 /** One ADSR cycle with the release starting at `relStart` (gate: note end;
  *  oneshot/loop: end of decay). Releases from the CURRENT level, so a note
- *  shorter than attack+decay lets go mid-ramp instead of jumping to sustain. */
+ *  shorter than attack+decay lets go mid-ramp instead of jumping to sustain -
+ *  and lands on valueEnd, holding it past the release. */
 function adsrValue(mod: SynthMod, t: number, relStart: number): number {
   const r = Math.max(mod.release, 1e-4)
   if (t < relStart) return adsrPre(mod, t)
+  const yEnd = mod.valueEnd ?? 0
   const remaining = 1 - (t - relStart) / r
-  if (remaining <= 0) return 0
-  return adsrPre(mod, relStart) * remaining
+  if (remaining <= 0) return yEnd
+  return yEnd + (adsrPre(mod, relStart) - yEnd) * remaining
 }
 
 // ── Bezier (endpoints pinned at 0; y(x) via a cached parametric LUT) ────────
@@ -125,14 +129,17 @@ function bezierLut(mod: SynthMod): Float32Array {
     const t = i / BEZIER_LUT_STEPS
     const mt = 1 - t
     lut[i * 2] = 3 * mt * mt * t * p1.x + 3 * mt * t * t * p2.x + t * t * t
-    lut[i * 2 + 1] = 3 * mt * mt * t * p1.y + 3 * mt * t * t * p2.y
+    lut[i * 2 + 1] = mt * mt * mt * (mod.valueStart ?? 0)
+      + 3 * mt * mt * t * p1.y + 3 * mt * t * t * p2.y
+      + t * t * t * (mod.valueEnd ?? 0)
   }
   bezierLutCache.set(mod, lut)
   return lut
 }
 
 function bezierValue(mod: SynthMod, u: number): number {
-  if (u <= 0 || u >= 1) return 0
+  if (u <= 0) return mod.valueStart ?? 0
+  if (u >= 1) return mod.valueEnd ?? 0
   const lut = bezierLut(mod)
   for (let i = 2; i < lut.length; i += 2) {
     if (lut[i] >= u) {
@@ -190,10 +197,15 @@ export function synthModSpanBeats(mod: SynthMod, noteDurBeats: number): number {
 export function sampleSynthMod(mod: SynthMod, ageBeats: number, noteDurBeats: number): number {
   const dur = Math.max(noteDurBeats, MIN_VOICE_BEATS)
   if (ageBeats < 0) return 0
+  // Past its own span a modulator HOLDS its landing value (0 for pre-feature
+  // racks) while another modulator keeps the voice alive.
+  const held = mod.shape === 'points'
+    ? mod.points[mod.points.length - 1]?.y ?? 0
+    : mod.valueEnd ?? 0
   if (mod.shape === 'adsr') {
     if (mod.life === 'oneshot') return adsrValue(mod, ageBeats, mod.attack + mod.decay)
     if (mod.life === 'loop') {
-      if (ageBeats >= dur) return 0
+      if (ageBeats >= dur) return held
       const cycle = Math.max(mod.attack + mod.decay + mod.release, 1e-3)
       return adsrValue(mod, ageBeats % cycle, mod.attack + mod.decay)
     }
@@ -204,14 +216,14 @@ export function sampleSynthMod(mod: SynthMod, ageBeats: number, noteDurBeats: nu
     : (u: number) => pointsValue(mod.points, u)
   if (mod.life === 'oneshot') {
     const span = Math.max(mod.beats, MIN_VOICE_BEATS)
-    return ageBeats >= span ? 0 : curve(ageBeats / span)
+    return ageBeats >= span ? held : curve(ageBeats / span)
   }
   if (mod.life === 'loop') {
-    if (ageBeats >= dur) return 0
+    if (ageBeats >= dur) return held
     const cycle = Math.max(mod.beats, MIN_VOICE_BEATS)
     return curve((ageBeats % cycle) / cycle)
   }
-  return ageBeats >= dur ? 0 : curve(ageBeats / dur)
+  return ageBeats >= dur ? held : curve(ageBeats / dur)
 }
 
 /** A voice lives as long as its longest enabled modulator says; with a bare

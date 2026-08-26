@@ -494,6 +494,15 @@ export interface SynthMod {
   points: SynthModPoint[]
   /** Flight (oneshot) / cycle (loop) length in beats for bezier/points curves. */
   beats: number
+  /** Where the curve BEGINS and where it LANDS (0..1 of the channel), so an
+   *  envelope need not start or end at zero - a size that opens at full, an
+   *  opacity that holds. Absence = 0 (the historical pinned endpoints, so
+   *  pre-feature racks are untouched). ADSR: attack departs from valueStart,
+   *  release decays to valueEnd and HOLDS it while the voice outlives this
+   *  modulator. Bezier: the two endpoint heights. Points: unused - its end
+   *  knots are already free. */
+  valueStart?: number
+  valueEnd?: number
   /** Output gain in the target's units (size multiplier, world units, turns). */
   amount: number
   /** 0 = ignore note velocity, 1 = full velocity scaling. */
