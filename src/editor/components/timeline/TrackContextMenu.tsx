@@ -142,6 +142,7 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       ...plugin.params.filter(isNumberParam).map((p) => ({
         key: fxTarget(inst.id, p.key),
         label: `${plugin.name} · ${p.label}`,
+        integer: p.integer,
       })),
     ]
   })
@@ -257,13 +258,15 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       if (d) addMoverTrack(trackId, d.id, d.label)
     } else if (groupKey === 'automation') {
       const p = params.find((pp) => pp.key === itemId)
-      if (p) addAutomationTrack(trackId, p.key, p.label)
+      // Count params (`integer` on the def) start their lane on the
+      // whole-number grid with stepped interpolation.
+      if (p) addAutomationTrack(trackId, p.key, p.label, { integer: p.integer })
     } else if (groupKey === 'envelope') {
       const item = envelopeItems.find((f) => f.key === itemId)
       if (item) addEnvelopeTrack(trackId, item.key, item.label, item.envTarget)
     } else if (groupKey === 'effect') {
       const item = fxItems.find((f) => f.key === itemId)
-      if (item) addAutomationTrack(trackId, item.key, item.label)
+      if (item) addAutomationTrack(trackId, item.key, item.label, { integer: 'integer' in item ? item.integer : undefined })
     } else if (groupKey === 'move-scene') {
       moveTrackToScene(trackId, itemId)
       useUIStore.getState().setSelectedTrackId(null)

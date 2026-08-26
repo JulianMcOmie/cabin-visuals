@@ -160,17 +160,21 @@ test('a mirrored copy hands its reflected axes to the movers below it', () => {
   assert.deepEqual(localX.toArray().map(round), [-1, 0, 0])
 })
 
-test('MIDI gates slots to zero opacity without changing the slot count', () => {
+test('the MIDI lane is the count lane on MIRRORS: notes latch a mirror count at their onset', () => {
+  // One integer row per mirror count, matching an automation lane on MIRRORS.
   const rows = symmetrySplitter.midiRows?.(settings({ mirrors: 3 })) ?? []
-  assert.equal(rows.length, 6)
-  assert.equal(rows[0].pitch, 127)
-  assert.equal(rows[0].label, 'Disable copy 1')
+  assert.equal(rows.length, 12)
+  assert.deepEqual(rows[0], { pitch: 47, label: '12 mirrors' })
+  assert.deepEqual(rows[rows.length - 1], { pitch: 36, label: '1 mirror' })
 
-  const held = copiesFor({ mirrors: 3 }, [note(0, 126)], 0.5)
-  assert.equal(held.length, 6, 'the muted slot is still present')
-  assert.equal(held[1].opacity, 0)
-  for (const slot of [0, 2, 3, 4, 5]) assert.equal(held[slot].opacity, 1)
+  // Pitch 38 = 3 mirror lines = the 6 slots of D_3, from the onset on
+  // (duration ignored); the knob's single mirror holds before it.
+  assert.equal(copiesFor({ mirrors: 1 }, [note(1, 38)], 0.5).length, 2)
+  assert.equal(copiesFor({ mirrors: 1 }, [note(1, 38)], 0.5 + 1).length, 6)
+  assert.equal(copiesFor({ mirrors: 1 }, [note(1, 38)], 20).length, 6, 'the latch holds')
 
-  const released = copiesFor({ mirrors: 3 }, [note(0, 126)], 2)
-  for (const copy of released) assert.equal(copy.opacity, 1)
+  // The retired mute map's 96+ pitches fall out of the count span and no-op.
+  const legacy = copiesFor({ mirrors: 3 }, [note(0, 126)], 0.5)
+  assert.equal(legacy.length, 6)
+  for (const copy of legacy) assert.equal(copy.opacity, 1)
 })

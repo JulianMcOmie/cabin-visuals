@@ -125,55 +125,54 @@ test('size scales each copy about its own center, independent of radius', () => 
   for (const copy of unscaled) assert.deepEqual(scaleOf(copy), [1, 1, 1])
 })
 
-test('the MIDI lane is a value lane: automation-encoded radius rows, top = max', () => {
+test('the MIDI lane is the count lane: one integer row per copy count, top = 32', () => {
   const rows = radialSplitter.midiRows!(settings())
-  assert.equal(rows.length, 49) // the automation pitch span, 36..84
-  assert.deepEqual(rows[0], { pitch: 84, label: 'R 10.0' })
-  assert.deepEqual(rows[rows.length - 1], { pitch: 36, label: 'R 0.0' })
+  assert.equal(rows.length, 32) // one row per whole count, pitches 36..67
+  assert.deepEqual(rows[0], { pitch: 67, label: '32 copies' })
+  assert.deepEqual(rows[rows.length - 1], { pitch: 36, label: '1 copy' })
   assert.equal(radialSplitter.strictMidiRows, true)
 })
 
-test('between onsets the radius swells 0 → r → 0; outside the span it rests at the knob', () => {
-  // Two onsets at beats 1 and 3, both at pitch 84 (r = 10); knob radius 3.
+test('notes latch the copy count at their onset - a step function resting at the knob', () => {
+  // Pitch 37 = 2 copies, pitch 43 = 8 copies (36 + k names count 1 + k).
   const resolved = radialSplitter.resolve({
-    settings: settings({ copies: 1, radius: 3 }),
-    notes: [note(1, 84), note(3, 84)],
+    settings: settings({ copies: 4, radius: 2 }),
+    notes: [note(1, 37), note(3, 43)],
   })
-  const radiusAtBeat = (beat: number) => positionOf(resolveVisualCopies([resolved], beat)[0])[0]
-  assert.equal(radiusAtBeat(0.5), 3, 'rests at the knob before the first onset')
-  assert.equal(radiusAtBeat(1), 0, 'collapsed on the onset')
-  assert.equal(radiusAtBeat(2), 10, 'peaks at the note value mid-cycle')
-  assert.equal(radiusAtBeat(1.5), 7.5, 'the symmetric swell: 4u(1-u) at u = 0.25')
-  assert.equal(radiusAtBeat(2.5), 7.5, '...and its mirror at u = 0.75')
-  assert.equal(radiusAtBeat(3), 3, 'rests again from the last onset on')
+  const countAtBeat = (beat: number) => resolveVisualCopies([resolved], beat).length
+  assert.equal(countAtBeat(0.5), 4, 'rests at the knob before the first onset')
+  assert.equal(countAtBeat(1), 2, 'jumps on the onset')
+  assert.equal(countAtBeat(2.9), 2, 'holds past the note end - duration is ignored')
+  assert.equal(countAtBeat(3), 8)
+  assert.equal(countAtBeat(100), 8, 'the last onset holds for the rest of the timeline')
 
-  // Pitch encodes the peak: pitch 60 maps to r = 5 over the 36-84 span.
-  const half = radialSplitter.resolve({
-    settings: settings({ copies: 1, radius: 0 }),
-    notes: [note(0, 60), note(2, 60)],
-  })
-  assert.equal(positionOf(resolveVisualCopies([half], 1)[0])[0], 5)
+  // Each sampled count is a TRUE re-layout, not a reveal: 2 copies sit 180°
+  // apart exactly as the knob at 2 would put them.
+  assert.deepEqual(resolveVisualCopies([resolved], 1).map(positionOf), [[2, 0, 0], [-2, 0, 0]])
+
+  // The structural bracket sizes the mounted pool at the lane's full reach.
+  const probe = resolveVisualCopies([resolved.structuralVariants![0]], 0)
+  assert.equal(probe.length, 8)
 })
 
-test('a lone onset is inert, chords keep the largest radius, out-of-span pitches are no-ops', () => {
-  const lone = radialSplitter.resolve({ settings: settings({ copies: 1, radius: 2 }), notes: [note(1, 84)] })
-  assert.equal(positionOf(resolveVisualCopies([lone], 1.5)[0])[0], 2, 'nothing to stretch to')
-
-  // A chord at beat 0 (pitches 60 and 84) collapses to one boundary keeping r = 10.
+test('chords keep the largest count, out-of-span pitches are no-ops', () => {
+  // A chord at beat 0 (pitches 37 and 43) collapses to one gate keeping 8.
   const chord = radialSplitter.resolve({
-    settings: settings({ copies: 1, radius: 0 }),
-    notes: [note(0, 60), note(0, 84), note(2, 60)],
+    settings: settings({ copies: 1, radius: 2 }),
+    notes: [note(0, 37), note(0, 43)],
   })
-  assert.equal(positionOf(resolveVisualCopies([chord], 1)[0])[0], 10)
+  assert.equal(resolveVisualCopies([chord], 1).length, 8)
 
-  // The retired mute rows (pitch 127 downward) fall outside the value span:
-  // old saves degrade to the knob radius instead of misreading.
+  // The retired radius rows above the count span (68..84) and the retired mute
+  // rows (127 downward) both fall out of span: old saves degrade to the knob
+  // instead of misreading.
   const legacy = radialSplitter.resolve({
     settings: settings({ copies: 2, radius: 1.5 }),
-    notes: [note(0, 127), note(2, 126)],
+    notes: [note(0, 84), note(1, 127), note(2, 126)],
   })
   const copies = resolveVisualCopies([legacy], 1)
-  assert.equal(positionOf(copies[0])[0], 1.5)
+  assert.equal(copies.length, 2, 'count stays the knob')
+  assert.equal(positionOf(copies[0])[0], 1.5, 'radius stays the knob')
   assert.deepEqual(copies.map((copy) => copy.opacity), [1, 1], 'no mute gating either')
 })
 
@@ -423,17 +422,17 @@ test('ring twist turns each ring about the axis, changing bearing and nothing el
   upright.forEach((copy) => assert.deepEqual(localXOf(copy), [1, 0, 0]))
 })
 
-test('every ring rides the MIDI radius lane, and the spiral anchors per ring', () => {
-  // The lane samples ONE radius; the ring offsets ride on top of it, so a
-  // swelling lane moves the whole stack and keeps its spacing.
-  const swelling = resolveVisualCopies([
+test('the count lane resizes every ring together, and the spiral anchors per ring', () => {
+  // The lane samples ONE count; every ring repeats that slot set, so a latch
+  // to 2 makes a 2-ring stack of 2-copy rings (ring-major) with the ring
+  // offsets exactly where the knobs put them.
+  const latched = resolveVisualCopies([
     radialSplitter.resolve({
       settings: settings({ copies: 1, radius: 0, rings: 2, ringSpacing: 1 }),
-      notes: [note(0, 84), note(4, 84)],
+      notes: [note(0, 37)],
     }),
-  ], 2)
-  // Mid-interval the swell is at its peak (4u(1-u) at u = 0.5 = 1) -> radius 10.
-  assert.deepEqual(swelling.map(positionOf), [[10, 0, 0], [11, 0, 0]])
+  ], 1)
+  assert.deepEqual(latched.map(positionOf), [[0, 0, 0], [0, 0, 0], [1, 0, 0], [-1, 0, 0]])
 
   // Spiral GROWTH stays per COPY, anchored at each ring's own first slot.
   const spiral = resolveVisualCopies([
@@ -502,11 +501,11 @@ test('spiral growth is a per-copy RADIUS ratio anchored at copy 0, and only in s
   ], 0)
   for (const copy of circular) assert.deepEqual(positionOf(copy), [2, 0, 0])
 
-  // Growth rides on the MIDI-sampled radius, not on the knob: the lane still
-  // owns the ring's size and the spiral keeps its proportions while it swells.
+  // Growth rides whatever count the lane latches: a spiral keeps its per-copy
+  // proportions when a note resizes it, exactly as the knob would lay it out.
   const midi = radialSplitter.resolve({
-    settings: settings({ copies: 2, radius: 0, sweep: 0, shape: 1, growth: 2 }),
-    notes: [note(0, 84), note(2, 84)],
+    settings: settings({ copies: 1, radius: 10, sweep: 0, shape: 1, growth: 2 }),
+    notes: [note(0, 37)],
   })
   assert.deepEqual(resolveVisualCopies([midi], 1).map(positionOf), [[10, 0, 0], [20, 0, 0]])
 })

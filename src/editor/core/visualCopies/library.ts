@@ -5,7 +5,7 @@
 
 import { Matrix4, Vector3 } from 'three'
 import type { MidiRowDef } from '../../instruments/types'
-import { cycleValueAt, extractValueGates, valueLaneRows } from './valueLane'
+import { countLaneRows, resolveCountLane } from './countLane'
 import type { MoverOrSplitterDefinition } from './definitions'
 import type { VisualCopy } from './types'
 import { moverDefinition } from './mover'
@@ -40,7 +40,6 @@ import { symmetrySplitter } from './symmetry'
 import { tunnelSplitter } from './tunnel'
 import { duplicateTrailSplitter } from './duplicateTrail'
 import { approachSplitter } from './approach'
-import { noteDisablesSplitterSlot, splitterMidiRows } from './splitterMidi'
 import { applySplitterSize, splitterSize, SPLITTER_SIZE_MIN, SPLITTER_SIZE_PARAM } from './splitterSize'
 import { GRID_COLOR, LINE_COLOR, RADIAL_COLOR } from './identityColors'
 
@@ -122,17 +121,18 @@ export const burstMover: MoverOrSplitterDefinition<BurstSettings> = {
 // Slot count comes only from settings, never from MIDI, so downstream indices
 // and the React occurrence list stay stable.
 //
-// The MIDI lane is a VALUE lane, not a mute map (reworked 2026-08): a note's
-// pitch names a radius through the same 36-84 encoding automation lanes use,
-// and between consecutive note ONSETS the radius swells 0 → r → 0 along the
-// cycle-automation default curve (y = 4u(1-u), the DEFAULT_CYCLE bezier's
-// closed form) where r is the earlier onset's pitch-value. Outside the onset
-// span - before the first note, at/after the last, or with fewer than two -
-// the ring rests at the RADIUS knob: the panel says what the piece looks
-// like, MIDI bends it. Duration and velocity are deliberately ignored (onsets
-// only), chords collapse to one boundary keeping the largest radius, and
-// out-of-span pitches (including the retired mute rows at 122-127) are
-// no-ops, so old saves degrade to their knob radius instead of misreading.
+// The MIDI lane is the shared COUNT lane (countLane.ts, reworked 2026-08-25 -
+// it retired the 2026-08 radius value lane): a note's pitch names a COPY
+// COUNT through the same integer row grid an automation lane on COPIES uses
+// (one row per whole number, bottom row = 1 at pitch 36), and the count jumps
+// to it at the onset and holds until the next - a step function. Before the
+// first onset the ring rests at the COPIES knob (or its automation): the
+// panel says what the piece looks like, MIDI bends it. Each sampled count
+// re-lays the ring out exactly as turning the knob would; duration and
+// velocity are ignored, chords keep the largest count, and out-of-span
+// pitches (the retired radius rows above the count span, the mute rows at
+// 122-127) are no-ops, so those saves degrade toward their knobs. RADIUS is
+// knob + automation only now.
 //
 // The polar options (2026-08) are four knobs on top of that ring, chosen so
 // each one buys a whole family of shapes and every default is the plain ring
@@ -240,8 +240,6 @@ export interface RadialSettings {
 
 const RADIAL_MAX_COPIES = 32
 const RADIAL_MAX_RINGS = 8
-const RADIAL_RADIUS_MIN = 0
-const RADIAL_RADIUS_MAX = 10
 const RADIAL_AXES = [new Vector3(0, 0, 1), new Vector3(0, 1, 0), new Vector3(1, 0, 0)]
 const RADIAL_DIRECTIONS: [number, number, number][] = [[1, 0, 0], [1, 0, 0], [0, 1, 0]]
 // Each plane's LOCAL tangent and its face-the-center fix. Both are constants
@@ -276,9 +274,9 @@ export function radialSweepFraction(index: number, count: number, sweepDegrees: 
   return closed ? index / count : index / (count - 1)
 }
 
-// Rows span the automation pitch range top-down (top row = full radius,
-// bottom = 0) so the roll reads like an automation lane's value rows.
-const RADIAL_VALUE_ROWS: MidiRowDef[] = valueLaneRows('R', RADIAL_RADIUS_MIN, RADIAL_RADIUS_MAX)
+// One row per whole count, top = 32, bottom = 1, matching an integer
+// automation lane on COPIES (countLane.ts).
+const RADIAL_COUNT_ROWS: MidiRowDef[] = countLaneRows(1, RADIAL_MAX_COPIES, 'copy', 'copies')
 
 export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
   id: 'radial',
@@ -286,7 +284,7 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
   kind: 'splitter',
   identityColor: RADIAL_COLOR,
   params: [
-    { key: 'copies', label: 'Copies', min: 1, max: RADIAL_MAX_COPIES, step: 1, default: 6 },
+    { key: 'copies', label: 'Copies', min: 1, max: RADIAL_MAX_COPIES, step: 1, default: 6, integer: true },
     { key: 'radius', label: 'Radius', min: 0, max: 10, step: 0.1, default: 0 },
     SPLITTER_SIZE_PARAM,
     {
@@ -314,7 +312,7 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
     { key: 'sweep', label: 'Sweep', min: 0, max: 1440, step: 5, default: 360 },
     { key: 'rise', label: 'Rise', min: -2, max: 2, step: 0.05, default: 0 },
     { key: 'tilt', label: 'Tilt', min: -180, max: 180, step: 1, default: 0 },
-    { key: 'rings', label: 'Rings', min: 1, max: RADIAL_MAX_RINGS, step: 1, default: 1 },
+    { key: 'rings', label: 'Rings', min: 1, max: RADIAL_MAX_RINGS, step: 1, default: 1, integer: true },
     { key: 'ringSpacing', label: 'Ring spacing', min: -5, max: 5, step: 0.1, default: 1 },
     { key: 'ringSize', label: 'Ring size', min: 0.25, max: 2, step: 0.01, default: 1 },
     { key: 'ringDepth', label: 'Ring depth', min: -4, max: 4, step: 0.05, default: 0 },
@@ -332,121 +330,133 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
       default: RADIAL_FACING_OUTWARD,
     },
   ],
-  midiRows: () => RADIAL_VALUE_ROWS,
+  midiRows: () => RADIAL_COUNT_ROWS,
   strictMidiRows: true,
   resolve({ settings, notes }) {
-    const count = Math.max(1, Math.min(RADIAL_MAX_COPIES, Math.round(settings.copies)))
-    const plane = settings.plane === 1 || settings.plane === 2 ? settings.plane : 0
-    const axis = RADIAL_AXES[plane]
-    const direction = RADIAL_DIRECTIONS[plane]
-    const size = splitterSize(settings.size)
-    const sweep = Math.max(0, settings.sweep ?? 360)
-    const rise = settings.rise ?? 0
-    const growth = settings.shape === RADIAL_SHAPE_SPIRAL ? Math.max(0.05, settings.growth ?? 1) : 1
-    const facing = settings.facing === RADIAL_FACING_UPRIGHT
-      || settings.facing === RADIAL_FACING_PATH
-      || settings.facing === RADIAL_FACING_CENTER
-      ? settings.facing
-      : RADIAL_FACING_OUTWARD
-    // TILT is ONE rotation shared by every slot, because it is stated in the
-    // SLOT's frame: the same local nod becomes that slot's own tangent once the
-    // slot rotation places it (R . tilt . R^-1 = a turn about the WORLD
-    // tangent), so the formation keeps its radial symmetry with no per-copy
-    // math - RINGS and RING TWIST included, since both only change which
-    // bearing a slot wears. Identity at 0, which keeps an untouched save exact.
-    const tilt = settings.tilt ?? 0
-    const tiltFix = tilt === 0
-      ? null
-      : new Matrix4().makeRotationAxis(RADIAL_TANGENTS[plane], (tilt * Math.PI) / 180)
-    const rings = Math.max(1, Math.min(RADIAL_MAX_RINGS, Math.round(settings.rings ?? 1)))
-    const ringSpacing = settings.ringSpacing ?? 1
-    const ringSize = Math.max(0.05, settings.ringSize ?? 1)
-    const ringDepth = settings.ringDepth ?? 0
-    const ringTwist = ((settings.ringTwist ?? 0) * Math.PI) / 180
-    // Structural slots, RING-MAJOR (ring 0's whole slot set first, so a ring is
-    // a contiguous run of copy indices). Within a ring, slot 0 is unrotated and
-    // sits at the ring's own radius - it is the spiral's anchor and the arc's
-    // first end. Everything here is beat-independent; only the radius the
-    // translation is built from moves, so the three per-ring amounts are all
-    // resolved once, here.
-    const slots = Array.from({ length: rings * count }, (_, i) => {
-      const ring = Math.floor(i / count)
-      const slot = i % count
-      // TWIST turns each whole ring about the axis before its slots are laid
-      // out, so it joins the slot angle rather than becoming a second rotation:
-      // the copies stay on their radius and only their bearing moves, and
-      // UPRIGHT still cancels the FULL bearing below.
-      const angle = radialSweepFraction(slot, count, sweep) * (sweep * Math.PI) / 180 + ringTwist * ring
-      const rotation = new Matrix4().makeRotationAxis(axis, angle)
-      // The facing fix rides INSIDE the slot (after the translation), so it
-      // re-aims the copy without moving it: cancelling the slot rotation
-      // leaves the copy wearing the object's own orientation, and a quarter
-      // turn about the axis points it down the tangent.
-      const faceFix = facing === RADIAL_FACING_UPRIGHT
-        ? new Matrix4().makeRotationAxis(axis, -angle)
-        : facing === RADIAL_FACING_PATH
-          ? new Matrix4().makeRotationAxis(axis, Math.PI / 2)
-          : facing === RADIAL_FACING_CENTER
-            // A quarter turn onto the INWARD radial, so the object's forward
-            // axis looks at the ring's center from wherever it sits. Same
-            // constant in every plane, because "which way is local +Z" is the
-            // only thing that decides it - which makes it a turn within the
-            // ring plane for a ring seen edge-on (XZ, YZ) and a pitch out of
-            // the ring plane for one seen face-on (XY).
-            ? new Matrix4().makeRotationAxis(RADIAL_FACE_CENTER_AXES[plane], Math.PI / 2)
-            : null
-      return {
-        rotation,
-        faceFix,
-        radiusFactor: Math.pow(growth, slot),
-        // Additive radius step, and the ring's axial step joins RISE's - both
-        // are world distances along the axis the slot rotation leaves alone.
-        radiusOffset: ringSpacing * ring,
-        rise: rise * slot + ringDepth * ring,
-        // Ratio on the shared knob, floored at the knob's own minimum so a
-        // shrinking stack can't reach a degenerate scale.
-        size: Math.max(SPLITTER_SIZE_MIN, size * Math.pow(ringSize, ring)),
-      }
+    // The count lane re-resolves this layout at each sampled COPIES value and
+    // publishes the structural bracket (countLane.ts); an empty lane is the
+    // bare layout, bit-identical to the pre-lane definition.
+    return resolveCountLane({
+      settings,
+      notes,
+      key: 'copies',
+      min: 1,
+      max: RADIAL_MAX_COPIES,
+      resolveAt: resolveRadialLayout,
     })
-    // The shared value-lane grammar (valueLane.ts): pitch-mapped cycle gates,
-    // radius swelling 0 -> r -> 0 between onsets, resting at the knob outside.
-    const gates = extractValueGates(notes, RADIAL_RADIUS_MIN, RADIAL_RADIUS_MAX)
-    return {
-      apply(visualCopy, { beat }) {
-        const radius = cycleValueAt(gates, beat, settings.radius)
-        // Size composes AFTER the translation - R · T(radius) · S(size) - so
-        // it scales each copy about its own center and the ring radius stays
-        // exactly the sampled radius, whatever the size. (The shared splitter
-        // knob; see splitterSize.ts.) RISE joins the same translation: the
-        // slot rotation is ABOUT the axis, so the axial component is
-        // untouched by it and one translation says both.
-        return slots.map((slot) => {
-          // Rings step the radius additively and CLAMP at the center: a
-          // negative radius would come back out on the opposite side.
-          const slotRadius = Math.max(0, radius + slot.radiusOffset) * slot.radiusFactor
-          const transform = visualCopy.transform.clone()
-            .multiply(slot.rotation)
-            .multiply(new Matrix4().makeTranslation(
-              direction[0] * slotRadius + axis.x * slot.rise,
-              direction[1] * slotRadius + axis.y * slot.rise,
-              direction[2] * slotRadius + axis.z * slot.rise,
-            ))
-          // TILT before FACING: the nod is measured on the slot's own frame,
-          // where it is radially symmetric, and the facing fix then re-aims
-          // whatever it left. The other order would let Upright cancel the
-          // slot rotation FIRST, and every copy would nod the same way in
-          // world space - a rigid lean, not a ring closing.
-          if (tiltFix) transform.multiply(tiltFix)
-          if (slot.faceFix) transform.multiply(slot.faceFix)
-          return {
-            transform: applySplitterSize(transform, slot.size),
-            opacity: visualCopy.opacity,
-            colorShift: { ...visualCopy.colorShift },
-          }
-        })
-      },
-    }
   },
+}
+
+/** The whole ring as a pure function of settings - every per-beat input
+ *  (the lane's count, automated knobs) arrives as a re-resolve. */
+function resolveRadialLayout(settings: RadialSettings) {
+  const count = Math.max(1, Math.min(RADIAL_MAX_COPIES, Math.round(settings.copies)))
+  const plane = settings.plane === 1 || settings.plane === 2 ? settings.plane : 0
+  const axis = RADIAL_AXES[plane]
+  const direction = RADIAL_DIRECTIONS[plane]
+  const size = splitterSize(settings.size)
+  const sweep = Math.max(0, settings.sweep ?? 360)
+  const rise = settings.rise ?? 0
+  const growth = settings.shape === RADIAL_SHAPE_SPIRAL ? Math.max(0.05, settings.growth ?? 1) : 1
+  const facing = settings.facing === RADIAL_FACING_UPRIGHT
+    || settings.facing === RADIAL_FACING_PATH
+    || settings.facing === RADIAL_FACING_CENTER
+    ? settings.facing
+    : RADIAL_FACING_OUTWARD
+  // TILT is ONE rotation shared by every slot, because it is stated in the
+  // SLOT's frame: the same local nod becomes that slot's own tangent once the
+  // slot rotation places it (R . tilt . R^-1 = a turn about the WORLD
+  // tangent), so the formation keeps its radial symmetry with no per-copy
+  // math - RINGS and RING TWIST included, since both only change which
+  // bearing a slot wears. Identity at 0, which keeps an untouched save exact.
+  const tilt = settings.tilt ?? 0
+  const tiltFix = tilt === 0
+    ? null
+    : new Matrix4().makeRotationAxis(RADIAL_TANGENTS[plane], (tilt * Math.PI) / 180)
+  const rings = Math.max(1, Math.min(RADIAL_MAX_RINGS, Math.round(settings.rings ?? 1)))
+  const ringSpacing = settings.ringSpacing ?? 1
+  const ringSize = Math.max(0.05, settings.ringSize ?? 1)
+  const ringDepth = settings.ringDepth ?? 0
+  const ringTwist = ((settings.ringTwist ?? 0) * Math.PI) / 180
+  // Structural slots, RING-MAJOR (ring 0's whole slot set first, so a ring is
+  // a contiguous run of copy indices). Within a ring, slot 0 is unrotated and
+  // sits at the ring's own radius - it is the spiral's anchor and the arc's
+  // first end. Everything in this function is a pure function of settings, so
+  // the slots resolve once here and per-beat inputs arrive as a re-resolve.
+  const slots = Array.from({ length: rings * count }, (_, i) => {
+    const ring = Math.floor(i / count)
+    const slot = i % count
+    // TWIST turns each whole ring about the axis before its slots are laid
+    // out, so it joins the slot angle rather than becoming a second rotation:
+    // the copies stay on their radius and only their bearing moves, and
+    // UPRIGHT still cancels the FULL bearing below.
+    const angle = radialSweepFraction(slot, count, sweep) * (sweep * Math.PI) / 180 + ringTwist * ring
+    const rotation = new Matrix4().makeRotationAxis(axis, angle)
+    // The facing fix rides INSIDE the slot (after the translation), so it
+    // re-aims the copy without moving it: cancelling the slot rotation
+    // leaves the copy wearing the object's own orientation, and a quarter
+    // turn about the axis points it down the tangent.
+    const faceFix = facing === RADIAL_FACING_UPRIGHT
+      ? new Matrix4().makeRotationAxis(axis, -angle)
+      : facing === RADIAL_FACING_PATH
+        ? new Matrix4().makeRotationAxis(axis, Math.PI / 2)
+        : facing === RADIAL_FACING_CENTER
+          // A quarter turn onto the INWARD radial, so the object's forward
+          // axis looks at the ring's center from wherever it sits. Same
+          // constant in every plane, because "which way is local +Z" is the
+          // only thing that decides it - which makes it a turn within the
+          // ring plane for a ring seen edge-on (XZ, YZ) and a pitch out of
+          // the ring plane for one seen face-on (XY).
+          ? new Matrix4().makeRotationAxis(RADIAL_FACE_CENTER_AXES[plane], Math.PI / 2)
+          : null
+    return {
+      rotation,
+      faceFix,
+      radiusFactor: Math.pow(growth, slot),
+      // Additive radius step, and the ring's axial step joins RISE's - both
+      // are world distances along the axis the slot rotation leaves alone.
+      radiusOffset: ringSpacing * ring,
+      rise: rise * slot + ringDepth * ring,
+      // Ratio on the shared knob, floored at the knob's own minimum so a
+      // shrinking stack can't reach a degenerate scale.
+      size: Math.max(SPLITTER_SIZE_MIN, size * Math.pow(ringSize, ring)),
+    }
+  })
+  const radius = settings.radius ?? 0
+  return {
+    apply(visualCopy: VisualCopy) {
+      // Size composes AFTER the translation - R · T(radius) · S(size) - so
+      // it scales each copy about its own center and the ring radius stays
+      // exactly the knob's radius, whatever the size. (The shared splitter
+      // knob; see splitterSize.ts.) RISE joins the same translation: the
+      // slot rotation is ABOUT the axis, so the axial component is
+      // untouched by it and one translation says both.
+      return slots.map((slot) => {
+        // Rings step the radius additively and CLAMP at the center: a
+        // negative radius would come back out on the opposite side.
+        const slotRadius = Math.max(0, radius + slot.radiusOffset) * slot.radiusFactor
+        const transform = visualCopy.transform.clone()
+          .multiply(slot.rotation)
+          .multiply(new Matrix4().makeTranslation(
+            direction[0] * slotRadius + axis.x * slot.rise,
+            direction[1] * slotRadius + axis.y * slot.rise,
+            direction[2] * slotRadius + axis.z * slot.rise,
+          ))
+        // TILT before FACING: the nod is measured on the slot's own frame,
+        // where it is radially symmetric, and the facing fix then re-aims
+        // whatever it left. The other order would let Upright cancel the
+        // slot rotation FIRST, and every copy would nod the same way in
+        // world space - a rigid lean, not a ring closing.
+        if (tiltFix) transform.multiply(tiltFix)
+        if (slot.faceFix) transform.multiply(slot.faceFix)
+        return {
+          transform: applySplitterSize(transform, slot.size),
+          opacity: visualCopy.opacity,
+          colorShift: { ...visualCopy.colorShift },
+        }
+      })
+    },
+  }
 }
 
 // ── Line ─────────────────────────────────────────────────────────────────────
@@ -475,9 +485,11 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
 // camera's shrink out (that apparent-size treatment belongs to the dedicated
 // depth splitters - see duplicateTrail).
 //
-// The MIDI lane is the shared slot mute map (Polyhedron's convention): one row
-// per copy, a held note hides that copy; animation beyond that belongs to
-// automation lanes on the knobs.
+// The MIDI lane is the shared COUNT lane (countLane.ts, 2026-08-25 - it
+// retired the per-copy mute map): a note's pitch names a copy count on the
+// integer automation grid, latching at each onset and resting at the COPIES
+// knob before the first. Old mute notes (96 up) fall out of the count span
+// and no-op; animation beyond the count belongs to automation lanes.
 
 export interface LineSettings {
   copies: number
@@ -501,47 +513,60 @@ export const lineSplitter: MoverOrSplitterDefinition<LineSettings> = {
   kind: 'splitter',
   identityColor: LINE_COLOR,
   params: [
-    { key: 'copies', label: 'Copies', min: 1, max: LINE_MAX_COPIES, step: 1, default: 5 },
+    { key: 'copies', label: 'Copies', min: 1, max: LINE_MAX_COPIES, step: 1, default: 5, integer: true },
     { key: 'spacing', label: 'Spacing', min: 0, max: 4, step: 0.05, default: 1 },
     SPLITTER_SIZE_PARAM,
     { key: 'growth', label: 'Growth', min: 0.5, max: 2, step: 0.01, default: 1 },
     { key: 'angle', label: 'Angle', min: -180, max: 180, step: 1, default: 0 },
     { key: 'tilt', label: 'Tilt', min: -90, max: 90, step: 1, default: 0 },
   ],
-  midiRows: (settings) => {
-    const count = Math.max(1, Math.min(LINE_MAX_COPIES, Math.round(settings.copies)))
-    return splitterMidiRows(count, 'copy', 'copies')
-  },
+  midiRows: () => LINE_COUNT_ROWS,
   strictMidiRows: true,
   resolve({ settings, notes }) {
-    const count = Math.max(1, Math.min(LINE_MAX_COPIES, Math.round(settings.copies)))
-    const spacing = Math.max(0, settings.spacing ?? 1)
-    const growth = Math.max(0.05, settings.growth ?? 1)
-    const uniformSize = splitterSize(settings.size)
-    const angle = ((settings.angle ?? 0) * Math.PI) / 180
-    const tilt = ((settings.tilt ?? 0) * Math.PI) / 180
-    // Aim the step direction: identity at (0, 0) stepping along local -Z, so
-    // R·(0,0,-1) = (cos t · sin a, sin t, -cos t · cos a) - lift about X
-    // first, then swing about Y.
-    const rotation = new Matrix4()
-      .makeRotationY(-angle)
-      .multiply(new Matrix4().makeRotationX(tilt))
-    const slots = Array.from({ length: count }, (_, index) => {
-      const size = uniformSize * Math.pow(growth, index)
-      const slot = rotation.clone()
-        .multiply(new Matrix4().makeTranslation(0, 0, -spacing * index))
-      return applySplitterSize(slot, size)
+    return resolveCountLane({
+      settings,
+      notes,
+      key: 'copies',
+      min: 1,
+      max: LINE_MAX_COPIES,
+      resolveAt: resolveLineLayout,
     })
-    return {
-      apply(visualCopy, { beat }) {
-        return slots.map((slot, index) => ({
-          transform: visualCopy.transform.clone().multiply(slot),
-          opacity: noteDisablesSplitterSlot(notes, beat, index, slots.length) ? 0 : visualCopy.opacity,
-          colorShift: { ...visualCopy.colorShift },
-        }))
-      },
-    }
   },
+}
+
+// One row per whole count, matching an integer automation lane on COPIES.
+const LINE_COUNT_ROWS: MidiRowDef[] = countLaneRows(1, LINE_MAX_COPIES, 'copy', 'copies')
+
+/** The whole run as a pure function of settings (countLane.ts re-resolves it
+ *  at each sampled count). */
+function resolveLineLayout(settings: LineSettings) {
+  const count = Math.max(1, Math.min(LINE_MAX_COPIES, Math.round(settings.copies)))
+  const spacing = Math.max(0, settings.spacing ?? 1)
+  const growth = Math.max(0.05, settings.growth ?? 1)
+  const uniformSize = splitterSize(settings.size)
+  const angle = ((settings.angle ?? 0) * Math.PI) / 180
+  const tilt = ((settings.tilt ?? 0) * Math.PI) / 180
+  // Aim the step direction: identity at (0, 0) stepping along local -Z, so
+  // R·(0,0,-1) = (cos t · sin a, sin t, -cos t · cos a) - lift about X
+  // first, then swing about Y.
+  const rotation = new Matrix4()
+    .makeRotationY(-angle)
+    .multiply(new Matrix4().makeRotationX(tilt))
+  const slots = Array.from({ length: count }, (_, index) => {
+    const size = uniformSize * Math.pow(growth, index)
+    const slot = rotation.clone()
+      .multiply(new Matrix4().makeTranslation(0, 0, -spacing * index))
+    return applySplitterSize(slot, size)
+  })
+  return {
+    apply(visualCopy: VisualCopy) {
+      return slots.map((slot) => ({
+        transform: visualCopy.transform.clone().multiply(slot),
+        opacity: visualCopy.opacity,
+        colorShift: { ...visualCopy.colorShift },
+      }))
+    },
+  }
 }
 
 // ── Grid ────────────────────────────────────────────────────────────────────
@@ -574,18 +599,16 @@ export const lineSplitter: MoverOrSplitterDefinition<LineSettings> = {
 // spacing/radius stay exactly what their knobs say - the two are independent
 // axes of the layout, which is the whole point of having both.
 //
-// The MIDI lane is a VALUE lane on SPACING (Radial's radius grammar,
-// valueLane.ts): a note's pitch names a spacing through the automation 36-84
-// encoding and the lattice swells 0 -> s -> 0 between onsets on the cycle
-// default's closed form, resting at the SPACING knob outside the span - so an
-// empty lane is exactly the knob, and notes breathe the whole lattice. The
-// rows are DETENTS, every 6th pitch, so the roll shows 9 rows over 0-4 in 0.5
-// steps (bottom row = exactly 0, a full collapse) instead of Radial's 49; any
-// pitch dragged between detents still decodes through the same encoding. Only
-// the LINEAR offsets scale - ring radii keep their own knobs - and spacing is
-// floored at 0, matching the knob's own floor. The per-cell mute map retired
-// in favor of this (2026-08); old mute notes (pitch 96 up) fall out of the
-// value span and no-op, so those saves degrade to the knob.
+// The MIDI lane is the shared COUNT lane on ROWS (countLane.ts, 2026-08-25 -
+// it retired the 2026-08 spacing value lane, which retired the per-cell mute
+// map before it): a note's pitch names a ROW count on the integer automation
+// grid (one row per whole number, bottom = 1 at pitch 36), latching at each
+// onset and resting at the ROWS knob before the first - each sampled count
+// re-lays the lattice out exactly as turning the knob would. ROWS is the
+// lane's dimension because it is the grid's leading count param; COLUMNS and
+// DEPTH (and SPACING, whose lane this replaced) stay knob + automation. Old
+// spacing notes above the count span, and mute notes at 96 up, fall out of
+// span and no-op, so those saves degrade toward their knobs.
 
 export interface GridSettings {
   rows: number
@@ -611,11 +634,8 @@ export interface GridSettings {
 }
 
 const GRID_MAX_DIMENSION = 32
-const GRID_SPACING_MIN = 0
-const GRID_SPACING_MAX = 4
-// 9 detent rows over 0-4: every 6th pitch of the 36-84 span lands exactly on
-// a 0.5 step, endpoints included (84 = 4.0 down to 36 = 0.0).
-const GRID_VALUE_ROWS: MidiRowDef[] = valueLaneRows('S', GRID_SPACING_MIN, GRID_SPACING_MAX, 6)
+// One row per whole count, matching an integer automation lane on ROWS.
+const GRID_COUNT_ROWS: MidiRowDef[] = countLaneRows(1, GRID_MAX_DIMENSION, 'row', 'rows')
 const GRID_PLANES: [0 | 1 | 2, 0 | 1 | 2][] = [
   [0, 1],
   [0, 2],
@@ -663,9 +683,9 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
   kind: 'splitter',
   identityColor: GRID_COLOR,
   params: [
-    { key: 'rows', label: 'Rows', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 3 },
-    { key: 'columns', label: 'Columns', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 3 },
-    { key: 'depth', label: 'Depth', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 1 },
+    { key: 'rows', label: 'Rows', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 3, integer: true },
+    { key: 'columns', label: 'Columns', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 3, integer: true },
+    { key: 'depth', label: 'Depth', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 1, integer: true },
     { key: 'spacing', label: 'Spacing', min: 0, max: 40, step: 0.1, default: 1 },
     SPLITTER_SIZE_PARAM,
     {
@@ -725,93 +745,101 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
       default: 0,
     },
   ],
-  midiRows: () => GRID_VALUE_ROWS,
+  midiRows: () => GRID_COUNT_ROWS,
   strictMidiRows: true,
   resolve({ settings, notes }) {
-    const rows = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.rows)))
-    const columns = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.columns)))
-    const depth = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.depth ?? 1)))
-    const [horizontalAxis, verticalAxis] = GRID_PLANES[settings.plane] ?? GRID_PLANES[0]
-    const normalAxis = (3 - horizontalAxis - verticalAxis) as 0 | 1 | 2
-    const size = splitterSize(settings.size)
-    // One record per dimension, in composition order. `unitOffset` keeps the
-    // exact legacy centering (rows grow downward from the top, layer 0 is the
-    // front) at spacing 1; the sampled spacing scales it per frame.
-    const dimensions = [
-      {
-        count: columns,
-        circular: settings.columnsMode === 1,
-        radius: Math.max(0, settings.columnsRadius ?? 0),
-        offsetAxis: horizontalAxis,
-        rotationAxis: normalAxis,
-        unitOffset: (index: number) => index - (columns - 1) / 2,
-      },
-      {
-        count: rows,
-        circular: settings.rowsMode === 1,
-        radius: Math.max(0, settings.rowsRadius ?? 0),
-        offsetAxis: verticalAxis,
-        rotationAxis: horizontalAxis,
-        unitOffset: (index: number) => (rows - 1) / 2 - index,
-      },
-      {
-        count: depth,
-        circular: settings.depthMode === 1,
-        radius: Math.max(0, settings.depthRadius ?? 0),
-        offsetAxis: normalAxis,
-        rotationAxis: verticalAxis,
-        unitOffset: (index: number) => (depth - 1) / 2 - index,
-      },
-    ]
-    // Everything except the linear translation is beat-independent, so each
-    // cell precomputes a unit lattice vector (the spacing's coefficient) plus
-    // the circular steps and SIZE folded into one tail matrix: the per-frame
-    // cell is T(spacing * unit) * tail.
-    const cells = gridCellOrder3(rows, columns, depth, settings.indexing).map(([row, column, layer]) => {
-      const indices = [column, row, layer]
-      // Grid is a layout, not a fit-to-frame operation: adding rows/columns
-      // expands the occupied area while every copy retains the incoming size
-      // (scaled only by the SIZE knob, which is applied last so it never feeds
-      // back into the offsets). Linear offsets sum in world axes, outside the
-      // circular steps.
-      const unit = new Vector3()
-      for (let d = 0; d < 3; d++) {
-        const dim = dimensions[d]
-        if (!dim.circular) unit.addScaledVector(GRID_AXIS_VECTORS[dim.offsetAxis], dim.unitOffset(indices[d]))
-      }
-      const tail = new Matrix4()
-      for (let d = 0; d < 3; d++) {
-        const dim = dimensions[d]
-        if (!dim.circular) continue
-        const arm = GRID_AXIS_VECTORS[dim.offsetAxis].clone().multiplyScalar(dim.radius)
-        tail
-          .multiply(new Matrix4().makeRotationAxis(GRID_AXIS_VECTORS[dim.rotationAxis], (indices[d] / dim.count) * Math.PI * 2))
-          .multiply(new Matrix4().makeTranslation(arm.x, arm.y, arm.z))
-      }
-      return { unit, tail: applySplitterSize(tail, size) }
+    return resolveCountLane({
+      settings,
+      notes,
+      key: 'rows',
+      min: 1,
+      max: GRID_MAX_DIMENSION,
+      resolveAt: resolveGridLayout,
     })
-    // The value lane: notes name spacings, the lattice breathes between
-    // onsets, the knob (floored at 0) holds outside the span. Only the linear
-    // offsets scale - ring radii are their own knobs.
-    const gates = extractValueGates(notes, GRID_SPACING_MIN, GRID_SPACING_MAX)
-    const restingSpacing = Math.max(0, settings.spacing ?? 1)
-    return {
-      apply(visualCopy, { beat }) {
-        const spacing = cycleValueAt(gates, beat, restingSpacing)
-        return cells.map((cell) => ({
-          transform: visualCopy.transform.clone()
-            .multiply(new Matrix4().makeTranslation(
-              cell.unit.x * spacing,
-              cell.unit.y * spacing,
-              cell.unit.z * spacing,
-            ))
-            .multiply(cell.tail),
-          opacity: visualCopy.opacity,
-          colorShift: { ...visualCopy.colorShift },
-        }))
-      },
-    }
   },
+}
+
+/** The whole lattice as a pure function of settings (countLane.ts re-resolves
+ *  it at each sampled ROWS count). */
+function resolveGridLayout(settings: GridSettings) {
+  const rows = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.rows)))
+  const columns = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.columns)))
+  const depth = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.depth ?? 1)))
+  const [horizontalAxis, verticalAxis] = GRID_PLANES[settings.plane] ?? GRID_PLANES[0]
+  const normalAxis = (3 - horizontalAxis - verticalAxis) as 0 | 1 | 2
+  const size = splitterSize(settings.size)
+  // One record per dimension, in composition order. `unitOffset` keeps the
+  // exact legacy centering (rows grow downward from the top, layer 0 is the
+  // front) at spacing 1; the SPACING knob scales it in apply.
+  const dimensions = [
+    {
+      count: columns,
+      circular: settings.columnsMode === 1,
+      radius: Math.max(0, settings.columnsRadius ?? 0),
+      offsetAxis: horizontalAxis,
+      rotationAxis: normalAxis,
+      unitOffset: (index: number) => index - (columns - 1) / 2,
+    },
+    {
+      count: rows,
+      circular: settings.rowsMode === 1,
+      radius: Math.max(0, settings.rowsRadius ?? 0),
+      offsetAxis: verticalAxis,
+      rotationAxis: horizontalAxis,
+      unitOffset: (index: number) => (rows - 1) / 2 - index,
+    },
+    {
+      count: depth,
+      circular: settings.depthMode === 1,
+      radius: Math.max(0, settings.depthRadius ?? 0),
+      offsetAxis: normalAxis,
+      rotationAxis: verticalAxis,
+      unitOffset: (index: number) => (depth - 1) / 2 - index,
+    },
+  ]
+  // Everything except the linear translation is beat-independent, so each
+  // cell precomputes a unit lattice vector (the spacing's coefficient) plus
+  // the circular steps and SIZE folded into one tail matrix: the per-frame
+  // cell is T(spacing * unit) * tail.
+  const cells = gridCellOrder3(rows, columns, depth, settings.indexing).map(([row, column, layer]) => {
+    const indices = [column, row, layer]
+    // Grid is a layout, not a fit-to-frame operation: adding rows/columns
+    // expands the occupied area while every copy retains the incoming size
+    // (scaled only by the SIZE knob, which is applied last so it never feeds
+    // back into the offsets). Linear offsets sum in world axes, outside the
+    // circular steps.
+    const unit = new Vector3()
+    for (let d = 0; d < 3; d++) {
+      const dim = dimensions[d]
+      if (!dim.circular) unit.addScaledVector(GRID_AXIS_VECTORS[dim.offsetAxis], dim.unitOffset(indices[d]))
+    }
+    const tail = new Matrix4()
+    for (let d = 0; d < 3; d++) {
+      const dim = dimensions[d]
+      if (!dim.circular) continue
+      const arm = GRID_AXIS_VECTORS[dim.offsetAxis].clone().multiplyScalar(dim.radius)
+      tail
+        .multiply(new Matrix4().makeRotationAxis(GRID_AXIS_VECTORS[dim.rotationAxis], (indices[d] / dim.count) * Math.PI * 2))
+        .multiply(new Matrix4().makeTranslation(arm.x, arm.y, arm.z))
+    }
+    return { unit, tail: applySplitterSize(tail, size) }
+  })
+  const spacing = Math.max(0, settings.spacing ?? 1)
+  return {
+    apply(visualCopy: VisualCopy) {
+      return cells.map((cell) => ({
+        transform: visualCopy.transform.clone()
+          .multiply(new Matrix4().makeTranslation(
+            cell.unit.x * spacing,
+            cell.unit.y * spacing,
+            cell.unit.z * spacing,
+          ))
+          .multiply(cell.tail),
+        opacity: visualCopy.opacity,
+        colorShift: { ...visualCopy.colorShift },
+      }))
+    },
+  }
 }
 
 export { evaluateVisibilityOpacity, visibilityMover, type VisibilitySettings } from './visibility'

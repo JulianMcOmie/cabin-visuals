@@ -6,7 +6,7 @@ export const kaleidoscopePlugin: VisualEffect = {
   name: 'Kaleidoscope',
   category: 'shader',
   params: [
-    { key: 'segments', label: 'Segments', min: 2, max: 24, step: 1, default: 6 },
+    { key: 'segments', label: 'Segments', min: 2, max: 24, step: 1, default: 6, integer: true },
     { key: 'rotation', label: 'Rotation', min: 0, max: 6.28, step: 0.05, default: 0 },
     { key: 'zoom', label: 'Zoom', min: 0.1, max: 3, step: 0.05, default: 1 },
     { key: 'spinSpeed', label: 'Spin Speed', min: -2, max: 2, step: 0.05, default: 0 },

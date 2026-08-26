@@ -247,7 +247,7 @@ export const parametricPatternSplitter: MoverOrSplitterDefinition<ParametricPatt
       options: PARAMETRIC_PATTERNS.map((label, value) => ({ label, value })),
       default: 0,
     },
-    { key: 'copies', label: 'Copies', min: 1, max: MAX_COPIES, step: 1, default: 48 },
+    { key: 'copies', label: 'Copies', min: 1, max: MAX_COPIES, step: 1, default: 48, integer: true },
     { key: 'radius', label: 'Radius', min: 0, max: 20, step: 0.1, default: 3 },
     SPLITTER_SIZE_PARAM,
     { key: 'amount', label: 'Amount', min: 0, max: 10, step: 0.05, default: 1 },

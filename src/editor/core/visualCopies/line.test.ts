@@ -114,20 +114,32 @@ test('a non-zero aim rotates each copy frame with the axis', () => {
   assert.ok(Math.abs(e[10]) < 1e-10)
 })
 
-test('midi rows mute their copy for the note duration', () => {
-  const during = resolveLine({ copies: 3 }, [note(127)], 0.5)
-  assert.deepEqual(during.map((c) => c.opacity), [0, 1, 1])
-  const after = resolveLine({ copies: 3 }, [note(127)], 1.5)
-  assert.deepEqual(after.map((c) => c.opacity), [1, 1, 1])
+test('notes latch the copy count at their onset - a step function resting at the knob', () => {
+  // Pitch 38 = 3 copies (36 + k names count 1 + k); duration is ignored.
+  const during = resolveLine({ copies: 5 }, [note(38)], 0.5)
+  assert.equal(during.length, 3)
+  assert.deepEqual(rounded(during.map(position)), [[0, 0, 0], [0, 0, -1], [0, 0, -2]])
+  const after = resolveLine({ copies: 5 }, [note(38)], 1.5)
+  assert.equal(after.length, 3, 'the latch holds past the note end')
 })
 
-test('midi rows match the copy count and count down from 127', () => {
+test('the count lane rows match an integer automation lane: 32 rows, bottom = 1 copy', () => {
   const rows = lineSplitter.midiRows!(settings({ copies: 3 }))
-  assert.deepEqual(rows.map((r) => r.pitch), [127, 126, 125])
+  assert.equal(rows.length, 32)
+  assert.deepEqual(rows[0], { pitch: 67, label: '32 copies' })
+  assert.deepEqual(rows[rows.length - 1], { pitch: 36, label: '1 copy' })
 })
 
-test('copy count never depends on the beat or notes', () => {
+test('an empty lane keeps the knob count at every beat; retired mute pitches no-op', () => {
   for (const beat of [0, 0.25, 3, 17.5]) {
+    assert.equal(resolveLine({ copies: 7 }, [], beat).length, 7)
+    // The retired mute map's 96+ pitches fall out of the count span.
     assert.equal(resolveLine({ copies: 7 }, [note(127), note(124)], beat).length, 7)
   }
+})
+
+test('the structural bracket sizes the pool at the lane\'s full reach', () => {
+  const resolved = lineSplitter.resolve({ settings: settings({ copies: 2 }), notes: [note(39)] })
+  assert.equal(resolveVisualCopies([resolved.structuralVariants![0]], 0).length, 4)
+  assert.equal(resolveVisualCopies([resolved.structuralVariants![1]], 0).length, 2)
 })

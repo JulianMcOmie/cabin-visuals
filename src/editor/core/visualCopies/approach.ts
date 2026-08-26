@@ -374,7 +374,7 @@ export const approachSplitter: MoverOrSplitterDefinition<ApproachSettings> = {
     // time they are a third of the way in. Dropped on a track these defaults
     // have to READ as flying-into-it immediately - a longer, sparser run is a
     // truer corridor but shows the viewer almost nothing on the first frame.
-    { key: 'density', label: 'Density', min: 1, max: APPROACH_MAX_DENSITY, step: 1, default: 8 },
+    { key: 'density', label: 'Density', min: 1, max: APPROACH_MAX_DENSITY, step: 1, default: 8, integer: true },
     { key: 'speed', label: 'Speed / beat', min: 0, max: 60, step: 0.1, default: 5 },
     { key: 'depth', label: 'Distance', min: 1, max: 200, step: 1, default: 24 },
     { key: 'size', label: 'Arrival size', min: 0, max: 8, step: 0.05, default: 2 },

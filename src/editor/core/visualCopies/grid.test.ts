@@ -117,62 +117,52 @@ test('grid preserves an incoming non-unit scale', () => {
   for (const copy of copies) assert.deepEqual(scale(copy), [2, 3, 4])
 })
 
-test('the MIDI lane is a value lane: 9 spacing detent rows over 0-4, bottom = exactly 0', () => {
+test('the MIDI lane is the count lane on ROWS: one integer row per count, top = 32', () => {
   const rows = gridSplitter.midiRows!(settings())
-  assert.equal(rows.length, 9) // every 6th pitch of the 36..84 span
-  assert.deepEqual(rows[0], { pitch: 84, label: 'S 4.0' })
-  assert.deepEqual(rows[4], { pitch: 60, label: 'S 2.0' })
-  assert.deepEqual(rows[8], { pitch: 36, label: 'S 0.0' })
+  assert.equal(rows.length, 32) // one row per whole count, pitches 36..67
+  assert.deepEqual(rows[0], { pitch: 67, label: '32 rows' })
+  assert.deepEqual(rows[rows.length - 1], { pitch: 36, label: '1 row' })
   assert.equal(gridSplitter.strictMidiRows, true)
 })
 
-test('between onsets the spacing swells 0 -> s -> 0; outside the span it rests at the knob', () => {
-  // A 1x2 grid: the copies sit at +-spacing/2 on X, so their gap IS the spacing.
+test('notes latch the ROW count at their onset - a step function resting at the knob', () => {
+  // Pitch 37 = 2 rows, pitch 39 = 4 rows; columns stay the knob's 2.
   const resolved = gridSplitter.resolve({
     settings: settings({ rows: 1, columns: 2, spacing: 1 }),
-    notes: [note(1, 84), note(3, 84)], // pitch 84 = spacing 4
+    notes: [note(1, 37), note(3, 39)],
   })
-  const spacingAtBeat = (beat: number) => {
-    const copies = resolveVisualCopies([resolved], beat)
-    return Number((position(copies[1])[0] - position(copies[0])[0]).toFixed(10))
-  }
-  assert.equal(spacingAtBeat(0.5), 1, 'rests at the knob before the first onset')
-  assert.equal(spacingAtBeat(1), 0, 'collapsed on the onset')
-  assert.equal(spacingAtBeat(2), 4, 'peaks at the note value mid-cycle')
-  assert.equal(spacingAtBeat(1.5), 3, 'the symmetric swell: 4u(1-u) at u = 0.25')
-  assert.equal(spacingAtBeat(2.5), 3, '...and its mirror at u = 0.75')
-  assert.equal(spacingAtBeat(3), 1, 'rests again from the last onset on')
+  const countAtBeat = (beat: number) => resolveVisualCopies([resolved], beat).length
+  assert.equal(countAtBeat(0.5), 2, 'rests at the knob before the first onset (1×2)')
+  assert.equal(countAtBeat(1), 4, 'jumps on the onset (2×2)')
+  assert.equal(countAtBeat(2.9), 4, 'holds past the note end - duration is ignored')
+  assert.equal(countAtBeat(3), 8, '4×2 from the second onset on')
 
-  // A pitch between detents still decodes through the automation encoding:
-  // pitch 60 is the midpoint, spacing 2.
-  const half = gridSplitter.resolve({
-    settings: settings({ rows: 1, columns: 2, spacing: 0 }),
-    notes: [note(0, 60), note(2, 60)],
-  })
-  const copies = resolveVisualCopies([half], 1)
-  assert.equal(Number((position(copies[1])[0] - position(copies[0])[0]).toFixed(10)), 2)
+  // The sampled count is a TRUE re-layout, centered like the knob would be:
+  // two rows land at ±spacing/2 on Y.
+  assert.deepEqual(
+    rounded(resolveVisualCopies([resolved], 1).map(position)),
+    [[-0.5, 0.5, 0], [0.5, 0.5, 0], [-0.5, -0.5, 0], [0.5, -0.5, 0]],
+  )
 })
 
-test('the value lane scales only the linear lattice; ring radii and mute pitches are inert', () => {
-  // Circular columns keep their radius knob while the linear rows collapse to
-  // spacing 0 on the onset.
+test('the count lane leaves every other knob alone; retired pitches are inert', () => {
+  // Circular columns keep their radius while a note doubles the linear rows
+  // (spacing 0 stacks the two rows so every copy reads the ring radius alone).
   const ring = gridSplitter.resolve({
-    settings: settings({ rows: 2, columns: 4, columnsMode: 1, columnsRadius: 2, spacing: 1 }),
-    notes: [note(0, 84), note(2, 84)],
+    settings: settings({ rows: 1, columns: 4, columnsMode: 1, columnsRadius: 2, spacing: 0 }),
+    notes: [note(0, 37)],
   })
-  const collapsed = resolveVisualCopies([ring], 0)
-  for (const copy of collapsed) {
+  const doubled = resolveVisualCopies([ring], 0)
+  assert.equal(doubled.length, 8, 'two rows of the four-copy ring')
+  for (const copy of doubled) {
     const [x, y] = position(copy)
     assert.equal(Number(Math.hypot(x, y).toFixed(9)), 2, 'ring radius holds at the knob')
   }
-  // The two linear rows coincide at spacing 0: each column's pair collapses.
-  for (let column = 0; column < 4; column++) {
-    assert.deepEqual(rounded([position(collapsed[column])]), rounded([position(collapsed[column + 4])]))
-  }
 
-  // The retired per-cell mute rows (pitch 96 up) fall outside the value span:
-  // old saves degrade to the knob spacing and nothing is hidden.
-  const legacy = resolveGrid({ rows: 2, columns: 2 }, [note(0, 127), note(2, 126)], 1)
+  // The retired spacing value rows above the count span (68..84) and the
+  // retired per-cell mute rows (96 up) both fall out of span: old saves
+  // degrade to the knobs and nothing is hidden or rescaled.
+  const legacy = resolveGrid({ rows: 2, columns: 2 }, [note(0, 84), note(1, 127), note(2, 126)], 1)
   assert.deepEqual(rounded(legacy.map(position)), [
     [-0.5, 0.5, 0],
     [0.5, 0.5, 0],

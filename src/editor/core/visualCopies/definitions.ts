@@ -26,9 +26,12 @@ import type { MoverOrSplitter } from './types'
  * resolve() stays the single source of truth for what notes DO. Omit it for
  * the full piano roll.
  *
- * A splitter's slot count must be structural (from settings), never from MIDI -
- * notes gate a slot's opacity to zero rather than removing it, so downstream
- * indices stay stable.
+ * A splitter's slot count is structural: fixed per resolve, never a function
+ * of the beat. A COUNT LANE (countLane.ts - the default MIDI vocabulary on
+ * splitters with a count knob) does let notes name the count, but through the
+ * automated-settings machinery: the entry re-resolves per sampled count and
+ * publishes `structuralVariants` bracketing the lane's reach, so the mounted
+ * pool is sized once for everything the notes can ask for.
  */
 export interface MoverOrSplitterDefinition<Settings> {
   id: string

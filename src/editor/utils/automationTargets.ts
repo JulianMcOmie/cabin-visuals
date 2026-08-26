@@ -15,6 +15,9 @@ import type { Track } from '../types'
 export interface AutomationTargetOption {
   key: string
   label: string
+  /** The target is a whole-number count (NumberParamDef.integer): a lane
+   *  landing on it starts on the integer row grid. */
+  integer?: boolean
 }
 
 /**
@@ -48,10 +51,11 @@ export function automationTargetsForParent(parent: Track, mainActive: boolean): 
       ...plugin.params.filter(isNumberParam).map((p) => ({
         key: fxTarget(inst.id, p.key),
         label: `${plugin.name} · ${p.label}`,
+        integer: p.integer,
       })),
     ]
   })
-  return [...params.map((p) => ({ key: p.key, label: p.label })), ...fxItems]
+  return [...params.map((p) => ({ key: p.key, label: p.label, integer: p.integer })), ...fxItems]
 }
 
 /** Whether the lane still wears its auto-name (its current target's label under

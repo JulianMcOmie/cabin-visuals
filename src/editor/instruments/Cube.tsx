@@ -41,7 +41,7 @@ export const cubeInstrument: ObjectInstrumentDef = {
     { key: 'tube', label: 'Tube', min: 0.12, max: 0.85, step: 0.01, default: DEFAULT_TUBE_FRACTION },
     // The N-gon family: how many sides the prism/cone cross-section has -
     // 3 = triangular prism / pyramid, high counts approach round.
-    { key: 'sides', label: 'Sides', min: MIN_SIDES, max: MAX_SIDES, step: 1, default: DEFAULT_SIDES },
+    { key: 'sides', label: 'Sides', min: MIN_SIDES, max: MAX_SIDES, step: 1, default: DEFAULT_SIDES, integer: true },
     // Spin is opt-in: 0 = still (the default), 1 = the classic steady tumble.
     { key: 'spinSpeed', label: 'Spin Speed', min: 0, max: 4, step: 0.05, default: 0 },
     // The FINISH: Matte is the Overlap instruments' poster surface (flat color

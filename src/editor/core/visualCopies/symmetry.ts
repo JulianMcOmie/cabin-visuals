@@ -17,9 +17,11 @@
 // stay symmetric while it moves.
 
 import { Matrix4, Vector3 } from 'three'
+import type { MidiRowDef } from '../../instruments/types'
+import { countLaneRows, resolveCountLane } from './countLane'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { SYMMETRY_COLOR } from './identityColors'
-import { noteDisablesSplitterSlot, splitterMidiRows } from './splitterMidi'
+import type { VisualCopy } from './types'
 import { applySplitterSize, splitterSize, SPLITTER_SIZE_PARAM } from './splitterSize'
 
 export interface SymmetrySettings {
@@ -165,7 +167,7 @@ export const symmetrySplitter: MoverOrSplitterDefinition<SymmetrySettings> = {
   kind: 'splitter',
   identityColor: SYMMETRY_COLOR,
   params: [
-    { key: 'mirrors', label: 'Mirrors', min: 1, max: SYMMETRY_MAX_MIRRORS, step: 1, default: 1 },
+    { key: 'mirrors', label: 'Mirrors', min: 1, max: SYMMETRY_MAX_MIRRORS, step: 1, default: 1, integer: true },
     { key: 'tilt', label: 'Tilt', min: 0, max: 180, step: 1, default: 0 },
     { key: 'spread', label: 'Spread', min: 0, max: 10, step: 0.1, default: 1.5 },
     SPLITTER_SIZE_PARAM,
@@ -181,27 +183,47 @@ export const symmetrySplitter: MoverOrSplitterDefinition<SymmetrySettings> = {
       default: 0,
     },
   ],
-  midiRows: (settings) => splitterMidiRows(symmetryCopyCount(settings.mirrors), 'copy', 'copies'),
+  // The COUNT lane (countLane.ts, 2026-08-25 - it retired the per-copy mute
+  // map, whose 96+ pitches now fall out of span and no-op): a note's pitch
+  // names a MIRRORS count on the integer automation grid, latching at each
+  // onset and resting at the knob before the first. Rows speak in mirror
+  // LINES, the knob's own unit - the copy count is 2N by construction.
+  midiRows: () => SYMMETRY_COUNT_ROWS,
   strictMidiRows: true,
   resolve({ settings, notes }) {
-    // SIZE rides on top of the group math rather than inside it: the exported
-    // slot transforms ARE the dihedral group (and the panel's fold diagram
-    // reads its `basis` as "how the axes are turned or flipped"), so the scale
-    // post-multiplies here - each copy grows about its own center, and spread
-    // stays exactly spread. A positive uniform scale leaves the reflections'
-    // negative determinant intact, so mirrored copies still light and cull as
-    // genuine mirror images.
-    const size = splitterSize(settings.size)
-    const transforms = symmetryTransforms(settings).map((slot) => applySplitterSize(slot, size))
-    const count = transforms.length
-    return {
-      apply(visualCopy, { beat }) {
-        return transforms.map((transform, slot) => ({
-          transform: visualCopy.transform.clone().multiply(transform),
-          opacity: noteDisablesSplitterSlot(notes, beat, slot, count) ? 0 : visualCopy.opacity,
-          colorShift: { ...visualCopy.colorShift },
-        }))
-      },
-    }
+    return resolveCountLane({
+      settings,
+      notes,
+      key: 'mirrors',
+      min: 1,
+      max: SYMMETRY_MAX_MIRRORS,
+      resolveAt: resolveSymmetryLayout,
+    })
   },
+}
+
+// One row per whole mirror count, matching an integer automation lane on MIRRORS.
+const SYMMETRY_COUNT_ROWS: MidiRowDef[] = countLaneRows(1, SYMMETRY_MAX_MIRRORS, 'mirror', 'mirrors')
+
+/** The whole dihedral slot set as a pure function of settings (countLane.ts
+ *  re-resolves it at each sampled mirror count). */
+function resolveSymmetryLayout(settings: SymmetrySettings) {
+  // SIZE rides on top of the group math rather than inside it: the exported
+  // slot transforms ARE the dihedral group (and the panel's fold diagram
+  // reads its `basis` as "how the axes are turned or flipped"), so the scale
+  // post-multiplies here - each copy grows about its own center, and spread
+  // stays exactly spread. A positive uniform scale leaves the reflections'
+  // negative determinant intact, so mirrored copies still light and cull as
+  // genuine mirror images.
+  const size = splitterSize(settings.size)
+  const transforms = symmetryTransforms(settings).map((slot) => applySplitterSize(slot, size))
+  return {
+    apply(visualCopy: VisualCopy) {
+      return transforms.map((transform) => ({
+        transform: visualCopy.transform.clone().multiply(transform),
+        opacity: visualCopy.opacity,
+        colorShift: { ...visualCopy.colorShift },
+      }))
+    },
+  }
 }
