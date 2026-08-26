@@ -423,8 +423,8 @@ export const tunnelSplitter: MoverOrSplitterDefinition<TunnelSettings> = {
     // 6 x 8 = 48 copies: enough for a corridor wall, and in the same weight
     // class as the other splitters (Parametric Pattern defaults to 48). Every
     // copy is a whole instrument, so this is the setting that costs frames.
-    { key: 'copiesPerRing', label: 'Copies per ring', min: 1, max: MAX_COPIES_PER_RING, step: 1, default: 6 },
-    { key: 'rings', label: 'Rings', min: 1, max: MAX_RINGS, step: 1, default: 8 },
+    { key: 'copiesPerRing', label: 'Copies per ring', min: 1, max: MAX_COPIES_PER_RING, step: 1, default: 6, integer: true },
+    { key: 'rings', label: 'Rings', min: 1, max: MAX_RINGS, step: 1, default: 8, integer: true },
     { key: 'radius', label: 'Radius', min: 0, max: 20, step: 0.1, default: 3 },
     SPLITTER_SIZE_PARAM,
     { key: 'depth', label: 'Depth', min: 1, max: 200, step: 1, default: 40 },

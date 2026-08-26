@@ -713,6 +713,7 @@ export function TrackEditor() {
                         ...plugin.params.filter(isNumberParam).map((p) => ({
                           key: fxTarget(inst.id, p.key),
                           label: `${plugin.name} · ${p.label}`,
+                          integer: p.integer,
                         })),
                       ]
                     })
@@ -724,14 +725,20 @@ export function TrackEditor() {
                       .map((cid) => siblingTracks[cid])
                       .filter((c) => !!c && c.id !== track.id && c.type === 'automation')
                       .map((c) => c!.targetParam))
-                    const targetOptions = [...parentParams.map((p) => ({ key: p.key, label: p.label })), ...fxOptions]
+                    const targetOptions = [...parentParams.map((p) => ({ key: p.key, label: p.label, integer: p.integer })), ...fxOptions]
                       .map((o) => ({ ...o, disabled: siblingTargets.has(o.key) }))
                     return (
                       <AutomationUserInterface
                         targetLabel={targetLabel}
                         targetKey={track.targetParam}
                         targetOptions={targetOptions}
-                        onTarget={(key, label) => setAutomationTarget(track.id, key, label, track.name === targetLabel)}
+                        onTarget={(key, label) => {
+                          // A count target starts the reset range on the whole-number grid.
+                          const option = targetOptions.find((o) => o.key === key)
+                          setAutomationTarget(track.id, key, label, track.name === targetLabel, {
+                            integer: option && 'integer' in option ? (option.integer as boolean | undefined) : undefined,
+                          })
+                        }}
                         color={resolveTrackDisplayColor(track)}
                         mode={automationMode(track)}
                         interpolation={track.interpolation ?? 'linear'}

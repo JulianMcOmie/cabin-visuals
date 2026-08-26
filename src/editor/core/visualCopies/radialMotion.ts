@@ -293,9 +293,9 @@ export const radialMotionMover: MoverOrSplitterDefinition<RadialMotionSettings> 
   params: [
     // Powers of two by default: a ring whose seat count divides its parent's
     // lines the copies up into readable arms instead of a uniform haze.
-    { key: 'copies0', label: 'Outer copies', min: 1, max: MAX_COPIES_PER_DEPTH, step: 1, default: 8 },
-    { key: 'copies1', label: 'Middle copies', min: 1, max: MAX_COPIES_PER_DEPTH, step: 1, default: 4 },
-    { key: 'copies2', label: 'Inner copies', min: 1, max: MAX_COPIES_PER_DEPTH, step: 1, default: 2 },
+    { key: 'copies0', label: 'Outer copies', min: 1, max: MAX_COPIES_PER_DEPTH, step: 1, default: 8, integer: true },
+    { key: 'copies1', label: 'Middle copies', min: 1, max: MAX_COPIES_PER_DEPTH, step: 1, default: 4, integer: true },
+    { key: 'copies2', label: 'Inner copies', min: 1, max: MAX_COPIES_PER_DEPTH, step: 1, default: 2, integer: true },
     { key: 'radius0', label: 'Outer radius', min: 0, max: 12, step: 0.05, default: 3.2 },
     { key: 'radius1', label: 'Middle radius', min: 0, max: 12, step: 0.05, default: 1.5 },
     { key: 'radius2', label: 'Inner radius', min: 0, max: 12, step: 0.05, default: 0.65 },

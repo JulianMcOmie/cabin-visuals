@@ -37,6 +37,8 @@ Automation lanes encode value in note pitch: `pitchToValue`/`valueToPitch` over 
 
 A lane carrying an `automationRange` reshapes that through `pitchToValueRanged`, and three helpers here own the reshaping — `automationValueBounds` (the lane's own min/max, deliberately NOT clamped to the param's), `automationIntegerGrid` (the whole-number rows an INT lane counts on) and `automationRowCount` (how many rows the config asks for; derived under INT). Rows always run min→max evenly. See `core/visual/CLAUDE.md` for why INT derives its count instead of rounding a spread.
 
+A COUNT param (`integer: true` on its NumberParamDef — copies, rows, columns, mirrors, sides, segments) makes INT the lane's CREATION default: `addAutomationTrack` (and both retarget paths) seeds `automationRange: { integer: true }` plus `'step'` interpolation, so a fresh lane on Copies shows one row per whole number (1–32 → 32 rows) and jumps at each keyframe instead of splining through 6.4 copies. The same grid is the splitters' own MIDI vocabulary — `core/visualCopies/countLane.ts` decodes pitches identically, which is the reason the two must never drift.
+
 ## loopRegion.ts / midiImport.ts
 
 Loop region math (`shouldLoopWrap`); MIDI file import via `@tonejs/midi` → `ImportedMidiTrack`s consumed by ProjectStore.

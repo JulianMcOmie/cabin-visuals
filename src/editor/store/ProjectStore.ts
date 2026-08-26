@@ -499,8 +499,11 @@ export interface ProjectState {
    *  formations under one text track is the whole point, and they are told apart
    *  by which one played last. */
   /** Add an `automation` child track under `parentId`, driving the given param over
-   *  time. No-op if one already automates that param. */
-  addAutomationTrack: (parentId: string, paramKey: string, paramLabel: string) => void
+   *  time. No-op if one already automates that param. Callers pass `integer` from
+   *  the target param's def (the store can't read instrument defs - see the import
+   *  note at the top): a count param's lane starts on the whole-number row grid
+   *  with stepped interpolation instead of the fractional spline. */
+  addAutomationTrack: (parentId: string, paramKey: string, paramLabel: string, opts?: { integer?: boolean }) => void
   /** Add an `ability` child track under `parentId` for one of the parent instrument's
    *  abilities (opt-in). No-op if that ability already has a track. */
   addAbilityTrack: (parentId: string, abilityKey: string, abilityLabel: string) => void
@@ -539,8 +542,9 @@ export interface ProjectState {
    *  addressing as addAutomationTrack, fx: keys included). No-ops if a sibling
    *  lane already drives that param. `rename` carries the new label onto the
    *  lane's name (the caller passes true when the old name was the auto-name,
-   *  so a user's custom name survives). */
-  setAutomationTarget: (trackId: string, paramKey: string, paramLabel: string, rename: boolean) => void
+   *  so a user's custom name survives). `integer` mirrors addAutomationTrack's:
+   *  a count target starts the reset range on the whole-number grid. */
+  setAutomationTarget: (trackId: string, paramKey: string, paramLabel: string, rename: boolean, opts?: { integer?: boolean }) => void
   /** Fix an automation lane's target after a drag moved (or copied) it under a
    *  new parent. `available` is every target the new parent offers (the caller
    *  resolves it - the store can't read instrument defs; see the import note at
@@ -548,7 +552,7 @@ export interface ProjectState {
    *  again (that's what makes dragging BACK work), keeps a target that still
    *  fits, and otherwise falls to the first free option while remembering the
    *  displaced one. `rename` mirrors setAutomationTarget's flag. */
-  remapAutomationTarget: (trackId: string, available: { key: string; label: string }[], rename: boolean) => void
+  remapAutomationTarget: (trackId: string, available: { key: string; label: string; integer?: boolean }[], rename: boolean) => void
   /** Set an automation lane's output amount (a whole-lane gain, any mode).
    *  Clamped to [0, AUTOMATION_AMOUNT_MAX]; 1 is stored as absence. */
   setTrackAutomationAmount: (trackId: string, amount: number) => void
@@ -1801,7 +1805,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       return { tracks: { ...s.tracks, [trackId]: { ...track, inputValues: { ...track.inputValues, [key]: value } } } }
     }),
 
-  addAutomationTrack: (parentId, paramKey, paramLabel) =>
+  addAutomationTrack: (parentId, paramKey, paramLabel, opts) =>
     set((s) => {
       const parent = s.tracks[parentId]
       if (!parent) return s
@@ -1824,7 +1828,12 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         // `?? 'linear'` absence fallback - that fallback is what every saved
         // lane predating this field reads, and moving it would silently
         // re-interpolate projects that have already shipped.
-        interpolation: 'spline',
+        //
+        // A COUNT param (the target's `integer` flag) steps instead: 6.4
+        // copies is not a value, so the lane starts on the whole-number row
+        // grid and jumps at each keyframe. Both are creation defaults only.
+        interpolation: opts?.integer ? 'step' : 'spline',
+        ...(opts?.integer ? { automationRange: { integer: true } } : null),
         // Param lanes have no definition to declare an identity, so they take
         // their own hue-cycle color - lanes no longer inherit their parent.
         color: resolveNextTrackColor(s, parentId),
@@ -2118,7 +2127,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       return { tracks: { ...s.tracks, [trackId]: next } }
     }),
 
-  setAutomationTarget: (trackId, paramKey, paramLabel, rename) =>
+  setAutomationTarget: (trackId, paramKey, paramLabel, rename, opts) =>
     set((s) => {
       const track = s.tracks[trackId]
       if (!track || track.type !== 'automation' || track.targetParam === paramKey) return s
@@ -2131,10 +2140,17 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       })
       if (taken) return s
       // The row-spread config speaks the OLD param's value units; a stale
-      // sub-range on a new param is nonsense, so it resets to the full span.
-      // Note pitches re-map onto the new param's range by construction. A
-      // deliberate retarget also forgets any drag-displaced previous target.
-      const next: Track = { ...track, targetParam: paramKey, automationRange: undefined, previousTargetParam: undefined }
+      // sub-range on a new param is nonsense, so it resets to the full span -
+      // which for a COUNT target (the def's `integer` flag) is the
+      // whole-number grid. Note pitches re-map onto the new param's range by
+      // construction. A deliberate retarget also forgets any drag-displaced
+      // previous target.
+      const next: Track = {
+        ...track,
+        targetParam: paramKey,
+        automationRange: opts?.integer ? { integer: true } : undefined,
+        previousTargetParam: undefined,
+      }
       if (rename) next.name = paramLabel
       return { tracks: { ...s.tracks, [trackId]: next } }
     }),
@@ -2153,10 +2169,16 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         .map((c) => c!.targetParam))
       const usable = (key: string | undefined) =>
         !!key && !taken.has(key) && available.some((o) => o.key === key)
-      const retarget = (key: string, label: string, previous: string | undefined): { tracks: Record<string, Track> } => {
-        // Range resets like setAutomationTarget's: it speaks the old param's units.
-        const next: Track = { ...track, targetParam: key, previousTargetParam: previous, automationRange: undefined }
-        if (rename) next.name = label
+      const retarget = (option: { key: string; label: string; integer?: boolean }, previous: string | undefined): { tracks: Record<string, Track> } => {
+        // Range resets like setAutomationTarget's: it speaks the old param's
+        // units, and a COUNT target's full span is the whole-number grid.
+        const next: Track = {
+          ...track,
+          targetParam: option.key,
+          previousTargetParam: previous,
+          automationRange: option.integer ? { integer: true } : undefined,
+        }
+        if (rename) next.name = option.label
         return { tracks: { ...s.tracks, [trackId]: next } }
       }
       // The displaced original wins over a still-fitting default: that is what
@@ -2164,12 +2186,12 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       const previous = track.previousTargetParam
       if (usable(previous)) {
         const option = available.find((o) => o.key === previous)!
-        return retarget(option.key, option.label, undefined)
+        return retarget(option, undefined)
       }
       if (usable(track.targetParam)) return s
       const fallback = available.find((o) => !taken.has(o.key))
       if (!fallback || fallback.key === track.targetParam) return s
-      return retarget(fallback.key, fallback.label, track.previousTargetParam ?? track.targetParam)
+      return retarget(fallback, track.previousTargetParam ?? track.targetParam)
     }),
 
   setTrackAutomationAmount: (trackId, amount) =>

@@ -692,9 +692,17 @@ function resolveOwnMoverOrSplitter(track: Track, p: ProjectSnapshot): MoverOrSpl
     maxOverlay[lane.param] = bounds.max
     minOverlay[lane.param] = bounds.min
   }
+  // A definition that itself rides a COUNT lane (visualCopies/countLane.ts)
+  // returns entries carrying their OWN [max, min] variants bracketing the
+  // lane's reach. The structural probe swaps variants one level deep only, so
+  // flatten here: keep that inner bracket rather than the lane-bearing entry,
+  // or the probe would sample the lane at beat 0 and miss a mid-timeline jump
+  // to a count larger than the automated knob reaches.
+  const maxResolved = def.resolve({ settings: { ...settings, ...maxOverlay }, notes })
+  const minResolved = def.resolve({ settings: { ...settings, ...minOverlay }, notes })
   wrapped.structuralVariants = [
-    def.resolve({ settings: { ...settings, ...maxOverlay }, notes }),
-    def.resolve({ settings: { ...settings, ...minOverlay }, notes }),
+    maxResolved.structuralVariants?.[0] ?? maxResolved,
+    minResolved.structuralVariants?.[1] ?? minResolved,
   ]
   return wrapped
 }

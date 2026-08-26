@@ -1,9 +1,12 @@
-// Shared MIDI grammar for slot-gating splitters (Line, Polyhedron; Radial and
-// Grid retired their mute rows for value lanes in 2026-08 - see valueLane.ts):
-// rows count DOWN from pitch 127, one row per slot (or per slot range when the
-// slot count exceeds 128 pitches), and a held note drives its slots' opacity to
-// zero. Notes never add or remove slots - the count stays structural so
-// downstream indices are stable.
+// Shared MIDI grammar for slot-gating splitters. Only POLYHEDRON still wears
+// it (its count comes from the shape geometry, so there is no count knob for
+// a lane to drive): rows count DOWN from pitch 127, one row per slot (or per
+// slot range when the slot count exceeds 128 pitches), and a held note drives
+// its slots' opacity to zero. Notes never add or remove slots - the count
+// stays structural so downstream indices are stable. Every splitter WITH a
+// count knob (Radial, Line, Grid, Symmetry) moved to the count lane
+// (countLane.ts, 2026-08-25); their old mute notes fall out of that lane's
+// span and no-op.
 
 import type { MidiRowDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'

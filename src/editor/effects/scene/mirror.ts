@@ -67,7 +67,7 @@ export const mirrorScenePlugin: VisualEffect = {
       { value: 2, label: 'Kaleidoscope' },
       { value: 3, label: 'Tile' },
     ], default: 2 },
-    { key: 'segments', label: 'Segments', min: 2, max: 16, step: 1, default: 6, showIf: 'mode=2' },
+    { key: 'segments', label: 'Segments', min: 2, max: 16, step: 1, default: 6, showIf: 'mode=2', integer: true },
     { key: 'angle', label: 'Angle', min: 0, max: 360, step: 1, default: 0 },
   ],
   fragmentShader: MIRROR_FRAGMENT,

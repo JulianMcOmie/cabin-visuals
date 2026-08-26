@@ -33,6 +33,14 @@ export interface NumberParamDef extends ParamBase {
    *  sliders round to 3 significant digits instead of snapping to `step`,
    *  which would erase the fine low-end values the curve exists to reach. */
   curve?: number
+  /** A whole-number COUNT ("how many": copies, rows, columns, mirrors, sides).
+   *  Automation lanes created on it (and lanes retargeted onto it) default to
+   *  the integer row grid with STEPPED interpolation - one row per whole
+   *  number (core/trackTypes.ts automationIntegerGrid) and the value jumping
+   *  at each keyframe - instead of the 49 fractional rows the spline glides
+   *  through. A creation default only: the lane's range and interpolation
+   *  stay user-editable, and the slider already steps via `step`. */
+  integer?: boolean
 }
 export interface SelectParamDef extends ParamBase {
   type: 'select'
