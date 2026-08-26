@@ -451,6 +451,55 @@ export interface Track {
   /** Photo-instrument-only: the ordered photos of its bank. Order is the MIDI
    *  mapping - index 0 answers baseNote. Bytes live behind core/photo. */
   photoPads?: PhotoPad[]
+  /** Mod-Synth-only: the modulator rack. Every note spawns a voice (a copy of
+   *  the object) and each modulator shapes one channel of that voice's flight.
+   *  Absence = the starter rack (instruments/modSynthCore.ts), so pre-feature
+   *  saves and fresh tracks need no seeding; an empty array is a genuinely
+   *  bare rack. Purely additive field - persists and undoes like videoPads. */
+  synthMods?: SynthMod[]
+}
+
+/** Which channel of a spawned voice a Mod Synth modulator drives. */
+export type SynthModTarget = 'size' | 'posX' | 'posY' | 'posZ' | 'opacity' | 'hue' | 'rotZ'
+/** How the modulator's curve is authored. */
+export type SynthModShape = 'adsr' | 'bezier' | 'points'
+/** How the curve maps onto the voice's life: gate follows the note (release
+ *  after note-off), oneshot is a fixed flight in beats, loop cycles while the
+ *  note is held. */
+export type SynthModLife = 'gate' | 'oneshot' | 'loop'
+
+export interface SynthModPoint { x: number; y: number }
+
+/**
+ * One modulator in a Mod Synth's rack. ADSR times are BEATS (a synth's attack
+ * must not stretch with note length); bezier/points curves are normalized over
+ * the life's span. The value units are the target's own (see
+ * `SYNTH_MOD_TARGETS` in instruments/modSynthCore.ts for amount ranges).
+ */
+export interface SynthMod {
+  /** Stable identity for panel rows and React keys - never re-minted on edit. */
+  id: string
+  target: SynthModTarget
+  enabled: boolean
+  shape: SynthModShape
+  life: SynthModLife
+  /** ADSR: attack/decay/release in beats, sustain a 0..1 level. */
+  attack: number
+  decay: number
+  sustain: number
+  release: number
+  /** Cubic-bezier control points (endpoints pinned at value 0). */
+  bezier: [SynthModPoint, SynthModPoint]
+  /** Hand-drawn curve, x ascending over [0,1]. */
+  points: SynthModPoint[]
+  /** Flight (oneshot) / cycle (loop) length in beats for bezier/points curves. */
+  beats: number
+  /** Output gain in the target's units (size multiplier, world units, turns). */
+  amount: number
+  /** 0 = ignore note velocity, 1 = full velocity scaling. */
+  velocity: number
+  /** 0 = ignore pitch, 1 = full key tracking (pitch 36 silent, 84 full). */
+  keyTracking: number
 }
 
 /**

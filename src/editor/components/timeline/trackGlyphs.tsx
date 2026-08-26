@@ -178,6 +178,13 @@ const G = {
       <circle cx="8" cy="8" r="2.4" fill="currentColor" stroke="none" />
     </>
   ),
+  modSynth: (
+    <>
+      <path d="M2 13 L4 4 L7 9.5 L11 9.5 L14 13" strokeLinejoin="round" />
+      <circle cx="4" cy="4" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="11" cy="9.5" r="1.4" fill="currentColor" stroke="none" />
+    </>
+  ),
   laserLine: (
     <>
       <path d="M2 8h12" strokeWidth="3.4" strokeOpacity="0.25" />

@@ -16,7 +16,7 @@ import { AUTOMATION_AMOUNT_MAX, DEFAULT_BURST, DEFAULT_CYCLE, DEFAULT_FORCE, DEF
 import type { ImportedMidiTrack } from '../core/midiImport'
 import type { AspectRatioId } from '../core/aspectRatios'
 import { placeTranscription, invertStrobeSpans, groupTimingIntoLines, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
-import { DEFAULT_SCENE_BACKGROUND, defaultSceneGradient, sceneBackdropMode, type SceneBackdropMode, type SceneGradient, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type AutomationMode, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type Routing } from '../types'
+import { DEFAULT_SCENE_BACKGROUND, defaultSceneGradient, sceneBackdropMode, type SceneBackdropMode, type SceneGradient, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type AutomationMode, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type SynthMod, type Routing } from '../types'
 import type { ProjectDocument } from '../../persistence/types'
 import { upgradeDocument } from '../../persistence/upgrade'
 import { useVideoStore } from './VideoStore'
@@ -568,6 +568,8 @@ export interface ProjectState {
   setTrackVideoPads: (trackId: string, videoPads: VideoPad[]) => void
   /** Replace a Photo track's ordered photos (its bank). */
   setTrackPhotoPads: (trackId: string, photoPads: PhotoPad[]) => void
+  /** Replace a Mod Synth track's modulator rack. */
+  setTrackSynthMods: (trackId: string, synthMods: SynthMod[]) => void
   /** Create an audio track (top of the root tracks) holding one block at bar 0
    *  spanning the whole clip. The load pipeline's landing spot - files dropped
    *  on the track area end here; a project can hold several. Returns the new
@@ -2230,6 +2232,13 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       const track = s.tracks[trackId]
       if (!track) return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, photoPads } } }
+    }),
+
+  setTrackSynthMods: (trackId, synthMods) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, synthMods } } }
     }),
 
   addAudioTrack: (clip) => {

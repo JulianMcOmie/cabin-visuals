@@ -585,6 +585,7 @@ export function computeAtBeat(beat: number) {
         energy,
         videoPads: obj.videoPads,
         photoPads: obj.photoPads,
+        synthMods: obj.synthMods,
         world,
         meshScale,
         opacity,
@@ -608,6 +609,7 @@ export function computeAtBeat(beat: number) {
     state.energy = energy
     state.videoPads = obj.videoPads
     state.photoPads = obj.photoPads
+    state.synthMods = obj.synthMods
     state.world = world
     state.meshScale = meshScale
     state.opacity = opacity
@@ -722,7 +724,7 @@ function computeCopyStates(
       state = {
         beat: copyBeat, secPerBeat, beatsPerBar: 4,
         params, energy,
-        videoPads: obj.videoPads, photoPads: obj.photoPads,
+        videoPads: obj.videoPads, photoPads: obj.photoPads, synthMods: obj.synthMods,
         world: new Matrix4(), meshScale: 1, opacity: 1,
         effectOverrides: undefined, blackedOut,
         stringParams: obj.stringParams, abilityEvents: obj.abilityEvents,
@@ -784,6 +786,7 @@ function computeCopyStates(
     state.energy = energy
     state.videoPads = obj.videoPads
     state.photoPads = obj.photoPads
+    state.synthMods = obj.synthMods
     state.meshScale = meshScale
     state.opacity = opacity
     state.effectOverrides = effectOverrides

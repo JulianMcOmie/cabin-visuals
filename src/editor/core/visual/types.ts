@@ -4,7 +4,7 @@
 
 import type { Matrix4 } from 'three'
 import type { LocalTransform, TransformCtx } from '../../instruments/types'
-import type { AdsrEnvelope, LyricClip, LyricNotePayload, PhotoPad, StyleLane, VideoPad } from '../../types'
+import type { AdsrEnvelope, LyricClip, LyricNotePayload, PhotoPad, StyleLane, SynthMod, VideoPad } from '../../types'
 import type { AutomationLane } from './automation'
 import type { MoverOrSplitter } from '../visualCopies/types'
 
@@ -138,6 +138,9 @@ export interface ResolvedObject {
   videoPads?: VideoPad[]
   /** Photo-instrument-only: ordered photos (fresh array per resolve). */
   photoPads?: PhotoPad[]
+  /** Mod-Synth-only: the modulator rack (fresh array per resolve, same
+   *  identity contract as the pads - a rack edit repaints a paused frame). */
+  synthMods?: SynthMod[]
   /** The ordered mover-and-splitter chain (VisualCopy pipeline): local children
    *  in exact childIds order, then matching global entries in exact
    *  rootTrackIds order. */
@@ -214,6 +217,8 @@ export interface ObjectState {
   videoPads?: VideoPad[]
   /** Photo-instrument-only: ordered photos (per-resolve identity). */
   photoPads?: PhotoPad[]
+  /** Mod-Synth-only: the modulator rack (per-resolve identity). */
+  synthMods?: SynthMod[]
   /** True this frame when the object track is muted or excluded by solo. */
   blackedOut: boolean
   /** World transform (local composed with all ancestors) WITHOUT the object's

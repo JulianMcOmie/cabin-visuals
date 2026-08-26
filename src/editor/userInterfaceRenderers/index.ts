@@ -33,6 +33,7 @@ export const USER_INTERFACE_RENDERERS: Record<UserInterfaceRendererId, UserInter
   neonPolar: lazyPanel(() => import('./NeonPolarUserInterface'), 'NeonPolarUserInterfaceRenderer'),
   hopfFibration: lazyPanel(() => import('./HopfFibrationUserInterface'), 'HopfFibrationUserInterfaceRenderer'),
   laserSphere: lazyPanel(() => import('./LaserSphereUserInterface'), 'LaserSphereUserInterfaceRenderer'),
+  modSynth: lazyPanel(() => import('./ModSynthUserInterface'), 'ModSynthUserInterfaceRenderer'),
   shapeFlight: lazyPanel(() => import('./ShapeFlightUserInterface'), 'ShapeFlightUserInterfaceRenderer'),
   metronomeBalls: lazyPanel(() => import('./MetronomeBallsUserInterface'), 'MetronomeBallsUserInterfaceRenderer'),
   emojiDisplay: lazyPanel(() => import('./EmojiDisplayUserInterface'), 'EmojiDisplayUserInterfaceRenderer'),

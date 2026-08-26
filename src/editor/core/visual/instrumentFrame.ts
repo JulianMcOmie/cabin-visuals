@@ -126,6 +126,9 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
     put(sig, state.abilityEvents)
     put(sig, state.videoPads)
     put(sig, state.photoPads)
+    // The Mod Synth's rack: a modulator edit mints a fresh array via resolve,
+    // and this is what repaints the voices while paused.
+    put(sig, state.synthMods)
     // Document identity: any store edit to the clips or lanes mints fresh
     // arrays, and this is what repaints the words while paused.
     put(sig, state.lyricClips)

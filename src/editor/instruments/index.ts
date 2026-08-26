@@ -46,6 +46,7 @@ import { cropMaskInstrument } from './Crop'
 import { midiRollInstrument } from './MidiRoll'
 import { starfieldInstrument } from './Starfield'
 import { wireframeInstrument } from './Wireframe'
+import { modSynthInstrument } from './ModSynth'
 import type { ObjectInstrumentDef } from './types'
 import { preloadComponent } from './lazyInstrument'
 
@@ -83,6 +84,7 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [strobeInstrument.id]: strobeInstrument,
   [laserSphereInstrument.id]: laserSphereInstrument,
   [laserLineInstrument.id]: laserLineInstrument,
+  [modSynthInstrument.id]: modSynthInstrument,
   [wormholeInstrument.id]: wormholeInstrument,
   [particleSphereInstrument.id]: particleSphereInstrument,
   [photoSlotInstrument.id]: photoSlotInstrument,

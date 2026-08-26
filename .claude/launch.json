@@ -329,7 +329,15 @@
     {
       "name": "note-drag-guide-3082",
       "runtimeExecutable": "env",
-      "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3082", "npm", "run", "dev", "--", "--port", "3082"],
+      "runtimeArgs": [
+        "NEXT_DIST_DIR=.next-isolated-3082",
+        "npm",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3082"
+      ],
       "port": 3082
     },
     {
@@ -349,7 +357,15 @@
     {
       "name": "scene-fx-3097",
       "runtimeExecutable": "env",
-      "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3097", "npm", "run", "dev", "--", "--port", "3097"],
+      "runtimeArgs": [
+        "NEXT_DIST_DIR=.next-isolated-3097",
+        "npm",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3097"
+      ],
       "port": 3097
     },
     {
@@ -393,6 +409,20 @@
         "3072"
       ],
       "port": 3072
+    },
+    {
+      "name": "mod-synth-3091",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "NEXT_DIST_DIR=.next-isolated-3091",
+        "npm",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3091"
+      ],
+      "port": 3091
     }
   ]
 }
