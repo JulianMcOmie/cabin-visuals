@@ -25,8 +25,11 @@ export function exportAspectChoices(pinned: AspectRatioId | 'fill'): [ExportAspe
 
 /** Rate control. 'bitrate' = fixed target (predictable size, but busy grainy
  *  frames get starved and macroblock). 'quality' = constant-quality quantizer
- *  mode: every frame gets the bits it needs and the size floats with content. */
-export type ExportRateControl = 'bitrate' | 'quality'
+ *  mode: every frame gets the bits it needs and the size floats with content.
+ *  'lossless' = quantizer mode at QP 0: quantization off as far as H.264
+ *  allows (8-bit 4:2:0 remain), for the smooth bloom/gradient falloffs that
+ *  band into visible layers at ANY real QP. Files get enormous. */
+export type ExportRateControl = 'bitrate' | 'quality' | 'lossless'
 
 /** A slice of the project in absolute beats, [startBeat, endBeat). */
 export interface BeatRange {
@@ -137,11 +140,15 @@ const H264_LEVELS: readonly [number, number, number][] = [
 ]
 
 /** H.264 High profile codec string for the selected frame size/rate: the
- *  lowest level whose frame-size AND macroblock-rate ceilings both fit. */
-export function videoCodec(width: number, height: number, fps: number): string {
+ *  lowest level whose frame-size AND macroblock-rate ceilings both fit.
+ *  `minLevelIdc` floors the pick for configs whose BITRATE outruns the level
+ *  the frame size alone would land on - QP-0 exports run 5-10x the level-4.2
+ *  bitrate ceiling at 1080p60, and an encoder honoring a too-low level would
+ *  quantize to fit it, silently undoing the whole point of the mode. */
+export function videoCodec(width: number, height: number, fps: number, minLevelIdc = 0): string {
   const macroblocks = Math.ceil(width / 16) * Math.ceil(height / 16)
   const level =
-    H264_LEVELS.find(([, maxFs, maxMbps]) => macroblocks <= maxFs && macroblocks * fps <= maxMbps)?.[0] ??
+    H264_LEVELS.find(([idc, maxFs, maxMbps]) => idc >= minLevelIdc && macroblocks <= maxFs && macroblocks * fps <= maxMbps)?.[0] ??
     H264_LEVELS[H264_LEVELS.length - 1][0]
   return `avc1.6400${level.toString(16)}`
 }

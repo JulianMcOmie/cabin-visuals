@@ -139,7 +139,7 @@ export async function runExport(
   // "muxable" requires and how Firefox's encoders fall short of it).
   if (!(await encoderProducesMuxableChunks(exportEncoderConfig(settings), exportEncodeOptions(settings)))) {
     throw new Error(
-      settings.rateControl === 'quality'
+      settings.rateControl !== 'bitrate'
         ? "this browser's encoder doesn't support constant-quality mode. Switch Quality back to Standard, or export in Chrome."
         : "this browser's video encoder doesn't produce the chunk data MP4 files need. Please export in Chrome.",
     )

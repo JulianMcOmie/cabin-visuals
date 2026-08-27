@@ -15,6 +15,23 @@ const MAX_QUEUE = 2
  *  file until finalize) survivable on long grainy 4K exports. */
 const EXPORT_QUANTIZER = 21
 
+/** QP for 'lossless': quantization off as far as H.264 goes. Even QP 21 bands
+ *  bloom's smooth dark falloff into visible layers (the grade's grain is under
+ *  one 8-bit step in shadows, so the encoder smooths it away and un-dithers
+ *  the gradient). Remember mux.ts holds the whole file in memory - at QP 0 a
+ *  long 1080p60 export is gigabytes, which is the mode's real cost. */
+const LOSSLESS_QUANTIZER = 0
+
+/** Level 5.2: the codec-string floor for QP-0 exports (see videoCodec). */
+const LOSSLESS_MIN_LEVEL_IDC = 52
+
+/** The QP a settings object asks for, or null for plain bitrate mode. */
+function quantizerFor(settings: ExportSettings): number | null {
+  if (settings.rateControl === 'lossless') return LOSSLESS_QUANTIZER
+  if (settings.rateControl === 'quality') return EXPORT_QUANTIZER
+  return null
+}
+
 export interface VideoEncodeSession {
   /** Encode one canvas frame; resolves once the encoder queue has drained below the cap. */
   encodeFrame(canvas: HTMLCanvasElement, frameIndex: number, fps: number): Promise<void>
@@ -27,14 +44,15 @@ export interface VideoEncodeSession {
 /** The exact encoder config a session will run - exported so runExport can
  *  probe THIS config (not a stand-in) before spending minutes rendering. */
 export function exportEncoderConfig(settings: ExportSettings): VideoEncoderConfig {
+  const minLevel = settings.rateControl === 'lossless' ? LOSSLESS_MIN_LEVEL_IDC : 0
   const base: VideoEncoderConfig = {
-    codec: videoCodec(settings.width, settings.height, settings.fps),
+    codec: videoCodec(settings.width, settings.height, settings.fps, minLevel),
     width: settings.width,
     height: settings.height,
     framerate: settings.fps,
     latencyMode: 'quality',
   }
-  return settings.rateControl === 'quality'
+  return quantizerFor(settings) !== null
     ? { ...base, bitrateMode: 'quantizer' }
     : { ...base, bitrate: settings.videoBitrate }
 }
@@ -43,8 +61,9 @@ export function exportEncoderConfig(settings: ExportSettings): VideoEncoderConfi
  *  the QP handed to every encode() call. Exported so the runExport probe can
  *  encode exactly like the real session will. */
 export function exportEncodeOptions(settings: ExportSettings): VideoEncoderEncodeOptions | undefined {
-  return settings.rateControl === 'quality'
-    ? ({ avc: { quantizer: EXPORT_QUANTIZER } } as VideoEncoderEncodeOptions)
+  const quantizer = quantizerFor(settings)
+  return quantizer !== null
+    ? ({ avc: { quantizer } } as VideoEncoderEncodeOptions)
     : undefined
 }
 

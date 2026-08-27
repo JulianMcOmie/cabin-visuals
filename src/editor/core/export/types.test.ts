@@ -30,6 +30,13 @@ test('a frame past 4K60s macroblock rate steps up to level 6.0', () => {
   assert.equal(videoCodec(4320, 2160, 60), 'avc1.64003c')
 })
 
+test('minLevelIdc floors the level without disturbing higher picks', () => {
+  // 1080p60 alone lands on 4.2; a QP-0 export floors it to 5.2.
+  assert.equal(videoCodec(1920, 1080, 60, 52), 'avc1.640034')
+  // A pick already at or above the floor is untouched.
+  assert.equal(videoCodec(4320, 2160, 60, 52), 'avc1.64003c')
+})
+
 test('9:16 tiers are the 16:9 tiers rotated', () => {
   assert.deepEqual(sizes('9:16'), [
     { label: '4K', width: 2160, height: 3840 },

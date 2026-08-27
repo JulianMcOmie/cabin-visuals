@@ -87,7 +87,7 @@ function loadSavedSettings(isPro: boolean): ExportSettings {
     merged.height = tier.height
   }
   merged.videoBitrate = defaultBitrate(Math.min(merged.width, merged.height), merged.fps)
-  if (merged.rateControl !== 'quality') merged.rateControl = 'bitrate'
+  if (merged.rateControl !== 'quality' && merged.rateControl !== 'lossless') merged.rateControl = 'bitrate'
   merged.watermark = false
   return isPro ? merged : clampToFreeTier(merged)
 }
@@ -597,10 +597,14 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
                 >
                   <option value="bitrate">Standard</option>
                   <option value="quality">Maximum</option>
+                  <option value="lossless">No quantization</option>
                 </select>
               </label>
               {settings.rateControl === 'quality' && (
                 <p className="-mt-2 text-[11px] leading-snug text-[var(--text-muted)]">File can grow several times larger</p>
+              )}
+              {settings.rateControl === 'lossless' && (
+                <p className="-mt-2 text-[11px] leading-snug text-[var(--text-muted)]">Bloom and gradients keep their full smoothness - files get very large, best for short ranges</p>
               )}
 
               <label className={`flex items-center justify-between ${audioOk ? '' : 'opacity-50'}`}>
