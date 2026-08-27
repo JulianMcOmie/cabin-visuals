@@ -540,9 +540,12 @@ const PHYSICS_PARAMS: ParamDef[] = [
     default: PHYSICS_TARGET_Y,
   },
   // One span knob for every channel: world units for X/Y/Z, degrees for the
-  // rotations, octaves of scale for Size. The wide range is what lets one
-  // param serve a 4-unit throw and a 360-degree tumble.
-  { key: 'amount', label: 'Amount', min: -360, max: 360, step: 0.1, default: 4 },
+  // rotations, octaves of scale for Size. Was ±360 so a rotation could tumble
+  // a full turn, but that made the whole usable position band the slider's
+  // first few pixels - ±10 fits the throws people actually dial (a rotation
+  // channel now caps at a 10-degree sway; give rotations their own scale if a
+  // full tumble is ever asked for).
+  { key: 'amount', label: 'Amount', min: -10, max: 10, step: 0.05, default: 4 },
   { key: 'force', label: 'Force', min: 0.05, max: 6, step: 0.05, default: 1.6 },
   { key: 'bounce', label: 'Bounce', min: 0, max: 0.98, step: 0.01, default: 0.7, showIf: 'solve=2' },
   { key: 'damp', label: 'Damping', min: 0.02, max: 1, step: 0.01, default: 0.25, showIf: 'law=1' },
