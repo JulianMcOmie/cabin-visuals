@@ -393,6 +393,59 @@ function CanvasTransportBar({
   )
 }
 
+const VIEW_ASPECTS: ViewAspect[] = ['fill', ...ASPECT_RATIO_IDS]
+
+/** The aspect pill + its dropdown, shared by the transport strip and the
+ *  fullscreen overlay so the two surfaces cannot drift. Both open UPWARD
+ *  (transport strip sits under the canvas; the fullscreen copy sits in the
+ *  bottom-left corner). The parent owns the open state because fullscreen
+ *  must keep its auto-hiding controls up while the menu is open; `glass`
+ *  swaps the chip onto the canvas-overlay glass treatment the fullscreen
+ *  button wears. Writes the project-wide viewAspect either way - picking in
+ *  fullscreen IS picking in the main view (and reseeds the export default). */
+function AspectPill({ open, setOpen, glass }: {
+  open: boolean
+  setOpen: (v: boolean) => void
+  glass?: boolean
+}) {
+  const aspect = useProjectStore((s) => s.viewAspect)
+  const setAspect = useProjectStore((s) => s.setViewAspect)
+  return (
+    <div className="relative flex-shrink-0">
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen(!open) }}
+        title="Preview aspect ratio - see the visual as an export at that shape would compose it"
+        className={`flex h-7 items-center gap-1.5 rounded-md px-2 @[530px]:px-2.5 font-mono text-[9px] uppercase tracking-wide text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer ${
+          glass
+            ? 'visualizer-glass-control border border-[var(--border)] bg-[rgba(16,19,28,0.8)]'
+            : 'bg-[var(--bg-elevated)]'
+        }`}
+      >
+        {aspect === 'fill' ? 'Fill' : aspect}
+        <span className="text-[7px] leading-none">▾</span>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setOpen(false) }} />
+          <div className="absolute bottom-full left-0 z-50 mb-1 min-w-[76px] rounded-md border border-[var(--border)] bg-[var(--bg-panel-raised)] py-1 shadow-lg shadow-black/50">
+            {VIEW_ASPECTS.map((a) => (
+              <button
+                key={a}
+                onClick={(e) => { e.stopPropagation(); setAspect(a); setOpen(false) }}
+                className={`flex w-full items-center px-2.5 py-1 font-mono text-[9px] uppercase tracking-wide transition-colors cursor-pointer ${
+                  a === aspect ? 'text-[var(--accent)]' : 'text-[var(--text-3)] hover:text-[var(--text)]'
+                }`}
+              >
+                {a === 'fill' ? 'Fill' : a}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 function VisualPanel({
   previewSceneId,
   sourceCanvasRef,
@@ -406,6 +459,9 @@ function VisualPanel({
   const fullscreenControlTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [fullscreenControlVisible, setFullscreenControlVisible] = useState(false)
+  // Fullscreen's own aspect pill (bottom-left). Same project-wide viewAspect
+  // as the transport strip's - fullscreen just starts on whatever is pinned.
+  const [fsAspectOpen, setFsAspectOpen] = useState(false)
   // A project setting (persisted in the document, seeds the export default).
   const aspect = useProjectStore((s) => s.viewAspect)
 
@@ -491,6 +547,7 @@ function VisualPanel({
       const el = panelRef.current
       const isFs = document.fullscreenElement === el
       setIsFullscreen(isFs)
+      if (!isFs) setFsAspectOpen(false)
       if (!el) return
       if (isFs) {
         // Native fullscreen holds the screen now - drop the glide's inline
@@ -586,8 +643,10 @@ function VisualPanel({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  // The framed box: contain-fit for any pinned aspect, fill-the-panel for 'fill'
-  // and fullscreen. Everything outside it is the panel's deep background -
+  // The framed box: contain-fit for any pinned aspect, fill-the-panel for
+  // 'fill'. Fullscreen is no special case: the pinned aspect (and the glide
+  // below) carry straight over, the panel is just the whole screen there.
+  // Everything outside it is the panel's deep background -
   // that IS the letterbox bar - so animating the box animates the bars.
   //
   // While a switch glides, React hands the box an explicit px pair instead of
@@ -640,7 +699,7 @@ function VisualPanel({
     const from = prevAspectRef.current
     prevAspectRef.current = aspect
     const panel = panelRef.current
-    if (!panel || from === aspect || isFullscreen || reducedMotion()) return
+    if (!panel || from === aspect || reducedMotion()) return
     const { width: cw, height: ch } = panel.getBoundingClientRect()
     // Switching again mid-glide starts from where the box actually IS (the
     // running transition's live rect), not from the previous aspect's box.
@@ -663,11 +722,16 @@ function VisualPanel({
     // glide is read for the mid-glide handoff, never a trigger - depending on
     // it would restart the glide on its own first commit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aspect, isFullscreen])
+  }, [aspect])
 
   const boxStyle = glide
     ? { width: glide.width, height: glide.height }
-    : restingAspectBox(isFullscreen ? 'fill' : aspect)
+    : restingAspectBox(aspect)
+
+  // The overlay controls show/hide as ONE cluster; an open aspect menu holds
+  // them up past the hide timer (fading the pill out from under its own open
+  // dropdown strands the menu with no anchor).
+  const controlsShown = (isMobile ? touchControlsVisible : fullscreenControlVisible) || fsAspectOpen
 
   return (
     <div
@@ -695,7 +759,7 @@ function VisualPanel({
       >
         <Scene previewSceneId={previewSceneId} sourceCanvasRef={sourceCanvasRef} />
       <div className={`absolute top-2 right-2 z-10 transition-opacity duration-300 ${
-        (isMobile ? touchControlsVisible : fullscreenControlVisible)
+        controlsShown
           ? 'pointer-events-auto opacity-100'
           : 'pointer-events-none opacity-0'
       }`}>
@@ -713,6 +777,19 @@ function VisualPanel({
         </button>
       </div>
       </div>
+      {/* Fullscreen's aspect pill: bottom-left of the SCREEN (a child of the
+          panel, not the framed box, so it stays in the corner while the box
+          letterboxes), riding the same auto-hide as the fullscreen button.
+          Desktop only - phones have no aspect control anywhere (the transport
+          strip that carries it is hidden there), and the corner belongs to
+          the canvas transport bar. */}
+      {isFullscreen && !isMobile && (
+        <div className={`absolute bottom-3 left-3 z-10 transition-opacity duration-300 ${
+          controlsShown ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+        }`}>
+          <AspectPill open={fsAspectOpen} setOpen={setFsAspectOpen} glass />
+        </div>
+      )}
       {/* First-run tutorial: switched OFF in the UI, kept intact in the code.
           Re-enable by uncommenting this and its import at the top of the file -
           nothing else was removed. Unmounted rather than early-returned on
@@ -896,8 +973,6 @@ function EditorPanelToggle({
   )
 }
 
-const VIEW_ASPECTS: ViewAspect[] = ['fill', ...ASPECT_RATIO_IDS]
-
 // Fast Preview levels as the toolbar spells them (the store owns the order and
 // the resolution each one renders at - see UIStore.PREVIEW_QUALITY_SCALE).
 const PREVIEW_QUALITY_LABELS: Record<PreviewQuality, string> = {
@@ -934,8 +1009,6 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
       : { startBeat: 0, endBeat: defaultLoopEndBeat, enabled: true })
   }
 
-  const aspect = useProjectStore((s) => s.viewAspect)
-  const setAspect = useProjectStore((s) => s.setViewAspect)
   const [aspectOpen, setAspectOpen] = useState(false)
   const previewQuality = useUIStore((s) => s.previewQuality)
   const setPreviewQuality = useUIStore((s) => s.setPreviewQuality)
@@ -978,34 +1051,7 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
           fixed by clipping this box: the view chip's hover panel is an
           absolutely-positioned child that has to escape upward. */}
       <div className="flex min-w-0 flex-1 items-center gap-1 @[530px]:gap-1.5">
-        <div className="relative flex-shrink-0">
-          <button
-            onClick={() => setAspectOpen((v) => !v)}
-            title="Preview aspect ratio - see the visual as an export at that shape would compose it"
-            className="flex h-7 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2 @[530px]:px-2.5 font-mono text-[9px] uppercase tracking-wide text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer"
-          >
-            {aspect === 'fill' ? 'Fill' : aspect}
-            <span className="text-[7px] leading-none">▾</span>
-          </button>
-          {aspectOpen && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setAspectOpen(false)} />
-              <div className="absolute bottom-full left-0 z-50 mb-1 min-w-[76px] rounded-md border border-[var(--border)] bg-[var(--bg-panel-raised)] py-1 shadow-lg shadow-black/50">
-                {VIEW_ASPECTS.map((a) => (
-                  <button
-                    key={a}
-                    onClick={() => { setAspect(a); setAspectOpen(false) }}
-                    className={`flex w-full items-center px-2.5 py-1 font-mono text-[9px] uppercase tracking-wide transition-colors cursor-pointer ${
-                      a === aspect ? 'text-[var(--accent)]' : 'text-[var(--text-3)] hover:text-[var(--text)]'
-                    }`}
-                  >
-                    {a === 'fill' ? 'Fill' : a}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+        <AspectPill open={aspectOpen} setOpen={setAspectOpen} />
         {/* Fast Preview: renders the canvas pipeline at a fraction of full size
             for smoother playback on heavy projects. The field name rides INSIDE
             the chip at the muted level so the control says what it is at rest -
