@@ -31,7 +31,12 @@ import type { MoverOrSplitter, MoverOrSplitterContext, VisualCopy } from './type
  * copy its own clock: entries below it replay their material at each copy's
  * age, and latching entries sample at its birth. Offsets from nested emitters
  * sum; a later emitter's births overwrite an ancestor's; descendants of a copy
- * inherit both.
+ * inherit both. An entry may OPT OUT of a prefix of those emitters via
+ * `clockSkipEmitters` (types.ts) - the resolver's position routing, which
+ * reorders emitters to the chain front and stamps each entry with how many of
+ * them sit above it in the user's pipeline; such an entry runs on the
+ * remaining suffix's clock (fully live at skip = all), while `birthBeat` is
+ * handed over regardless.
  *
  * No MIDI, automation, envelope, project-track, React, or instrument logic
  * belongs here - definitions close over whatever resolved data they need.
@@ -42,6 +47,27 @@ import type { MoverOrSplitter, MoverOrSplitterContext, VisualCopy } from './type
 export interface CopyClocks {
   beatOffsets: readonly number[] | null
   birthBeats: readonly (number | undefined)[] | null
+  /** Per copy: the accumulated offset AFTER each emitter ran, in emitter order
+   *  (so `beatOffsets[i] === checkpoints[i][last]` whenever both exist). This
+   *  is what lets a consumer subtract a PREFIX of the emitters back out - the
+   *  suffix arithmetic behind `clockSkipEmitters` (`copyClockShift` below). */
+  checkpoints: readonly (readonly number[] | null)[] | null
+}
+
+/** The chain-clock shift an entry (or lane) with `clockSkipEmitters = skip`
+ *  experiences on a copy whose total offset is `total` with the given emitter
+ *  checkpoints: the offsets of the emitters it does NOT skip - a suffix, since
+ *  skipped emitters are exactly the ones above it in the pipeline. skip 0 is
+ *  the whole offset (the pattern case); skip ≥ the emitters seen is 0 (live). */
+export function copyClockShift(
+  total: number,
+  checkpoints: readonly number[] | null | undefined,
+  skip: number,
+): number {
+  if (skip <= 0) return total
+  if (!checkpoints || checkpoints.length === 0) return 0
+  if (skip >= checkpoints.length) return 0
+  return total - checkpoints[skip - 1]
 }
 
 /** True when any entry declares it may emit the per-copy time channel - the
@@ -73,17 +99,24 @@ export function resolveVisualCopies(
   // copy", so ordinary chains pay nothing.
   let beatOffsets: number[] | null = null
   let birthBeats: (number | undefined)[] | null = null
+  // Per copy: accumulated offset after each emitter, in emitter order. What the
+  // suffix arithmetic behind `clockSkipEmitters` subtracts against - see
+  // `copyClockShift`. Lazy like the others; appended to only on emitter steps.
+  let clockCheckpoints: (readonly number[] | null)[] | null = null
 
   for (const moverOrSplitter of moverAndSplitterChain) {
     const previousVisualCopies = visualCopies
     const previousInternals = internals
     const previousOffsets = beatOffsets
     const previousBirths = birthBeats
+    const previousCheckpoints = clockCheckpoints
     const count = previousVisualCopies.length
     const nextVisualCopies: VisualCopy[] = []
     let nextInternals: (Matrix4 | null)[] | null = null
     let nextOffsets: number[] | null = null
     let nextBirths: (number | undefined)[] | null = null
+    let nextCheckpoints: (readonly number[] | null)[] | null = null
+    const skipEmitters = moverOrSplitter.clockSkipEmitters ?? 0
     const framed = moverOrSplitter.applyFramed
     // ONE context per step, re-pointed at each copy: `index`, `beat` and
     // `birthBeat` are the only fields that vary per copy, and the contract
@@ -100,7 +133,13 @@ export function resolveVisualCopies(
       context.index = index
       const inheritedOffset = previousOffsets ? previousOffsets[index] : 0
       const inheritedBirth = previousBirths ? previousBirths[index] : undefined
-      context.beat = beat - inheritedOffset
+      const inheritedCheckpoints = previousCheckpoints ? previousCheckpoints[index] : null
+      // The entry's clock: the inherited offset minus the emitters it skips
+      // (those above it in the pipeline - see `clockSkipEmitters` in types.ts).
+      // birthBeat is handed over regardless, so a live entry still latches.
+      context.beat = beat - (skipEmitters > 0
+        ? copyClockShift(inheritedOffset, inheritedCheckpoints, skipEmitters)
+        : inheritedOffset)
       context.birthBeat = inheritedBirth
       const inherited = previousInternals ? previousInternals[index] : null
       if (framed) {
@@ -121,10 +160,14 @@ export function resolveVisualCopies(
           if (birth !== undefined && !nextBirths) {
             nextBirths = new Array<number | undefined>(nextVisualCopies.length).fill(undefined)
           }
+          if (inheritedCheckpoints && !nextCheckpoints) {
+            nextCheckpoints = new Array<readonly number[] | null>(nextVisualCopies.length).fill(null)
+          }
           nextVisualCopies.push(next)
           if (nextInternals) nextInternals.push(internal)
           if (nextOffsets) nextOffsets.push(offset)
           if (nextBirths) nextBirths.push(birth)
+          if (nextCheckpoints) nextCheckpoints.push(inheritedCheckpoints)
         }
       } else {
         for (const next of moverOrSplitter.apply(visualCopy, context)) {
@@ -137,23 +180,44 @@ export function resolveVisualCopies(
           if (inheritedBirth !== undefined && !nextBirths) {
             nextBirths = new Array<number | undefined>(nextVisualCopies.length).fill(undefined)
           }
+          if (inheritedCheckpoints && !nextCheckpoints) {
+            nextCheckpoints = new Array<readonly number[] | null>(nextVisualCopies.length).fill(null)
+          }
           nextVisualCopies.push(next)
           if (nextInternals) nextInternals.push(inherited)
           if (nextOffsets) nextOffsets.push(inheritedOffset)
           if (nextBirths) nextBirths.push(inheritedBirth)
+          if (nextCheckpoints) nextCheckpoints.push(inheritedCheckpoints)
         }
       }
+    }
+
+    // An emitter step closes a checkpoint: every output copy records its
+    // accumulated offset so far, in emitter order - the prefix sums that let a
+    // later entry's `clockSkipEmitters` subtract this emitter back out. The
+    // arrays are per copy (cloned on append, shared on inheritance), so a
+    // targeted emitter's pass-through copies checkpoint their unchanged total.
+    if (moverOrSplitter.emitsCopyClocks) {
+      const appended: (readonly number[] | null)[] = new Array(nextVisualCopies.length)
+      for (let i = 0; i < nextVisualCopies.length; i++) {
+        const inheritedCp = nextCheckpoints ? nextCheckpoints[i] : null
+        const total = nextOffsets ? nextOffsets[i] : 0
+        appended[i] = inheritedCp ? [...inheritedCp, total] : [total]
+      }
+      nextCheckpoints = appended
     }
 
     visualCopies = nextVisualCopies
     internals = nextInternals
     beatOffsets = nextOffsets
     birthBeats = nextBirths
+    clockCheckpoints = nextCheckpoints
   }
 
   if (clocksOut) {
     clocksOut.beatOffsets = beatOffsets
     clocksOut.birthBeats = birthBeats
+    clocksOut.checkpoints = clockCheckpoints
   }
 
   if (!internals) return visualCopies

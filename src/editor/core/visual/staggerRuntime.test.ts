@@ -120,35 +120,45 @@ test('an automated stagger still emits its clocks (applyFramed survives the wrap
   }
 })
 
-// ── Per-copy object states: EVERYTHING below the emitter rides the copy clock ─
+// ── Per-copy object states: CHILD POSITION routes each lane's clock ──────────
+// Above the emitter = pattern, replayed at each copy's own clock; after it =
+// live overlay on the real timeline. The instrument itself (notes, energy,
+// localTransform) is above everything and always staggers.
 
-test('a staggered track gets per-copy object states on each copy clock', () => {
+/** A min→max keyframe ramp over beats [0, 4] on `targetParam`. */
+function rampLane(id: string, parentId: string, targetParam: string): Track {
+  return track({
+    id, type: 'automation', parentId, targetParam,
+    blocks: [{
+      id: `${id}-b`, startBar: 0, durationBars: 2, loop: false,
+      notes: [
+        { id: `${id}-n1`, startBeat: 0, durationBeats: 0.25, pitch: 36, velocity: 100 },
+        { id: `${id}-n2`, startBeat: 4, durationBeats: 0.25, pitch: 84, velocity: 100 },
+      ],
+    }],
+  })
+}
+
+test('a staggered track gets per-copy object states; lane position routes each clock', () => {
   const cubeParams = getInstrument('cube')?.params.filter(isNumberParam) ?? []
-  const paramKey = cubeParams[0]?.key
-  assert.ok(paramKey, 'cube declares a numeric param to automate')
+  const patternKey = cubeParams[0]?.key
+  const liveKey = cubeParams[1]?.key
+  assert.ok(patternKey && liveKey && patternKey !== liveKey, 'cube declares two numeric params to automate')
   const p = snapshot([
     track({
-      id: 'cube', instrumentId: 'cube', childIds: ['st', 'auto', 'tfauto'],
+      id: 'cube', instrumentId: 'cube', childIds: ['patternAuto', 'st', 'liveAuto', 'tfauto'],
       blocks: [{
         id: 'cube-b', startBar: 0, durationBars: 1, loop: false,
         notes: [{ id: 'cube-n', startBeat: 0, durationBeats: 1, pitch: 60, velocity: 100 }],
       }],
     }),
+    // ABOVE the stagger: pattern - each copy reads a DIFFERENT value at its age.
+    rampLane('patternAuto', 'cube', patternKey!),
     track({ id: 'st', type: 'splitter', splitterId: 'stagger', parentId: 'cube', inputValues: { copies: 4, duration: 4 } }),
-    // An instrument-param lane: min at beat 0 → max at beat 4, so each copy
-    // reads a DIFFERENT value at its own age.
-    track({
-      id: 'auto', type: 'automation', parentId: 'cube', targetParam: paramKey,
-      blocks: [{
-        id: 'auto-b', startBar: 0, durationBars: 2, loop: false,
-        notes: [
-          { id: 'a1', startBeat: 0, durationBeats: 0.25, pitch: 36, velocity: 100 },
-          { id: 'a2', startBeat: 4, durationBeats: 0.25, pitch: 84, velocity: 100 },
-        ],
-      }],
-    }),
-    // A SPATIAL tf lane below every chain child: formation-as-one, so every
-    // copy state must read it at the OBJECT clock, identical across copies.
+    // AFTER the stagger: live - every copy reads the real timeline's value.
+    rampLane('liveAuto', 'cube', liveKey!),
+    // A SPATIAL tf lane below every chain child: formation-as-one, object clock
+    // (routed by the same position rule now - no special case).
     track({
       id: 'tfauto', type: 'automation', parentId: 'cube', targetParam: 'tfX',
       blocks: [{
@@ -173,14 +183,63 @@ test('a staggered track gets per-copy object states on each copy clock', () => {
     // The cube's note at [0, 1) sounds only for the copy whose age is inside it.
     assert.equal(s?.activeNotes.length, age < 1 ? 1 : 0, `copy ${i} active notes`)
   })
-  // The instrument-param lane ramps over [0, 4]: distinct per copy, ordered by age.
-  const v = (i: number) => getObjectState('cube', i)!.params[paramKey!]
-  assert.ok(v(3) > v(0) && v(0) > v(1) && v(1) > v(2), 'param staggers per copy')
-  // The spatial tf lane stays on the object clock: identical across copies,
-  // equal to the shared state's value.
+  // The pattern lane ramps over [0, 4]: distinct per copy, ordered by age.
+  const v = (i: number) => getObjectState('cube', i)!.params[patternKey!]
+  assert.ok(v(3) > v(0) && v(0) > v(1) && v(1) > v(2), 'pattern lane staggers per copy')
+  // The live lane and the spatial tf lane read the real timeline: identical
+  // across copies, equal to the shared state's values.
   ages.forEach((_, i) => {
-    assert.equal(getObjectState('cube', i)!.params.tfX, objectState!.params.tfX, `copy ${i} tfX`)
+    const s = getObjectState('cube', i)!
+    assert.equal(s.params[liveKey!], objectState!.params[liveKey!], `copy ${i} live lane`)
+    assert.equal(s.params.tfX, objectState!.params.tfX, `copy ${i} tfX`)
   })
+})
+
+// ── Chain movers: before the stagger = the pattern, after it = a live overlay ─
+
+/** A translate-burst Mover with one note - the x offset arrives over the burst. */
+function burstMoverTrack(id: string, parentId: string, noteBeat: number): Track {
+  return track({
+    id, type: 'mover', moverId: 'mover', parentId,
+    inputValues: { movement: 0, timing: 0, x: 3, y: 0, z: 0 },
+    blocks: [{
+      id: `${id}-b`, startBar: 0, durationBars: 4, loop: false,
+      notes: [{ id: `${id}-n`, startBeat: noteBeat, durationBeats: 1, pitch: 60, velocity: 100 }],
+    }],
+  })
+}
+
+const copyX = (copies: ReturnType<typeof resolveVisualCopies>) =>
+  copies.map((c) => c.transform.elements[12])
+
+test('a mover AFTER the stagger runs on the real timeline', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['st', 'mv'] }),
+    track({ id: 'st', type: 'splitter', splitterId: 'stagger', parentId: 'cube', inputValues: { copies: 3, duration: 4 } }),
+    burstMoverTrack('mv', 'cube', 9),
+  ], ['cube'])
+  const chain = chainOf(p, 'cube')
+  // Before its note nothing moves; mid-burst every copy carries the SAME
+  // real-clock offset - the note at beat 9 fires even though no copy's age
+  // ever reaches 9, which is the whole point of the live overlay.
+  assert.deepEqual(copyX(resolveVisualCopies(chain, 8)), [0, 0, 0])
+  const mid = copyX(resolveVisualCopies(chain, 9.5))
+  assert.ok(mid[0] > 0.1, 'the burst fired on the timeline clock')
+  assert.ok(mid.every((x) => x === mid[0]), 'all copies share the live offset')
+})
+
+test('a mover BEFORE the stagger is the pattern and replays per copy', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['mv', 'st'] }),
+    burstMoverTrack('mv', 'cube', 1),
+    track({ id: 'st', type: 'splitter', splitterId: 'stagger', parentId: 'cube', inputValues: { copies: 4, duration: 4 } }),
+  ], ['cube'])
+  const chain = chainOf(p, 'cube')
+  // Loop stagger(4, 4) at beat 10: ages [2, 1, 0, 3] - each copy mid-replay of
+  // the burst at its own phase, so the offsets DIFFER across copies.
+  const xs = copyX(resolveVisualCopies(chain, 10))
+  assert.equal(xs.length, 4)
+  assert.ok(new Set(xs.map((x) => x.toFixed(4))).size > 1, 'copies replay the burst at their own ages')
 })
 
 test('unstaggered tracks answer any copy index with the shared state', () => {

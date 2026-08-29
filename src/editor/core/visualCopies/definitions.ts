@@ -80,6 +80,15 @@ export interface MoverOrSplitterDefinition<Settings> {
    * competes with the definition that replaced it.
    */
   legacy?: boolean
+  /**
+   * This definition is a TIME EMITTER: its resolved entries may emit the
+   * per-copy clock channel (`MoverOrSplitter.emitsCopyClocks`). Declared on the
+   * definition as well as on the resolved entry because the RESOLVER needs the
+   * answer before resolving - sibling lanes and prefix walks count the emitters
+   * above/below a child by its definition to route each lane's clock (see
+   * `clockSkipEmitters` in types.ts). Structural: true regardless of notes.
+   */
+  emitsCopyClocks?: boolean
   midiRows?: (settings: Settings, context?: { priorCount: number }) => MidiRowDef[]
   /** Keep the editor to exactly midiRows, even if saved notes use other pitches. */
   strictMidiRows?: boolean

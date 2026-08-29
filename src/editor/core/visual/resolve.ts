@@ -203,6 +203,20 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
       max: bounds.max,
     })
   }
+  // Child position routes the clock past a time emitter (Stagger): a lane above
+  // it is pattern (replayed per copy), a lane after it is live. Stamped here so
+  // every consumer - the params overlay, the woven tf entries, the per-copy
+  // engine states - reads one answer. No emitter children = no stamps = the
+  // field stays absent everywhere, at the cost of one walk.
+  const emitterMap = emitterClocksAboveByChild(track, p)
+  if (emitterMap) {
+    for (const lane of out) {
+      // Explicit even at 0: "pattern" (0) and "no emitters here" (absent) must
+      // stay distinguishable for the weave and orderEmitterClocks.
+      const skip = lane.sourceTrackId !== undefined ? emitterMap.get(lane.sourceTrackId) : undefined
+      if (skip !== undefined) lane.clockSkipEmitters = skip
+    }
+  }
   return out
 }
 
@@ -244,6 +258,9 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
     const c = p.tracks[cid]
     return !!c && !c.instrumentId && c.type === 'automation' && !!c.solo
   })
+  // Same clock routing as the param lanes: an fx lane above a time emitter
+  // replays per copy, one after it rides the real timeline.
+  const emitterMap = emitterClocksAboveByChild(track, p)
   for (const childId of track.childIds ?? []) {
     const child = p.tracks[childId]
     if (!child || child.instrumentId || child.type !== 'automation') continue
@@ -252,6 +269,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
     if (!target) continue
     const instance = effects.find((e) => e.id === target.instanceId)
     if (!instance) continue
+    const clockSkipEmitters = emitterMap ? emitterMap.get(childId) ?? 0 : undefined
     let min = 0
     let max = 1
     let base = instance.settings[target.key] ?? 0
@@ -278,6 +296,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
       out.push({
         instanceId: target.instanceId,
         key: target.key,
+        clockSkipEmitters,
         mode: 'linear',
         keyframes: [],
         burst: child.burst,
@@ -294,6 +313,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
       out.push({
         instanceId: target.instanceId,
         key: target.key,
+        clockSkipEmitters,
         mode: 'linear',
         keyframes: [],
         cycle: child.cycle,
@@ -310,6 +330,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
       out.push({
         instanceId: target.instanceId,
         key: target.key,
+        clockSkipEmitters,
         mode: 'linear',
         keyframes: [],
         force: child.force,
@@ -330,6 +351,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
     out.push({
       instanceId: target.instanceId,
       key: target.key,
+      clockSkipEmitters,
       mode: child.interpolation ?? 'linear',
       keyframes: extractKeyframes(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount, child.automationRange),
       splineTension: child.splineTension,
@@ -405,6 +427,15 @@ function resolveEnvelopes(track: Track, def: ObjectInstrumentDef | undefined, p:
       notes,
     })
   }
+  // Same clock routing as the automation lanes: an envelope above a time
+  // emitter replays per copy, one after it gates on the real timeline.
+  const emitterMap = emitterClocksAboveByChild(track, p)
+  if (emitterMap) {
+    for (const env of out) {
+      const skip = emitterMap.get(env.trackId)
+      if (skip !== undefined) env.clockSkipEmitters = skip
+    }
+  }
   return out
 }
 
@@ -472,6 +503,44 @@ function chainEntryCount(track: Track, p: ProjectSnapshot): number {
  *  contributes nothing and is skipped exactly like an unknown definition. */
 function isChainEntryTrack(track: Track, p: ProjectSnapshot): boolean {
   return chainEntryCount(track, p) > 0
+}
+
+/** How many of a chain child's entries are TIME EMITTERS (Stagger), read off the
+ *  DEFINITION so no resolution is needed (definitions.ts's `emitsCopyClocks`).
+ *  A switcher's rows keep their slots whatever their mute state, so this counts
+ *  them unfiltered, exactly like chainEntryCount. */
+function emitterEntryCount(track: Track, p: ProjectSnapshot): number {
+  if (track.type === 'switcher') {
+    return switcherChildTracks(track, p)
+      .reduce((n, child) => n + emitterEntryCount(child, p), 0)
+  }
+  const def = getMoverOrSplitterDefinition(moverOrSplitterId(track))
+  return !!def && !def.parentGate && def.emitsCopyClocks ? 1 : 0
+}
+
+/** Child position routes the clock on a track that carries a time emitter:
+ *  everything ABOVE the emitter in child order is the pattern it replays per
+ *  copy, everything AFTER it is a live overlay on the real timeline. This maps
+ *  each childId to the number of emitters above it - the `clockSkipEmitters`
+ *  its lane (or chain entry) should carry - or returns null when the track has
+ *  no emitter children at all, which is the common case and costs one walk.
+ *  Mute/solo mirror the chain walks exactly, so the counts line up with the
+ *  emitter ordinals the kernel checkpoints. */
+function emitterClocksAboveByChild(track: Track, p: ProjectSnapshot): Map<string, number> | null {
+  const children = (track.childIds ?? [])
+    .map((cid) => p.tracks[cid])
+    .filter((c): c is Track => !!c)
+  const chainChildren = children.filter((c) => isChainEntryTrack(c, p))
+  const anySolo = chainChildren.some((c) => c.solo)
+  let emitters = 0
+  const map = new Map<string, number>()
+  for (const child of children) {
+    map.set(child.id, emitters)
+    if (isChainEntryTrack(child, p) && !child.muted && (!anySolo || child.solo)) {
+      emitters += emitterEntryCount(child, p)
+    }
+  }
+  return emitters > 0 ? map : null
 }
 
 /**
@@ -877,6 +946,12 @@ function weaveTfAutomationLanes(
     }
     const base = track.params?.[lane.param] ?? transformDefault(lane.param)
     const entry = tfAutomationChainEntry(lane, base)
+    // The MIRROR moves this entry across the chain, so its clock must be routed
+    // by the lane's own CHILD position, not by where the entry lands: a pattern
+    // lane (above the emitter) mirrors below it and must still ride the copy
+    // clock. Carrying the lane's stamp (explicit even at 0) pre-empts
+    // orderEmitterClocks' by-chain-position default.
+    if (lane.clockSkipEmitters !== undefined) entry.clockSkipEmitters = lane.clockSkipEmitters
     const position = n - g
     const slot = deltasByPosition.get(position)
     if (slot) slot.push(entry)
@@ -1007,14 +1082,19 @@ function priorChainPrefixes(trackId: string, p: ProjectSnapshot): MoverOrSplitte
         if (t.instrumentId && getInstrument(t.instrumentId)) memberObjects.push(t)
         for (const c of t.childIds ?? []) collectObjects(c)
       }
+      // Time emitters BELOW the target still precede it at runtime
+      // (orderEmitterClocks moves them to the chain front), so their fan-out
+      // belongs in the prefix; nothing else below the target does.
+      let pastTarget = false
       for (const cid of parent.childIds ?? []) {
-        if (cid === trackId) break
+        if (cid === trackId) { pastTarget = true; continue }
         const child = p.tracks[cid]
         if (!child) continue
         if (isChainEntryTrack(child, p)) {
           if (child.muted || (anySolo && !child.solo)) continue
-          entriesAbove.push(...resolveChainChildEntries(child, p))
-        } else {
+          const entries = resolveChainChildEntries(child, p)
+          entriesAbove.push(...(pastTarget ? entries.filter((e) => e.emitsCopyClocks) : entries))
+        } else if (!pastTarget) {
           collectObjects(cid)
         }
       }
@@ -1035,10 +1115,14 @@ function priorChainPrefixes(trackId: string, p: ProjectSnapshot): MoverOrSplitte
       const own = resolveOwnMoverOrSplitter(parent, p)
       if (own) prefix.push(own)
     }
+    // Same emitter rule as the group arm: an emitter below the target still
+    // runs before it (orderEmitterClocks), so its fan-out joins the prefix.
+    let pastTarget = false
     for (const child of candidates) {
-      if (child.id === trackId) break
+      if (child.id === trackId) { pastTarget = true; continue }
       if (child.muted || (anySolo && !child.solo)) continue
-      prefix.push(...resolveChainChildEntries(child, p))
+      const entries = resolveChainChildEntries(child, p)
+      prefix.push(...(pastTarget ? entries.filter((e) => e.emitsCopyClocks) : entries))
     }
     return [prefix]
   }
@@ -1049,8 +1133,11 @@ function priorChainPrefixes(trackId: string, p: ProjectSnapshot): MoverOrSplitte
   const targetObjects = objects.filter((object) => globalTrackTargetsObject(target, object, p))
   return targetObjects.map((object) => {
     const prefix = resolveMoverAndSplitterChain(object, p)
+    // Same emitter rule as the sibling walks: a later global emitter hitting
+    // this object still precedes the target at runtime (orderEmitterClocks).
+    let pastTarget = false
     for (const globalId of flattenTree(p)) {
-      if (globalId === trackId) break
+      if (globalId === trackId) { pastTarget = true; continue }
       const global = p.tracks[globalId]
       if (
         !global || global.muted ||
@@ -1058,10 +1145,54 @@ function priorChainPrefixes(trackId: string, p: ProjectSnapshot): MoverOrSplitte
         isChainChild(global, p) ||
         !globalTrackTargetsObject(global, object, p)
       ) continue
-      prefix.push(...resolveChainChildEntries(global, p))
+      const entries = resolveChainChildEntries(global, p)
+      prefix.push(...(pastTarget ? entries.filter((e) => e.emitsCopyClocks) : entries))
     }
     return prefix
   })
+}
+
+/**
+ * Route the clocks of a chain that carries a TIME EMITTER (Stagger), then move
+ * the emitters to the front so the kernel can honor that routing in one pass.
+ *
+ * Child position is the semantics: everything ABOVE an emitter in the pipeline
+ * is the pattern it replays per copy, everything AFTER it is a live overlay on
+ * the real timeline (still handed `birthBeat`, so latching devices below keep
+ * working). The kernel shifts entries below an emitter - causality forbids
+ * shifting entries above one - so the pattern entries must sit below it in the
+ * CHAIN, and an emitter is space-neutral (stacked clones, no transform), which
+ * is what makes the move transform-exact. Each entry is stamped with
+ * `clockSkipEmitters` = the number of emitters above it in the original order
+ * (its pre-existing stamp wins - the tf weave routes by the lane's own child
+ * position); the kernel subtracts those emitters' offsets back out of
+ * `context.beat`. Entries are cloned when stamped, never mutated - group and
+ * global entries are shared across objects, and each object's chain may route
+ * them differently.
+ *
+ * Emitters keep their relative order (their ordinals are what the stamps
+ * count), and an emitter never rides another's clock - each evaluates on the
+ * real timeline (nested emitters' offsets still SUM for the pattern above
+ * both).
+ */
+function orderEmitterClocks(chain: MoverOrSplitter[]): MoverOrSplitter[] {
+  if (!chain.some((entry) => entry.emitsCopyClocks)) return chain
+  const emitters: MoverOrSplitter[] = []
+  const rest: MoverOrSplitter[] = []
+  let seen = 0
+  for (const entry of chain) {
+    const skip = entry.clockSkipEmitters ?? seen
+    const routed = skip === (entry.clockSkipEmitters ?? 0)
+      ? entry
+      : { ...entry, clockSkipEmitters: skip }
+    if (entry.emitsCopyClocks) {
+      emitters.push(routed)
+      seen++
+    } else {
+      rest.push(routed)
+    }
+  }
+  return [...emitters, ...rest]
 }
 
 // ── Per-track resolve reuse ──────────────────────────────────────────────────
@@ -1439,6 +1570,13 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
         target.maskSourceIds.push(object.trackId)
       }
     }
+  }
+
+  // Chains that carry a time emitter get their clocks routed LAST, after the
+  // group and global passes have finished appending - the emitter ordinals
+  // count across the whole assembled chain, wherever the emitter came from.
+  for (const object of objects) {
+    object.moverAndSplitterChain = orderEmitterClocks(object.moverAndSplitterChain)
   }
 
   // The scene instrument's fx lanes drive the scene EFFECT chain (its

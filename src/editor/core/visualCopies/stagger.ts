@@ -1,15 +1,20 @@
 // Stagger: the TIME emitter. It makes no shape of its own - it fans copies of
-// whatever reaches it and gives each one its OWN CLOCK, so every chain entry
-// BELOW it runs on each copy's clock: one authored pattern - a size ramp, a
-// mover's phrase - replays per copy, staggered. The Stagger owns the only
-// loop, so the pattern is authored ONCE and never needs a looped block.
+// the object and gives each one its OWN CLOCK. CHILD POSITION routes what that
+// clock reaches (resolve.ts's orderEmitterClocks): everything ABOVE the
+// Stagger in the pipeline - the instrument's own animation, param lanes,
+// envelopes, movers - is the PATTERN, replayed per copy at each copy's age;
+// everything AFTER it is a LIVE overlay that keeps running on the real
+// timeline (still handed `birthBeat`, so a latching device below works). The
+// Stagger owns the only loop, so the pattern is authored ONCE and never needs
+// a looped block.
 //
 // The mental model it was built for (nested shapes forever expanding to fill
-// the frame): a single 0→DURATION expansion curve above it in the track order
-// (the existing "lane above a splitter animates each copy" weave), the
-// Stagger, and a Colorizer below in its "Born" sample mode with one note per
-// copy birth - red, blue, green, yellow. Each shell replays the expansion at
-// its own age and keeps the color its note said the moment it was born.
+// the frame): a single 0→DURATION expansion curve above it in the track
+// order, the Stagger, and a Colorizer below in its "Born" sample mode with
+// one note per copy birth - red, blue, green, yellow. Each shell replays the
+// expansion at its own age and keeps the color its note said the moment it
+// was born - while a mover or modulation lane placed after the Stagger still
+// works the way it does on any other track, composing on the timeline clock.
 //
 // DURATION is one copy's flight, in beats: its clock runs 0→DURATION from its
 // birth. WHEN copies are born is PRESENCE-driven, the `scene` def's
@@ -127,6 +132,9 @@ export const staggerSplitter: MoverOrSplitterDefinition<StaggerSettings> = {
   label: 'Stagger',
   kind: 'splitter',
   identityColor: STAGGER_COLOR,
+  // Definition-level so the resolver can route sibling lanes' clocks without
+  // resolving (see definitions.ts); the resolved entry declares it again below.
+  emitsCopyClocks: true,
   params: [
     { key: 'copies', label: 'Copies', min: 1, max: STAGGER_MAX_COPIES, step: 1, default: 4 },
     { key: 'duration', label: 'Duration (beats)', min: 0.25, max: 32, step: 0.25, default: 4 },

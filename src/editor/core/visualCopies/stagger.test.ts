@@ -116,6 +116,51 @@ test('the child-chain wrapper threads the clocks through', () => {
   assert.deepEqual(log.map((s) => s.birthBeat), [8, 9, 10, 7])
 })
 
+// ── clockSkipEmitters: the resolver's position routing, honored by the kernel ─
+
+test('an entry skipping the emitter runs at the real beat, birthBeat intact', () => {
+  const log: ProbeSample[] = []
+  const live = { ...probe(log), clockSkipEmitters: 1 }
+  const copies = resolveVisualCopies([stagger(4, 4), live], 10)
+  assert.equal(copies.length, 4)
+  // Live overlay: every copy evaluated at the timeline beat...
+  assert.deepEqual(log.map((s) => s.beat), [10, 10, 10, 10])
+  // ...but the latch clock still rides along, so Born-mode devices keep working.
+  assert.deepEqual(log.map((s) => s.birthBeat), [8, 9, 10, 7])
+})
+
+test('skip counts a SUFFIX of the emitters: partial skips ride only the later ones', () => {
+  // Two hand-built emitters with fixed offsets, so the arithmetic is exact:
+  // e1 lags every copy 5 beats, e2 another 2.
+  const emitter = (lag: number): MoverOrSplitter => ({
+    emitsCopyClocks: true,
+    apply: (visualCopy) => [clone(visualCopy)],
+    applyFramed: (visualCopy) => [{ visualCopy: clone(visualCopy), beatOffset: lag }],
+  })
+  const pattern: ProbeSample[] = []
+  const middle: ProbeSample[] = []
+  const live: ProbeSample[] = []
+  resolveVisualCopies([
+    emitter(5),
+    { ...emitter(2), clockSkipEmitters: 1 },
+    probe(pattern),                            // skip 0: both lags
+    { ...probe(middle), clockSkipEmitters: 1 } // only e2's lag
+    ,
+    { ...probe(live), clockSkipEmitters: 2 },  // neither
+  ], 20)
+  assert.deepEqual(pattern.map((s) => s.beat), [13])
+  assert.deepEqual(middle.map((s) => s.beat), [18])
+  assert.deepEqual(live.map((s) => s.beat), [20])
+})
+
+test('clocksOut carries per-copy checkpoints in emitter order', () => {
+  const clocks = { beatOffsets: null, birthBeats: null, checkpoints: null } as import('./resolveVisualCopies').CopyClocks
+  resolveVisualCopies([stagger(2, 4)], 10, undefined, clocks)
+  // stagger(2, 4) at beat 10: ages [2, 0] → offsets [8, 10], one emitter each.
+  assert.deepEqual(clocks.beatOffsets, [8, 10])
+  assert.deepEqual(clocks.checkpoints, [[8], [10]])
+})
+
 test('copy targeting: an untargeted copy passes through on the real clock', () => {
   const log: ProbeSample[] = []
   // Two incoming copies; the stagger owns slice 0 only, so copy 1 must reach

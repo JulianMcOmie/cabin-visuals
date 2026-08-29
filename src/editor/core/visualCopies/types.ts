@@ -169,13 +169,15 @@ export interface FramedVisualCopy {
   /**
    * OPTIONAL: this copy's chain-clock LAG, in beats. The kernel evaluates every
    * entry BELOW the emitting one at `context.beat = beat − offset` for this
-   * copy and its descendants; nested emitters' offsets SUM (each measures its
-   * own in the already-shifted clock it was handed). It shifts the CHAIN's
-   * clock only - never the instrument's own animation/notes/energy, the
-   * object-level automation overlay, envelopes, or `warpBeat` (which stays
-   * object-wide at the real beat). Purity holds: the offset is recomputed per
-   * evaluation as a function of the incoming beat, so a copy is still a pure
-   * function of the playhead.
+   * copy and its descendants - unless the entry skips this emitter via
+   * `clockSkipEmitters` (position routing: entries the resolver placed after
+   * the emitter in the pipeline stay live); nested emitters' offsets SUM (each
+   * measures its own in the clock it was handed). `warpBeat` stays object-wide
+   * at the real beat. The engine separately replays the whole object per copy
+   * (params, envelopes, notes, localTransform) for chains that declare
+   * `emitsCopyClocks`, routed per lane by the same position rule. Purity
+   * holds: the offset is recomputed per evaluation as a function of the
+   * incoming beat, so a copy is still a pure function of the playhead.
    */
   beatOffset?: number
   /**
@@ -248,6 +250,20 @@ export interface MoverOrSplitter {
    * this with it.
    */
   emitsCopyClocks?: boolean
+  /**
+   * OPTIONAL: how many of the chain's emitters (in emitter order) do NOT clock
+   * this entry. Child position routes the clock - everything ABOVE an emitter
+   * in the user's pipeline is the pattern it replays per copy, everything AFTER
+   * it is a live overlay on the real timeline - and the resolver encodes that
+   * here: an entry's `clockSkipEmitters` is the number of emitters above it in
+   * child order, whose offsets the kernel then subtracts back out of
+   * `context.beat` (a suffix of the per-copy offset checkpoints). 0 / absent =
+   * shifted by every inherited offset, which is both the pattern case and the
+   * historical behavior for hand-built chains. `birthBeat` is deliberately NOT
+   * gated by this - a live entry still latches per birth (the Colorizer's Born
+   * mode below a Stagger).
+   */
+  clockSkipEmitters?: number
   /**
    * OPTIONAL: alternative resolutions of this same entry whose output COUNTS
    * bracket everything `apply` can ever produce. The runtime attaches these

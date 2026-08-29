@@ -17,7 +17,7 @@ One instrument track produces ONE opaque visual output; an ordered chain of move
   implements it contributes nothing itself; it answers "the device I am nested under is
   switched off at this beat". Only `bypass` does — see the section below.
 - **`warpBeat` is the one escape from space into time.** `apply` can only restate the copy it is handed — it cannot un-compute the instrument animation, automation or upstream motion already baked in below it, so freeze/reverse cannot be a transform. An entry may instead implement optional `warpBeat(realBeat) → beat`, and `computeAtBeat` evaluates that object's ENTIRE state at the result (energy, automation, envelopes, localTransform, activeNotes, `state.beat`, and the whole chain). Object-wide, not a chain partition: the entry's position in the chain is irrelevant. Multiple entries compose by SUMMING deltas against the real beat (`warpChainBeat` in `resolveVisualCopies.ts`) — feeding one the other's output would make it read its own notes at the wrong times. Subtree scope comes free from a top-level mover's `targets` routing.
-- **The PER-COPY time channel is the other escape into time** (2026-08-24): a framed entry may emit `beatOffset`/`birthBeat` per output copy (`FramedVisualCopy`), and the kernel evaluates every entry BELOW it at `context.beat = beat − offset`, carrying `context.birthBeat` alongside. Where `warpBeat` remaps the WHOLE object, this partitions the chain's clock per copy — Stagger is the emitter (see its section). The channel rides `applyFramed` because a time field dropped by `apply` is unobservable (offsets only steer entries below), and the framed-forwarding wrappers (copy targets, bypass, switcher gates) therefore pass it for free — their gated-off pass-throughs correctly carry no offset. Two seams needed real work and will bite again if forgotten: `splitterWithChildChain` builds slots via the splitter's OWN `applyFramed` and re-attaches each slot's time fields to its outputs (a Stagger wearing one tf lane would otherwise silently lose every clock), and `resolveOwnMoverOrSplitter`'s automation wrapper forwards `applyFramed` through its per-beat memo (an automated knob would otherwise strip the channel). Below an emitter, every one-slot per-beat memo (tf lane entries, automated-entry re-resolves, switcher gates) degrades to one recomputation per distinct copy clock per frame — correct, just un-memoized.
+- **The PER-COPY time channel is the other escape into time** (2026-08-24): a framed entry may emit `beatOffset`/`birthBeat` per output copy (`FramedVisualCopy`), and the kernel evaluates every entry BELOW it at `context.beat = beat − offset`, carrying `context.birthBeat` alongside. Where `warpBeat` remaps the WHOLE object, this partitions the chain's clock per copy — Stagger is the emitter (see its section). **CHILD POSITION routes the clock (2026-08-27)**: everything ABOVE the emitter in the user's pipeline is the pattern it replays per copy, everything AFTER it is a live overlay on the real timeline — `orderEmitterClocks` in core/visual/resolve.ts moves the emitters to the chain front (an emitter is space-neutral, so the move is transform-exact) and stamps every entry/lane with `clockSkipEmitters` (how many emitters sit above it, whose offsets the kernel subtracts back out of its clock via per-copy checkpoint suffixes — `copyClockShift`). A live entry still receives `birthBeat`, which is what keeps a Born-latching Colorizer below a Stagger working. Hand-built chains carry no stamps, so raw kernel semantics (everything below shifts) are unchanged for tests. The channel rides `applyFramed` because a time field dropped by `apply` is unobservable (offsets only steer entries below), and the framed-forwarding wrappers (copy targets, bypass, switcher gates) therefore pass it for free — their gated-off pass-throughs correctly carry no offset. Two seams needed real work and will bite again if forgotten: `splitterWithChildChain` builds slots via the splitter's OWN `applyFramed` and re-attaches each slot's time fields to its outputs (a Stagger wearing one tf lane would otherwise silently lose every clock), and `resolveOwnMoverOrSplitter`'s automation wrapper forwards `applyFramed` through its per-beat memo (an automated knob would otherwise strip the channel). Pattern entries below an emitter degrade every one-slot per-beat memo (tf lane entries, automated-entry re-resolves, switcher gates) to one recomputation per distinct copy clock per frame — correct, just un-memoized; live entries keep their memos.
 
 ## Structure
 
@@ -385,14 +385,19 @@ phrase is only truncated when that many really are in frame together.
 
 ## `stagger` — the time emitter (stagger.ts)
 
-N copies, each on its OWN CLOCK: copy i's downstream `context.beat` is its AGE and its
+N copies, each on its OWN CLOCK: copy i's `context.beat` is its AGE and its
 `context.birthBeat` is its birth. No spatial contribution at all — N stacked clones —
-because it is a time device and space is other devices' job. The workflow it exists for
-(one pattern, sequenced identities): a size/motion pattern ABOVE it in child order (the
-tf-lane weave puts it below in the chain, so it replays per copy at each copy's age — the
-Stagger owns the ONLY loop, so the pattern is authored once, un-looped), and a sequenced
-device BELOW latching per birth. WHEN copies are born is PRESENCE-driven, the `scene`
-def's convention:
+because it is a time device and space is other devices' job. **CHILD POSITION routes
+what the clock reaches (2026-08-27)**: everything ABOVE the Stagger in the pipeline —
+the instrument's own animation, param lanes, envelopes, movers — is the PATTERN,
+replayed per copy at its age (the Stagger owns the ONLY loop, so the pattern is
+authored once, un-looped, in the first DURATION beats of the timeline); everything
+AFTER it is a LIVE overlay that keeps running on the real timeline clock, composing on
+top exactly as it would on any unstaggered track — with `birthBeat` still in hand, so
+a sequenced device below can latch per birth. (Before this, entries below ran on the
+copy clock position-blind, which made any note-driven mover or lane placed after a
+Stagger read as dead — its material outside `[0, DURATION)` was unreachable.) WHEN
+copies are born is PRESENCE-driven, the `scene` def's convention:
 
 - **Empty lane: a free-running cycle** — DURATION is one copy's flight and COPIES
   phase-divides it: age is `mod(beat − i·duration/copies, duration)`, births every
@@ -429,21 +434,29 @@ Three more things to know:
 - **Everything is a closed-form pure function of the beat** (no state; pause/scrub/
   export exact; count beat-independent by construction — the triggered allocation runs
   once at resolve and per-frame work is a binary search per slot).
-- **Nested Staggers: offsets SUM, births OVERWRITE.** Each measures in the clock it was
-  handed, so an inner Stagger's births are expressed in the outer one's age-space —
-  consistent, documented, exotic.
+- **Nested Staggers: offsets SUM, births OVERWRITE.** Through the resolver each emitter
+  now measures the REAL timeline (a later emitter is "after" the earlier one, so it
+  skips its clock — `orderEmitterClocks`); an entry between two Staggers rides only the
+  later one's clock, and an entry above both rides their sum. Raw kernel chains without
+  stamps keep the old measured-in-the-handed-clock behavior. Exotic either way.
 
 `birthBeat` is generic context, not a Colorizer feature: any sequenced device can grow a
 latch mode by reading it (size-at-birth, shape-at-birth via a switcher, word-at-birth).
 
 **The chain clock is only HALF of staggering — the engine's per-copy object states are
-the other half.** Chain entries below the Stagger ride `context.beat` here; everything
-the chain cannot see (instrument params and their lanes, tfOpacity, envelopes, energy,
-active notes, the instrument's own animation) staggers through per-copy ObjectStates in
-`core/visual/VisualEngine.ts`, keyed off the entry's `emitsCopyClocks` declaration
-(types.ts — structural on purpose; probing a beat proves nothing for a triggered
-Stagger). A new emitter definition must set it, and every wrapper that forwards
-`applyFramed` forwards it too.
+the other half.** Pattern entries ride `context.beat` here; everything the chain cannot
+see (instrument params and their lanes, tfOpacity, envelopes, energy, active notes, the
+instrument's own animation) staggers through per-copy ObjectStates in
+`core/visual/VisualEngine.ts` — with each LANE's clock routed by the same child-position
+rule (`clockSkipEmitters`, stamped by the resolver's lane gatherers): a lane above the
+Stagger replays per copy, a lane after it samples the real timeline, and the old
+hardcoded spatial-tf exception fell out of exactly that rule (a below-the-chain spatial
+lane is below the Stagger, hence object-clocked, with no special case). Keyed off
+`emitsCopyClocks`, declared BOTH on the resolved entry (types.ts — structural on
+purpose; probing a beat proves nothing for a triggered Stagger) and on the DEFINITION
+(definitions.ts — the resolver counts emitters among siblings without resolving them).
+A new emitter definition must set both, and every wrapper that forwards `applyFramed`
+forwards the entry flag too.
 
 ## Hue Rotate, and the perceptual hue circle
 

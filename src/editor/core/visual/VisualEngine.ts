@@ -8,8 +8,7 @@ import { DEFAULT_ADSR, evaluateAdsrGain } from './adsr'
 import { composeMatrix, identitySV, localTransformToSV } from './stateVector'
 import { isIdentityTransform, readTrackTransform, trackOpacity } from '../transform'
 import { identityVisualCopy } from '../visualCopies/identityVisualCopy'
-import { chainEmitsCopyClocks, resolveVisualCopies, structuralCopyCount, warpChainBeat, type CopyClocks } from '../visualCopies/resolveVisualCopies'
-import { SPATIAL_TF_PARAMS } from './tfAutomationChain'
+import { chainEmitsCopyClocks, copyClockShift, resolveVisualCopies, structuralCopyCount, warpChainBeat, type CopyClocks } from '../visualCopies/resolveVisualCopies'
 import type { VisualCopy } from '../visualCopies/types'
 import type { ResolvedGraph, ResolvedGroup, ObjectState, ResolvedEnvelope, ResolvedNote } from './types'
 import { MIN_SOUNDING_BEATS, soundingNoteWindow } from './noteWindow'
@@ -88,15 +87,18 @@ const copyCountWarned = new Set<string>()
 // Purity holds: a copy state is a pure function of (beat - offset), so
 // pause/scrub/export agree exactly.
 //
-// Deliberately OBJECT-CLOCKED inside a copy state: the SPATIAL tf lanes (their
-// per-copy half lives in the chain weave, and sampling a below-the-chain lane
-// per copy would tear the formation-as-one placement apart) and the switcher
-// gate (`blackedOut`). Everything else - instrument params, tfOpacity,
-// envelopes, effect lanes, energy, active notes, localTransform - rides the
-// copy clock.
+// CHILD POSITION routes each lane's clock (the same rule the chain follows -
+// see resolve.ts's orderEmitterClocks): a lane ABOVE the emitter is pattern and
+// samples at the copy's own clock, a lane AFTER it is a live overlay and
+// samples the real timeline. The resolver stamps every lane with
+// `clockSkipEmitters` (how many emitters it does not ride) and the kernel's
+// per-copy offset checkpoints let this file subtract exactly those emitters
+// back out (`copyClockShift`). The instrument itself - params base, energy,
+// active notes, localTransform - is above everything and always rides the copy
+// clock; the switcher gate (`blackedOut`) stays object-clocked.
 let staggeredTracks = new Set<string>()
 const copyStatesByTrack = new Map<string, (ObjectState | null)[]>()
-const copyClocksScratch: CopyClocks = { beatOffsets: null, birthBeats: null }
+const copyClocksScratch: CopyClocks = { beatOffsets: null, birthBeats: null, checkpoints: null }
 const _copySV = identitySV()
 // The hidden copies that pad a frame's output up to the structural pool size.
 // VisualCopies are immutable by contract (visualCopies/types.ts), so ONE
@@ -688,15 +690,21 @@ function computeCopyStates(
     const offset = clocks.beatOffsets?.[i] ?? 0
     if (offset === 0) { slots[i] = null; continue }
     const copyBeat = objBeat - offset
+    // Each lane rides only the emitters below its own child position: the
+    // resolver stamped `clockSkipEmitters` (emitters ABOVE the lane, skipped),
+    // and the kernel's checkpoints carry each emitter's share of this copy's
+    // offset. Skip 0 = the full copy clock (a pattern lane); skipping every
+    // emitter = the object clock (a live lane after the emitter).
+    const checkpoints = clocks.checkpoints?.[i] ?? null
+    const laneBeatFor = (skip: number | undefined) =>
+      objBeat - (skip ? copyClockShift(offset, checkpoints, skip) : offset)
 
     const energy = !off && obj.notes.length > 0 ? evaluatePulse(obj.notes, copyBeat) : 0
     let params = obj.params
     if (obj.automations.length) {
       params = { ...obj.params }
       for (const auto of obj.automations) {
-        // Spatial tf lanes keep the OBJECT clock (see `staggeredTracks`).
-        const laneBeat = SPATIAL_TF_PARAMS.has(auto.param) ? objBeat : copyBeat
-        const v = sampleAutomationLane(auto, laneBeat, params[auto.param] ?? auto.base ?? 0)
+        const v = sampleAutomationLane(auto, laneBeatFor(auto.clockSkipEmitters), params[auto.param] ?? auto.base ?? 0)
         if (!Number.isNaN(v)) params[auto.param] = v
       }
     }
@@ -704,7 +712,7 @@ function computeCopyStates(
     let fxEnvelopes: { env: ResolvedEnvelope; gain: number }[] | null = null
     for (const env of obj.envelopes) {
       if (env.notes.length === 0) continue
-      const gain = evaluateAdsrGain(env.notes, copyBeat, env.adsr)
+      const gain = evaluateAdsrGain(env.notes, laneBeatFor(env.clockSkipEmitters), env.adsr)
       if (env.kind === 'opacity') {
         opacityGate *= 1 - env.depth + env.depth * gain
       } else if (env.kind === 'param' && env.param !== undefined) {
@@ -754,7 +762,7 @@ function computeCopyStates(
       effectOverrides = {}
       for (const ea of obj.effectAutomations) {
         const base = effectOverrides[ea.instanceId]?.[ea.key] ?? ea.base ?? 0
-        const v = sampleAutomationLane(ea, copyBeat, base)
+        const v = sampleAutomationLane(ea, laneBeatFor(ea.clockSkipEmitters), base)
         if (!Number.isNaN(v)) (effectOverrides[ea.instanceId] ??= {})[ea.key] = v
       }
     }

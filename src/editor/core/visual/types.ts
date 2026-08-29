@@ -29,6 +29,13 @@ export interface ResolvedAutomation extends AutomationLane {
    *  place a tf* lane relative to its mover/splitter siblings (resolve.ts's weave
    *  step); consumers sampling the lane never need it. */
   sourceTrackId?: string
+  /** On a track carrying a time emitter (Stagger): how many emitters sit ABOVE
+   *  this lane in child order - the emitters whose per-copy clock it does NOT
+   *  ride. A lane above the emitter (skip 0 / absent) is pattern and samples at
+   *  each copy's own clock; a lane after it samples the real timeline. Same
+   *  contract as `MoverOrSplitter.clockSkipEmitters` (visualCopies/types.ts);
+   *  computeCopyStates subtracts the matching checkpoint suffix. */
+  clockSkipEmitters?: number
 }
 
 /** A resolved automation lane targeting one effect instance's setting (or its
@@ -38,6 +45,8 @@ export interface ResolvedAutomation extends AutomationLane {
 export interface ResolvedEffectAutomation extends AutomationLane {
   instanceId: string
   key: string
+  /** Clock routing past a time emitter - see ResolvedAutomation. */
+  clockSkipEmitters?: number
 }
 
 /**
@@ -72,6 +81,8 @@ export interface ResolvedEnvelope {
   adsr: AdsrEnvelope
   depth: number
   notes: ResolvedNote[]
+  /** Clock routing past a time emitter - see ResolvedAutomation. */
+  clockSkipEmitters?: number
 }
 
 /** One of a track's notes, flattened to absolute project beats, carrying the
