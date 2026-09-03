@@ -6,6 +6,15 @@ import { CURRENT_VERSION, upgradeDocument } from './upgrade'
 const visual: Track = { id: 'visual', name: 'Cube', type: 'base', instrumentId: 'cube', color: '#fff', muted: false, solo: false, blocks: [], childIds: [] }
 const audio: Track = { id: 'audio', name: 'Audio', type: 'audio', instrumentId: '', color: '#0ff', muted: false, solo: false, blocks: [], childIds: [], audioBlocks: [] }
 
+/** Root ids minus the Lighting group UPGRADES[17] seeds into every visual scene. */
+function stripLighting(scene: { rootTrackIds: string[]; tracks: Record<string, Track> }): string[] {
+  return scene.rootTrackIds.filter((id) => {
+    const t = scene.tracks[id]
+    return !(t?.type === 'group' && t.name === 'Lighting'
+      && t.childIds.every((cid) => scene.tracks[cid]?.instrumentId === 'light'))
+  })
+}
+
 test('v4 migration creates Main and Scene 1 with exclusive visual ownership', () => {
   const doc = upgradeDocument({
     schemaVersion: 4,
@@ -21,7 +30,8 @@ test('v4 migration creates Main and Scene 1 with exclusive visual ownership', ()
   assert.ok(main)
   assert.ok(first)
   assert.deepEqual(main.rootTrackIds, [])
-  assert.deepEqual(first.rootTrackIds, ['visual'])
+  // UPGRADES[17] prepends the seeded Lighting group to every visual scene.
+  assert.deepEqual(stripLighting(first), ['visual'])
   assert.deepEqual(first.tracks.visual, {
     ...visual,
     // finish: 1 = UPGRADES[13] pinning pre-FINISH cubes to the Gloss look.
@@ -87,7 +97,7 @@ test('v6 migration removes modifiers and promotes their nested tracks', () => {
   })
 
   assert.equal(doc.schemaVersion, CURRENT_VERSION)
-  assert.deepEqual(doc.scenes.one.rootTrackIds, ['visual'])
+  assert.deepEqual(stripLighting(doc.scenes.one), ['visual'])
   assert.deepEqual(doc.scenes.one.tracks.visual.childIds, ['modifier-child'])
   assert.equal(doc.scenes.one.tracks.modifier, undefined)
   assert.equal(doc.scenes.one.tracks['modifier-child'].parentId, 'visual')

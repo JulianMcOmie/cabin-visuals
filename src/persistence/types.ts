@@ -1,4 +1,5 @@
 import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track } from '../editor/types'
+import { defaultLightingTracks } from '../editor/core/defaultLighting'
 import type { AudioClip } from '../editor/store/AudioStore'
 import type { VideoClip } from '../editor/store/VideoStore'
 import type { PhotoClip } from '../editor/store/PhotoStore'
@@ -75,6 +76,10 @@ export interface ProjectDocument {
 export function emptyDocument(): ProjectDocument {
   const mainId = crypto.randomUUID()
   const firstSceneId = crypto.randomUUID()
+  // The seeded Lighting group every visual scene is born with. Saved blobs of
+  // this document later walk UPGRADES[17], whose has-a-light-track guard keeps
+  // it from seeding a second rig.
+  const lighting = defaultLightingTracks()
   return {
     // Keep in step with upgrade.ts's CURRENT_VERSION (a literal here because
     // upgrade.ts imports this module - the constant would be a cycle). A stale
@@ -86,7 +91,7 @@ export function emptyDocument(): ProjectDocument {
     totalBars: 32,
     scenes: {
       [mainId]: { id: mainId, name: 'Composite', isMain: true, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: {}, rootTrackIds: [] },
-      [firstSceneId]: { id: firstSceneId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: {}, rootTrackIds: [] },
+      [firstSceneId]: { id: firstSceneId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: lighting.tracks, rootTrackIds: [lighting.rootId] },
     },
     sceneOrder: [mainId, firstSceneId],
     activeSceneId: firstSceneId,

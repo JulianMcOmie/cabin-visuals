@@ -8,6 +8,7 @@ import { getObjectState, getVisualCopy } from '../../core/visual/VisualEngine'
 import { composeScreenAnchor } from '../../core/visual/screenAnchor'
 import { applyMaterialOpacity } from '../../core/visual/animatedOpacity'
 import { InstrumentCopyContext } from '../../core/visual/instrumentColor'
+import { SceneIdContext } from '../../core/visual/sceneContext'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
@@ -192,13 +193,15 @@ export const ObjectRenderer = memo(function ObjectRenderer({
   const Component = def?.component
   const bare = useMemo(() => Component
     ? (
-      <InstrumentCopyContext.Provider value={instrumentCopyContext}>
-        <Suspense fallback={<InstrumentPending />}>
-          <Component trackId={trackId} />
-        </Suspense>
-      </InstrumentCopyContext.Provider>
+      <SceneIdContext.Provider value={sceneId}>
+        <InstrumentCopyContext.Provider value={instrumentCopyContext}>
+          <Suspense fallback={<InstrumentPending />}>
+            <Component trackId={trackId} />
+          </Suspense>
+        </InstrumentCopyContext.Provider>
+      </SceneIdContext.Provider>
     )
-    : null, [Component, instrumentCopyContext, trackId])
+    : null, [Component, instrumentCopyContext, trackId, sceneId])
   if (!def || !bare) return null
   const instrument = materialInstances.length > 0
     ? <MaterialWrapper trackId={trackId} plugins={materialInstances}>{bare}</MaterialWrapper>
@@ -216,7 +219,7 @@ export const ObjectRenderer = memo(function ObjectRenderer({
     // scene (this group's useFrame) already composes the copy transform.
     const frame = <group ref={groupRef}>{instrument}</group>
     return needsShaderPath
-      ? <ShaderWrapper trackId={trackId} plugins={shaderInstances} postMoverScalePlugins={[]} maskSourceIds={maskSourceIds}>{frame}</ShaderWrapper>
+      ? <ShaderWrapper trackId={trackId} sceneId={sceneId} plugins={shaderInstances} postMoverScalePlugins={[]} maskSourceIds={maskSourceIds}>{frame}</ShaderWrapper>
       : frame
   }
 
@@ -233,6 +236,7 @@ export const ObjectRenderer = memo(function ObjectRenderer({
     return (
       <ShaderWrapper
         trackId={trackId}
+        sceneId={sceneId}
         visualCopyIndex={visualCopyIndex}
         plugins={shaderInstances}
         postMoverScalePlugins={scaleInstances}

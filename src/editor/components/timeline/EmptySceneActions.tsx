@@ -55,15 +55,21 @@ type Action = {
 export const EmptySceneActions = memo(function EmptySceneActions({
   empty,
   labelWidth,
+  topOffset = 0,
   isMain,
   onAddTrack,
 }: {
-  /** Whether the scene has no tracks. Owned by the caller, but this component
-   *  outlives a false to play its exit - see EXIT_MS above. */
+  /** Whether the scene has no CONTENT tracks. Owned by the caller, but this
+   *  component outlives a false to play its exit - see EXIT_MS above. A scene
+   *  wearing only its virtual scene track and/or the seeded Lighting group
+   *  still counts as empty. */
   empty: boolean
   /** Left inset of the lane region: the cluster sits at the top-left of the
    *  lanes, not over the frozen label column. */
   labelWidth: number
+  /** Height (px) of the rows already showing (the Lighting group, the scene
+   *  track) - the list parks BELOW them instead of painting over their lanes. */
+  topOffset?: number
   /** Main composes the other scenes, so its first track is a Scene composition
    *  instrument rather than an object - the row says what it will actually do,
    *  which is put a scene on screen. */
@@ -152,8 +158,8 @@ export const EmptySceneActions = memo(function EmptySceneActions({
     // reach the lanes everywhere the cluster isn't; only the cluster itself
     // takes the pointer.
     <div
-      className="pointer-events-none absolute inset-y-0 right-0 z-20 flex items-start justify-start pt-5"
-      style={{ left: labelWidth + PLAYHEAD_TRIANGLE_HALF }}
+      className="pointer-events-none absolute inset-y-0 right-0 z-20 flex items-start justify-start"
+      style={{ left: labelWidth + PLAYHEAD_TRIANGLE_HALF, paddingTop: 20 + topOffset }}
     >
       {/* The headline and every row are DIRECT children of the animated
           element, so one `> *` rule staggers all five - hence `mb` on the

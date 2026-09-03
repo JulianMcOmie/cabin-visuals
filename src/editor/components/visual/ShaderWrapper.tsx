@@ -8,6 +8,7 @@ import {
 import { useTimeStore } from '../../store/TimeStore'
 import { getBeatOverride } from '../../core/visual/beatOverride'
 import { getObjectState, getVisualCopy } from '../../core/visual/VisualEngine'
+import { PassLightPool, refreshPosterLightDir, sceneHasLightAnchors } from '../../core/visual/sceneLights'
 import { applyMaterialOpacity } from '../../core/visual/animatedOpacity'
 import { getEffect } from '../../effects'
 import { effectiveEffectState } from '../../effects/automation'
@@ -65,6 +66,7 @@ type Step =
  */
 export function ShaderWrapper({
   trackId,
+  sceneId,
   visualCopyIndex,
   plugins,
   postMoverScalePlugins,
@@ -72,6 +74,11 @@ export function ShaderWrapper({
   children,
 }: {
   trackId: string
+  /** The project scene this occurrence belongs to. When that scene has Light
+   *  tracks, the offscreen rig mirrors THEM (sceneLights registry) instead of
+   *  its legacy hand-built light set, so an effect-chained object is lit the
+   *  same as its unwrapped neighbors. Absent = always the legacy set. */
+  sceneId?: string
   /** Which VisualCopy occurrence this wrapper renders (composed into the holder).
    *  Full-frame occurrences OMIT it: their placement group inside the offscreen
    *  scene already carries the copy transform via the screen anchor, so the
@@ -93,10 +100,15 @@ export function ShaderWrapper({
   // a fullscreen-quad pass rig, and the shared output uniform.
   const rig = useMemo(() => {
     const scene = new Scene()
-    scene.add(new AmbientLight(0xffffff, 0.5))
-    const dir = new DirectionalLight(0xffffff, 1.2); dir.position.set(4, 4, 4); scene.add(dir)
-    const key = new PointLight(0x818cf8, 3); key.position.set(-4, -2, 3); scene.add(key)
-    const rim = new PointLight(0xf0abfc, 1.5); rim.position.set(3, 3, -4); scene.add(rim)
+    // The legacy hand-built light set, kept for scenes with no Light tracks
+    // (and for callers with no sceneId). Grouped so the track-light path can
+    // stand it down with one visibility flip.
+    const legacyLights = new Group()
+    legacyLights.add(new AmbientLight(0xffffff, 0.5))
+    const dir = new DirectionalLight(0xffffff, 1.2); dir.position.set(4, 4, 4); legacyLights.add(dir)
+    const key = new PointLight(0x818cf8, 3); key.position.set(-4, -2, 3); legacyLights.add(key)
+    const rim = new PointLight(0xf0abfc, 1.5); rim.position.set(3, 3, -4); legacyLights.add(rim)
+    scene.add(legacyLights)
     const holder = new Group(); holder.matrixAutoUpdate = false; scene.add(holder)
 
     // `own` holds the chain's final output; when no pass is active this frame
@@ -111,8 +123,13 @@ export function ShaderWrapper({
     quadScene.add(quad)
 
     const outUniforms: Record<string, IUniform> = { tDiffuse: { value: null as Texture | null } }
-    return { scene, holder, own, quadScene, quadCam, quad, outUniforms }
+    return { scene, legacyLights, holder, own, quadScene, quadCam, quad, outUniforms }
   }, [])
+
+  // Mirrored Light-track set for the offscreen scene (no shadows, matching the
+  // legacy set). Slots empty until the scene actually has light anchors.
+  const lightPool = useMemo(() => new PassLightPool(rig.scene), [rig])
+  useEffect(() => () => lightPool.dispose(), [lightPool])
 
   // Target size: the canvas' CSS size scaled by the preview-quality factor
   // (1 at Final and under an export pin). Floor, not round: the wrapper has
@@ -200,6 +217,15 @@ export function ShaderWrapper({
     // chrome/glass) keep their reflections inside the offscreen pass.
     if (rig.scene.environment !== parentScene.environment) {
       rig.scene.environment = parentScene.environment
+    }
+
+    // Scenes with Light tracks light this pass with THOSE; the legacy
+    // hand-built set only serves scenes that have none.
+    const trackLit = !!sceneId && sceneHasLightAnchors(sceneId)
+    rig.legacyLights.visible = !trackLit
+    if (sceneId) {
+      if (trackLit) refreshPosterLightDir(sceneId)
+      lightPool.sync(sceneId, false)
     }
 
     // Render the object (with world × Scale effect × this occurrence's

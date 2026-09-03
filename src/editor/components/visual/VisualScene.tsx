@@ -40,6 +40,7 @@ import { DEFAULT_SCENE_BACKGROUND, type Scene, type SceneGradient } from '../../
 import { ObjectRenderer } from './ObjectRenderer'
 import { InstancedObjectRenderer } from './InstancedObjectRenderer'
 import { FinalInvertMaskContext } from '../../core/visual/finalInvertMask'
+import { PassLightPool, refreshPosterLightDir } from '../../core/visual/sceneLights'
 import { resolveActiveColorFilter } from '../../instruments/ColorFilters'
 import { resolveActiveStrobe } from '../../instruments/Strobe'
 import { BASS_RIPPLE_FIELD_GLSL, resolveActiveBassRipple } from '../../instruments/BassRipple'
@@ -60,6 +61,10 @@ interface MountedScene {
   invertTarget: WebGLRenderTarget
   filterTargets: [WebGLRenderTarget, WebGLRenderTarget]
   outputTexture: Texture
+  /** Mirrored Light-track sets, one per pass scene (base / front / invert) -
+   *  the track-driven replacement for the hardcoded `lights()` rig, synced
+   *  from the sceneLights registry each frame before the passes render. */
+  lightPools: [PassLightPool, PassLightPool, PassLightPool]
   /** True while invertTarget is known to hold transparent black - lets the
    *  render loop skip the target switch + clear + render for the common case
    *  of a scene with no final-invert objects (see the pass gating below). */
@@ -82,6 +87,7 @@ function disposeMountedScene(runtime: MountedScene) {
   runtime.target.dispose()
   runtime.invertTarget.dispose()
   runtime.filterTargets.forEach((target) => target.dispose())
+  runtime.lightPools.forEach((pool) => pool.dispose())
 }
 
 function makeCompositorGeometry() {
@@ -642,10 +648,14 @@ export function VisualScene() {
       // stencil buffer for Overlap Shape's parity passes; the filter targets
       // only ever receive fullscreen quads, so they stay stencil-free.
       const target = new WebGLRenderTarget(width, height, { ...options, stencilBuffer: true })
+      const base = new ThreeScene()
+      const front = new ThreeScene()
+      const invert = new ThreeScene()
       map.set(sceneId, {
-        base: new ThreeScene(),
-        front: new ThreeScene(),
-        invert: new ThreeScene(),
+        base,
+        front,
+        invert,
+        lightPools: [new PassLightPool(base), new PassLightPool(front), new PassLightPool(invert)],
         target,
         invertTarget: new WebGLRenderTarget(width, height, maskOptions),
         filterTargets: [
@@ -946,6 +956,30 @@ export function VisualScene() {
     return m
   }, [objects, placementKey])
 
+  // Which scenes hold Light TRACKS in the document. Those scenes are lit by
+  // their tracks (mirrored per pass from the sceneLights registry) and the
+  // hardcoded legacy rig stands down; a scene with none - old fixtures,
+  // hand-built test documents - keeps the baked rig, so nothing ever renders
+  // unlit. A muted/faded light track still counts (going dark is what muting
+  // your lights means). String fingerprint, per the render-budget rule.
+  const lightTrackSceneKey = useProjectStore((s) => {
+    let out = ''
+    for (const [sceneId, scene] of Object.entries(s.scenes)) {
+      for (const trackId of Object.keys(scene.tracks)) {
+        const t = scene.tracks[trackId]
+        if (t.type === 'base' && t.instrumentId === 'light') {
+          out += sceneId + ','
+          break
+        }
+      }
+    }
+    return out
+  })
+  const lightTrackScenes = useMemo(
+    () => new Set(lightTrackSceneKey.split(',').filter(Boolean)),
+    [lightTrackSceneKey],
+  )
+
   // Which scenes hold a shadow-CASTING instrument (`castsShadows` on the def).
   // Only those get a shadow-mapped key light: three's shadow pass runs on
   // every gl.render of a scene whose light casts - bind the 1024² map, clear
@@ -1085,6 +1119,16 @@ export function VisualScene() {
         // document's own values, so this path is unchanged for every project
         // that never presses ⌘⇧S.
         const backdrop = getSceneBackdrop(sceneId)
+        const presence = passPresence.get(sceneId)
+        // Mirror the scene's Light-track anchors into each pass that will
+        // render (the base pool syncs unconditionally so deleted lights are
+        // removed), and refresh the Matte finish's key-light direction. All
+        // pure functions of this frame's already-composed transforms.
+        refreshPosterLightDir(sceneId)
+        const allowShadows = shadowScenes.has(sceneId)
+        runtime.lightPools[0].sync(sceneId, allowShadows)
+        if (presence?.front) runtime.lightPools[1].sync(sceneId, allowShadows)
+        if (presence?.invert) runtime.lightPools[2].sync(sceneId, allowShadows)
         gl.setRenderTarget(runtime.target)
         gl.setClearColor(
           backdrop?.color ?? projectScene?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND,
@@ -1093,7 +1137,6 @@ export function VisualScene() {
         gl.clear(true, true, true)
         const sceneGradient = backdrop ? backdrop.gradient : activeBackdropGradient(projectScene)
         if (sceneGradient) paintBackdropGradient(sceneGradient)
-        const presence = passPresence.get(sceneId)
         if (precompileRef.current) {
           precompilePass(runtime.base)
           if (presence?.front) precompilePass(runtime.front)
@@ -1399,23 +1442,26 @@ export function VisualScene() {
         })
         return (
           <Fragment key={sceneId}>
+            {/* The legacy baked rig only lights scenes with NO Light tracks;
+                a scene that has them is lit by its tracks' mirrored pools
+                (see MountedScene.lightPools and the sync in the frame loop). */}
             {createPortal(
             <>
-              {lights(shadowScenes.has(sceneId))}
+              {lightTrackScenes.has(sceneId) ? null : lights(shadowScenes.has(sceneId))}
               {mountObjects(base, '')}
             </>,
             runtime.base,
             )}
             {createPortal(
             <>
-              {lights(shadowScenes.has(sceneId))}
+              {lightTrackScenes.has(sceneId) ? null : lights(shadowScenes.has(sceneId))}
               {mountObjects(front, ':front')}
             </>,
             runtime.front,
             )}
             {createPortal(
             <FinalInvertMaskContext.Provider value>
-              {lights(shadowScenes.has(sceneId))}
+              {lightTrackScenes.has(sceneId) ? null : lights(shadowScenes.has(sceneId))}
               {mountObjects(invert, ':invert')}
             </FinalInvertMaskContext.Provider>,
             runtime.invert,

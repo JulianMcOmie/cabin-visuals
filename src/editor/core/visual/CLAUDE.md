@@ -314,6 +314,14 @@ reference port. Facts that cost time to establish:
     lanes' sliders — and it REPLACES the lane array rather than mutating it, because
     `instrumentFrame`'s signature compares it by reference. Mutating in place drags a
     knob with no repaint at all while paused, which reads exactly like a dead panel.
+- `sceneLights.ts` — the Light-track machinery: the anchor registry (LightVisual
+  registers `{anchor group, LightDesc}` per occurrence), `PassLightPool` (each
+  render pass mirrors the registry into its own THREE.Scene per frame - how one
+  light track reaches base/front/invert AND ShaderWrapper's offscreen rigs), and
+  the per-scene poster key-light direction (`posterLightDir` hands out a shared
+  Vector3 that `refreshPosterLightDir` re-aims at the first live directional
+  light; poster materials hold it by reference). `sceneContext.ts` is the
+  SceneIdContext instruments read to find their scene.
 - `automation.ts` — the three automation-lane MODES and the one function that dispatches between them.
 - `energy.ts` — the note-pulse "energy" signal instruments receive.
 - `noteWindow.ts` — bisected windows over a sorted note stream, for the per-frame consumers that used to scan every note of an object per frame (`activeNotes` in computeAtBeat, `evaluatePulse`, `evaluateAdsrGain`, the splitter mute rows in `visualCopies/splitterMidi.ts`). Each caller still applies its own exact predicate inside the window, so the answers are bit-identical to the full scans (`noteWindow.test.ts` pins that against verbatim copies of the old evaluators). It leans on `flattenBlocks` sorting by beat; an unsorted array falls back to the whole range, so hand-built fixtures still work. The window range it returns is ONE shared object - read it before asking for another.

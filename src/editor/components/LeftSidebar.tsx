@@ -161,6 +161,14 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <path d="M6 6 L1.7 3.5 A5 5 0 0 1 6 1 Z" fill="#a78bfa" fillOpacity="0.75" />
     </svg>
   )},
+  { id: 'light', name: 'Light', description: 'A scene light you can see and place - point bulb, spotlight, sun, sky wash or soft panel. Move it, automate it, split it into arrays; notes flash it.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <circle cx="6" cy="6" r="2.2" fill="#fde68a" />
+      <g stroke="#fbbf24" strokeWidth="1" strokeLinecap="round">
+        <path d="M6 0.8v1.6M6 9.6v1.6M0.8 6h1.6M9.6 6h1.6M2.3 2.3l1.1 1.1M9.7 2.3 8.6 3.4M2.3 9.7l1.1-1.1M9.7 9.7 8.6 8.6" />
+      </g>
+    </svg>
+  )},
   { id: 'laserSphere', name: 'Laser Sphere', description: 'A white-hot neon orb with HDR bloom and colored scene light.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <circle cx="6" cy="6" r="4.5" fill="#22d3ee" fillOpacity="0.18" stroke="#67e8f9" strokeWidth="0.8" />
@@ -382,7 +390,7 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
 // at the bottom - still available, out of the first impression.
 // Circle and Triangle left the library outright - 3D Shape's geometry picker
 // covers them (the instruments stay registered for old projects).
-const CORE_OBJECT_IDS = new Set(['cube', 'laserLine', 'wireframe', 'particleBurst', 'overlapShape'])
+const CORE_OBJECT_IDS = new Set(['cube', 'laserLine', 'wireframe', 'particleBurst', 'overlapShape', 'light'])
 const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.has(i.id))
 
 // The Instruments folder. These are object instruments like any other; what

@@ -30,6 +30,7 @@ import { updateMidiActivityAtBeat } from './midiActivityRegistry'
 import { scrollLeftAroundBeat } from '../../utils/zoomAroundBeat'
 import { audioPickupBars } from '../../utils/audioPickup'
 import { isSceneTrackId } from '../../core/sceneTrack'
+import { isLightingOnlyTrack } from '../../core/defaultLighting'
 
 const MIN_OUTSIDE_PROJECT_BARS = 8
 const OUTSIDE_PROJECT_OVERSCAN_BARS = 2
@@ -547,7 +548,12 @@ export function TimelineArea() {
         )}
         <EmptySceneActions
           key={activeSceneId}
-          empty={!documentLoading && rootTrackIds.every(isSceneTrackId)}
+          // A scene wearing only its virtual scene track and/or the seeded
+          // Lighting group is still "empty" - lights aren't content. The list
+          // parks BELOW those rows instead of over them.
+          empty={!documentLoading
+            && rootTrackIds.every((id) => isSceneTrackId(id) || isLightingOnlyTrack(tracks[id], tracks))}
+          topOffset={visualRows.length * rowHeight}
           labelWidth={labelWidth}
           isMain={activeSceneIsMain}
           onAddTrack={handleAddTrackWithBlock}

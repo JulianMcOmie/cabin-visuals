@@ -842,13 +842,15 @@ export function TrackEditor() {
                   // that toggle is on - a flight-speed slider means nothing
                   // with flight mode off. 'key' alone means "key >= 0.5";
                   // 'key=2' pins to one select value ("scatter spread" has no
-                  // business showing while the layout is Stack).
+                  // business showing while the layout is Stack), and
+                  // 'key=0|1' pins to any of several (the Light's REACH knob
+                  // belongs to both the point and spot types).
                   const numericValue = (key: string) =>
                     track.params?.[key] ?? Number(def?.params.find((p) => p.key === key)?.default ?? 0)
                   const showIfSatisfied = (condition: string) => {
                     const [key, expected] = condition.split('=')
                     return expected !== undefined
-                      ? Math.round(numericValue(key)) === Number(expected)
+                      ? expected.split('|').some((v) => Math.round(numericValue(key)) === Number(v))
                       : numericValue(key) >= 0.5
                   }
                   const visibleParameters = def?.params.filter(

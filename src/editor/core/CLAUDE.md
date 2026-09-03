@@ -39,6 +39,17 @@ A lane carrying an `automationRange` reshapes that through `pitchToValueRanged`,
 
 A COUNT param (`integer: true` on its NumberParamDef — copies, rows, columns, mirrors, sides, segments) makes INT the lane's CREATION default: `addAutomationTrack` (and both retarget paths) seeds `automationRange: { integer: true }` plus `'step'` interpolation, so a fresh lane on Copies shows one row per whole number (1–32 → 32 rows) and jumps at each keyframe instead of splining through 6.4 copies. The same grid is the splitters' own MIDI vocabulary — `core/visualCopies/countLane.ts` decodes pitches identically, which is the reason the two must never drift.
 
+## defaultLighting.ts — the seeded light rig
+
+`defaultLightingTracks()` builds the "Lighting" group of five Light-instrument
+tracks (fresh ids per call) that every visual scene is born with - the old
+hardcoded VisualScene rig's exact values as editable tracks. Three creation
+paths call it (ProjectStore's `makeInitialScenes` + `addScene`, persistence's
+`emptyDocument`); persistence UPGRADES[17] carries its own frozen copy for old
+saves. `isLightingOnlyTrack` is the timeline's "a scene wearing only lights is
+still empty" predicate. Values here and in the upgrade step are intentionally
+duplicated - a shipped step never chases a live module.
+
 ## loopRegion.ts / midiImport.ts
 
 Loop region math (`shouldLoopWrap`); MIDI file import via `@tonejs/midi` → `ImportedMidiTrack`s consumed by ProjectStore.

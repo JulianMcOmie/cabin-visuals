@@ -4,6 +4,7 @@ import { InstrumentPending } from '../../instruments/lazyInstrument'
 import { isFullFrameTrack } from '../../instruments/types'
 import { useProjectStore } from '../../store/ProjectStore'
 import { InstancedScaleContext } from '../../core/visual/instancedFrame'
+import { SceneIdContext } from '../../core/visual/sceneContext'
 import { isTrackStaggered, type ObjectListEntry } from '../../core/visual/VisualEngine'
 import { ObjectRenderer } from './ObjectRenderer'
 
@@ -96,10 +97,12 @@ export function InstancedObjectRenderer({
     )
   }
   return (
-    <InstancedScaleContext.Provider value={scaleInstances}>
-      <Suspense fallback={<InstrumentPending />}>
-        <Instanced trackId={trackId} />
-      </Suspense>
-    </InstancedScaleContext.Provider>
+    <SceneIdContext.Provider value={sceneId}>
+      <InstancedScaleContext.Provider value={scaleInstances}>
+        <Suspense fallback={<InstrumentPending />}>
+          <Instanced trackId={trackId} />
+        </Suspense>
+      </InstancedScaleContext.Provider>
+    </SceneIdContext.Provider>
   )
 }

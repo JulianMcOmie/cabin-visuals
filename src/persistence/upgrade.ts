@@ -21,7 +21,7 @@ import type { AudioClip } from '../editor/store/AudioStore'
 const LEGACY_SCENE_BACKGROUND = '#000000'
 
 /** Bump when the document shape changes, and append the matching step below. */
-export const CURRENT_VERSION = 17
+export const CURRENT_VERSION = 18
 
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
@@ -708,6 +708,70 @@ UPGRADES[16] = (doc) => {
       }
     }
     scenes[sceneId] = { ...scene, tracks }
+  }
+  return { ...rest, scenes }
+}
+
+// ── v17 → v18 ────────────────────────────────────────────────────────────────
+// Scene lighting becomes TRACKS. The renderer's hardcoded light rig is now a
+// seeded "Lighting" group of five Light-instrument tracks per visual scene
+// (visible, movable, automatable); every pre-v18 scene gets that group wearing
+// the old rig's exact values, so nothing changes on screen - the lights just
+// become rows you can edit. Scenes that somehow already hold a light track are
+// left alone, as is Composite (it composes scenes and holds no objects).
+// Values are a frozen copy of core/defaultLighting.ts - a shipped step must
+// not chase the live module.
+UPGRADES[17] = (doc) => {
+  const rest = doc as { scenes?: Record<string, Scene> } & Record<string, unknown>
+  const SEEDS: { name: string; color: string; params: Record<string, number>; stringParams?: Record<string, string> }[] = [
+    { name: 'Ambience', color: '#93c5fd', params: { type: 3, intensity: 0.55, flat: 0.12, bulb: 0 }, stringParams: { color: '#dbeafe', groundColor: '#170921' } },
+    { name: 'Key Light', color: '#fde68a', params: { type: 2, intensity: 2.4, castShadow: 1, bulb: 0, tfX: 4, tfY: 7, tfZ: 5 }, stringParams: { color: '#ffffff' } },
+    { name: 'Fill Panel', color: '#fed7aa', params: { type: 4, intensity: 6, width: 5, height: 5, bulb: 0, tfX: 4, tfY: 4, tfZ: 5, tfRotX: -35.52, tfRotY: 35.52 }, stringParams: { color: '#fff7ed' } },
+    { name: 'Cool Fill', color: '#60a5fa', params: { type: 0, intensity: 7, distance: 20, decay: 2, bulb: 0, tfX: -4, tfY: 2, tfZ: -3 }, stringParams: { color: '#60a5fa' } },
+    { name: 'Warm Rim', color: '#fb7185', params: { type: 0, intensity: 3.5, distance: 16, decay: 2, bulb: 0, tfX: 3, tfY: -1, tfZ: 3 }, stringParams: { color: '#fb7185' } },
+  ]
+  const scenes: Record<string, Scene> = {}
+  for (const [sceneId, scene] of Object.entries(rest.scenes ?? {})) {
+    const hasLight = Object.values(scene.tracks ?? {}).some(
+      (t) => (t as Track).type === 'base' && (t as Track).instrumentId === 'light',
+    )
+    if (scene.isMain || hasLight) {
+      scenes[sceneId] = scene
+      continue
+    }
+    const groupId = crypto.randomUUID()
+    const tracks: Record<string, Track> = { ...scene.tracks }
+    const childIds: string[] = []
+    for (const seed of SEEDS) {
+      const id = crypto.randomUUID()
+      childIds.push(id)
+      tracks[id] = {
+        id,
+        name: seed.name,
+        type: 'base',
+        instrumentId: 'light',
+        params: { ...seed.params },
+        stringParams: seed.stringParams ? { ...seed.stringParams } : undefined,
+        color: seed.color,
+        muted: false,
+        solo: false,
+        blocks: [],
+        parentId: groupId,
+        childIds: [],
+      }
+    }
+    tracks[groupId] = {
+      id: groupId,
+      name: 'Lighting',
+      type: 'group',
+      instrumentId: '',
+      color: '#eab308',
+      muted: false,
+      solo: false,
+      blocks: [],
+      childIds,
+    }
+    scenes[sceneId] = { ...scene, tracks, rootTrackIds: [groupId, ...scene.rootTrackIds] }
   }
   return { ...rest, scenes }
 }

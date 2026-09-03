@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useContext, useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, Color, Euler, Group, Matrix4, Mesh, MeshPhysicalMaterial, Quaternion, Vector3 } from 'three'
 import { InstancedMesh2 } from '@three.ez/instanced-mesh'
 import { cubeSpinRotation } from '../core/visual/cubeSpin'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { useInstancedCopyFrame } from '../core/visual/instancedFrame'
+import { SceneIdContext } from '../core/visual/sceneContext'
+import { posterLightDir } from '../core/visual/sceneLights'
 import type { ObjectState } from '../core/visual/types'
 import {
   FUNDAMENTAL_MATERIAL_PROPS,
@@ -68,6 +70,7 @@ function cubeBaseHex(state: ObjectState, scratch: Color): string {
 // by ObjectRenderer's placement group; this draws the mesh at local origin and owns
 // appearance (color/emissive/surface toggles) plus its signature Shatter ability.
 export function Cube({ trackId }: { trackId: string }) {
+  const sceneId = useContext(SceneIdContext)
   const spinRef = useRef<Group>(null)
   const meshRef = useRef<Mesh | null>(null)
   const fragRefs = useRef<(Mesh | null)[]>([])
@@ -122,6 +125,10 @@ export function Cube({ trackId }: { trackId: string }) {
       ;(uniforms.uColor.value as Color).copy(tint)
       uniforms.uShade.value = state.params.shading ?? paramDefault(cubeInstrument, 'shading')
       uniforms.uEnergy.value = energy
+      // Follow the scene's key light by REFERENCE: the shared vector is
+      // refreshed each frame by sceneLights, so a moving light re-shades a
+      // paused matte solid without this callback re-running.
+      uniforms.uLightDir.value = posterLightDir(sceneId)
     } else {
       const gloss = glossMaterials.get(mesh)
       if (gloss && mesh.material === posterMaterial) mesh.material = gloss
@@ -204,6 +211,7 @@ const _baseScratch = new Color()
 const WHITE = new Color('#ffffff')
 
 export function CubeInstanced({ trackId }: { trackId: string }) {
+  const sceneId = useContext(SceneIdContext)
   const rig = useMemo(() => {
     const poster = createInstancedPosterMaterial()
     // Material generic left wide: the finish swaps poster ⟷ gloss at runtime.
@@ -277,6 +285,7 @@ export function CubeInstanced({ trackId }: { trackId: string }) {
       if (solid.material !== poster) solid.material = poster
       poster.uniforms.uShade.value = state.params.shading ?? paramDefault(cubeInstrument, 'shading')
       poster.uniforms.uEnergy.value = energy
+      poster.uniforms.uLightDir.value = posterLightDir(sceneId)
     } else {
       if (solid.material !== gloss) solid.material = gloss
       const surface = {

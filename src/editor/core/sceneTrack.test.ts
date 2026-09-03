@@ -103,6 +103,11 @@ function freshScene(): string {
   return useProjectStore.getState().activeSceneId
 }
 
+/** Root ids minus the seeded Lighting group every fresh scene is born with. */
+function contentRoots(scene: { rootTrackIds: string[]; tracks: Record<string, Track> }): string[] {
+  return scene.rootTrackIds.filter((id) => scene.tracks[id]?.name !== 'Lighting')
+}
+
 test('the toggle publishes the row into the flattened view and back out', () => {
   const id = freshScene()
   useProjectStore.getState().addTrack(track({ id: 'a' }))
@@ -134,7 +139,7 @@ test('a colorizer added under the scene row lands in sceneTrackChildIds', () => 
   }))
   const s = useProjectStore.getState().scenes[id]
   assert.deepEqual(s.sceneTrackChildIds, ['cz'])
-  assert.deepEqual(s.rootTrackIds, [], 'a scene lane is not a root track')
+  assert.deepEqual(contentRoots(s), [], 'a scene lane is not a root track')
   assert.ok(s.tracks.cz, 'but the lane itself is a real track in the document')
 })
 
@@ -142,7 +147,7 @@ test('an object dropped on the scene row lands at root instead', () => {
   const id = freshScene()
   useProjectStore.getState().setSceneTrackEnabled(id, true)
   useProjectStore.getState().addTrack(track({ id: 'a', parentId: sceneTrackId(id) }))
-  assert.deepEqual(useProjectStore.getState().scenes[id].rootTrackIds, ['a'])
+  assert.deepEqual(contentRoots(useProjectStore.getState().scenes[id]), ['a'])
   assert.deepEqual(useProjectStore.getState().scenes[id].sceneTrackChildIds, undefined)
 })
 

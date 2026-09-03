@@ -144,6 +144,47 @@ geometry is invisible to r3f's auto-dispose. Don't subscribe to ProjectStore for
 this: `s.tracks` only carries the ACTIVE scene, so a previewed-but-inactive scene
 would silently render defaults. The camera is an instrument too (`CameraControl`, `CameraOrbit`); full-frame filter instruments: `ColorFilters`, `FilmStock`. Media instruments (`Video`, `Photo`, `PhotoSlot`) delegate time models to `core/video|photo`.
 
+## The Light instrument: scene lights are tracks now
+
+`Light.tsx` / `LightVisual.tsx` (2026-08-29): a scene light as an ordinary object
+track - position rides `tf*` (so automation lanes, movers, splitters and groups
+all move lights with zero bespoke machinery; a ring splitter mints a ring of
+lamps), knobs automate like any params, and `flash` lifts intensity with note
+energy. Five TYPE values (point / spot / directional / ambient / area),
+**append-only** - they are saved in `track.params`. Facts you cannot see from
+the def file:
+
+- **The mounted component holds NO THREE light.** It renders an anchor group
+  (plus the optional glowing bulb) and registers `{anchor, desc}` in
+  `core/visual/sceneLights.ts`; each render pass (VisualScene's base/front/
+  invert per scene, plus every ShaderWrapper offscreen rig) owns a
+  `PassLightPool` that mirrors the registry into its own scene per frame. That
+  is how one light reaches every pass - the same reason the old hardcoded rig
+  was replicated per portal. Fades and mutes reach the light via `desc.on` /
+  `desc.intensity`, both written in the frame callback.
+- **Every visual scene is SEEDED with a "Lighting" group** wearing the old
+  hardcoded rig's exact values (`core/defaultLighting.ts`; persistence
+  UPGRADES[17] for old saves; `emptyDocument()` and both scene-creation paths
+  for new ones). A scene with NO light tracks still gets the legacy baked
+  `lights()` rig in VisualScene - the fallback that keeps hand-built fixtures
+  and unseeded documents rendering. Deleting all light tracks therefore
+  restores the stock look rather than going black; muting them goes dark.
+- **`SceneIdContext`** (`core/visual/sceneContext.ts`, provided by
+  ObjectRenderer and InstancedObjectRenderer) is how an instrument learns its
+  scene. The Light registers with it; the 3D Shape's Matte finish reads it to
+  follow the scene's key light: `posterLightDir(sceneId)` hands back a shared
+  per-scene Vector3 that `refreshPosterLightDir` re-aims each frame at the
+  first live DIRECTIONAL light track, so poster materials point their
+  `uLightDir` uniform at it BY REFERENCE and a moving light re-shades paused
+  matte solids without their callbacks re-running. Null context (panels,
+  previews) = the frozen historical direction.
+- **Shadows stay gated on the scene having a `castsShadows` instrument**
+  (VisualScene's `shadowScenes`, passed to `PassLightPool.sync` as
+  `allowShadows`) - a directional/spot light's `castShadow` param only takes
+  effect then, same economy as the old rig.
+- `showIf` grew an OR form for this def: `'type=0|1'` (TrackEditor's
+  `showIfSatisfied`).
+
 ## Camera instruments own the camera, and only one can
 
 The Canvas ships a plain default camera at `[0, 0, 5]`, fov 55, and there are no

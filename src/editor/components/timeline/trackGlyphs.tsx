@@ -178,6 +178,14 @@ const G = {
       <circle cx="8" cy="8" r="2.4" fill="currentColor" stroke="none" />
     </>
   ),
+  // A radiating point - the filled heart plus eight rays reads as "emits
+  // light" where laserSphere's ring-in-ring reads as "glowing object".
+  light: (
+    <>
+      <circle cx="8" cy="8" r="2.4" fill="currentColor" stroke="none" />
+      <path d="M8 2.2v1.9M8 11.9v1.9M2.2 8h1.9M11.9 8h1.9M4 4l1.3 1.3M12 4l-1.3 1.3M4 12l1.3-1.3M12 12l-1.3-1.3" />
+    </>
+  ),
   modSynth: (
     <>
       <path d="M2 13 L4 4 L7 9.5 L11 9.5 L14 13" strokeLinejoin="round" />

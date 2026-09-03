@@ -177,7 +177,11 @@ test('moving a root track transfers its complete subtree with stable ids', () =>
   const moved = useProjectStore.getState()
   assert.equal(moved.scenes[sourceId].tracks.visual, undefined)
   assert.equal(moved.scenes[sourceId].tracks.motion, undefined)
-  assert.deepEqual(moved.scenes[targetId].rootTrackIds, ['visual'])
+  // addScene seeds a Lighting group into the new scene; the moved track lands after it.
+  const contentRoots = moved.scenes[targetId].rootTrackIds.filter(
+    (id) => moved.scenes[targetId].tracks[id]?.name !== 'Lighting',
+  )
+  assert.deepEqual(contentRoots, ['visual'])
   assert.equal(moved.scenes[targetId].tracks.visual.childIds[0], 'motion')
   assert.equal(moved.scenes[targetId].tracks.motion.parentId, 'visual')
   assert.equal(moved.tracks.visual, undefined)

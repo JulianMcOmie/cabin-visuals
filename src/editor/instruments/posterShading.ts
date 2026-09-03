@@ -1,21 +1,34 @@
 import { Color, DoubleSide, FrontSide, ShaderMaterial } from 'three'
+import { DEFAULT_POSTER_LIGHT_DIR } from '../core/visual/sceneLights'
 
 // The "poster" look, extracted from Overlap Solid so the 3D Shape's Matte
 // finish and the overlap instruments render the SAME surface by construction:
-// a flat base color mixed with a fixed-direction lambert term (never scene
-// lights), tone-map-free so the picked color is the rendered color, with a
-// gentle lift toward white as the note-pulse energy - present but never
-// glaring, and nothing bright enough to trip the scene bloom.
+// a flat base color mixed with a single-direction lambert term, tone-map-free
+// so the picked color is the rendered color, with a gentle lift toward white
+// as the note-pulse energy - present but never glaring, and nothing bright
+// enough to trip the scene bloom.
+//
+// The lambert DIRECTION: historically a baked constant. The poster materials
+// now carry it as the `uLightDir` uniform so the Matte finish can follow the
+// scene's key (directional) light track - CubeVisual points the uniform's
+// value at the scene's shared vector from core/visual/sceneLights.ts. The
+// 3-arg `posterShade` overload keeps the baked constant for the consumers
+// that embed this GLSL into their own shaders (the Overlap instruments),
+// which stay bit-identical.
 
 export const POSTER_SHADE_DEFAULT = 0.3
 
 /** `posterShade(color, normal, shade)`: the one lighting formula. `shade` 0 is
- *  the 2D instrument's poster-flat fill; 1 is the full lambert model. */
+ *  the 2D instrument's poster-flat fill; 1 is the full lambert model. The
+ *  4-arg overload takes the light direction; the 3-arg form keeps the
+ *  historical baked one. */
 export const POSTER_SHADING_GLSL = /* glsl */ `
-vec3 posterShade(vec3 color, vec3 normal, float shade) {
-  vec3 light = normalize(vec3(0.55, 0.8, 0.6));
-  float lambert = clamp(dot(normalize(normal), light), 0.0, 1.0);
+vec3 posterShade(vec3 color, vec3 normal, float shade, vec3 lightDir) {
+  float lambert = clamp(dot(normalize(normal), normalize(lightDir)), 0.0, 1.0);
   return color * mix(1.0, 0.3 + 0.7 * lambert, shade);
+}
+vec3 posterShade(vec3 color, vec3 normal, float shade) {
+  return posterShade(color, normal, shade, vec3(0.55, 0.8, 0.6));
 }
 `
 
@@ -32,10 +45,11 @@ uniform vec3 uColor;
 uniform float uShade;
 uniform float uEnergy;
 uniform float uOpacity;
+uniform vec3 uLightDir;
 varying vec3 vNormal;
 ${POSTER_SHADING_GLSL}
 void main() {
-  vec3 col = posterShade(uColor, vNormal, uShade);
+  vec3 col = posterShade(uColor, vNormal, uShade, uLightDir);
   // The note pulse: a modest lift toward white, not an emissive bloom.
   col = mix(col, vec3(1.0), clamp(uEnergy, 0.0, 1.0) * 0.25);
   gl_FragColor = vec4(col * uOpacity, uOpacity);
@@ -81,11 +95,12 @@ uniform vec3 uColor;
 uniform float uShade;
 uniform float uEnergy;
 uniform float uOpacity;
+uniform vec3 uLightDir;
 varying vec3 vNormal;
 varying vec4 vInstanceColor;
 ${POSTER_SHADING_GLSL}
 void main() {
-  vec3 col = posterShade(uColor * vInstanceColor.rgb, vNormal, uShade);
+  vec3 col = posterShade(uColor * vInstanceColor.rgb, vNormal, uShade, uLightDir);
   col = mix(col, vec3(1.0), clamp(uEnergy, 0.0, 1.0) * 0.25);
   float a = uOpacity * vInstanceColor.a;
   gl_FragColor = vec4(col * a, a);
@@ -105,6 +120,9 @@ export function createInstancedPosterMaterial(options?: { doubleSide?: boolean }
       uShade: { value: POSTER_SHADE_DEFAULT },
       uEnergy: { value: 0 },
       uOpacity: { value: 1 },
+      // A fresh copy per material: render-path callers repoint `.value` at
+      // their scene's shared live vector; preview/panel mounts keep this.
+      uLightDir: { value: DEFAULT_POSTER_LIGHT_DIR.clone() },
     },
   })
   material.side = options?.doubleSide ? DoubleSide : FrontSide
@@ -123,6 +141,9 @@ export function createPosterMaterial(options?: { doubleSide?: boolean }): Shader
       uShade: { value: POSTER_SHADE_DEFAULT },
       uEnergy: { value: 0 },
       uOpacity: { value: 1 },
+      // A fresh copy per material: render-path callers repoint `.value` at
+      // their scene's shared live vector; preview/panel mounts keep this.
+      uLightDir: { value: DEFAULT_POSTER_LIGHT_DIR.clone() },
     },
   })
   material.side = options?.doubleSide ? DoubleSide : FrontSide
