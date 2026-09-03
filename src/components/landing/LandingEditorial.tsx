@@ -94,7 +94,11 @@ export function LandingEditorial() {
   const closingCtaRef = useRef<HTMLDivElement>(null)
 
   return (
-    <EditorialSkin className="flex min-h-screen flex-col font-sans">
+    <EditorialSkin className="isolate flex min-h-screen flex-col font-sans">
+      {/* Hovering either CTA drifts the whole page toward purple and back
+          (.lp-tint-wash in globals.css). `isolate` on the skin is what keeps
+          the wash above the skin's own background. */}
+      <div aria-hidden className="lp-tint-wash" data-hot={heroHot || closingHot} />
       <CursorParticles />
 
       <EditorialHeader>

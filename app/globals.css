@@ -757,7 +757,7 @@ body.drag-moving * {
 }
 
 /* ============================================================
-   Editorial skin (2026 landing redesign, spec: dark-but-not-black,
+   Editorial skin (2026 landing redesign, spec: black with a blue cast,
    serif display, single soft-cyan accent). Scoped remap of the console
    tokens so whole screens adopt the editorial look without rewriting
    their markup - wrap a page in <EditorialSkin> from
@@ -765,26 +765,28 @@ body.drag-moving * {
    global tokens follows. The editor itself is never skinned.
    ============================================================ */
 .editorial-skin {
-  /* Editorial tokens under their own names (the landing cover uses these). */
-  --lp-bg: #181b22;
-  --lp-bg-deep: #12141a;
+  /* Editorial tokens under their own names (the landing cover uses these).
+     Palette is "black·blue" (picked 2026-09-02): true black with a whisper
+     of steel blue, hairlines lifted a notch so they still read on black. */
+  --lp-bg: #03050b;
+  --lp-bg-deep: #000104;
   --lp-text: #e9ebf0;
   --lp-text-muted: #aab0be;
   --lp-text-faint: #7d8494;
   --lp-accent: #9ee8f5;
-  --lp-border: rgba(233, 235, 240, 0.08);
-  --lp-border-strong: rgba(233, 235, 240, 0.1);
+  --lp-border: rgba(222, 232, 250, 0.13);
+  --lp-border-strong: rgba(222, 232, 250, 0.17);
 
   /* Console tokens remapped so skinned screens' existing markup lands on the
-     editorial palette. Surface hierarchy is preserved, just lifted and cooled. */
-  --bg-page: #181b22;
-  --bg-panel: #12141a;
-  --bg-panel-raised: #1b1e26;
-  --bg-elevated: #232733;
-  --bg-app: #0c0d12;
-  --border: rgba(233, 235, 240, 0.08);
-  --border-subtle: rgba(233, 235, 240, 0.06);
-  --border-strong: rgba(233, 235, 240, 0.16);
+     editorial palette. Surface hierarchy is preserved, just sunk and cooled. */
+  --bg-page: #03050b;
+  --bg-panel: #000104;
+  --bg-panel-raised: #0a0e1a;
+  --bg-elevated: #121828;
+  --bg-app: #02030a;
+  --border: rgba(222, 232, 250, 0.13);
+  --border-subtle: rgba(222, 232, 250, 0.1);
+  --border-strong: rgba(222, 232, 250, 0.2);
   --text: #e9ebf0;
   --text-2: #ccd1dc;
   --text-3: #aab0be;
@@ -796,12 +798,12 @@ body.drag-moving * {
   --on-accent: #12141a;
 
   /* Deeper chrome (the landing's editor facsimile draws with these). */
-  --bg-shell: #0e1016;
-  --bg-topbar: #0e1016;
-  --bg-timeline: #10131a;
-  --bg-track-row: #1b1e26;
-  --bg-canvas: #0c0d12;
-  --bg-canvas-deep: #0a0b10;
+  --bg-shell: #050812;
+  --bg-topbar: #050812;
+  --bg-timeline: #070b16;
+  --bg-track-row: #0a0e1a;
+  --bg-canvas: #03050b;
+  --bg-canvas-deep: #000104;
 
   /* Reroute the font-sans / font-mono utilities (inlined from these vars by
      @theme inline) onto the editorial stack for everything inside the skin. */
@@ -810,4 +812,34 @@ body.drag-moving * {
 
   background-color: var(--lp-bg);
   color: var(--lp-text);
+}
+
+/* Landing CTA hover: the page's black·blue drifts toward black·purple and
+   back on a slow loop while a "Start creating" pill is hot. A full-page
+   wash sits between the skin's background and its content (the landing
+   sets `isolate` on the skin so z-index:-1 lands there instead of behind
+   the page). Two properties on purpose: the loop animates the wash's
+   colour alpha, hot/cold transitions its opacity - a single animated
+   property would snap to base the instant the animation was removed. */
+.lp-tint-wash {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: rgba(12, 5, 24, 0);
+  opacity: 0;
+  transition: opacity 1.4s ease;
+  animation: lp-tint-cycle 7s ease-in-out infinite;
+  animation-play-state: paused;
+}
+.lp-tint-wash[data-hot="true"] {
+  opacity: 1;
+  animation-play-state: running;
+}
+@keyframes lp-tint-cycle {
+  0%, 100% { background-color: rgba(12, 5, 24, 0); }
+  50% { background-color: rgba(12, 5, 24, 1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-tint-wash { animation: none; }
 }
