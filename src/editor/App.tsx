@@ -1064,7 +1064,7 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
             const index = PREVIEW_QUALITIES.indexOf(previewQuality)
             setPreviewQuality(PREVIEW_QUALITIES[(index + 1) % PREVIEW_QUALITIES.length])
           }}
-          title="Fast Preview - trades sharpness for smoother playback. Auto softens only while playing. Export always renders final quality."
+          title="Fast Preview - trades sharpness for smoother playback. Auto softens only while playing. Fast also drops shadows and fill lights; Fastest renders flat, unlit colour. Export always renders final quality."
           className="group flex h-7 flex-shrink-0 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2 @[530px]:px-2.5 font-mono text-[9px] uppercase tracking-wide cursor-pointer"
         >
           {/* The field name is the first thing to go when the strip narrows -

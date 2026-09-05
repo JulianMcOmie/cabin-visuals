@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { TRACK_LABEL_WIDTH } from '../constants'
 import type { LoopRegion } from '../core/loopRegion'
+import type { LightingBudget } from '../core/visual/sceneLights'
 
 export interface EditingBlockRef {
   trackId: string
@@ -43,6 +44,19 @@ export const PREVIEW_QUALITY_SCALE: Record<PreviewQuality, number> = {
 export function previewQualityScale(quality: PreviewQuality, isPlaying: boolean): number {
   if (quality === 'auto') return isPlaying ? PREVIEW_QUALITY_SCALE.auto : 1
   return PREVIEW_QUALITY_SCALE[quality]
+}
+
+/** The lighting each level affords, on top of its resolution scale. The
+ *  resolution scale shrinks per-pixel shading with the picture, but not the
+ *  shadow pass or the program's light count - so the two fixed levels also
+ *  spend lighting: Fast trims the rig (no shadows, ambient + directional
+ *  only), Fastest goes flat (one white ambient, no shading). AUTO keeps full
+ *  lighting - its softening is meant to be invisible in motion, and a
+ *  re-lit scene is not. Export pins 'full' regardless (usePreviewLighting). */
+export function previewLighting(quality: PreviewQuality): LightingBudget {
+  if (quality === 'fast') return 'trimmed'
+  if (quality === 'fastest') return 'flat'
+  return 'full'
 }
 
 /** What the 3D canvas shows: the Composite's final frame, or the scene being edited. */

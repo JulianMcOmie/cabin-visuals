@@ -8,7 +8,7 @@ import {
 import { useTimeStore } from '../../store/TimeStore'
 import { getBeatOverride } from '../../core/visual/beatOverride'
 import { getObjectState, getVisualCopy } from '../../core/visual/VisualEngine'
-import { PassLightPool, refreshPosterLightDir, sceneHasLightAnchors } from '../../core/visual/sceneLights'
+import { FLAT_LIGHT_INTENSITY, PassLightPool, refreshPosterLightDir, sceneHasLightAnchors } from '../../core/visual/sceneLights'
 import { registerHoverTarget } from '../../core/visual/hoverTargets'
 import { applyMaterialOpacity } from '../../core/visual/animatedOpacity'
 import { getEffect } from '../../effects'
@@ -17,7 +17,7 @@ import type { EffectInstance } from '../../types'
 import { composePostMoverScale, evaluatePostMoverScale } from '../../core/visual/postMoverScale'
 import { CROP_MASK_FRAGMENT, resolveActiveCropMask, type ActiveCropMask } from '../../instruments/Crop'
 import { MAX_DIVISIONS as CROP_MAX_DIVISIONS } from '../../core/directors/crop'
-import { useRenderTargetScale } from './useRenderTargetScale'
+import { usePreviewLighting, useRenderTargetScale } from './useRenderTargetScale'
 import { acquireShaderScratch, releaseShaderScratch, type ShaderScratch } from './shaderScratchPool'
 
 // Fullscreen-quad vertex shader: writes clip space directly, so a 2×2 plane always fills
@@ -104,12 +104,21 @@ export function ShaderWrapper({
     // The legacy hand-built light set, kept for scenes with no Light tracks
     // (and for callers with no sceneId). Grouped so the track-light path can
     // stand it down with one visibility flip.
+    // The point lights sit in their own sub-group: the 'trimmed' lighting
+    // budget (Fast preview) stands them down and keeps ambient + directional.
     const legacyLights = new Group()
     legacyLights.add(new AmbientLight(0xffffff, 0.5))
     const dir = new DirectionalLight(0xffffff, 1.2); dir.position.set(4, 4, 4); legacyLights.add(dir)
-    const key = new PointLight(0x818cf8, 3); key.position.set(-4, -2, 3); legacyLights.add(key)
-    const rim = new PointLight(0xf0abfc, 1.5); rim.position.set(3, 3, -4); legacyLights.add(rim)
+    const legacyFills = new Group()
+    const key = new PointLight(0x818cf8, 3); key.position.set(-4, -2, 3); legacyFills.add(key)
+    const rim = new PointLight(0xf0abfc, 1.5); rim.position.set(3, 3, -4); legacyFills.add(rim)
+    legacyLights.add(legacyFills)
     scene.add(legacyLights)
+    // The 'flat' budget's ambient for callers with no sceneId (no pool sync
+    // runs for them); sceneId callers get the pool's own.
+    const flatLight = new AmbientLight(0xffffff, FLAT_LIGHT_INTENSITY)
+    flatLight.visible = false
+    scene.add(flatLight)
     const holder = new Group(); holder.matrixAutoUpdate = false; scene.add(holder)
 
     // `own` holds the chain's final output; when no pass is active this frame
@@ -124,13 +133,14 @@ export function ShaderWrapper({
     quadScene.add(quad)
 
     const outUniforms: Record<string, IUniform> = { tDiffuse: { value: null as Texture | null } }
-    return { scene, legacyLights, holder, own, quadScene, quadCam, quad, outUniforms }
+    return { scene, legacyLights, legacyFills, flatLight, holder, own, quadScene, quadCam, quad, outUniforms }
   }, [])
 
   // Mirrored Light-track set for the offscreen scene (no shadows, matching the
   // legacy set). Slots empty until the scene actually has light anchors.
   const lightPool = useMemo(() => new PassLightPool(rig.scene), [rig])
   useEffect(() => () => lightPool.dispose(), [lightPool])
+  const lighting = usePreviewLighting()
 
   // Shift-hover root: the object's meshes render in this offscreen rig, not in
   // the pass scene (the pass scene only holds the output quad), so the holder
@@ -232,10 +242,12 @@ export function ShaderWrapper({
     // Scenes with Light tracks light this pass with THOSE; the legacy
     // hand-built set only serves scenes that have none.
     const trackLit = !!sceneId && sceneHasLightAnchors(sceneId)
-    rig.legacyLights.visible = !trackLit
+    rig.legacyLights.visible = !trackLit && lighting !== 'flat'
+    rig.legacyFills.visible = lighting === 'full'
+    rig.flatLight.visible = !sceneId && lighting === 'flat'
     if (sceneId) {
       if (trackLit) refreshPosterLightDir(sceneId)
-      lightPool.sync(sceneId, false)
+      lightPool.sync(sceneId, false, lighting)
     }
 
     // Render the object (with world × Scale effect × this occurrence's

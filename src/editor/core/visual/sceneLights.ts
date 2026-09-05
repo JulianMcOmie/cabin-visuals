@@ -37,6 +37,30 @@ export const LIGHT_TYPE_DIRECTIONAL = 2
 export const LIGHT_TYPE_AMBIENT = 3
 export const LIGHT_TYPE_AREA = 4
 
+/** How much of the scene's light rig a render pass keeps. The fast preview
+ *  levels trade lighting for frame rate (UIStore.previewLighting):
+ *  - 'full'    - every light, shadows where the scene has a caster.
+ *  - 'trimmed' - Fast: no shadow pass, and only ambient + directional lights
+ *                shine. Point / spot / area lights are the expensive part of
+ *                the fragment light loop (area lights = LTC lookups), and the
+ *                shadow pass is a whole extra depth render per lit pass that
+ *                the resolution scale does nothing to shrink.
+ *  - 'flat'    - Fastest: the rig is gone; one white ambient lights everything
+ *                to its bare albedo, so the shader has no light loop at all.
+ *  Export and preview captures always render 'full' (the pin lives in
+ *  usePreviewLighting). */
+export type LightingBudget = 'full' | 'trimmed' | 'flat'
+
+/** The flat budget's one ambient. Ambient irradiance goes through Lambert's
+ *  1/π, so π puts a lit surface at exactly its albedo - colours as authored,
+ *  just unshaded. */
+export const FLAT_LIGHT_INTENSITY = Math.PI
+
+/** Which light types the 'trimmed' budget keeps shining. */
+export function lightTypeSurvivesTrim(type: number): boolean {
+  return type === LIGHT_TYPE_AMBIENT || type === LIGHT_TYPE_DIRECTIONAL
+}
+
 /** What one Light occurrence contributes this frame. Written in place by the
  *  instrument's frame callback; read by every pass pool. `intensity` and
  *  `flat` arrive with the track/copy fade and the note flash already applied. */
@@ -210,10 +234,26 @@ function buildSlot(scene: Scene, type: number): Slot {
  */
 export class PassLightPool {
   private slots = new Map<string, Slot>()
+  /** The 'flat' budget's ambient, built on first use and shown only then. */
+  private flat: AmbientLight | null = null
   constructor(private scene: Scene) {}
 
-  sync(sceneId: string, allowShadows: boolean) {
-    const anchors = sortedAnchors(sceneId)
+  /** `budget` is the preview level's lighting allowance (see LightingBudget).
+   *  Under 'flat' every mirrored slot is dropped - fewer lights in the scene
+   *  is what makes three compile the cheaper program - and the pool's own
+   *  ambient stands in; under 'trimmed' shadows are off and only the surviving
+   *  types stay lit. Switching budgets recompiles the pass's lit materials
+   *  once, like a light-type edit would. */
+  sync(sceneId: string, allowShadows: boolean, budget: LightingBudget = 'full') {
+    const flat = budget === 'flat'
+    if (flat && !this.flat) {
+      this.flat = new AmbientLight(0xffffff, FLAT_LIGHT_INTENSITY)
+      this.scene.add(this.flat)
+    }
+    if (this.flat) this.flat.visible = flat
+    const anchors = flat ? [] : sortedAnchors(sceneId)
+    const trimmed = budget === 'trimmed'
+    const shadows = allowShadows && budget === 'full'
     const seen = new Set<string>()
     for (const anchor of anchors) {
       seen.add(anchor.key)
@@ -227,7 +267,7 @@ export class PassLightPool {
         slot = buildSlot(this.scene, desc.type)
         this.slots.set(anchor.key, slot)
       }
-      const live = desc.on && !anchorHidden(anchor.object)
+      const live = desc.on && !anchorHidden(anchor.object) && (!trimmed || lightTypeSurvivesTrim(desc.type))
       if (slot.light) slot.light.visible = live
       if (slot.hemi) slot.hemi.visible = live
       if (slot.flat) slot.flat.visible = live
@@ -270,7 +310,7 @@ export class PassLightPool {
           light.penumbra = desc.penumbra
           light.position.setFromMatrixPosition(anchor.object.matrixWorld)
           slot.target!.position.set(desc.aimX, desc.aimY, desc.aimZ)
-          light.castShadow = desc.castShadow && allowShadows
+          light.castShadow = desc.castShadow && shadows
           break
         }
         case LIGHT_TYPE_DIRECTIONAL: {
@@ -279,7 +319,7 @@ export class PassLightPool {
           light.intensity = desc.intensity
           light.position.setFromMatrixPosition(anchor.object.matrixWorld)
           slot.target!.position.set(desc.aimX, desc.aimY, desc.aimZ)
-          light.castShadow = desc.castShadow && allowShadows
+          light.castShadow = desc.castShadow && shadows
           break
         }
         default: {
@@ -304,6 +344,11 @@ export class PassLightPool {
   dispose() {
     for (const slot of this.slots.values()) disposeSlot(this.scene, slot)
     this.slots.clear()
+    if (this.flat) {
+      this.scene.remove(this.flat)
+      this.flat.dispose()
+      this.flat = null
+    }
   }
 }
 

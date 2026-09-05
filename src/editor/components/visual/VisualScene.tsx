@@ -42,7 +42,7 @@ import { DEFAULT_SCENE_BACKGROUND, type Scene, type SceneGradient } from '../../
 import { ObjectRenderer } from './ObjectRenderer'
 import { InstancedObjectRenderer } from './InstancedObjectRenderer'
 import { FinalInvertMaskContext } from '../../core/visual/finalInvertMask'
-import { PassLightPool, refreshPosterLightDir } from '../../core/visual/sceneLights'
+import { PassLightPool, refreshPosterLightDir, type LightingBudget } from '../../core/visual/sceneLights'
 import { hoverGlowColor, hoverTargetsForTrack, rootSceneOf } from '../../core/visual/hoverTargets'
 import { isExportPinned } from '../../core/export/frameDriver'
 import { useUIStore } from '../../store/UIStore'
@@ -54,7 +54,7 @@ import { CROP_MASK_FRAGMENT, resolveActiveCropMask } from '../../instruments/Cro
 import { MAX_DIVISIONS as CROP_MAX_DIVISIONS } from '../../core/directors/crop'
 import { getBeatOverride } from '../../core/visual/beatOverride'
 import { useTimeStore } from '../../store/TimeStore'
-import { useRenderTargetScale } from './useRenderTargetScale'
+import { usePreviewLighting, useRenderTargetScale } from './useRenderTargetScale'
 
 RectAreaLightUniformsLib.init()
 
@@ -581,17 +581,22 @@ function applyCompositorLayer(
 
 /** The per-pass light rig. `shadows` = give the key light a shadow map (see
  *  shadowScenes in VisualScene): only a scene with a casting instrument pays
- *  for the shadow pass. */
-function lights(shadows: boolean) {
+ *  for the shadow pass. `budget` is the preview level's allowance: 'trimmed'
+ *  drops the shadow pass, the area fill and the point lights; 'flat' renders
+ *  nothing here at all - the pass's PassLightPool supplies the flat ambient
+ *  (it syncs for every mounted scene, track-lit or not). */
+function lights(shadows: boolean, budget: LightingBudget) {
+  if (budget === 'flat') return null
+  const full = budget === 'full'
   return (
     <>
       <ambientLight intensity={0.12} />
       <hemisphereLight color="#dbeafe" groundColor="#170921" intensity={0.55} />
-      <rectAreaLight position={[4, 4, 5]} rotation={[-0.62, 0.62, 0]} color="#fff7ed" intensity={6} width={5} height={5} />
+      {full && <rectAreaLight position={[4, 4, 5]} rotation={[-0.62, 0.62, 0]} color="#fff7ed" intensity={6} width={5} height={5} />}
       <directionalLight
         position={[4, 7, 5]}
         intensity={2.4}
-        castShadow={shadows}
+        castShadow={shadows && full}
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
         shadow-camera-left={-10}
@@ -603,8 +608,8 @@ function lights(shadows: boolean) {
         shadow-bias={-0.0004}
         shadow-normalBias={0.035}
       />
-      <pointLight position={[-4, 2, -3]} color="#60a5fa" intensity={7} distance={20} decay={2} />
-      <pointLight position={[3, -1, 3]} color="#fb7185" intensity={3.5} distance={16} decay={2} />
+      {full && <pointLight position={[-4, 2, -3]} color="#60a5fa" intensity={7} distance={20} decay={2} />}
+      {full && <pointLight position={[3, -1, 3]} color="#fb7185" intensity={3.5} distance={16} decay={2} />}
     </>
   )
 }
@@ -654,6 +659,9 @@ export function VisualScene() {
   // rig, which shrinks by the same factor (the resize effect below re-sizes
   // the targets and invalidates on the change).
   const targetScale = useRenderTargetScale()
+  // Fast levels also spend lighting (see previewLighting); read here so the
+  // frame loop's pool syncs and the legacy rigs below agree on one budget.
+  const lighting = usePreviewLighting()
   const environment = useMemo(() => {
     const room = new RoomEnvironment()
     const pmrem = new PMREMGenerator(gl)
@@ -1190,9 +1198,9 @@ export function VisualScene() {
         // pure functions of this frame's already-composed transforms.
         refreshPosterLightDir(sceneId)
         const allowShadows = shadowScenes.has(sceneId)
-        runtime.lightPools[0].sync(sceneId, allowShadows)
-        if (presence?.front) runtime.lightPools[1].sync(sceneId, allowShadows)
-        if (presence?.invert) runtime.lightPools[2].sync(sceneId, allowShadows)
+        runtime.lightPools[0].sync(sceneId, allowShadows, lighting)
+        if (presence?.front) runtime.lightPools[1].sync(sceneId, allowShadows, lighting)
+        if (presence?.invert) runtime.lightPools[2].sync(sceneId, allowShadows, lighting)
         gl.setRenderTarget(runtime.target)
         gl.setClearColor(
           backdrop?.color ?? projectScene?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND,
@@ -1552,21 +1560,21 @@ export function VisualScene() {
                 (see MountedScene.lightPools and the sync in the frame loop). */}
             {createPortal(
             <>
-              {lightTrackScenes.has(sceneId) ? null : lights(shadowScenes.has(sceneId))}
+              {lightTrackScenes.has(sceneId) ? null : lights(shadowScenes.has(sceneId), lighting)}
               {mountObjects(base, '')}
             </>,
             runtime.base,
             )}
             {createPortal(
             <>
-              {lightTrackScenes.has(sceneId) ? null : lights(shadowScenes.has(sceneId))}
+              {lightTrackScenes.has(sceneId) ? null : lights(shadowScenes.has(sceneId), lighting)}
               {mountObjects(front, ':front')}
             </>,
             runtime.front,
             )}
             {createPortal(
             <FinalInvertMaskContext.Provider value>
-              {lightTrackScenes.has(sceneId) ? null : lights(shadowScenes.has(sceneId))}
+              {lightTrackScenes.has(sceneId) ? null : lights(shadowScenes.has(sceneId), lighting)}
               {mountObjects(invert, ':invert')}
             </FinalInvertMaskContext.Provider>,
             runtime.invert,
