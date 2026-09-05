@@ -126,7 +126,7 @@ export const OscilloscopeUserInterfaceRenderer: UserInterfaceRendererDefinition 
                   key={option.label}
                   onClick={() => background.setValue(option.on ? 1 : 0)}
                   aria-pressed={active}
-                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-[2px] py-1 text-[10px] transition-colors cursor-pointer ${active
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-[2px] py-1 text-[10px] cursor-pointer ${active
                     ? 'bg-[var(--bg-elevated)] text-[var(--text)]'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-3)]'}`}
                 >
@@ -161,7 +161,7 @@ export const OscilloscopeUserInterfaceRenderer: UserInterfaceRendererDefinition 
                     onClick={() => placement.setValue(option.pinned ? 1 : 0)}
                     aria-pressed={active}
                     title={option.hint}
-                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-[2px] py-1 text-[10px] transition-colors cursor-pointer ${active
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-[2px] py-1 text-[10px] cursor-pointer ${active
                       ? 'bg-[var(--bg-elevated)] text-[var(--text)]'
                       : 'text-[var(--text-muted)] hover:text-[var(--text-3)]'}`}
                   >

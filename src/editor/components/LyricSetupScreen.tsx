@@ -162,7 +162,7 @@ export function LyricSetupScreen({
   const EscapeButton = ({ label, onClick }: { label: string; onClick: () => void }) => (
     <button
       onClick={onClick}
-      className="mt-5 text-[12px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)] cursor-pointer"
+      className="mt-5 text-[12px] text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer"
     >
       {label}
     </button>
@@ -305,7 +305,7 @@ export function LyricSetupScreen({
       onDrop={onDrop}
     >
       <SiteHeader>
-        <Link href="/projects" className="px-3 text-[13px] text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer">
+        <Link href="/projects" className="px-3 text-[13px] text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer">
           Projects
         </Link>
         <ProfileMenu />
@@ -363,7 +363,7 @@ export function LyricSetupScreen({
                     disabled={applying}
                     aria-busy={picked}
                     title={style.description}
-                    className={`group overflow-hidden rounded-lg border bg-[var(--bg-app)] text-left transition-all duration-150 ${
+                    className={`group overflow-hidden rounded-lg border bg-[var(--bg-app)] text-left ${
                       picked
                         // The click landed: this card lifts and takes the accent.
                         // While the words are still coming the others stay live
@@ -427,7 +427,7 @@ export function LyricSetupScreen({
                 <span className="text-xs text-[var(--text-muted)]">Drop your song anywhere on this page</span>
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="mt-1.5 flex h-9 items-center justify-center rounded bg-[var(--accent)] px-5 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] cursor-pointer"
+                  className="mt-1.5 flex h-9 items-center justify-center rounded bg-[var(--accent)] px-5 text-[13px] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] cursor-pointer"
                 >
                   Browse files
                 </button>
@@ -452,7 +452,7 @@ export function LyricSetupScreen({
               <button
                 onClick={() => void loadDemoSong()}
                 disabled={demoLoading}
-                className="-mt-3 text-[12px] text-[var(--text-3)] transition-colors hover:text-[var(--text)] disabled:opacity-60 cursor-pointer"
+                className="-mt-3 text-[12px] text-[var(--text-3)] hover:text-[var(--text)] disabled:opacity-60 cursor-pointer"
               >
                 {demoLoading
                   ? `Loading ${DEMO_SONG.label}…`
@@ -460,7 +460,7 @@ export function LyricSetupScreen({
               </button>
               <Link
                 href="/projects"
-                className="text-[12px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)] cursor-pointer"
+                className="text-[12px] text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer"
               >
                 ← Back to projects
               </Link>
@@ -470,7 +470,7 @@ export function LyricSetupScreen({
               <p className="mx-auto m-0 max-w-[380px] text-[13px] leading-relaxed text-[#d68383]">{phase.message}</p>
               <button
                 onClick={() => { setPhase({ kind: 'pick' }); if (firstAudioBlock()) void run() }}
-                className="flex h-9 items-center justify-center rounded bg-[var(--accent)] px-5 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] cursor-pointer"
+                className="flex h-9 items-center justify-center rounded bg-[var(--accent)] px-5 text-[13px] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] cursor-pointer"
               >
                 Try again
               </button>

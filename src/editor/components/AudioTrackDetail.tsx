@@ -87,7 +87,7 @@ function TranscribeControl({ trackId }: { trackId: string }) {
         disabled={working}
         aria-busy={working}
         title="Transcribe this song and write its timed words onto a Lyrics track"
-        className={`flex h-6 items-center gap-1.5 rounded border px-2.5 text-[10px] font-medium transition-colors ${
+        className={`flex h-6 items-center gap-1.5 rounded border px-2.5 text-[10px] font-medium ${
           working
             ? 'cursor-default border-[var(--border)] text-[var(--text-muted)]'
             : 'cursor-pointer border-[var(--border)] text-[var(--text-3)] hover:border-[var(--border-strong)] hover:text-[var(--text)]'

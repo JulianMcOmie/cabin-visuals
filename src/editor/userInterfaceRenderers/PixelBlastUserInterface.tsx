@@ -100,7 +100,7 @@ function PixelSwitch({ b }: { b: BooleanBinding | null }) {
         aria-checked={on}
         aria-label={b.def.label}
         onClick={() => b.set(on ? 0 : 1)}
-        className="flex h-[16px] w-[16px] items-center justify-center border transition-colors active:scale-90 cursor-pointer"
+        className="flex h-[16px] w-[16px] items-center justify-center border active:scale-90 cursor-pointer"
         style={on
           ? { borderColor: withAlpha(ACCENT, 0.8), background: withAlpha(ACCENT, 0.14) }
           : { borderColor: 'rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)' }}

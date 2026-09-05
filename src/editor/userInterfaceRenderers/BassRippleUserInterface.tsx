@@ -250,7 +250,7 @@ function PatternSegments({ b }: { b: SelectBinding }) {
             role="radio"
             aria-checked={selected}
             onClick={() => b.set(option.value)}
-            className={`flex min-w-0 flex-1 items-center justify-center gap-1 px-1 py-[5px] text-[9px] font-semibold uppercase tracking-[0.1em] transition-colors ${
+            className={`flex min-w-0 flex-1 items-center justify-center gap-1 px-1 py-[5px] text-[9px] font-semibold uppercase tracking-[0.1em] ${
               selected ? '' : 'bg-black/25 text-white/40 hover:bg-white/5 hover:text-white/60'
             }`}
             style={selected ? { background: ACCENT, color: '#0c0a1a' } : undefined}

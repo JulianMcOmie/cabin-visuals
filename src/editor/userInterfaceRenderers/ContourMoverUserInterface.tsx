@@ -145,7 +145,7 @@ export const ContourMoverUserInterfaceRenderer: UserInterfaceRendererDefinition 
           aria-label="Reset all Contour parameters"
           title="Reset all"
           onClick={resetAll}
-          className="flex h-6 w-6 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-2)]"
+          className="flex h-6 w-6 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:border-[var(--border-strong)] hover:text-[var(--text-2)]"
         >
           <RotateCcw size={11} />
         </button>
@@ -166,7 +166,7 @@ export const ContourMoverUserInterfaceRenderer: UserInterfaceRendererDefinition 
                 aria-label={`${option.label} surface`}
                 title={option.label}
                 onClick={() => shape.set(option.value)}
-                className={`flex flex-1 items-center justify-center py-1.5 transition-colors ${active
+                className={`flex flex-1 items-center justify-center py-1.5 ${active
                   ? 'bg-[var(--bg-elevated)] text-[var(--text)]'
                   : 'bg-transparent text-[var(--text-muted)] hover:text-[var(--text-2)]'}`}
                 style={active ? { color: accent } : undefined}

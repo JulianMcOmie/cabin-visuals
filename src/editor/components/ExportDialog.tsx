@@ -289,7 +289,7 @@ function AspectCard({ aspect, selected, onPick }: { aspect: ExportAspect; select
     <button
       onClick={onPick}
       aria-pressed={selected}
-      className={`flex flex-1 flex-col items-center justify-center gap-2 rounded-[10px] border py-3 transition-colors cursor-pointer ${
+      className={`flex flex-1 flex-col items-center justify-center gap-2 rounded-[10px] border py-3 cursor-pointer ${
         selected
           ? 'border-transparent bg-[var(--accent)]'
           : 'border-[rgba(255,255,255,0.1)] bg-[#10131c] hover:border-[rgba(255,255,255,0.2)]'
@@ -536,7 +536,7 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
                         key={mode}
                         disabled={disabled}
                         onClick={() => setSettings((s) => ({ ...s, rangeMode: mode }))}
-                        className={`h-[38px] flex-1 rounded-full text-[12px] font-semibold transition-colors ${
+                        className={`h-[38px] flex-1 rounded-full text-[12px] font-semibold ${
                           selected
                             ? 'bg-[var(--accent)] text-[#0c0d12]'
                             : disabled
@@ -649,7 +649,7 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
               <button
                 onClick={() => void start()}
                 disabled={!settings.fileName.trim()}
-                className="mt-auto flex h-10 w-full items-center justify-center gap-2 rounded-full bg-[var(--accent-button)] text-[13px] font-bold text-[var(--on-accent)] [font-family:var(--font-plex-sans)] transition-colors hover:bg-[var(--accent-hover)] disabled:bg-[var(--bg-elevated)] disabled:text-[var(--text-muted)] cursor-pointer disabled:cursor-default"
+                className="mt-auto flex h-10 w-full items-center justify-center gap-2 rounded-full bg-[var(--accent-button)] text-[13px] font-bold text-[var(--on-accent)] [font-family:var(--font-plex-sans)] hover:bg-[var(--accent-hover)] disabled:bg-[var(--bg-elevated)] disabled:text-[var(--text-muted)] cursor-pointer disabled:cursor-default"
               >
                 <Upload size={13} strokeWidth={2.5} />
                 Export · {duration}
@@ -714,7 +714,7 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
                   downloadBlob(phase.blob, phase.fileName)
                   setDownloaded(true)
                 }}
-                className="h-9 flex-shrink-0 rounded-full bg-[var(--accent-button)] px-6 text-[12px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] cursor-pointer"
+                className="h-9 flex-shrink-0 rounded-full bg-[var(--accent-button)] px-6 text-[12px] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] cursor-pointer"
               >
                 {downloaded ? 'Download again' : 'Download'}
               </button>
@@ -725,7 +725,7 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
         {phase.kind === 'error' && (
           <div className="flex flex-col gap-3">
             <p className="break-words text-xs text-red-400">Export failed: {phase.message}</p>
-            <button onClick={() => setPhase({ kind: 'settings' })} className="h-10 w-full rounded-full bg-[var(--bg-elevated)] text-xs font-semibold text-[var(--text-2)] transition-colors hover:bg-[var(--border)] cursor-pointer">
+            <button onClick={() => setPhase({ kind: 'settings' })} className="h-10 w-full rounded-full bg-[var(--bg-elevated)] text-xs font-semibold text-[var(--text-2)] hover:bg-[var(--border)] cursor-pointer">
               Back
             </button>
           </div>
@@ -810,7 +810,7 @@ function RunningView({
       </p>
       <button
         onClick={onCancel}
-        className="h-10 w-full rounded-full border border-[rgba(255,255,255,0.14)] text-xs font-semibold text-[var(--text-2)] transition-colors hover:border-[rgba(255,255,255,0.3)] hover:text-[var(--text)] cursor-pointer"
+        className="h-10 w-full rounded-full border border-[rgba(255,255,255,0.14)] text-xs font-semibold text-[var(--text-2)] hover:border-[rgba(255,255,255,0.3)] hover:text-[var(--text)] cursor-pointer"
       >
         Cancel
       </button>

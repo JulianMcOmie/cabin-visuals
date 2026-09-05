@@ -154,7 +154,7 @@ function SegmentStepper({ segments }: { segments: NumberBound }) {
       aria-label={label}
       onClick={() => segments.setValue(snap(n + direction * d.step, d))}
       disabled={direction === -1 ? n <= d.min : n >= d.max}
-      className="flex h-5 w-5 flex-shrink-0 cursor-pointer items-center justify-center rounded-[3px] border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-3)] transition-all hover:text-[var(--text-2)] active:scale-90 disabled:cursor-default disabled:opacity-35"
+      className="flex h-5 w-5 flex-shrink-0 cursor-pointer items-center justify-center rounded-[3px] border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text-2)] active:scale-90 disabled:cursor-default disabled:opacity-35"
     >
       {icon}
     </button>

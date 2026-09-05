@@ -53,7 +53,7 @@ export function PlaybackRateControl() {
       // carry what the click does - otherwise the button announces as "½×".
       aria-label={`Playback speed: ${RATE_TITLE[rate]}. Click for ${RATE_LABEL[next]}`}
       title={`${RATE_TITLE[rate]} - click for ${RATE_LABEL[next]}`}
-      className={`flex h-7 cursor-pointer items-center rounded-md px-2.5 font-mono text-[10px] leading-none tabular-nums transition-colors focus-visible:outline-1 focus-visible:outline-[var(--accent)] ${
+      className={`flex h-7 cursor-pointer items-center rounded-md px-2.5 font-mono text-[10px] leading-none tabular-nums focus-visible:outline-1 focus-visible:outline-[var(--accent)] ${
         slowed
           ? 'bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/20'
           : 'bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)]'

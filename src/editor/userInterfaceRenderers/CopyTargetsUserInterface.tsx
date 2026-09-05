@@ -368,7 +368,7 @@ export function CopyTargetsUserInterface({ track }: { track: Track }) {
                           aria-pressed={on}
                           title={`Slice ${i + 1} of ${slices}`}
                           onClick={() => toggleSlice(i)}
-                          className="flex h-[22px] cursor-pointer items-center gap-1 rounded-[5px] border px-1.5 text-[10px] tabular-nums transition-colors"
+                          className="flex h-[22px] cursor-pointer items-center gap-1 rounded-[5px] border px-1.5 text-[10px] tabular-nums "
                           style={on
                             ? { background: withAlpha(hue, 0.22), color: towardWhite(hue, 0.65), borderColor: withAlpha(hue, 0.35) }
                             : { background: 'rgba(255,255,255,0.03)', color: 'var(--text-muted)', borderColor: 'rgba(255,255,255,0.07)' }}
@@ -398,7 +398,7 @@ function StepButton({ label, disabled, onClick, children }: {
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="h-[20px] w-[20px] cursor-pointer rounded-[5px] text-[12px] leading-none text-[var(--text-2)] transition-colors hover:bg-white/[0.06] disabled:cursor-default disabled:opacity-30"
+      className="h-[20px] w-[20px] cursor-pointer rounded-[5px] text-[12px] leading-none text-[var(--text-2)] hover:bg-white/[0.06] disabled:cursor-default disabled:opacity-30"
     >
       {children}
     </button>

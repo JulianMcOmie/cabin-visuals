@@ -405,7 +405,7 @@ export function TimelineArea() {
   const rulerCorner = useMemo(() => (
     <div className="flex items-center gap-2 px-3 w-full">
       <button
-        className="flex items-center justify-center w-4 h-4 rounded-[3px] bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors cursor-pointer"
+        className="flex items-center justify-center w-4 h-4 rounded-[3px] bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] hover:bg-[var(--border)] cursor-pointer"
         onClick={handleAddTrack}
         title={`Add track`}
       >
@@ -469,7 +469,7 @@ export function TimelineArea() {
         )}
         {libraryDragging && (
           <div
-            className={`pointer-events-none absolute top-0 bottom-0 left-0 z-30 flex items-center justify-center border border-dashed transition-colors ${
+            className={`pointer-events-none absolute top-0 bottom-0 left-0 z-30 flex items-center justify-center border border-dashed ${
               libraryDropReady
                 ? 'border-[var(--accent)] bg-[var(--accent)]/15'
                 : 'border-[var(--border-strong)] bg-[var(--accent)]/5'
@@ -795,7 +795,7 @@ export function TimelineArea() {
             }}
             className="group pointer-events-auto absolute top-0 bottom-0 -left-[5px] w-[10px] cursor-ew-resize touch-none outline-none"
           >
-            <span className="absolute top-0 bottom-0 left-1/2 w-px -translate-x-1/2 bg-white/[0.12] transition-[width,background-color,box-shadow] group-hover:w-0.5 group-hover:bg-[var(--accent)] group-hover:shadow-[0_0_6px_var(--accent)] group-focus-visible:w-0.5 group-focus-visible:bg-[var(--accent)] group-focus-visible:shadow-[0_0_6px_var(--accent)]" />
+            <span className="absolute top-0 bottom-0 left-1/2 w-px -translate-x-1/2 bg-white/[0.12] group-hover:w-0.5 group-hover:bg-[var(--accent)] group-hover:shadow-[0_0_6px_var(--accent)] group-focus-visible:w-0.5 group-focus-visible:bg-[var(--accent)] group-focus-visible:shadow-[0_0_6px_var(--accent)]" />
           </div>
         </div>
       </div>

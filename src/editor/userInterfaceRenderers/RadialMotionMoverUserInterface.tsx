@@ -304,7 +304,7 @@ function CountHeader({ bound, depth }: { bound: UserInterfaceParameter | undefin
       aria-label={`${direction < 0 ? 'Fewer' : 'More'} ${name} copies`}
       disabled={direction < 0 ? value <= min : value >= max}
       onClick={() => bound?.setValue(clamp(value + direction, min, max))}
-      className="flex h-[15px] w-[15px] items-center justify-center rounded-[3px] border border-white/10 bg-black/30 font-mono text-[10px] leading-none text-white/45 transition-colors hover:text-white/80 disabled:opacity-25 disabled:hover:text-white/45"
+      className="flex h-[15px] w-[15px] items-center justify-center rounded-[3px] border border-white/10 bg-black/30 font-mono text-[10px] leading-none text-white/45 hover:text-white/80 disabled:opacity-25 disabled:hover:text-white/45"
     >
       {direction < 0 ? '−' : '+'}
     </button>
@@ -376,7 +376,7 @@ export const RadialMotionMoverUserInterfaceRenderer: UserInterfaceRendererDefini
             <button
               aria-expanded={showMore}
               onClick={() => setShowMore((v) => !v)}
-              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 transition-colors hover:text-white/60"
+              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 hover:text-white/60"
             >
               {showMore ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
               MORE

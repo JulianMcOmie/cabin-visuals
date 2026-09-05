@@ -190,7 +190,7 @@ function BackdropDeck({ scene }: { scene: Scene }) {
           // min-w-0 + nowrap: the deck is three EQUAL segments in a panel the
           // user can drag narrow - let them shrink rather than wrap a label
           // onto a second line and grow the pill.
-          className={`flex h-6 min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 overflow-hidden rounded-full px-2 text-[10px] font-semibold whitespace-nowrap transition-colors ${
+          className={`flex h-6 min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 overflow-hidden rounded-full px-2 text-[10px] font-semibold whitespace-nowrap ${
             mode === kind ? 'bg-[var(--bg-elevated)] text-white/85' : 'text-white/40 hover:bg-white/[0.05] hover:text-white/70'
           }`}
         >
@@ -270,7 +270,7 @@ function GradientControls({ scene }: { scene: Scene }) {
               aria-pressed={gradient.kind === kind}
               title={title}
               onClick={() => setSceneBackgroundGradient(scene.id, { kind })}
-              className={`h-5 cursor-pointer rounded-full px-2.5 text-[9px] transition-colors ${
+              className={`h-5 cursor-pointer rounded-full px-2.5 text-[9px] ${
                 gradient.kind === kind
                   ? 'bg-[var(--bg-elevated)] font-semibold text-white/85'
                   : 'font-medium text-white/40 hover:bg-white/[0.05]'

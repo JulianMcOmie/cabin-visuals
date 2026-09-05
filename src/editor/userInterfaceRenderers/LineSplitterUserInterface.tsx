@@ -327,7 +327,7 @@ function LineConsole({ bound }: { bound: LineBindings }) {
             <button
               aria-expanded={showMore}
               onClick={() => setShowMore((v) => !v)}
-              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 transition-colors hover:text-white/60"
+              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 hover:text-white/60"
             >
               {showMore ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
               MORE

@@ -258,7 +258,7 @@ function Segmented({ options, value, accent, ariaLabel, onChange }: {
             aria-checked={active}
             title={option.title}
             onClick={() => onChange(option.value)}
-            className={`h-[22px] flex-1 cursor-pointer rounded-[5px] px-1.5 text-[9px] font-semibold tracking-[0.08em] transition-colors ${
+            className={`h-[22px] flex-1 cursor-pointer rounded-[5px] px-1.5 text-[9px] font-semibold tracking-[0.08em] ${
               active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
             }`}
             style={active

@@ -85,7 +85,7 @@ function ModeTabs({ bound }: { bound: UserInterfaceParameter }) {
             key={option.value}
             aria-pressed={active}
             onClick={() => bound.setValue(option.value)}
-            className={`border-r border-[var(--border)] py-1.5 text-[9px] font-semibold tracking-[0.05em] transition-colors last:border-r-0 cursor-pointer ${active
+            className={`border-r border-[var(--border)] py-1.5 text-[9px] font-semibold tracking-[0.05em] last:border-r-0 cursor-pointer ${active
               ? 'bg-[var(--bg-elevated)] text-[var(--text-2)]'
               : 'bg-[var(--bg-app)] text-[var(--text-muted)] hover:text-[var(--text-3)]'}`}
           >
@@ -202,7 +202,7 @@ function BurstModePills({ bound }: { bound: UserInterfaceParameter }) {
             key={option.value}
             aria-pressed={active}
             onClick={() => bound.setValue(option.value)}
-            className={`truncate rounded border px-1.5 py-1 text-[9px] font-semibold tracking-[0.03em] transition-colors cursor-pointer ${active
+            className={`truncate rounded border px-1.5 py-1 text-[9px] font-semibold tracking-[0.03em] cursor-pointer ${active
               ? 'border-[var(--accent-muted)] bg-[var(--bg-elevated)] text-[var(--text-2)]'
               : 'border-[var(--border)] bg-[var(--bg-app)] text-[var(--text-muted)] hover:text-[var(--text-3)]'}`}
             title={option.label}

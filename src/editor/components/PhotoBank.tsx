@@ -175,7 +175,7 @@ export function PhotoBank({ track }: { track: Track }) {
     >
       {fileDragActive && (
         <div
-          className={`pointer-events-none absolute -inset-1.5 z-10 flex items-center justify-center rounded border border-dashed transition-colors ${
+          className={`pointer-events-none absolute -inset-1.5 z-10 flex items-center justify-center rounded border border-dashed ${
             dropHover ? 'border-[var(--accent)] bg-[var(--accent)]/15' : 'border-[var(--border-strong)] bg-[var(--bg-panel)]/70'
           }`}
         >
@@ -227,7 +227,7 @@ export function PhotoBank({ track }: { track: Track }) {
       <button
         onClick={() => fileInputRef.current?.click()}
         disabled={atPadLimit}
-        className="mt-1 flex h-7 w-full items-center justify-center gap-1.5 rounded border border-dashed border-[var(--border)] text-[11px] text-[var(--text-3)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] disabled:opacity-50 cursor-pointer disabled:cursor-default"
+        className="mt-1 flex h-7 w-full items-center justify-center gap-1.5 rounded border border-dashed border-[var(--border)] text-[11px] text-[var(--text-3)] hover:border-[var(--border-strong)] hover:text-[var(--text)] disabled:opacity-50 cursor-pointer disabled:cursor-default"
       >
         <Plus size={11} />
         {atPadLimit ? `${PHOTO_FREE_MAX_PADS}-photo free limit` : 'Upload photos'}

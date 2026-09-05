@@ -84,7 +84,7 @@ function NotchRow({ bound }: { bound: UserInterfaceParameter | undefined }) {
         aria-label={`${definition.label} ${v}`}
         aria-pressed={v === value}
         onClick={() => bound.setValue(v)}
-        className={`h-[14px] flex-1 rounded-[2px] border transition-colors cursor-pointer ${filled
+        className={`h-[14px] flex-1 rounded-[2px] border cursor-pointer ${filled
           ? 'border-[var(--accent-muted)] bg-[var(--accent-muted)]'
           : 'border-[var(--border)] bg-[var(--bg-app)] hover:bg-[var(--bg-elevated)]'}`}
       />,
@@ -131,7 +131,7 @@ function ColorRow({ bound }: { bound: UserInterfaceParameter | undefined }) {
           aria-label={bound.definition.label}
           value={bound.value}
           onChange={(e) => bound.setValue(e.target.value)}
-          className="h-5 w-8 flex-shrink-0 cursor-pointer rounded border border-[var(--border)] bg-transparent transition-transform active:scale-95"
+          className="h-5 w-8 flex-shrink-0 cursor-pointer rounded border border-[var(--border)] bg-transparent active:scale-95"
         />
       </div>
     </div>

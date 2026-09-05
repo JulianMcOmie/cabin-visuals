@@ -216,7 +216,7 @@ function GeometryRow({ bound }: { bound: UserInterfaceParameter }) {
             aria-label={`Use ${option.label} geometry`}
             aria-pressed={active}
             onClick={() => bound.setValue(option.id)}
-            className={`flex min-w-0 items-center justify-center rounded-[3px] border py-1.5 text-[6px] font-semibold tracking-[0.06em] transition-colors ${active
+            className={`flex min-w-0 items-center justify-center rounded-[3px] border py-1.5 text-[6px] font-semibold tracking-[0.06em] ${active
               ? 'border-violet-300/35 bg-violet-500/16 text-violet-100'
               : 'border-white/[0.07] bg-white/[0.025] text-white/30 hover:bg-white/[0.06] hover:text-white/65'}`}
           >

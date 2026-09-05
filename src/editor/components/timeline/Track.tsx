@@ -294,7 +294,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
         position: 'relative',
         height: rowHeight,
       }}
-      className="flex items-stretch cursor-default transition-colors duration-100"
+      className="flex items-stretch cursor-default"
     >
       <div
         onClick={(e) => {
@@ -349,7 +349,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
             inherits this background, so selecting a parent lights its whole
             bracket region while a child's highlight stops at the divider. */}
         <div
-          className={`pointer-events-none absolute inset-y-0 right-0 transition-colors duration-100 ${isFirstChild ? 'rounded-tl-md' : ''} ${
+          className={`pointer-events-none absolute inset-y-0 right-0 ${isFirstChild ? 'rounded-tl-md' : ''} ${
             dropInto ? 'bg-[rgba(53,167,230,0.25)]' : isSelected ? 'bg-[var(--bg-elevated)]' : 'bg-[var(--bg-track-row)]'
           }`}
           style={{ left: regionLeft, boxShadow: dropInto ? dropOutline : undefined }}
@@ -556,7 +556,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
             onPointerEnter={() => {
               if (msPaint?.kind === 'mute' && track.muted !== msPaint.value) toggleMute(track.id)
             }}
-            className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center transition-all active:scale-75 cursor-pointer ${
+            className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center active:scale-75 cursor-pointer ${
               track.muted
                 ? 'bg-[var(--accent)] text-[var(--on-accent)]'
                 : 'bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-2)]'
@@ -573,7 +573,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
             onPointerEnter={() => {
               if (msPaint?.kind === 'solo' && track.solo !== msPaint.value) toggleSolo(track.id)
             }}
-            className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center transition-all active:scale-75 cursor-pointer ${
+            className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center active:scale-75 cursor-pointer ${
               track.solo
                 ? 'bg-[var(--warn)] text-[var(--on-accent)]'
                 : 'bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-2)]'
@@ -593,7 +593,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
                 const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
                 setTagsAnchor({ left: rect.left, top: rect.top, bottom: rect.bottom })
               }}
-              className={`w-4 h-4 rounded-[3px] flex items-center justify-center transition-all active:scale-75 cursor-pointer ${
+              className={`w-4 h-4 rounded-[3px] flex items-center justify-center active:scale-75 cursor-pointer ${
                 tagsAnchor
                   ? 'bg-[var(--accent)] text-[var(--on-accent)]'
                   : tagList.length > 0
@@ -614,7 +614,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
                 const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
                 setPanelAnchor({ left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom })
               }}
-              className={`w-4 h-4 rounded-[3px] flex items-center justify-center transition-all active:scale-75 cursor-pointer ${
+              className={`w-4 h-4 rounded-[3px] flex items-center justify-center active:scale-75 cursor-pointer ${
                 panelAnchor
                   ? 'bg-[var(--accent)] text-[var(--on-accent)]'
                   : 'bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-2)]'

@@ -267,7 +267,7 @@ function EasingStrip({ b }: { b: SelectBinding }) {
             aria-label={`${option.label} easing`}
             aria-pressed={active}
             onClick={() => b.set(option.value)}
-            className={`flex min-w-0 cursor-pointer flex-col items-center gap-0.5 rounded-md border py-1 transition-colors ${
+            className={`flex min-w-0 cursor-pointer flex-col items-center gap-0.5 rounded-md border py-1 ${
               active ? '' : 'border-white/[0.07] bg-white/[0.025] text-white/30 hover:bg-white/[0.06] hover:text-white/65'
             }`}
             style={active ? { borderColor: withAlpha(AMBER, 0.4), background: withAlpha(AMBER, 0.15), color: towardWhite(AMBER, 0.45) } : undefined}

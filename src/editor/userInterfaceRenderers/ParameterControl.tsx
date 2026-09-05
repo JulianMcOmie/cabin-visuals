@@ -96,7 +96,7 @@ export function ParamStepper({
       aria-label={aria}
       onClick={() => onChange(clamp(n + direction * step))}
       disabled={direction === -1 ? n <= min : n >= max}
-      className="flex h-5 w-5 flex-shrink-0 cursor-pointer items-center justify-center rounded-[3px] border border-[var(--border)] bg-[var(--bg-elevated)] font-mono text-[11px] leading-none text-[var(--text-3)] transition-all hover:text-[var(--text-2)] active:scale-90 disabled:cursor-default disabled:opacity-35"
+      className="flex h-5 w-5 flex-shrink-0 cursor-pointer items-center justify-center rounded-[3px] border border-[var(--border)] bg-[var(--bg-elevated)] font-mono text-[11px] leading-none text-[var(--text-3)] hover:text-[var(--text-2)] active:scale-90 disabled:cursor-default disabled:opacity-35"
     >
       {glyph}
     </button>
@@ -193,7 +193,7 @@ export function ParamToggle({ on, onChange, label }: { on: boolean; onChange: (o
       onClick={() => onChange(!on)}
       // active:scale = the press itself answers instantly, before any state
       // lands - the anti-rage-click affordance shared by every toggle.
-      className={`w-8 h-4 rounded-[3px] relative transition-all active:scale-90 flex-shrink-0 cursor-pointer ${on ? 'bg-[var(--accent-muted)]' : 'bg-[var(--border)]'}`}
+      className={`w-8 h-4 rounded-[3px] relative active:scale-90 flex-shrink-0 cursor-pointer ${on ? 'bg-[var(--accent-muted)]' : 'bg-[var(--border)]'}`}
       role="switch"
       aria-checked={on}
       aria-label={label}
@@ -248,7 +248,7 @@ export function ParamControl({ param, numValue, strValue, onNum, onStr }: {
             type="color"
             value={strValue ?? param.default}
             onChange={(e) => onStr?.(e.target.value)}
-            className="w-8 h-5 rounded bg-transparent border border-[var(--border)] cursor-pointer flex-shrink-0 transition-transform active:scale-95"
+            className="w-8 h-5 rounded bg-transparent border border-[var(--border)] cursor-pointer flex-shrink-0 active:scale-95"
           />
         </div>
       </div>

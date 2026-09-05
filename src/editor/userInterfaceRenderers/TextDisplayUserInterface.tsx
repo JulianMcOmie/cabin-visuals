@@ -226,7 +226,7 @@ function StyleLanesSection({ trackId }: { trackId: string }) {
               onClick={() => setOpenIndex(i)}
               aria-pressed={active}
               title={count > 0 ? `${count} word${count === 1 ? '' : 's'} on this lane` : 'No words on this lane yet'}
-              className={`group flex h-8 w-full cursor-pointer items-center justify-between px-2.5 text-left transition-colors ${active ? 'bg-[var(--bg-elevated)]' : 'bg-[var(--bg-app)] hover:bg-[var(--bg-panel)]'}`}
+              className={`group flex h-8 w-full cursor-pointer items-center justify-between px-2.5 text-left ${active ? 'bg-[var(--bg-elevated)]' : 'bg-[var(--bg-app)] hover:bg-[var(--bg-panel)]'}`}
             >
               <span
                 className={`truncate text-[13px] leading-none ${count === 0 ? 'opacity-50' : ''}`}
@@ -309,7 +309,7 @@ export function StyleLaneEditorCard({ trackId, laneIndex, frameless }: { trackId
               onClick={() => updateStyleLane(trackId, open, { font: v })}
               aria-pressed={active}
               title={preview.short}
-              className={`flex cursor-pointer flex-col items-center gap-0.5 rounded border py-1.5 transition-colors ${active
+              className={`flex cursor-pointer flex-col items-center gap-0.5 rounded border py-1.5 ${active
                 ? 'border-[var(--accent-muted)] bg-[var(--bg-elevated)] text-[var(--text)]'
                 : 'border-[var(--border)] bg-[var(--bg-app)] text-[var(--text-muted)] hover:text-[var(--text-3)]'}`}
             >
@@ -358,7 +358,7 @@ export function StyleLaneEditorCard({ trackId, laneIndex, frameless }: { trackId
                 updateStyleLane(trackId, open, { fx: next })
               }}
               aria-pressed={on}
-              className={`cursor-pointer rounded border px-2 py-0.5 text-[10px] capitalize transition-colors ${on
+              className={`cursor-pointer rounded border px-2 py-0.5 text-[10px] capitalize ${on
                 ? 'border-[var(--accent-muted)] bg-[var(--bg-elevated)] text-[var(--text)]'
                 : 'border-[var(--border)] bg-[var(--bg-app)] text-[var(--text-muted)] hover:text-[var(--text-3)]'}`}
             >{fx}</button>
@@ -435,7 +435,7 @@ export function LyricClipEditorCard({ trackId, clipId }: { trackId: string; clip
               onClick={() => setLayout(cardDef.kind === 'grid' ? { kind: 'grid', cols: clip.layout?.cols ?? 2 } : { kind: cardDef.kind })}
               aria-pressed={active}
               title={cardDef.label}
-              className={`flex cursor-pointer flex-col items-center rounded border py-1 transition-colors ${active
+              className={`flex cursor-pointer flex-col items-center rounded border py-1 ${active
                 ? 'border-[var(--accent-muted)] bg-[var(--bg-elevated)] text-[var(--text)]'
                 : 'border-[var(--border)] bg-[var(--bg-app)] text-[var(--text-muted)] hover:text-[var(--text-3)]'}`}
             >
@@ -531,7 +531,7 @@ function LyricClipsSection({ trackId }: { trackId: string }) {
                   aria-expanded={isOpen}
                   onClick={() => toggle(clip.id)}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(clip.id) } }}
-                  className={`group flex min-h-7 w-full cursor-pointer items-center gap-1.5 px-1.5 py-1 text-left transition-colors ${isOpen ? 'bg-[var(--bg-elevated)]' : 'bg-[var(--bg-app)] hover:bg-[var(--bg-panel)]'}`}
+                  className={`group flex min-h-7 w-full cursor-pointer items-center gap-1.5 px-1.5 py-1 text-left ${isOpen ? 'bg-[var(--bg-elevated)]' : 'bg-[var(--bg-app)] hover:bg-[var(--bg-panel)]'}`}
                 >
                   <ChevronRight
                     size={11}
@@ -563,7 +563,7 @@ function LyricClipsSection({ trackId }: { trackId: string }) {
       <button
         onClick={() => { if (paste.trim()) { sliceLyricsIntoClips(trackId, paste); setPaste('') } }}
         disabled={!paste.trim()}
-        className={`mt-1 h-6 w-full rounded border text-[10px] font-medium transition-colors ${paste.trim()
+        className={`mt-1 h-6 w-full rounded border text-[10px] font-medium ${paste.trim()
           ? 'cursor-pointer border-[var(--accent-muted)] bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25'
           : 'cursor-default border-[var(--border)] bg-[var(--bg-app)] text-[var(--text-muted)]'}`}
       >↓ Slice into clips (one line each)</button>
@@ -640,7 +640,7 @@ function TranscribeButton({ trackId }: { trackId: string }) {
         title={hasSong
           ? 'Transcribe the song and write its words onto this track'
           : 'Add a song to the timeline first'}
-        className={`mb-1.5 flex h-7 w-full items-center justify-center gap-1.5 rounded border text-[11px] font-medium transition-colors ${
+        className={`mb-1.5 flex h-7 w-full items-center justify-center gap-1.5 rounded border text-[11px] font-medium ${
           working || !hasSong
             ? 'cursor-default border-[var(--border)] bg-[var(--bg-app)] text-[var(--text-muted)]'
             : 'cursor-pointer border-[var(--accent-muted)] bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25'
@@ -723,7 +723,7 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
               key={id}
               onClick={() => setLyricGrouping(targetId, id)}
               aria-pressed={lyricGrouping === id}
-              className={`h-7 text-[11px] font-medium transition-colors cursor-pointer ${
+              className={`h-7 text-[11px] font-medium cursor-pointer ${
                 lyricGrouping === id
                   ? 'bg-[var(--accent)]/15 text-[var(--accent)]'
                   : 'bg-[var(--bg-app)] text-[var(--text-3)] hover:text-[var(--text)]'
@@ -777,7 +777,7 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
                   key={option.value}
                   onClick={() => colorMode.setValue(option.value)}
                   aria-pressed={active}
-                  className={`flex-1 rounded-[2px] py-1 text-[10px] transition-colors cursor-pointer ${active
+                  className={`flex-1 rounded-[2px] py-1 text-[10px] cursor-pointer ${active
                     ? 'bg-[var(--bg-elevated)] text-[var(--text)]'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-3)]'}`}
                 >

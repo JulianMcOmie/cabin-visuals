@@ -247,7 +247,7 @@ function AxisSelector({ b }: { b: SelectBinding }) {
               aria-pressed={active}
               title={option.label}
               onClick={() => b.set(option.value)}
-              className={`px-1.5 py-1 text-[7px] font-bold tracking-[0.08em] transition-colors ${
+              className={`px-1.5 py-1 text-[7px] font-bold tracking-[0.08em] ${
                 active ? 'text-black' : 'bg-black/25 text-white/40 hover:text-white/70'
               }`}
               style={active ? { background: EMBER } : undefined}

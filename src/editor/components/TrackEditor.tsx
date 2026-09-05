@@ -168,7 +168,7 @@ function EffectItem({
           aria-label={inst.enabled ? 'Disable effect' : 'Enable effect'}
         >
           <span
-            className="h-1.5 w-1.5 rounded-full transition-all group-active:scale-75"
+            className="h-1.5 w-1.5 rounded-full group-active:scale-75"
             style={inst.enabled
               ? { background: deviceAccent, boxShadow: `0 0 5px ${deviceAccent}` }
               : { background: 'var(--border-strong)' }}
@@ -522,7 +522,7 @@ export function TrackEditor() {
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`flex h-6 flex-1 min-w-0 items-center justify-center rounded-full px-2.5 text-[11px] transition-colors cursor-pointer ${
+              className={`flex h-6 flex-1 min-w-0 items-center justify-center rounded-full px-2.5 text-[11px] cursor-pointer ${
                 active
                   ? 'font-semibold'
                   : 'bg-transparent text-[var(--text-muted)] font-medium hover:bg-white/[0.05] hover:text-[var(--text-2)]'
@@ -967,7 +967,7 @@ export function TrackEditor() {
           return (
             <div
               onContextMenu={fx.canAdd ? (e) => { e.preventDefault(); setFxMenu({ x: e.clientX, y: e.clientY }) } : undefined}
-              className="min-h-full rounded transition-colors"
+              className="min-h-full rounded "
             >
               {fx.effects.map((inst, i) => {
                 const plugin = getEffect(inst.pluginId)
@@ -993,7 +993,7 @@ export function TrackEditor() {
                     const r = e.currentTarget.getBoundingClientRect()
                     setFxMenu({ x: r.left, y: r.bottom + 4 })
                   }}
-                  className="mt-1 flex h-[30px] w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[var(--border)] text-[11px] text-[var(--text-3)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] cursor-pointer"
+                  className="mt-1 flex h-[30px] w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[var(--border)] text-[11px] text-[var(--text-3)] hover:border-[var(--border-strong)] hover:text-[var(--text)] cursor-pointer"
                 >
                   <Plus size={11} />
                   Add effect

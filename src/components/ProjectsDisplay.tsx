@@ -104,7 +104,7 @@ function ProjectCard({
         event.stopPropagation()
         onOpenMenu(event.clientX, event.clientY)
       }}
-      className="cursor-pointer overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)] transition-[transform,border-color] duration-75 ease-out group-hover:scale-[1.012] group-hover:border-[var(--border)] active:scale-[0.99]"
+      className="cursor-pointer overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)] group-hover:scale-[1.012] group-hover:border-[var(--border)] active:scale-[0.99]"
     >
       <div className="relative h-[120px] overflow-hidden bg-[var(--bg-panel-raised)]">
         <div className="absolute inset-0">
@@ -281,7 +281,7 @@ export default function ProjectsDisplay({
               onClick={() => track('nav_clicked', { from: 'projects', to: 'discord' })}
               aria-label="Join the Cabin Visuals Discord"
               title="Join the Cabin Visuals Discord"
-              className="flex items-center text-[var(--text-3)] transition-colors hover:text-[var(--text)]"
+              className="flex items-center text-[var(--text-3)] hover:text-[var(--text)]"
             >
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="h-4 w-4">
                 <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.076.076 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z" />
@@ -289,7 +289,7 @@ export default function ProjectsDisplay({
             </a>
             <Link
               href="/pricing"
-              className="text-[13px] text-[var(--text-3)] transition-colors hover:text-[var(--text)]"
+              className="text-[13px] text-[var(--text-3)] hover:text-[var(--text)]"
             >
               Pricing
             </Link>
@@ -384,7 +384,7 @@ export default function ProjectsDisplay({
             <button
               onClick={openCreate}
               disabled={createBlocked}
-              className="flex h-9 cursor-pointer items-center gap-2 rounded-[99px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-default disabled:opacity-40 disabled:hover:bg-[var(--accent)]"
+              className="flex h-9 cursor-pointer items-center gap-2 rounded-[99px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] disabled:cursor-default disabled:opacity-40 disabled:hover:bg-[var(--accent)]"
             >
               <Plus size={14} strokeWidth={2.5} />
               New project
@@ -446,11 +446,11 @@ export default function ProjectsDisplay({
           >
             <motion.button
               layout
-              whileHover={createBlocked ? undefined : { scale: 1.012, transition: { duration: 0.06 } }}
-              whileTap={createBlocked ? undefined : { scale: 0.99, transition: { duration: 0.06 } }}
+              whileHover={createBlocked ? undefined : { scale: 1.012, transition: { duration: 0 } }}
+              whileTap={createBlocked ? undefined : { scale: 0.99, transition: { duration: 0 } }}
               onClick={openCreate}
               disabled={createBlocked}
-              className="flex min-h-[168px] w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--border)] bg-transparent text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-3)] disabled:cursor-default disabled:opacity-40 disabled:hover:border-[var(--border)] disabled:hover:text-[var(--text-muted)]"
+              className="flex min-h-[168px] w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--border)] bg-transparent text-[var(--text-muted)] hover:border-[var(--border-strong)] hover:text-[var(--text-3)] disabled:cursor-default disabled:opacity-40 disabled:hover:border-[var(--border)] disabled:hover:text-[var(--text-muted)]"
             >
               <Plus size={18} />
               <span className="text-xs">Empty or from a template</span>
@@ -527,7 +527,7 @@ function CreateProjectModal({
               <button
                 onClick={onClose}
                 aria-label="Close"
-                className="cursor-pointer rounded p-1 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
+                className="cursor-pointer rounded p-1 text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
               >
                 <X size={18} />
               </button>
@@ -535,9 +535,9 @@ function CreateProjectModal({
             <div className="grid gap-4 sm:grid-cols-2">
               <button
                 onClick={onOpenName}
-                className="group flex cursor-pointer flex-col items-start gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-app)] p-5 text-left transition-colors hover:border-[rgba(53,167,230,0.6)]"
+                className="group flex cursor-pointer flex-col items-start gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-app)] p-5 text-left hover:border-[rgba(53,167,230,0.6)]"
               >
-                <FilePlus size={24} className="text-[var(--text-muted)] transition-colors group-hover:text-[var(--accent)]" />
+                <FilePlus size={24} className="text-[var(--text-muted)] group-hover:text-[var(--accent)]" />
                 <div>
                   <h3 className="text-[13px] font-semibold text-[var(--text)]">Empty project</h3>
                   <p className="mt-1 text-xs text-[var(--text-muted)]">Start from a blank canvas.</p>
@@ -545,9 +545,9 @@ function CreateProjectModal({
               </button>
               <button
                 onClick={onOpenCatalog}
-                className="group flex cursor-pointer flex-col items-start gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-app)] p-5 text-left transition-colors hover:border-[rgba(53,167,230,0.6)]"
+                className="group flex cursor-pointer flex-col items-start gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-app)] p-5 text-left hover:border-[rgba(53,167,230,0.6)]"
               >
-                <LayoutTemplate size={24} className="text-[var(--text-muted)] transition-colors group-hover:text-[var(--accent)]" />
+                <LayoutTemplate size={24} className="text-[var(--text-muted)] group-hover:text-[var(--accent)]" />
                 <div>
                   <h3 className="text-[13px] font-semibold text-[var(--text)]">Start from a template</h3>
                   <p className="mt-1 text-xs text-[var(--text-muted)]">Pick a ready-made scene to customize.</p>
@@ -561,7 +561,7 @@ function CreateProjectModal({
               <button
                 onClick={onBack}
                 aria-label="Back"
-                className="cursor-pointer rounded p-1 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
+                className="cursor-pointer rounded p-1 text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
               >
                 <ChevronLeft size={18} />
               </button>
@@ -577,19 +577,19 @@ function CreateProjectModal({
                 if (e.key === 'Enter') { e.preventDefault(); submitName() }
               }}
               placeholder="Untitled Project"
-              className="block h-[38px] w-full rounded-[5px] border border-[var(--border)] bg-[var(--bg-app)] px-3 text-[13px] text-[var(--text)] outline-none transition-colors placeholder:text-[var(--text-muted)] focus:border-[var(--accent)]"
+              className="block h-[38px] w-full rounded-[5px] border border-[var(--border)] bg-[var(--bg-app)] px-3 text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--accent)]"
             />
             <div className="mt-5 flex justify-end gap-2.5">
               <button
                 onClick={onBack}
-                className="flex h-[36px] cursor-pointer items-center rounded-[5px] border border-[var(--border)] px-4 text-[13px] font-medium text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
+                className="flex h-[36px] cursor-pointer items-center rounded-[5px] border border-[var(--border)] px-4 text-[13px] font-medium text-[var(--text-2)] hover:border-[var(--border-strong)] hover:text-[var(--text)]"
               >
                 Back
               </button>
               <button
                 onClick={submitName}
                 disabled={!name.trim()}
-                className="flex h-[36px] cursor-pointer items-center rounded-[99px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-default disabled:opacity-50"
+                className="flex h-[36px] cursor-pointer items-center rounded-[99px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] disabled:cursor-default disabled:opacity-50"
               >
                 Create project
               </button>
@@ -602,7 +602,7 @@ function CreateProjectModal({
                 <button
                   onClick={onBack}
                   aria-label="Back"
-                  className="cursor-pointer rounded p-1 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
+                  className="cursor-pointer rounded p-1 text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
                 >
                   <ChevronLeft size={18} />
                 </button>
@@ -613,7 +613,7 @@ function CreateProjectModal({
               <button
                 onClick={onClose}
                 aria-label="Close"
-                className="cursor-pointer rounded p-1 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
+                className="cursor-pointer rounded p-1 text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
               >
                 <X size={18} />
               </button>
@@ -623,7 +623,7 @@ function CreateProjectModal({
                 <button
                   key={tpl.id}
                   onClick={() => onPickTemplate(tpl)}
-                  className="group cursor-pointer overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-app)] text-left transition-colors hover:border-[rgba(53,167,230,0.6)]"
+                  className="group cursor-pointer overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-app)] text-left hover:border-[rgba(53,167,230,0.6)]"
                   title={`Create a project from “${tpl.name}”`}
                 >
                   {/* No coloured backdrop: the video/canvas always covers the
@@ -701,7 +701,7 @@ function ProjectContextMenu({
           role="menuitem"
           disabled={createBlocked}
           onClick={onDuplicate}
-          className="flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[13px] text-[var(--text-2)] outline-none transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text)] disabled:cursor-default disabled:opacity-50"
+          className="flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[13px] text-[var(--text-2)] outline-none hover:bg-[var(--bg-elevated)] hover:text-[var(--text)] disabled:cursor-default disabled:opacity-50"
         >
           <Copy size={13} />
           {createBlocked ? 'Copy project (limit reached)' : 'Copy project'}
@@ -710,7 +710,7 @@ function ProjectContextMenu({
           type="button"
           role="menuitem"
           onClick={onDelete}
-          className="flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[13px] text-[var(--text-2)] outline-none transition-colors hover:bg-[var(--bg-elevated)] hover:text-[#d68383]"
+          className="flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[13px] text-[var(--text-2)] outline-none hover:bg-[var(--bg-elevated)] hover:text-[#d68383]"
         >
           <Trash2 size={13} />
           Delete project
@@ -768,13 +768,13 @@ function ConfirmDeletePopover({
         <div className="mt-2.5 flex justify-end gap-2">
           <button
             onClick={onCancel}
-            className="flex h-7 cursor-pointer items-center rounded-[5px] border border-[var(--border)] px-2.5 text-[12px] font-medium text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
+            className="flex h-7 cursor-pointer items-center rounded-[5px] border border-[var(--border)] px-2.5 text-[12px] font-medium text-[var(--text-2)] hover:border-[var(--border-strong)] hover:text-[var(--text)]"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
-            className="flex h-7 cursor-pointer items-center rounded-[5px] bg-[#d0433f] px-2.5 text-[12px] font-bold text-white transition-colors hover:bg-[#e04b47]"
+            className="flex h-7 cursor-pointer items-center rounded-[5px] bg-[#d0433f] px-2.5 text-[12px] font-bold text-white hover:bg-[#e04b47]"
           >
             Delete
           </button>

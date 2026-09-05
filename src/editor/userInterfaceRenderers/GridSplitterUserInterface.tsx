@@ -315,7 +315,7 @@ function ModeControl({ b, axis }: { b: SelectBinding; axis: string }) {
             aria-checked={active}
             title={`${axis}: ${option.label}`}
             onClick={() => b.set(option.value)}
-            className="flex items-center justify-center py-1 transition-colors"
+            className="flex items-center justify-center py-1 "
             style={active
               ? { background: withAlpha(ACCENT, 0.16), color: ACCENT }
               : { background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.35)' }}
@@ -416,7 +416,7 @@ function IconRadioRow({ b, glyph }: { b: SelectBinding; glyph: (value: number) =
             aria-checked={active}
             title={`${b.def.label}: ${option.label}`}
             onClick={() => b.set(option.value)}
-            className="flex h-6 w-6 items-center justify-center transition-colors"
+            className="flex h-6 w-6 items-center justify-center "
             style={active
               ? { background: withAlpha(ACCENT, 0.16), color: ACCENT }
               : { background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.35)' }}

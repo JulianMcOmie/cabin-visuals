@@ -54,7 +54,7 @@ function ToolbarSelect({ value, onChange, title, children }: {
         value={value}
         onChange={onChange}
         title={title}
-        className="appearance-none h-5 pl-1.5 pr-[18px] rounded bg-zinc-800/70 hover:bg-zinc-700/70 text-[10px] text-zinc-300 outline-none cursor-pointer transition-colors"
+        className="appearance-none h-5 pl-1.5 pr-[18px] rounded bg-zinc-800/70 hover:bg-zinc-700/70 text-[10px] text-zinc-300 outline-none cursor-pointer "
       >
         {children}
       </select>
@@ -655,7 +655,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
           onClick={onClose}
           title="Close (Esc)"
           data-midi-close=""
-          className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
+          className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 "
         >
           <X size={12} />
         </button>
@@ -663,7 +663,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
         <button
           onClick={() => setSnapEnabled(!snapEnabled)}
           title={snapEnabled ? 'Snap to grid (on)' : 'Snap to grid (off)'}
-          className={`px-2 h-5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
+          className={`px-2 h-5 rounded text-[10px] font-medium cursor-pointer ${
             snapEnabled ? '' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
           }`}
           style={snapEnabled ? { background: accent.pillBg, color: accent.pillText } : undefined}
@@ -677,7 +677,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
         <button
           onClick={() => setMidiVimEnabled(!midiVimEnabled)}
           title={midiVimEnabled ? 'midi vim is on — Esc leaves it, ? lists the keys' : 'midi vim: type notes from the keyboard (double-tap Shift)'}
-          className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded font-mono text-[11px] leading-none transition-colors cursor-pointer ${
+          className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded font-mono text-[11px] leading-none cursor-pointer ${
             midiVimEnabled ? '' : 'text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300'
           }`}
           style={midiVimEnabled ? { background: VIM_ACCENT, color: '#0b0d12' } : undefined}
@@ -712,7 +712,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
                     key={option.value}
                     onClick={() => setAutomationMode(trackId, option.value)}
                     title={option.title}
-                    className={`flex items-center gap-1 px-1.5 h-[18px] rounded-[3px] text-[10px] font-medium transition-colors cursor-pointer ${
+                    className={`flex items-center gap-1 px-1.5 h-[18px] rounded-[3px] text-[10px] font-medium cursor-pointer ${
                       active ? '' : 'text-zinc-500 hover:text-zinc-300'
                     }`}
                     style={active ? { background: accent.pillBg, color: accent.pillText } : undefined}
@@ -749,7 +749,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
                 <button
                   onClick={() => setTrackNoise(trackId, { ...noise, seed: Math.floor(Math.random() * 1e9) })}
                   title="Re-roll the noise (new random take; each take replays identically)"
-                  className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+                  className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 cursor-pointer"
                 >
                   <Dices size={11} />
                 </button>

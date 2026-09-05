@@ -155,7 +155,7 @@ function HueRing({ value, onChange }: { value: string; onChange: (hex: string) =
         aria-expanded={open}
         title={`Color ${value}`}
         onClick={() => setOpen((o) => !o)}
-        className="absolute top-[7px] left-1/2 h-[22px] w-[22px] -translate-x-1/2 cursor-pointer rounded-full border border-white/15 transition-transform active:scale-95"
+        className="absolute top-[7px] left-1/2 h-[22px] w-[22px] -translate-x-1/2 cursor-pointer rounded-full border border-white/15 active:scale-95"
         style={{ background: value }}
       />
       <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-white/40">COLOR</span>
@@ -221,7 +221,7 @@ export const WireframeUserInterfaceRenderer: UserInterfaceRendererDefinition = (
             title={def.name}
             aria-pressed={index === selected}
             onClick={() => shape?.set(index)}
-            className={`snap-start rounded-[7px] border p-[3px] text-center transition-colors ${
+            className={`snap-start rounded-[7px] border p-[3px] text-center ${
               index === selected ? 'bg-white/[0.05]' : 'border-white/[0.07] bg-white/[0.015] hover:border-white/30'
             }`}
             style={index === selected ? { borderColor: accent } : undefined}

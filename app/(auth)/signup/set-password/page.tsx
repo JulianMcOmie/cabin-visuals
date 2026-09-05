@@ -125,7 +125,7 @@ function SetPasswordFormInternal() {
         </p>
         <Link
           href="/editor"
-          className="flex h-[38px] w-full cursor-pointer items-center justify-center rounded-[5px] bg-[var(--accent)] text-[13px] font-bold text-[var(--on-accent)] transition-colors duration-100 hover:bg-[var(--accent-hover)] hover:text-[var(--on-accent)]"
+          className="flex h-[38px] w-full cursor-pointer items-center justify-center rounded-[5px] bg-[var(--accent)] text-[13px] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] hover:text-[var(--on-accent)]"
         >
           Back to the editor
         </Link>

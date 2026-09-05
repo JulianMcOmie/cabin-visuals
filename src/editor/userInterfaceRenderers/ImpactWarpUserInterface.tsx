@@ -343,7 +343,7 @@ function StyleStrip({ bound }: { bound: UserInterfaceParameter }) {
             aria-pressed={active}
             title={STYLE_HINTS[option.value] ?? option.label}
             onClick={() => bound.setValue(option.value)}
-            className={`flex flex-col items-center gap-1 py-2 transition-colors ${active ? '' : 'hover:bg-white/[0.04]'}`}
+            className={`flex flex-col items-center gap-1 py-2 ${active ? '' : 'hover:bg-white/[0.04]'}`}
             style={active ? { background: withAlpha(ACCENT, 0.16), boxShadow: `inset 0 -2px 0 0 ${ACCENT}` } : undefined}
           >
             <svg

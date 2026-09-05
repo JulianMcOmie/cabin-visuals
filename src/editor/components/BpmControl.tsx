@@ -130,7 +130,7 @@ export function BpmControl() {
     // whole tempo region reads as one control, not just the numerals.
     <div
       ref={groupRef}
-      className="group flex items-center gap-1 px-1 transition-colors"
+      className="group flex items-center gap-1 px-1 "
     >
       <div className="flex items-baseline gap-1.5">
         {editing ? (
@@ -156,7 +156,7 @@ export function BpmControl() {
             onKeyDown={onKeyDown}
             title="Drag or scroll to change tempo - double-click to type"
             style={chWidth(String(bpm).length)}
-            className={`${LCD_VALUE} cursor-ns-resize border-0 bg-transparent p-0 text-left text-[var(--text-3)] outline-none transition-colors hover:text-[var(--text)] focus-visible:outline-1 focus-visible:outline-[var(--accent)]`}
+            className={`${LCD_VALUE} cursor-ns-resize border-0 bg-transparent p-0 text-left text-[var(--text-3)] outline-none hover:text-[var(--text)] focus-visible:outline-1 focus-visible:outline-[var(--accent)]`}
           >
             {bpm}
           </button>
@@ -165,7 +165,7 @@ export function BpmControl() {
       </div>
       {/* Steppers surface on hover / keyboard focus - they advertise the value
           is editable; ±1 clicks are the precision path short of typing. */}
-      <div className="flex flex-col opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+      <div className="flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
         <button
           type="button"
           onClick={() => nudge(1)}

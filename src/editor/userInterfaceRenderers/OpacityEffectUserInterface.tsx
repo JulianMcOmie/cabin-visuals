@@ -144,7 +144,7 @@ export const OpacityEffectUserInterfaceRenderer: UserInterfaceRendererDefinition
                   aria-label={`Set opacity ${Math.round(stop * 100)}%`}
                   aria-pressed={active}
                   onClick={() => opacity.setValue(snap(d.min + stop * (d.max - d.min), d))}
-                  className={`cursor-pointer rounded-[3px] border py-1 font-mono text-[8px] tabular-nums transition-all active:scale-95 ${active
+                  className={`cursor-pointer rounded-[3px] border py-1 font-mono text-[8px] tabular-nums active:scale-95 ${active
                     ? 'border-[var(--accent-muted)] bg-[var(--accent-muted)]/20 text-[var(--text-2)]'
                     : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-3)]'}`}
                 >

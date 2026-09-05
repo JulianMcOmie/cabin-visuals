@@ -254,7 +254,7 @@ export const StarsUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ pa
                       aria-label="Ground color"
                       value={groundColor.value}
                       onChange={(e) => groundColor.setValue(e.target.value)}
-                      className="h-5 w-8 flex-shrink-0 cursor-pointer rounded border border-[var(--border)] bg-transparent transition-transform active:scale-95"
+                      className="h-5 w-8 flex-shrink-0 cursor-pointer rounded border border-[var(--border)] bg-transparent active:scale-95"
                     />
                   </div>
                 </div>

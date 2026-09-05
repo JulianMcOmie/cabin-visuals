@@ -568,7 +568,7 @@ function CyclePresetRow({ cycle, accent, onCycle }: {
             aria-label={preset.label}
             title={preset.title}
             onClick={() => onCycle({ ...cycle, ...preset.shape })}
-            className={`h-7 min-w-0 flex-1 cursor-pointer rounded-[5px] px-[3px] transition-colors ${
+            className={`h-7 min-w-0 flex-1 cursor-pointer rounded-[5px] px-[3px] ${
               active ? '' : 'hover:bg-white/[0.04]'
             }`}
             style={active ? { background: withAlpha(accent, 0.2) } : undefined}
@@ -625,7 +625,7 @@ function ShapeSegmented({ burst, accent, onBurst }: {
               bezier: option.value === 'bezier' ? burst.bezier ?? { ...DEFAULT_BURST_BEZIER } : burst.bezier,
               spring: option.value === 'spring' ? burst.spring ?? { ...DEFAULT_BURST_SPRING } : burst.spring,
             })}
-            className={`h-[22px] flex-1 cursor-pointer rounded-[5px] text-[9px] font-semibold tracking-[0.1em] transition-colors ${
+            className={`h-[22px] flex-1 cursor-pointer rounded-[5px] text-[9px] font-semibold tracking-[0.1em] ${
               active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
             }`}
             style={active
@@ -705,7 +705,7 @@ function ForceSegmented<T extends string>({ label, value, options, accent, onCha
               aria-checked={active}
               title={option.title}
               onClick={() => onChange(option.value)}
-              className={`h-[22px] min-w-0 flex-1 cursor-pointer truncate rounded-[5px] px-1 text-[8.5px] font-semibold tracking-[0.06em] transition-colors ${
+              className={`h-[22px] min-w-0 flex-1 cursor-pointer truncate rounded-[5px] px-1 text-[8.5px] font-semibold tracking-[0.06em] ${
                 active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
               }`}
               style={active ? { background: withAlpha(accent, 0.22), color: towardWhite(accent, 0.6) } : undefined}
@@ -729,7 +729,7 @@ function MoreRow({ label, children }: { label: string; children: JSX.Element }) 
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="flex cursor-pointer items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 transition-colors hover:text-white/60"
+        className="flex cursor-pointer items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 hover:text-white/60"
       >
         {open ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
         {label}
@@ -789,7 +789,7 @@ function ModeSegmented({ mode, accent, onMode }: {
             aria-selected={active}
             title={option.title}
             onClick={() => onMode(option.value)}
-            className={`h-[22px] flex-1 cursor-pointer rounded-[5px] text-[9px] font-semibold tracking-[0.1em] transition-colors ${
+            className={`h-[22px] flex-1 cursor-pointer rounded-[5px] text-[9px] font-semibold tracking-[0.1em] ${
               active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
             }`}
             style={active
@@ -832,7 +832,7 @@ function CurveSegmented({ interpolation, tension, accent, onInterpolation }: {
               aria-label={option.label}
               title={option.label}
               onClick={() => onInterpolation(option.value)}
-              className={`h-7 min-w-0 flex-1 cursor-pointer rounded-[5px] px-[3px] transition-colors ${
+              className={`h-7 min-w-0 flex-1 cursor-pointer rounded-[5px] px-[3px] ${
                 selected ? '' : 'hover:bg-white/[0.04]'
               }`}
               style={selected ? { background: withAlpha(accent, 0.2) } : undefined}
@@ -1024,7 +1024,7 @@ function RangeConsole({ bounds, range, accent, onRange }: {
           onClick={() => emit({ min: lo, max: hi, rows: range?.rows, integer: !integer, curve })}
           aria-pressed={integer}
           title="Count the rows in whole numbers, one per step from min to max"
-          className={`h-[18px] rounded-full px-2 font-mono text-[8px] font-semibold tracking-[0.1em] transition-colors cursor-pointer ${
+          className={`h-[18px] rounded-full px-2 font-mono text-[8px] font-semibold tracking-[0.1em] cursor-pointer ${
             integer ? '' : 'border border-white/10 text-white/40 hover:text-white/70'
           }`}
           style={integer ? { background: withAlpha(accent, 0.25), color: towardWhite(accent, 0.6) } : undefined}
@@ -1071,7 +1071,7 @@ function RangeConsole({ bounds, range, accent, onRange }: {
                 aria-disabled={integer}
                 title={integer ? 'Whole-number rows are evenly spread' : option.title}
                 onClick={() => emit({ min: lo, max: hi, rows: range?.rows, integer, curve: option.value })}
-                className={`h-[20px] cursor-pointer rounded-[5px] px-1.5 text-[8px] font-semibold tracking-[0.08em] transition-colors ${
+                className={`h-[20px] cursor-pointer rounded-[5px] px-1.5 text-[8px] font-semibold tracking-[0.08em] ${
                   active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
                 }`}
                 style={active ? { background: withAlpha(accent, 0.22), color: towardWhite(accent, 0.6) } : undefined}
@@ -1363,7 +1363,7 @@ export function AutomationUserInterface({
                   aria-pressed={invert}
                   title="Flip which bound the notes own: normally a note is the cycle's high over the floor; inverted it is the low under a constant ceiling"
                   data-testid="automation-cycle-invert"
-                  className={`mb-4 h-[22px] rounded-full px-2.5 font-mono text-[8px] font-semibold tracking-[0.1em] transition-colors cursor-pointer ${
+                  className={`mb-4 h-[22px] rounded-full px-2.5 font-mono text-[8px] font-semibold tracking-[0.1em] cursor-pointer ${
                     invert ? '' : 'border border-white/10 text-white/40 hover:text-white/70'
                   }`}
                   style={invert ? { background: withAlpha(accent, 0.25), color: towardWhite(accent, 0.6) } : undefined}
@@ -1375,7 +1375,7 @@ export function AutomationUserInterface({
                   aria-pressed={!!cycle.noteSpan}
                   title="End each cycle at its note's end instead of stretching to the next onset - duration matters, a lone note cycles, and the gap after a note lets go"
                   data-testid="automation-cycle-notespan"
-                  className={`mb-4 h-[22px] rounded-full px-2.5 font-mono text-[8px] font-semibold tracking-[0.1em] transition-colors cursor-pointer ${
+                  className={`mb-4 h-[22px] rounded-full px-2.5 font-mono text-[8px] font-semibold tracking-[0.1em] cursor-pointer ${
                     cycle.noteSpan ? '' : 'border border-white/10 text-white/40 hover:text-white/70'
                   }`}
                   style={cycle.noteSpan ? { background: withAlpha(accent, 0.25), color: towardWhite(accent, 0.6) } : undefined}
@@ -1426,7 +1426,7 @@ export function AutomationUserInterface({
               title="Re-roll the noise (a new random take; each take replays identically)"
               aria-label="Re-roll the noise seed"
               data-testid="automation-noise-reroll"
-              className="mb-4 flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-white/50 transition-colors hover:bg-white/[0.08] hover:text-white/80"
+              className="mb-4 flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-white/50 hover:bg-white/[0.08] hover:text-white/80"
             >
                 <Dices size={13} />
               </button>

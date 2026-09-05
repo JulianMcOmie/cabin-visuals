@@ -253,7 +253,7 @@ function MirrorsStepper({ b }: { b: NumBinding }) {
   const mirrors = clamp(Math.round(b.value), def.min, def.max)
   const commit = (raw: number) => b.set(clamp(Math.round(raw), def.min, def.max))
   const buttonClass =
-    'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-sm leading-none text-white/70 transition-colors hover:border-white/25 hover:text-white active:scale-95 disabled:pointer-events-none disabled:opacity-35'
+    'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-sm leading-none text-white/70 hover:border-white/25 hover:text-white active:scale-95 disabled:pointer-events-none disabled:opacity-35'
 
   return (
     <div className="flex items-stretch gap-1">
@@ -321,7 +321,7 @@ function PlaneSelector({ b }: { b: SelectBinding }) {
             aria-checked={active}
             title={`${b.def.label}: ${option.label}`}
             onClick={() => b.set(option.value)}
-            className={`flex cursor-pointer flex-col items-center gap-0.5 rounded-md border py-1.5 transition-colors ${
+            className={`flex cursor-pointer flex-col items-center gap-0.5 rounded-md border py-1.5 ${
               active ? '' : 'border-white/[0.07] bg-white/[0.025] text-white/30 hover:bg-white/[0.06] hover:text-white/65'
             }`}
             style={active ? { borderColor: withAlpha(ACCENT, 0.4), background: withAlpha(ACCENT, 0.15), color: towardWhite(ACCENT, 0.45) } : undefined}
@@ -359,7 +359,7 @@ function MuteMap({ count, mirroredSlot, hoveredSlot, onHoverSlot }: {
               title={`Copy ${slot + 1}${mirroredSlot(slot) ? ' (mirrored)' : ''} · mute with pitch ${pitch} (${noteName(pitch)})`}
               onPointerEnter={() => onHoverSlot(slot)}
               onPointerLeave={() => onHoverSlot(null)}
-              className="cursor-default rounded-[3px] border py-[3px] text-center font-mono text-[8px] leading-none tabular-nums transition-colors"
+              className="cursor-default rounded-[3px] border py-[3px] text-center font-mono text-[8px] leading-none tabular-nums "
               style={hovered
                 ? { borderColor: ACCENT, background: withAlpha(ACCENT, 0.14), color: towardWhite(ACCENT, 0.3) }
                 : slot === 0

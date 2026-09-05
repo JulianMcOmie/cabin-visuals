@@ -313,7 +313,7 @@ function LoopSelector({ b }: { b: SelectBinding }) {
                 ? 'Belt · each copy loops at the formation\'s own spacing, so the arrangement never breaks'
                 : 'Group · the whole formation travels out and back together, dissolving through the turn'}
               onClick={() => b.set(option.value)}
-              className={`px-1 pb-0.5 pt-1 transition-colors ${active ? '' : 'bg-black/25 hover:bg-white/5'}`}
+              className={`px-1 pb-0.5 pt-1 ${active ? '' : 'bg-black/25 hover:bg-white/5'}`}
               style={active ? { background: CURRENT } : undefined}
             >
               <svg

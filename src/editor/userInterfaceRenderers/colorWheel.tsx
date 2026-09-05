@@ -235,7 +235,7 @@ export function ColorWheelPill({ value, onChange, label, ariaLabel, title, halo,
         aria-expanded={open}
         title={title ?? `${ariaLabel} ${value}`}
         onClick={() => setOpen((o) => !o)}
-        className={`h-8 w-8 cursor-pointer rounded-full border border-white/15 transition-transform active:scale-95 ${dimmed ? 'opacity-45' : ''}`}
+        className={`h-8 w-8 cursor-pointer rounded-full border border-white/15 active:scale-95 ${dimmed ? 'opacity-45' : ''}`}
         style={{ background: value, boxShadow: halo }}
       />
       <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-white/40">{label}</span>

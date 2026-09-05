@@ -261,7 +261,7 @@ function ShapeSelector({ b }: { b: SelectBinding }) {
               aria-pressed={active}
               title={`${option.label} falloff`}
               onClick={() => b.set(option.value)}
-              className={`px-1 pb-0.5 pt-1 transition-colors ${active ? '' : 'bg-black/25 hover:bg-white/5'}`}
+              className={`px-1 pb-0.5 pt-1 ${active ? '' : 'bg-black/25 hover:bg-white/5'}`}
               style={active ? { background: accent } : undefined}
             >
               <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
@@ -299,7 +299,7 @@ function WordSelector({ b, label }: { b: SelectBinding; label: string }) {
               key={option.value}
               aria-pressed={active}
               onClick={() => b.set(option.value)}
-              className={`px-1.5 py-[3px] text-[8px] font-semibold tracking-[0.1em] transition-colors ${
+              className={`px-1.5 py-[3px] text-[8px] font-semibold tracking-[0.1em] ${
                 active ? 'text-black' : 'bg-black/25 text-white/45 hover:bg-white/5'
               }`}
               style={active ? { background: accent } : undefined}

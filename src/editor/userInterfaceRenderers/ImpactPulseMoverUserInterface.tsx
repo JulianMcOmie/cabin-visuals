@@ -313,7 +313,7 @@ function FalloffSegmented({ bound }: { bound: UserInterfaceParameter }) {
               aria-label={option.label}
               title={option.label}
               onClick={() => bound.setValue(option.value)}
-              className={`h-7 min-w-0 flex-1 cursor-pointer rounded-[5px] px-[3px] transition-colors ${
+              className={`h-7 min-w-0 flex-1 cursor-pointer rounded-[5px] px-[3px] ${
                 selected ? '' : 'hover:bg-white/[0.04]'
               }`}
               style={selected ? { background: withAlpha(STRIKE, 0.2) } : undefined}
@@ -421,7 +421,7 @@ export const ImpactPulseMoverUserInterfaceRenderer: UserInterfaceRendererDefinit
             <button
               aria-expanded={showMore}
               onClick={() => setShowMore((value) => !value)}
-              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 transition-colors hover:text-white/60"
+              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 hover:text-white/60"
             >
               {showMore ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
               MORE

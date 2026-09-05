@@ -98,7 +98,7 @@ function StagePad({ x, z, aimAtOrigin, panDegrees }: {
       }}
       onDoubleClick={() => { x.setValue(xDefinition.default); z.setValue(zDefinition.default) }}
       onKeyDown={onKeyDown}
-      className="relative h-[92px] cursor-crosshair touch-none select-none overflow-hidden rounded border border-[var(--border)] bg-[var(--bg-app)] outline-none transition-colors hover:border-[var(--border-strong)] focus-visible:border-[var(--accent)]"
+      className="relative h-[92px] cursor-crosshair touch-none select-none overflow-hidden rounded border border-[var(--border)] bg-[var(--bg-app)] outline-none hover:border-[var(--border-strong)] focus-visible:border-[var(--accent)]"
     >
       {/* Faint floor grid, quartered through the origin. */}
       {originX >= 0 && originX <= 100 && <span className="pointer-events-none absolute top-0 h-full w-px bg-[var(--border-subtle)]" style={{ left: `${originX}%` }} />}
@@ -186,7 +186,7 @@ function AxisCell({ bound, axis, suffix = '' }: {
       onPointerCancel={onPointerUp}
       onDoubleClick={() => bound.setValue(definition.default)}
       onKeyDown={onKeyDown}
-      className="flex min-w-0 cursor-ns-resize touch-none select-none flex-col items-center gap-0.5 rounded border border-[var(--border)] bg-[var(--bg-app)] py-1.5 outline-none transition-colors hover:border-[var(--border-strong)] focus-visible:border-[var(--accent)]"
+      className="flex min-w-0 cursor-ns-resize touch-none select-none flex-col items-center gap-0.5 rounded border border-[var(--border)] bg-[var(--bg-app)] py-1.5 outline-none hover:border-[var(--border-strong)] focus-visible:border-[var(--accent)]"
     >
       <span className="text-[8px] font-semibold tracking-[0.1em] text-[var(--text-muted)]">{axis}</span>
       <span className="font-mono text-[11px] tabular-nums text-[var(--text-2)]">
@@ -289,7 +289,7 @@ export const CameraControlUserInterfaceRenderer: UserInterfaceRendererDefinition
                   key={option.value}
                   onClick={() => lookMode.setValue(option.value)}
                   aria-pressed={active}
-                  className={`flex-1 rounded-[2px] py-1 text-[10px] transition-colors cursor-pointer ${active
+                  className={`flex-1 rounded-[2px] py-1 text-[10px] cursor-pointer ${active
                     ? 'bg-[var(--bg-elevated)] text-[var(--text)]'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-3)]'}`}
                 >

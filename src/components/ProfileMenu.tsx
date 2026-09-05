@@ -98,7 +98,7 @@ export function ProfileMenu({ size = 'md' }: { size?: 'sm' | 'md' }) {
       <DropdownMenuTrigger
         title="Account"
         disabled={isLoggingOut}
-        className={`flex ${box} cursor-pointer items-center justify-center rounded-[5px] border border-[var(--border)] bg-[var(--bg-elevated)] font-semibold text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] data-[state=open]:border-[var(--border-strong)] data-[state=open]:text-[var(--text)]`}
+        className={`flex ${box} cursor-pointer items-center justify-center rounded-[5px] border border-[var(--border)] bg-[var(--bg-elevated)] font-semibold text-[var(--text-2)] hover:border-[var(--border-strong)] hover:text-[var(--text)] data-[state=open]:border-[var(--border-strong)] data-[state=open]:text-[var(--text)]`}
       >
         {getInitials(profile, user.email)}
       </DropdownMenuTrigger>

@@ -289,7 +289,7 @@ function GeometryGrid({ b }: { b: StringBinding }) {
             aria-label={`Use ${option.label} geometry`}
             aria-pressed={active}
             onClick={() => b.set(option.id)}
-            className={`flex min-w-0 flex-col items-center gap-0.5 rounded-[4px] border py-1 transition-colors ${active
+            className={`flex min-w-0 flex-col items-center gap-0.5 rounded-[4px] border py-1 ${active
               ? ''
               : 'border-white/[0.07] bg-black/20 text-white/35 hover:bg-white/[0.05] hover:text-white/65'}`}
             style={active ? {
@@ -326,7 +326,7 @@ function SurfaceToggle({ b, label }: {
       onClick={() => b.set(on ? 0 : 1)}
       // h-full: the row is items-stretch, so the toggles track the kit
       // Segmented's height instead of pinning their own.
-      className={`h-full min-h-6 rounded-[4px] border text-[7px] font-semibold tracking-[0.12em] transition-colors ${on
+      className={`h-full min-h-6 rounded-[4px] border text-[7px] font-semibold tracking-[0.12em] ${on
         ? ''
         : 'border-white/[0.07] bg-black/25 text-white/40 hover:bg-white/[0.05] hover:text-white/65'}`}
       style={on ? {

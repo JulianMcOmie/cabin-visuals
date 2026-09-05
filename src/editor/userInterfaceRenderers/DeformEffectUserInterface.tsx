@@ -352,7 +352,7 @@ function DriveTabs({ value, options, onChange }: {
             role="tab"
             aria-selected={active}
             onClick={() => onChange(option.value)}
-            className={`border-b-2 px-2.5 py-[7px] text-[11px] transition-colors ${
+            className={`border-b-2 px-2.5 py-[7px] text-[11px] ${
               active ? 'text-white' : 'border-transparent text-white/40 hover:text-white/70'
             }`}
             style={active ? { borderBottomColor: DEFORM_ACCENT } : undefined}
@@ -463,7 +463,7 @@ export const DeformEffectUserInterfaceRenderer: UserInterfaceRendererDefinition 
                 aria-label={option.label}
                 title={option.hint}
                 onClick={() => operation.set(option.value)}
-                className={`flex flex-col items-center gap-[3px] rounded-[6px] border px-1 pb-[5px] pt-[6px] text-[9px] transition-colors ${
+                className={`flex flex-col items-center gap-[3px] rounded-[6px] border px-1 pb-[5px] pt-[6px] text-[9px] ${
                   selected ? 'text-white' : 'border-white/[0.07] text-white/45 hover:text-white/75'
                 }`}
                 style={selected

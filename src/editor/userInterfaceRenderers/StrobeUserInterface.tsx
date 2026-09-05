@@ -145,7 +145,7 @@ function RateChip({ row, active, onSelect }: {
       onClick={() => onSelect(row.pitch)}
       // Single line, division and pitch side by side: three stacked families of
       // two-line chips overran the panel and pushed the knobs out of view.
-      className={`flex min-w-0 flex-1 items-baseline justify-center gap-1 overflow-hidden rounded-sm border px-1 py-[2px] transition-colors ${
+      className={`flex min-w-0 flex-1 items-baseline justify-center gap-1 overflow-hidden rounded-sm border px-1 py-[2px] ${
         active
           ? 'border-transparent bg-white text-black'
           : 'border-white/10 bg-black/25 text-white/55 hover:bg-white/[0.06]'

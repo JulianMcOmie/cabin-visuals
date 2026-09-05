@@ -70,7 +70,7 @@ export function VimStatusLine({
       <button
         onClick={onExit}
         title="Leave midi vim (Esc)"
-        className="rounded px-1.5 font-semibold tracking-[0.08em] transition-opacity hover:opacity-80"
+        className="rounded px-1.5 font-semibold tracking-[0.08em] hover:opacity-80"
         style={{ background: accent, color: '#0b0d12' }}
       >
         {modeLabel}

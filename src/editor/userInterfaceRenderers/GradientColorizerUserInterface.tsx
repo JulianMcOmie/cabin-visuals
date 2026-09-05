@@ -68,7 +68,7 @@ function StopSwatch({ bound, label, align }: {
         aria-expanded={open}
         title={`Color ${label} · ${bound.value}`}
         onClick={() => setOpen((o) => !o)}
-        className="h-5 w-5 cursor-pointer rounded-full border-2 border-white/85 shadow-[0_1px_4px_rgba(0,0,0,.6)] transition-transform active:scale-95"
+        className="h-5 w-5 cursor-pointer rounded-full border-2 border-white/85 shadow-[0_1px_4px_rgba(0,0,0,.6)] active:scale-95"
         style={{ background: bound.value }}
       />
       {/* Below the swatch: the stops sit at the very top of the panel, so an
@@ -134,7 +134,7 @@ export const GradientColorizerUserInterfaceRenderer: UserInterfaceRendererDefini
               aria-pressed={flipped}
               title="Flip A ↔ B"
               onClick={() => flip.set(flipped ? 0 : 1)}
-              className="pointer-events-auto flex h-5 w-5 items-center justify-center rounded-full border border-white/25 bg-black/45 text-white/85 backdrop-blur-sm transition-transform hover:bg-black/60 active:scale-95"
+              className="pointer-events-auto flex h-5 w-5 items-center justify-center rounded-full border border-white/25 bg-black/45 text-white/85 backdrop-blur-sm hover:bg-black/60 active:scale-95"
             >
               <ArrowLeftRight size={10} />
             </button>

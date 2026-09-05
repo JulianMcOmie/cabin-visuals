@@ -167,7 +167,7 @@ function Segmented({ options, value, accent, ariaLabel, onChange }: {
             aria-checked={active}
             title={option.title}
             onClick={() => onChange(option.value)}
-            className={`h-[22px] flex-1 cursor-pointer rounded-[5px] px-2 text-[9px] font-semibold tracking-[0.1em] transition-colors ${
+            className={`h-[22px] flex-1 cursor-pointer rounded-[5px] px-2 text-[9px] font-semibold tracking-[0.1em] ${
               active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
             }`}
             style={active
@@ -192,7 +192,7 @@ function ZoneStepper({ bound, accent }: { bound: UserInterfaceParameter; accent:
       aria-label={direction === 1 ? 'More zones' : 'Fewer zones'}
       onClick={() => bound.setValue(clamp(n + direction, definition.min, definition.max))}
       disabled={direction === -1 ? n <= definition.min : n >= definition.max}
-      className="h-[22px] w-6 cursor-pointer rounded-[5px] font-mono text-[11px] leading-none text-white/50 transition-colors hover:bg-white/[0.04] hover:text-white/80 disabled:cursor-default disabled:opacity-30"
+      className="h-[22px] w-6 cursor-pointer rounded-[5px] font-mono text-[11px] leading-none text-white/50 hover:bg-white/[0.04] hover:text-white/80 disabled:cursor-default disabled:opacity-30"
     >
       {glyph}
     </button>

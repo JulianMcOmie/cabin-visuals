@@ -86,7 +86,7 @@ function SchemeChips({ b }: { b: SelectBinding }) {
             aria-pressed={active}
             aria-label={`${b.def.label}: ${option.label}`}
             onClick={() => b.set(option.value)}
-            className={`overflow-hidden rounded border transition-colors cursor-pointer ${
+            className={`overflow-hidden rounded border cursor-pointer ${
               active ? '' : 'border-white/[0.07] hover:border-white/20'
             }`}
             style={active ? { borderColor: withAlpha(accent, 0.7) } : undefined}
@@ -134,7 +134,7 @@ function CellStrip({ b }: { b: NumBinding | null }) {
               aria-label={`${def.label} ${cellValue}`}
               aria-pressed={lit}
               onClick={() => set(cellValue === current ? Math.round(def.min) : cellValue)}
-              className={`h-full flex-1 rounded-[1px] transition-colors cursor-pointer ${lit ? '' : 'bg-white/[0.08] hover:bg-white/[0.16]'}`}
+              className={`h-full flex-1 rounded-[1px] cursor-pointer ${lit ? '' : 'bg-white/[0.08] hover:bg-white/[0.16]'}`}
               style={lit ? { background: withAlpha(accent, 0.75) } : undefined}
             />
           )

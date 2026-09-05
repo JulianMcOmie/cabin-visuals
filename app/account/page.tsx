@@ -36,8 +36,8 @@ export default function AccountPage() {
           <span className="translate-y-[5px] text-[15px] font-semibold text-[var(--text)]">Cabin Visuals</span>
         </Link>
         <nav className="flex items-center gap-5 text-[13px]">
-          <Link href="/editor" className="text-[var(--text-3)] hover:text-[var(--text)] transition-colors cursor-pointer">Editor</Link>
-          <Link href="/projects" className="text-[var(--text-3)] hover:text-[var(--text)] transition-colors cursor-pointer">Projects</Link>
+          <Link href="/editor" className="text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer">Editor</Link>
+          <Link href="/projects" className="text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer">Projects</Link>
           <ProfileMenu />
         </nav>
       </header>
@@ -55,7 +55,7 @@ export default function AccountPage() {
             <Link
               href={isAnonymous ? '/signup' : '/login'}
               onClick={() => track('nav_clicked', { from: 'account', to: isAnonymous ? 'signup' : 'login' })}
-              className="mt-5 inline-flex h-[38px] items-center rounded-[5px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] transition-colors cursor-pointer"
+              className="mt-5 inline-flex h-[38px] items-center rounded-[5px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] cursor-pointer"
             >
               {isAnonymous ? 'Create an account' : 'Sign in'}
             </Link>
@@ -86,7 +86,7 @@ export default function AccountPage() {
                   <button
                     onClick={manageBilling}
                     disabled={opening}
-                    className="inline-flex h-[34px] shrink-0 items-center gap-2 rounded-[5px] border border-[var(--border)] px-3.5 text-[12px] font-semibold text-[var(--text-2)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)] transition-colors cursor-pointer disabled:opacity-60"
+                    className="inline-flex h-[34px] shrink-0 items-center gap-2 rounded-[5px] border border-[var(--border)] px-3.5 text-[12px] font-semibold text-[var(--text-2)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)] cursor-pointer disabled:opacity-60"
                   >
                     {opening && <Loader2 size={13} className="animate-spin" />}
                     {opening ? 'Opening portal…' : 'Manage subscription'}
@@ -94,7 +94,7 @@ export default function AccountPage() {
                 ) : (
                   <Link
                     href="/pricing"
-                    className="inline-flex h-[34px] shrink-0 items-center rounded-[5px] bg-[var(--accent)] px-3.5 text-[12px] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] transition-colors cursor-pointer"
+                    className="inline-flex h-[34px] shrink-0 items-center rounded-[5px] bg-[var(--accent)] px-3.5 text-[12px] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] cursor-pointer"
                   >
                     Upgrade to Pro
                   </Link>

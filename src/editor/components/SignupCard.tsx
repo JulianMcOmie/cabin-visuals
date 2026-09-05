@@ -73,9 +73,9 @@ export function SignupCard({ page }: { page: string }) {
       <form action={initiateSignup} onSubmit={() => track('signup_started', { page })} className="flex flex-col gap-[14px]">
         <div>
           <label htmlFor={emailId} className="mb-[6px] block font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">Email</label>
-          <input id={emailId} name="email" type="email" required placeholder="you@example.com" className="block h-[40px] w-full rounded-[8px] border border-[var(--border)] bg-[var(--bg-app)] px-3 text-[13px] text-[var(--text)] outline-none transition-colors duration-100 placeholder:text-[var(--text-muted)] focus:border-[var(--accent)]" />
+          <input id={emailId} name="email" type="email" required placeholder="you@example.com" className="block h-[40px] w-full rounded-[8px] border border-[var(--border)] bg-[var(--bg-app)] px-3 text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--accent)]" />
         </div>
-        <button type="submit" className="mt-1 h-[42px] w-full cursor-pointer rounded-[99px] bg-[var(--accent)] text-[14px] font-bold text-[var(--on-accent)] transition-colors duration-100 hover:bg-[var(--accent-hover)]">
+        <button type="submit" className="mt-1 h-[42px] w-full cursor-pointer rounded-[99px] bg-[var(--accent)] text-[14px] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)]">
           Continue
         </button>
       </form>
@@ -97,7 +97,7 @@ export function SignupCard({ page }: { page: string }) {
         <Link
           href="/login"
           onClick={() => track('nav_clicked', { from: page, to: 'login' })}
-          className="cursor-pointer text-[var(--accent)] transition-colors duration-100 hover:text-[var(--accent-hover)]"
+          className="cursor-pointer text-[var(--accent)] hover:text-[var(--accent-hover)]"
         >
           Log in
         </Link>

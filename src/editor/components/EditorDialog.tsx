@@ -175,7 +175,7 @@ export function EditorDialog({
           <button
             onClick={() => onClose?.()}
             aria-label={closeLabel}
-            className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-[8px] text-[var(--text-3)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] hover:text-[var(--text)] cursor-pointer"
+            className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-[8px] text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] hover:text-[var(--text)] cursor-pointer"
           >
             <X size={14} />
           </button>

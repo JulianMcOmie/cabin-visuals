@@ -115,7 +115,7 @@ export default function StartPage() {
                   onClick={() => void chooseStyle(style)}
                   disabled={!!chosen}
                   aria-busy={picked}
-                  className={`group overflow-hidden rounded-lg border bg-[var(--bg-app)] text-left transition-all duration-150 ${
+                  className={`group overflow-hidden rounded-lg border bg-[var(--bg-app)] text-left ${
                     picked
                       ? 'scale-[1.03] border-[var(--accent)] ring-2 ring-[var(--accent)]'
                       : chosen
@@ -155,7 +155,7 @@ export default function StartPage() {
                 title={tpl.description}
                 // Same picked/dimmed treatment as the lyric style picker, so
                 // the choice stays legible for the beat before the next screen.
-                className={`group overflow-hidden rounded-lg border bg-[var(--bg-app)] text-left transition-all duration-150 ${
+                className={`group overflow-hidden rounded-lg border bg-[var(--bg-app)] text-left ${
                   picked
                     ? 'scale-[1.03] cursor-default border-[var(--accent)] ring-2 ring-[var(--accent)]'
                     : chosen
@@ -182,7 +182,7 @@ export default function StartPage() {
         <button
           onClick={() => void startEmpty()}
           disabled={!!chosen}
-          className="mt-8 inline-flex cursor-pointer items-center gap-1.5 text-[13px] text-[var(--text-3)] transition-colors hover:text-[var(--text)] disabled:cursor-default disabled:opacity-40"
+          className="mt-8 inline-flex cursor-pointer items-center gap-1.5 text-[13px] text-[var(--text-3)] hover:text-[var(--text)] disabled:cursor-default disabled:opacity-40"
         >
           Create an empty project <ArrowRight size={14} />
         </button>

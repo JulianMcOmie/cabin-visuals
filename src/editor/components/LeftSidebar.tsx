@@ -662,7 +662,9 @@ function ItemGrid({ items, onItemPointerDown, onItemDoubleClick }: { items: Inst
                   {item.icon}
                 </span>
               )}
-            <div className="pointer-events-none absolute inset-0 flex items-end bg-gradient-to-t from-black/90 via-black/35 to-black/5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+            {/* No transition on purpose: library hover feedback is instant -
+                a fade here reads as input lag when sweeping the list. */}
+            <div className="pointer-events-none absolute inset-0 flex items-end bg-gradient-to-t from-black/90 via-black/35 to-black/5 opacity-0 group-hover:opacity-100">
               <span
                 className="min-w-0 truncate px-2 pb-1.5 text-xs font-medium text-white"
                 style={{ textShadow: '0 1px 3px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.75)' }}
@@ -706,7 +708,7 @@ const FolderBrowser = memo(function FolderBrowser({ folders, rootItems = [], onI
           type="button"
           onClick={() => setPath(path.slice(0, -1))}
           aria-label={`Back to ${path[path.length - 2]?.title ?? 'the library'}`}
-          className="sticky top-0 z-20 flex h-[30px] w-full flex-shrink-0 cursor-pointer select-none items-center gap-2.5 bg-[var(--bg-shell)] px-3 transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,var(--bg-shell))]"
+          className="sticky top-0 z-20 flex h-[30px] w-full flex-shrink-0 cursor-pointer select-none items-center gap-2.5 bg-[var(--bg-shell)] px-3 hover:bg-[color-mix(in_srgb,var(--accent)_8%,var(--bg-shell))]"
         >
           <ChevronLeft size={12} className="flex-shrink-0 text-[var(--text-muted)]" />
           <span className="min-w-0 truncate text-[13px] text-[var(--text)]">
@@ -727,7 +729,7 @@ const FolderBrowser = memo(function FolderBrowser({ folders, rootItems = [], onI
             key={folder.id}
             onClick={() => setPath([...path, folder])}
             title={folder.description}
-            className="mx-2 flex h-[30px] cursor-default select-none items-center gap-2.5 rounded-md px-2 transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]"
+            className="mx-2 flex h-[30px] cursor-default select-none items-center gap-2.5 rounded-md px-2 hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]"
           >
             <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--text-2)]">{folder.title}</span>
             <ChevronRight size={12} className="flex-shrink-0 text-[var(--text-muted)]" />
@@ -900,7 +902,7 @@ function TemplateCard({ tpl, onApply, selected = false, label }: {
         {/* The instrument cards' name treatment: a bottom gradient that
             reveals on hover - held visible on the current template so its
             marking never hides. */}
-        <div className={`pointer-events-none absolute inset-0 flex items-end bg-gradient-to-t from-black/90 via-black/35 to-black/5 transition-opacity duration-150 ${
+        <div className={`pointer-events-none absolute inset-0 flex items-end bg-gradient-to-t from-black/90 via-black/35 to-black/5 ${
           selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
         }`}>
           <span
@@ -1065,7 +1067,7 @@ export function LeftSidebar() {
               title={label}
               aria-label={label}
               aria-pressed={tab === id}
-              className={`flex h-6 w-6 flex-shrink-0 items-center justify-center gap-1.5 rounded-md transition-colors cursor-pointer @[310px]:w-auto @[310px]:px-1.5 ${
+              className={`flex h-6 w-6 flex-shrink-0 items-center justify-center gap-1.5 rounded-md cursor-pointer @[310px]:w-auto @[310px]:px-1.5 ${
                 tab === id
                   ? 'bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent)]'
                   : 'text-[var(--text-muted)] hover:bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] hover:text-[var(--text-2)]'
@@ -1106,7 +1108,7 @@ export function LeftSidebar() {
                 }}
                 onMouseLeave={() => setLoopHover(null)}
                 title={pattern.description}
-                className="flex items-center gap-2.5 h-[26px] px-3 cursor-default hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] transition-colors select-none"
+                className="flex items-center gap-2.5 h-[26px] px-3 cursor-default hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] select-none"
               >
                 <span className="flex-shrink-0 flex items-center justify-center w-3.5">
                   <Repeat size={12} className="text-emerald-400" />

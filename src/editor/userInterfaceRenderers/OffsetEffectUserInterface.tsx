@@ -192,7 +192,7 @@ export const OffsetEffectUserInterfaceRenderer: UserInterfaceRendererDefinition 
           aria-label="Reset offset"
           title="Reset offset"
           onClick={() => { x.setValue(x.definition.default); y.setValue(y.definition.default); z.setValue(z.definition.default) }}
-          className="flex w-6 flex-shrink-0 cursor-pointer items-center justify-center rounded-[3px] border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] transition-all hover:text-[var(--text-2)] active:scale-90"
+          className="flex w-6 flex-shrink-0 cursor-pointer items-center justify-center rounded-[3px] border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-2)] active:scale-90"
         >
           <RotateCcw size={10} />
         </button>

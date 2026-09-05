@@ -586,7 +586,7 @@ export function VideoClipBank({ track }: { track: Track }) {
     >
       {fileDragActive && !pickerCore && (
         <div
-          className={`pointer-events-none absolute -inset-1.5 z-10 flex items-center justify-center rounded border border-dashed transition-colors ${
+          className={`pointer-events-none absolute -inset-1.5 z-10 flex items-center justify-center rounded border border-dashed ${
             dropHover ? 'border-[var(--accent)] bg-[var(--accent)]/15' : 'border-[var(--border-strong)] bg-[var(--bg-panel)]/70'
           }`}
         >
@@ -612,7 +612,7 @@ export function VideoClipBank({ track }: { track: Track }) {
             key={`${pad.ref}-${pad.inPoint}-${i}`}
             onClick={() => openExisting(pad.ref)}
             title={`Open ${source?.fileName ?? 'this video'} to add or edit clips`}
-            className="mb-1 flex cursor-pointer items-center gap-2 rounded border border-[var(--border)] bg-[var(--bg-app)] px-2 py-1.5 transition-colors hover:border-[var(--border-strong)]"
+            className="mb-1 flex cursor-pointer items-center gap-2 rounded border border-[var(--border)] bg-[var(--bg-app)] px-2 py-1.5 hover:border-[var(--border-strong)]"
           >
             <span className="w-5 flex-shrink-0 font-mono text-[10px] text-[var(--accent)]">{i + 1}</span>
             <Film size={11} className="flex-shrink-0 text-[var(--text-muted)]" />
@@ -646,7 +646,7 @@ export function VideoClipBank({ track }: { track: Track }) {
       <button
         onClick={() => fileInputRef.current?.click()}
         disabled={atPadLimit || pickerCore !== null}
-        className="mt-1 flex h-7 w-full items-center justify-center gap-1.5 rounded border border-dashed border-[var(--border)] text-[11px] text-[var(--text-3)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] disabled:opacity-50 cursor-pointer disabled:cursor-default"
+        className="mt-1 flex h-7 w-full items-center justify-center gap-1.5 rounded border border-dashed border-[var(--border)] text-[11px] text-[var(--text-3)] hover:border-[var(--border-strong)] hover:text-[var(--text)] disabled:opacity-50 cursor-pointer disabled:cursor-default"
       >
         <Plus size={11} />
         {atPadLimit ? `${FREE_MAX_PADS}-clip free limit` : 'Upload video'}

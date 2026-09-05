@@ -256,7 +256,7 @@ function KindSegmented({ b, caption, labels, testId }: {
               aria-pressed={active}
               title={`${b.def.label}: ${option.label}`}
               onClick={() => b.set(option.value)}
-              className={`flex h-[22px] min-w-[30px] items-center justify-center px-1.5 text-[8px] font-bold tracking-[0.1em] transition-colors ${
+              className={`flex h-[22px] min-w-[30px] items-center justify-center px-1.5 text-[8px] font-bold tracking-[0.1em] ${
                 active ? 'text-black' : 'bg-black/25 text-white/40 hover:text-white/70'
               }`}
               style={active ? { background: ACCENT } : undefined}

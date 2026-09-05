@@ -114,7 +114,7 @@ function Pad({ label, hint, readout, ariaLabel, aria, onPoint, onArrow, onReset,
           const direction = event.key === 'ArrowRight' || event.key === 'ArrowUp' ? 1 : -1
           onArrow(direction, horizontal ? 'horizontal' : 'vertical')
         }}
-        className="relative mx-auto aspect-square w-full max-w-[176px] cursor-crosshair touch-none select-none overflow-hidden rounded border border-[var(--border)] bg-[var(--bg-app)] outline-none transition-colors hover:border-[var(--border-strong)] focus-visible:border-[var(--accent)]"
+        className="relative mx-auto aspect-square w-full max-w-[176px] cursor-crosshair touch-none select-none overflow-hidden rounded border border-[var(--border)] bg-[var(--bg-app)] outline-none hover:border-[var(--border-strong)] focus-visible:border-[var(--accent)]"
       >
         <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" className="pointer-events-none absolute inset-0 h-full w-full">
           {children}
@@ -272,7 +272,7 @@ function AxisPicker({ bound }: { bound: UserInterfaceParameter | undefined }) {
             onClick={() => bound.setValue(option.value)}
             aria-pressed={active === option.value}
             title={ORBIT_AXES[option.value]?.hint}
-            className={`flex-1 cursor-pointer rounded-[2px] py-1 text-[10px] transition-colors ${active === option.value
+            className={`flex-1 cursor-pointer rounded-[2px] py-1 text-[10px] ${active === option.value
               ? 'bg-[var(--bg-elevated)] text-[var(--text)]'
               : 'text-[var(--text-muted)] hover:text-[var(--text-3)]'}`}
           >
@@ -323,7 +323,7 @@ function AxisCell({ bound, axis }: { bound: UserInterfaceParameter | undefined; 
         const direction = event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1
         commit(value, value.value + direction * value.step)
       }}
-      className="flex min-w-0 cursor-ns-resize touch-none select-none flex-col items-center gap-0.5 rounded border border-[var(--border)] bg-[var(--bg-app)] py-1.5 outline-none transition-colors hover:border-[var(--border-strong)] focus-visible:border-[var(--accent)]"
+      className="flex min-w-0 cursor-ns-resize touch-none select-none flex-col items-center gap-0.5 rounded border border-[var(--border)] bg-[var(--bg-app)] py-1.5 outline-none hover:border-[var(--border-strong)] focus-visible:border-[var(--accent)]"
     >
       <span className="text-[8px] font-semibold tracking-[0.1em] text-[var(--text-muted)]">{axis}</span>
       <span className="font-mono text-[11px] tabular-nums text-[var(--text-2)]">{value.value.toFixed(1)}</span>
@@ -367,7 +367,7 @@ function Segmented({ bound }: { bound: UserInterfaceParameter | undefined }) {
             key={option.value}
             onClick={() => bound.setValue(option.value)}
             aria-pressed={active}
-            className={`flex-1 cursor-pointer rounded-[2px] py-1 text-[10px] transition-colors ${active
+            className={`flex-1 cursor-pointer rounded-[2px] py-1 text-[10px] ${active
               ? 'bg-[var(--bg-elevated)] text-[var(--text)]'
               : 'text-[var(--text-muted)] hover:text-[var(--text-3)]'}`}
           >

@@ -56,11 +56,11 @@ export default function PricingPage() {
     <MotionConfig reducedMotion="user">
     <EditorialSkin className="min-h-screen font-sans">
       <EditorialHeader>
-        <Link href="/editor" onClick={() => track('nav_clicked', { from: 'pricing', to: 'editor' })} className="text-[15px] text-[var(--text-3)] transition-colors hover:text-[var(--accent)] cursor-pointer">Editor</Link>
+        <Link href="/editor" onClick={() => track('nav_clicked', { from: 'pricing', to: 'editor' })} className="text-[15px] text-[var(--text-3)] hover:text-[var(--accent)] cursor-pointer">Editor</Link>
         {hasAccount ? (
-          <Link href="/projects" onClick={() => track('nav_clicked', { from: 'pricing', to: 'projects' })} className="text-[15px] text-[var(--text-3)] transition-colors hover:text-[var(--accent)] cursor-pointer">Projects</Link>
+          <Link href="/projects" onClick={() => track('nav_clicked', { from: 'pricing', to: 'projects' })} className="text-[15px] text-[var(--text-3)] hover:text-[var(--accent)] cursor-pointer">Projects</Link>
         ) : (
-          <Link href="/login" onClick={() => track('nav_clicked', { from: 'pricing', to: 'login' })} className="text-[15px] text-[var(--text-3)] transition-colors hover:text-[var(--accent)] cursor-pointer">Log in</Link>
+          <Link href="/login" onClick={() => track('nav_clicked', { from: 'pricing', to: 'login' })} className="text-[15px] text-[var(--text-3)] hover:text-[var(--accent)] cursor-pointer">Log in</Link>
         )}
         <ProfileMenu />
       </EditorialHeader>
@@ -103,7 +103,7 @@ export default function PricingPage() {
             <Link
               href={hasAccount ? '/projects' : '/login'}
               onClick={() => track('pricing_start_creating_clicked', { destination: hasAccount ? 'projects' : 'login' })}
-              className={`mt-7 flex h-[42px] items-center justify-center rounded-[99px] text-[14px] transition-colors cursor-pointer ${
+              className={`mt-7 flex h-[42px] items-center justify-center rounded-[99px] text-[14px] cursor-pointer ${
                 hasAccount
                   ? 'border border-[var(--border)] font-semibold text-[var(--text-2)] hover:border-[var(--border-strong)] hover:text-[var(--text)]'
                   : 'bg-[var(--accent)] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)]'
@@ -140,7 +140,7 @@ export default function PricingPage() {
               <button
                 onClick={handleUpgrade}
                 disabled={opening}
-                className={`mt-7 flex h-[42px] items-center justify-center gap-2 rounded-[99px] text-[14px] transition-colors disabled:opacity-60 cursor-pointer ${
+                className={`mt-7 flex h-[42px] items-center justify-center gap-2 rounded-[99px] text-[14px] disabled:opacity-60 cursor-pointer ${
                   hasAccount
                     ? 'border-0 bg-[var(--accent)] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] disabled:hover:bg-[var(--accent)]'
                     : 'border border-[rgba(158,232,245,0.4)] bg-transparent font-semibold text-[var(--accent)] hover:bg-[rgba(158,232,245,0.08)]'

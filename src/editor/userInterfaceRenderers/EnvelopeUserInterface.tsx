@@ -87,7 +87,7 @@ function CurveHandle({ padRef, x, y, ariaLabel, ariaMin, ariaMax, ariaNow, ariaT
       onPointerCancel={onPointerUp}
       onDoubleClick={onReset}
       onKeyDown={onKeyDown}
-      className="absolute z-10 h-[11px] w-[11px] -translate-x-1/2 -translate-y-1/2 touch-none select-none rounded-[2px] border border-[var(--border-strong)] bg-[var(--text-2)] outline-none transition-colors hover:bg-[var(--accent-hover)] focus-visible:border-[var(--accent)] focus-visible:bg-[var(--accent)]"
+      className="absolute z-10 h-[11px] w-[11px] -translate-x-1/2 -translate-y-1/2 touch-none select-none rounded-[2px] border border-[var(--border-strong)] bg-[var(--text-2)] outline-none hover:bg-[var(--accent-hover)] focus-visible:border-[var(--accent)] focus-visible:bg-[var(--accent)]"
       style={{ left: `${x}%`, top: `${y}%`, cursor }}
     />
   )

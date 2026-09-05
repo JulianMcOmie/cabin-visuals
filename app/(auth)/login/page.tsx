@@ -130,7 +130,7 @@ function LoginPageContent() {
         <div>
           <div className="mb-[6px] flex items-baseline justify-between">
             <label htmlFor="password" className={authLabelClass}>Password</label>
-            <Link href="/reset-password" className="cursor-pointer text-[11px] text-[var(--text-muted)] transition-colors duration-100 hover:text-[var(--text-3)]">
+            <Link href="/reset-password" className="cursor-pointer text-[11px] text-[var(--text-muted)] hover:text-[var(--text-3)]">
               Forgot?
             </Link>
           </div>

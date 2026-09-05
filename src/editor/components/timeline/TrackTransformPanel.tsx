@@ -163,7 +163,7 @@ function ScrubField({ trackId, spec }: { trackId: string; spec: FieldSpec }) {
           })
         }}
         onDoubleClick={() => resetTransformValues(trackId, [spec.key])}
-        className={`flex-1 cursor-ns-resize touch-none select-none rounded border border-[var(--border)] bg-black/25 px-2 py-1 text-right font-mono text-[12px] tabular-nums transition-colors hover:border-[var(--border-strong)] ${
+        className={`flex-1 cursor-ns-resize touch-none select-none rounded border border-[var(--border)] bg-black/25 px-2 py-1 text-right font-mono text-[12px] tabular-nums hover:border-[var(--border-strong)] ${
           onSnap ? 'text-[var(--accent)]' : 'text-[var(--text)]'
         }`}
       >
@@ -451,7 +451,7 @@ export function TrackTransformPanel({
           aria-label="Reset all transform values"
           title="Reset every value to its default"
           onClick={() => resetTransformValues(trackId, TRANSFORM_PARAM_DEFS.map((p) => p.key))}
-          className="rounded border border-[var(--border)] px-2.5 py-1 text-[10px] font-semibold tracking-[0.05em] text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
+          className="rounded border border-[var(--border)] px-2.5 py-1 text-[10px] font-semibold tracking-[0.05em] text-[var(--text-muted)] hover:border-[var(--border-strong)] hover:text-[var(--text)]"
         >
           Reset
         </button>

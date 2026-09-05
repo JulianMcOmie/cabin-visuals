@@ -247,7 +247,7 @@ export function TutorialOverlay() {
         ))}
         <button
           onClick={skip}
-          className="ml-auto cursor-pointer text-[11px] text-[var(--text-muted)] transition-colors hover:text-[var(--text-2)]"
+          className="ml-auto cursor-pointer text-[11px] text-[var(--text-muted)] hover:text-[var(--text-2)]"
         >
           Skip
         </button>
@@ -266,7 +266,7 @@ export function TutorialOverlay() {
         </span>
         <button
           onClick={() => setEngaged(false)}
-          className="cursor-pointer rounded bg-[var(--accent)] px-3.5 py-1.5 text-[12px] font-semibold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)]"
+          className="cursor-pointer rounded bg-[var(--accent)] px-3.5 py-1.5 text-[12px] font-semibold text-[var(--on-accent)] hover:bg-[var(--accent-hover)]"
         >
           Start creating
         </button>

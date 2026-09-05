@@ -63,7 +63,7 @@ function Segmented({ bound, labels, name }: {
             role="radio"
             aria-checked={active}
             onClick={() => bound.setValue(value)}
-            className={`h-6 min-w-0 flex-1 cursor-pointer truncate rounded-[5px] px-1 text-[9px] font-semibold tracking-[0.1em] transition-colors ${
+            className={`h-6 min-w-0 flex-1 cursor-pointer truncate rounded-[5px] px-1 text-[9px] font-semibold tracking-[0.1em] ${
               active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
             }`}
             style={active ? { background: withAlpha(ACCENT, 0.22), color: '#e9f5cf' } : undefined}

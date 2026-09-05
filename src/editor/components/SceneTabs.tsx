@@ -127,7 +127,7 @@ function ZoomSlider({ icon, label, value, min, max, unit, onChange }: {
 
   return (
     <label title={label} className="group/zoom flex items-center gap-1.5">
-      <span className="flex-shrink-0 text-[var(--text-muted)] transition-colors group-hover/zoom:text-[var(--text-3)]">
+      <span className="flex-shrink-0 text-[var(--text-muted)] group-hover/zoom:text-[var(--text-3)]">
         {icon}
       </span>
       <input
@@ -211,7 +211,7 @@ export function SceneTabs() {
               if (!scene.isMain) setMenu({ x: e.clientX, y: e.clientY, id })
             }}
             title={scene.isMain ? 'The final composition - composes the other scenes into the exported frame' : 'Double-click to rename · Right-click for options'}
-            className={`group flex flex-shrink-0 items-baseline gap-2.5 border-b-2 pb-1 transition-colors cursor-pointer ${
+            className={`group flex flex-shrink-0 items-baseline gap-2.5 border-b-2 pb-1 cursor-pointer ${
               active ? 'border-[var(--accent)]' : 'border-transparent'
             }`}
           >
@@ -219,7 +219,7 @@ export function SceneTabs() {
               {String(index + 1).padStart(2, '0')}
             </span>
             <span
-              className={`max-w-44 truncate text-[22px] italic leading-none [font-family:var(--font-display)] transition-colors ${
+              className={`max-w-44 truncate text-[22px] italic leading-none [font-family:var(--font-display)] ${
                 active
                   ? 'text-[var(--accent)]'
                   : 'text-[rgba(233,237,244,0.32)] group-hover:text-[var(--accent-hover)]'
@@ -233,7 +233,7 @@ export function SceneTabs() {
       <button
         onClick={create}
         title="Add scene"
-        className="flex-shrink-0 pb-1 text-[17px] italic leading-none [font-family:var(--font-display)] text-[var(--text-muted)] transition-colors hover:text-[var(--accent)] cursor-pointer"
+        className="flex-shrink-0 pb-1 text-[17px] italic leading-none [font-family:var(--font-display)] text-[var(--text-muted)] hover:text-[var(--accent)] cursor-pointer"
       >
         + new scene
       </button>
@@ -244,7 +244,7 @@ export function SceneTabs() {
         {/* Timeline zoom lives here so it never covers track content. The two
             sliders share one pill: they are one control ("how big is the
             timeline"), not two unrelated settings. */}
-        <div className="ml-1 flex h-6 flex-shrink-0 items-center gap-2.5 rounded-full bg-white/[0.03] px-2.5 transition-colors hover:bg-white/[0.06]">
+        <div className="ml-1 flex h-6 flex-shrink-0 items-center gap-2.5 rounded-full bg-white/[0.03] px-2.5 hover:bg-white/[0.06]">
           <ZoomSlider
             icon={<BeatWidthGlyph />}
             label="Horizontal zoom - beat width"

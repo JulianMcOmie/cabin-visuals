@@ -79,7 +79,7 @@ export function ConflictDialog() {
           <button
             onClick={reload}
             disabled={busy !== null}
-            className="flex items-center justify-center gap-2 rounded-md bg-[var(--accent)] px-3 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-60"
+            className="flex items-center justify-center gap-2 rounded-md bg-[var(--accent)] px-3 py-2 text-[13px] font-medium text-white hover:bg-[var(--accent-hover)] disabled:opacity-60"
           >
             {busy === 'reload' && <Loader2 size={13} className="animate-spin" />}
             Load the newer version
@@ -87,7 +87,7 @@ export function ConflictDialog() {
           <button
             onClick={() => void fork()}
             disabled={busy !== null}
-            className="flex items-center justify-center gap-2 rounded-md border border-[var(--border)] px-3 py-2 text-[13px] text-[var(--text-2)] transition-colors hover:text-[var(--text)] disabled:opacity-60"
+            className="flex items-center justify-center gap-2 rounded-md border border-[var(--border)] px-3 py-2 text-[13px] text-[var(--text-2)] hover:text-[var(--text)] disabled:opacity-60"
           >
             {busy === 'fork' && <Loader2 size={13} className="animate-spin" />}
             Keep this tab&apos;s version as a new project

@@ -126,7 +126,7 @@ function glidePanelToggle(panelDomId: string) {
 // contraction (scale) keeps the rounded shape instead of revealing square
 // corners as they shrink away from the clip edge.
 const transportBtn =
-  'flex w-8 cursor-pointer items-center justify-center transition-[color,background-color,transform] duration-100 active:scale-[0.92] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--accent)]'
+  'flex w-8 cursor-pointer items-center justify-center active:scale-[0.92] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--accent)]'
 
 // Dev-only companion to __cabinStores: exposes the r3f state (scene, camera,
 // renderer) so console/E2E checks can inspect the scene graph. Never ships.
@@ -361,7 +361,7 @@ function CanvasTransportBar({
           className="group/scrub relative cursor-pointer touch-none py-2"
           aria-label="Seek"
         >
-          <div className="relative h-1 rounded-full bg-white/25 transition-[height] duration-100 group-hover/scrub:h-1.5">
+          <div className="relative h-1 rounded-full bg-white/25 group-hover/scrub:h-1.5">
             <div
               className="absolute inset-y-0 left-0 rounded-full bg-[var(--accent)]"
               style={{ width: `${frac * 100}%` }}
@@ -380,7 +380,7 @@ function CanvasTransportBar({
               else void playback.play()
             }}
             aria-label={isPlaying ? 'Pause' : 'Play'}
-            className="visualizer-glass-control flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-[rgba(16,19,28,0.8)] text-white/90 transition-colors hover:text-white cursor-pointer"
+            className="visualizer-glass-control flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-[rgba(16,19,28,0.8)] text-white/90 hover:text-white cursor-pointer"
           >
             {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="translate-x-px" />}
           </button>
@@ -415,7 +415,7 @@ function AspectPill({ open, setOpen, glass }: {
       <button
         onClick={(e) => { e.stopPropagation(); setOpen(!open) }}
         title="Preview aspect ratio - see the visual as an export at that shape would compose it"
-        className={`flex h-7 items-center gap-1.5 rounded-md px-2 @[530px]:px-2.5 font-mono text-[9px] uppercase tracking-wide text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer ${
+        className={`flex h-7 items-center gap-1.5 rounded-md px-2 @[530px]:px-2.5 font-mono text-[9px] uppercase tracking-wide text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer ${
           glass
             ? 'visualizer-glass-control border border-[var(--border)] bg-[rgba(16,19,28,0.8)]'
             : 'bg-[var(--bg-elevated)]'
@@ -432,7 +432,7 @@ function AspectPill({ open, setOpen, glass }: {
               <button
                 key={a}
                 onClick={(e) => { e.stopPropagation(); setAspect(a); setOpen(false) }}
-                className={`flex w-full items-center px-2.5 py-1 font-mono text-[9px] uppercase tracking-wide transition-colors cursor-pointer ${
+                className={`flex w-full items-center px-2.5 py-1 font-mono text-[9px] uppercase tracking-wide cursor-pointer ${
                   a === aspect ? 'text-[var(--accent)]' : 'text-[var(--text-3)] hover:text-[var(--text)]'
                 }`}
               >
@@ -771,7 +771,7 @@ function VisualPanel({
           }}
           onBlur={hideFullscreenControl}
           title={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
-          className="visualizer-glass-control flex items-center justify-center w-6 h-6 rounded border border-[var(--border)] bg-[rgba(16,19,28,0.8)] text-[var(--text-3)] hover:text-[var(--text)] transition-colors cursor-pointer"
+          className="visualizer-glass-control flex items-center justify-center w-6 h-6 rounded border border-[var(--border)] bg-[rgba(16,19,28,0.8)] text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer"
         >
           {isFullscreen ? <Minimize size={11} /> : <Maximize size={11} />}
         </button>
@@ -877,7 +877,7 @@ function EditableProjectName() {
       <button
         onClick={startRename}
         aria-label="Rename project"
-        className="absolute left-full ml-1.5 opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-[var(--text)] transition-opacity cursor-pointer"
+        className="absolute left-full ml-1.5 opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer"
       >
         <Pencil size={10} />
       </button>
@@ -905,7 +905,7 @@ function SaveToCloudChip({ onOpen }: { onOpen: () => void }) {
       <span className="text-[var(--text-muted)]">·</span>
       <button
         onClick={() => { track('save_to_cloud_clicked', { from: demo ? 'demo' : 'guest' }); onOpen() }}
-        className="group inline-flex items-center gap-1 text-[var(--accent)] transition-colors hover:text-[var(--accent-hover)] cursor-pointer"
+        className="group inline-flex items-center gap-1 text-[var(--accent)] hover:text-[var(--accent-hover)] cursor-pointer"
       >
         <Cloud size={12} />
         <span className="group-hover:underline underline-offset-2">Save to cloud</span>
@@ -962,7 +962,7 @@ function EditorPanelToggle({
       aria-controls={controls}
       aria-pressed={open}
       title={`${open ? 'Hide' : 'Show'} ${label}`}
-      className={`flex h-9 w-[38px] flex-shrink-0 items-center justify-center rounded-[10px] transition-[color,background-color] duration-[400ms] ease-[cubic-bezier(0.05,0.7,0.1,1)] cursor-pointer hover:bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] ${
+      className={`flex h-9 w-[38px] flex-shrink-0 items-center justify-center rounded-[10px] transition-[color] duration-[400ms] ease-[cubic-bezier(0.05,0.7,0.1,1)] cursor-pointer hover:bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] ${
         open ? 'bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent)]' : 'text-[var(--text-3)]'
       }`}
     >
@@ -1063,7 +1063,7 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
             setPreviewQuality(PREVIEW_QUALITIES[(index + 1) % PREVIEW_QUALITIES.length])
           }}
           title="Fast Preview - trades sharpness for smoother playback. Auto softens only while playing. Export always renders final quality."
-          className="group flex h-7 flex-shrink-0 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2 @[530px]:px-2.5 font-mono text-[9px] uppercase tracking-wide transition-colors cursor-pointer"
+          className="group flex h-7 flex-shrink-0 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2 @[530px]:px-2.5 font-mono text-[9px] uppercase tracking-wide cursor-pointer"
         >
           {/* The field name is the first thing to go when the strip narrows -
               the VALUE is the payload, and the same collapse order the library
@@ -1082,7 +1082,7 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
           <span
             className={
               previewQuality === 'final'
-                ? 'text-[var(--text-3)] transition-colors group-hover:text-[var(--text)]'
+                ? 'text-[var(--text-3)] group-hover:text-[var(--text)]'
                 : 'text-[var(--accent)]'
             }
           >
@@ -1114,7 +1114,7 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
           <button
             onClick={() => setCanvasView(canvasView === 'main' ? 'scene' : 'main')}
             aria-label={canvasViewNote}
-            className="group flex h-7 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2 @[530px]:px-2.5 font-mono text-[9px] uppercase tracking-wide transition-colors cursor-pointer"
+            className="group flex h-7 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2 @[530px]:px-2.5 font-mono text-[9px] uppercase tracking-wide cursor-pointer"
           >
             <span className={`hidden @[670px]:inline ${canvasView === 'main' ? 'text-[var(--text-muted)]' : 'text-[var(--accent-muted)]'}`}>
               View
@@ -1126,7 +1126,7 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
             <span
               className={
                 canvasView === 'main'
-                  ? 'text-[var(--text-3)] transition-colors group-hover:text-[var(--text)]'
+                  ? 'text-[var(--text-3)] group-hover:text-[var(--text)]'
                   : 'text-[var(--accent)]'
               }
             >
@@ -1252,7 +1252,7 @@ function Header({
         onClick={(e) => {
           if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) setLeavingToProjects(true)
         }}
-        className="flex-shrink-0 flex items-center active:scale-[0.96] transition-transform cursor-pointer"
+        className="flex-shrink-0 flex items-center active:scale-[0.96] cursor-pointer"
       >
         {leavingToProjects
           ? <Loader2 size={16} className="animate-spin text-[var(--text-3)]" />
@@ -1305,7 +1305,7 @@ function Header({
             }}
             aria-disabled={exportGate?.ok === false}
             title={exportGate?.ok === false ? undefined : 'Export as MP4'}
-            className={`flex items-center gap-1.5 h-7 px-4 rounded-full text-[11px] font-semibold [font-family:var(--font-plex-sans)] transition-colors cursor-pointer ${
+            className={`flex items-center gap-1.5 h-7 px-4 rounded-full text-[11px] font-semibold [font-family:var(--font-plex-sans)] cursor-pointer ${
               exportGate?.ok === false
                 ? 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'
                 : 'bg-[var(--accent-button)] hover:bg-[var(--accent-hover)] text-[var(--on-accent)]'
@@ -1557,7 +1557,7 @@ export default function EditorApp() {
           {/* No visible rule: the card's inset gap separates library from
               workspace now. A slim invisible strip keeps the drag target,
               tinting on hover so it stays discoverable. */}
-          <PanelResizeHandle className="w-px cursor-col-resize bg-[var(--border-subtle)] outline-none transition-colors hover:bg-[var(--border-strong)] focus:outline-none" />
+          <PanelResizeHandle className="w-px cursor-col-resize bg-[var(--border-subtle)] outline-none hover:bg-[var(--border-strong)] focus:outline-none" />
 
           {/* Right section: inspector + canvas above, tracks + audio strip below.
               The shell shows only along the top and left; the workspace runs

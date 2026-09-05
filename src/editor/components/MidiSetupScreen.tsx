@@ -137,7 +137,7 @@ export function MidiSetupScreen({
       onDrop={onDrop}
     >
       <SiteHeader>
-        <Link href="/projects" className="px-3 text-[13px] text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer">
+        <Link href="/projects" className="px-3 text-[13px] text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer">
           Projects
         </Link>
         <ProfileMenu />
@@ -178,7 +178,7 @@ export function MidiSetupScreen({
             <span className="mt-1 text-xs text-[var(--text-muted)]">Drop files anywhere on this page</span>
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="mt-0.5 flex h-9 items-center justify-center rounded bg-[var(--accent)] px-5 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] cursor-pointer"
+              className="mt-0.5 flex h-9 items-center justify-center rounded bg-[var(--accent)] px-5 text-[13px] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] cursor-pointer"
             >
               Browse files
             </button>
@@ -200,7 +200,7 @@ export function MidiSetupScreen({
           {midiName || songName ? (
             <button
               onClick={onClose}
-              className="-mt-3 flex h-9 items-center justify-center rounded bg-[var(--accent)] px-5 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] cursor-pointer"
+              className="-mt-3 flex h-9 items-center justify-center rounded bg-[var(--accent)] px-5 text-[13px] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] cursor-pointer"
             >
               Open the editor →
             </button>
@@ -208,14 +208,14 @@ export function MidiSetupScreen({
             /* The optional-step door: same quiet styling as the sibling pages. */
             <button
               onClick={onClose}
-              className="-mt-3 text-[12px] text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer"
+              className="-mt-3 text-[12px] text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer"
             >
               No files handy? <span className="font-semibold text-[var(--text-2)]">Skip for now</span> - the roll keeps its demo pattern
             </button>
           )}
           <Link
             href="/projects"
-            className="text-[12px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)] cursor-pointer"
+            className="text-[12px] text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer"
           >
             ← Back to projects
           </Link>

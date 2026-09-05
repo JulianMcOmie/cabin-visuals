@@ -72,10 +72,10 @@ function EmojiPalette({ bound, spread, padding }: { bound: UserInterfaceParamete
             title="Click to remove"
             aria-label={`Remove ${emoji}`}
             onClick={() => removeAt(i)}
-            className="group relative flex h-7 w-7 items-center justify-center rounded-[3px] border border-[var(--border)] bg-[var(--bg-app)] text-[15px] leading-none transition-colors hover:border-[var(--border-strong)] cursor-pointer"
+            className="group relative flex h-7 w-7 items-center justify-center rounded-[3px] border border-[var(--border)] bg-[var(--bg-app)] text-[15px] leading-none hover:border-[var(--border-strong)] cursor-pointer"
           >
-            <span className="transition-opacity group-hover:opacity-30">{emoji}</span>
-            <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center text-[11px] text-[var(--text-2)] opacity-0 transition-opacity group-hover:opacity-100">×</span>
+            <span className="group-hover:opacity-30">{emoji}</span>
+            <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center text-[11px] text-[var(--text-2)] opacity-0 group-hover:opacity-100">×</span>
           </button>
         ))}
       </div>
@@ -92,7 +92,7 @@ function EmojiPalette({ bound, spread, padding }: { bound: UserInterfaceParamete
         <button
           onClick={append}
           disabled={parseEmojis(draft).length === 0}
-          className="h-6 rounded-[2px] border border-[var(--border)] bg-[var(--bg-elevated)] px-2 text-[10px] font-semibold tracking-[0.05em] text-[var(--text-3)] transition-colors hover:text-[var(--text)] disabled:opacity-30 disabled:hover:text-[var(--text-3)] cursor-pointer disabled:cursor-default"
+          className="h-6 rounded-[2px] border border-[var(--border)] bg-[var(--bg-elevated)] px-2 text-[10px] font-semibold tracking-[0.05em] text-[var(--text-3)] hover:text-[var(--text)] disabled:opacity-30 disabled:hover:text-[var(--text-3)] cursor-pointer disabled:cursor-default"
         >
           ADD
         </button>

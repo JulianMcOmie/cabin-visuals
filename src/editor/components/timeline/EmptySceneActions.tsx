@@ -182,7 +182,7 @@ export const EmptySceneActions = memo(function EmptySceneActions({
             type="button"
             onClick={run}
             style={{ '--i': i + 1 } as CSSProperties}
-            className={`group flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13.5px] transition-colors cursor-pointer ${
+            className={`group flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13.5px] cursor-pointer ${
               i === 0
                 ? 'bg-[var(--accent)]/[0.07] font-medium text-[var(--text)] hover:bg-[var(--accent)]/[0.15]'
                 : 'text-[var(--text-3)] hover:bg-[rgba(233,237,244,0.055)] hover:text-[var(--text)]'
@@ -190,7 +190,7 @@ export const EmptySceneActions = memo(function EmptySceneActions({
           >
             <Icon
               size={15}
-              className={`flex-shrink-0 transition-colors ${
+              className={`flex-shrink-0 ${
                 i === 0 ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] group-hover:text-[var(--accent)]'
               }`}
             />

@@ -548,7 +548,7 @@ function ShapeSelector({ b }: { b: SelectBinding }) {
               aria-pressed={active}
               title={`${option.label} recovery`}
               onClick={() => b.set(option.value)}
-              className={`px-1 pb-0.5 pt-1 transition-colors ${active ? '' : 'bg-black/25 hover:bg-white/5'}`}
+              className={`px-1 pb-0.5 pt-1 ${active ? '' : 'bg-black/25 hover:bg-white/5'}`}
               style={active ? { background: SHOCK } : undefined}
             >
               <svg width="16" height="12" viewBox="0 0 16 12" fill="none">

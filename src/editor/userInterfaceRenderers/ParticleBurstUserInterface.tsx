@@ -65,7 +65,7 @@ function TypeSelector({ b }: { b: SelectBinding }) {
             aria-pressed={active}
             aria-label={`${b.def.label}: ${option.label}`}
             onClick={() => b.set(option.value)}
-            className={`flex min-w-0 cursor-pointer flex-col items-center gap-1 rounded-md border px-1 py-1.5 transition-colors ${
+            className={`flex min-w-0 cursor-pointer flex-col items-center gap-1 rounded-md border px-1 py-1.5 ${
               active ? '' : 'border-white/[0.07] bg-white/[0.025] text-white/30 hover:bg-white/[0.06] hover:text-white/65'
             }`}
             style={active ? { borderColor: withAlpha(accent, 0.4), background: withAlpha(accent, 0.15), color: towardWhite(accent, 0.45) } : undefined}
@@ -95,7 +95,7 @@ function CurveSelector({ b }: { b: SelectBinding }) {
               aria-pressed={active}
               aria-label={`${b.def.label}: ${option.label}`}
               onClick={() => b.set(option.value)}
-              className={`px-1 pb-0.5 pt-1 transition-colors cursor-pointer ${active ? '' : 'bg-black/25 hover:bg-white/5'}`}
+              className={`px-1 pb-0.5 pt-1 cursor-pointer ${active ? '' : 'bg-black/25 hover:bg-white/5'}`}
               style={active ? { background: accent } : undefined}
             >
               <svg aria-hidden="true" width="16" height="14" viewBox="0 0 24 24" fill="none" strokeWidth="1.8" strokeLinecap="round" stroke={active ? '#000' : 'rgba(255,255,255,0.45)'}>

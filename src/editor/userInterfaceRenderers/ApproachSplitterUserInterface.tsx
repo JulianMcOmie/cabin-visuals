@@ -218,7 +218,7 @@ function IconSegmented({ b, label, icons, testId }: {
               aria-pressed={active}
               title={entry?.title ?? option.label}
               onClick={() => b.set(option.value)}
-              className={`flex h-[22px] w-[26px] items-center justify-center transition-colors ${
+              className={`flex h-[22px] w-[26px] items-center justify-center ${
                 active ? 'text-black' : 'bg-black/25 text-white/40 hover:text-white/70'
               }`}
               style={active ? { background: accent } : undefined}

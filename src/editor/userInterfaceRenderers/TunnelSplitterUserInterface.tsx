@@ -208,7 +208,7 @@ function CountStepper({ bound, label }: { bound: UserInterfaceParameter; label: 
       aria-label={`${direction < 0 ? 'Fewer' : 'More'}: ${definition.label}`}
       disabled={direction < 0 ? value <= definition.min : value >= definition.max}
       onClick={() => bound.setValue(clamp(value + direction, definition.min, definition.max))}
-      className="flex h-[16px] w-[16px] items-center justify-center rounded-[3px] border border-white/10 bg-black/30 font-mono text-[10px] leading-none text-white/45 transition-colors hover:text-white/80 disabled:opacity-25 disabled:hover:text-white/45"
+      className="flex h-[16px] w-[16px] items-center justify-center rounded-[3px] border border-white/10 bg-black/30 font-mono text-[10px] leading-none text-white/45 hover:text-white/80 disabled:opacity-25 disabled:hover:text-white/45"
     >
       {direction < 0 ? '−' : '+'}
     </button>
@@ -250,7 +250,7 @@ function Segmented({ bound, label, shortLabels, testId }: {
               aria-pressed={active}
               title={option.label}
               onClick={() => bound.setValue(option.value)}
-              className={`flex h-[22px] min-w-[30px] items-center justify-center px-1.5 text-[8px] font-bold tracking-[0.1em] transition-colors ${
+              className={`flex h-[22px] min-w-[30px] items-center justify-center px-1.5 text-[8px] font-bold tracking-[0.1em] ${
                 active ? 'text-black' : 'bg-black/25 text-white/40 hover:text-white/70'
               }`}
               style={active ? { background: CORRIDOR } : undefined}
@@ -350,7 +350,7 @@ export const TunnelSplitterUserInterfaceRenderer: UserInterfaceRendererDefinitio
             <button
               aria-expanded={showMore}
               onClick={() => setShowMore((v) => !v)}
-              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 transition-colors hover:text-white/60"
+              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 hover:text-white/60"
             >
               {showMore ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
               MORE
