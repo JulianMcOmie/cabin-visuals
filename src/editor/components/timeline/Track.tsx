@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, Move3d, Tag } from 'lucide-react'
 import { useUIStore } from '../../store/UIStore'
+import { withAlpha } from '../../userInterfaceRenderers/colorWheel'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useTimeStore } from '../../store/TimeStore'
 import { Block } from './Block'
@@ -151,6 +152,10 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
   }, [renaming])
 
   const isSelected = isPrimarySelected || inMultiSelection
+
+  // Shift-hover in the visualizer lights this row (CanvasHoverPicker).
+
+  const canvasHovered = useUIStore((s) => s.canvasHover?.trackId === track.id)
 
   // Tag badges are a second label line, shown only on deliberately-tall rows.
   const tagList = isObjectTrack ? track.tags ?? [] : []
@@ -352,7 +357,13 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
           className={`pointer-events-none absolute inset-y-0 right-0 ${isFirstChild ? 'rounded-tl-md' : ''} ${
             dropInto ? 'bg-[rgba(53,167,230,0.25)]' : isSelected ? 'bg-[var(--bg-elevated)]' : 'bg-[var(--bg-track-row)]'
           }`}
-          style={{ left: regionLeft, boxShadow: dropInto ? dropOutline : undefined }}
+          style={{
+            left: regionLeft,
+            boxShadow: dropInto ? dropOutline : canvasHovered ? `inset 0 0 0 1px ${withAlpha(blockColor, 0.75)}` : undefined,
+            // The visualizer's Shift-hover wash, in the row's own color so the
+            // glow on the canvas and the row it names read as one thing.
+            backgroundColor: canvasHovered && !dropInto ? withAlpha(blockColor, 0.22) : undefined,
+          }}
         >
           {wrapsChildren && (
             <span

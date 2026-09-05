@@ -423,6 +423,20 @@
         "3091"
       ],
       "port": 3091
+    },
+    {
+      "name": "scene-lights-3110",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "NEXT_DIST_DIR=.next-isolated-3110",
+        "npm",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3110"
+      ],
+      "port": 3110
     }
   ]
 }

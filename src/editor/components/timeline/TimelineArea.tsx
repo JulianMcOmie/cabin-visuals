@@ -150,6 +150,24 @@ export function TimelineArea() {
   // Two hand-rolled label gestures, distinguished in Track's pointer-down: a plain
   // drag re-nests/reorders (setTrackParent), Alt+drag duplicates.
   const { startNestDrag } = useTrackNestDrag(scrollRef)
+
+  // "Take me to this track" (UIStore.revealTrack - the visualizer's
+  // Shift+double-click): scroll the row to the middle of the pane. Reacts to
+  // the request CHANGING, never to presence, so it needs no clearing; the
+  // rows are read on the commit after the caller's select/expand/scene
+  // switch, so a freshly revealed row is already in `visualRows`.
+  const trackReveal = useUIStore((s) => s.trackReveal)
+  useEffect(() => {
+    if (!trackReveal) return
+    const sc = scrollRef.current
+    if (!sc) return
+    const index = visualRows.findIndex((r) => r.id === trackReveal.trackId)
+    if (index < 0) return
+    const top = Math.max(0, index * rowHeight - (sc.clientHeight - rowHeight) / 2)
+    sc.scrollTo({ top, behavior: 'smooth' })
+  // Only a new request scrolls - a row edit must not yank the pane around.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackReveal])
   const { copyDrag, ghostRef, startTrackCopyDrag } = useTrackCopyDrag(scrollRef)
 
   // The shared drop indicator (nest-drag and library drag both write it): a row to

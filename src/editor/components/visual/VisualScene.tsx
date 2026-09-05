@@ -21,6 +21,8 @@ import {
   NoToneMapping,
   Vector2,
   Vector3,
+  Vector4,
+  AdditiveBlending,
   type Material,
   type Texture,
 } from 'three'
@@ -41,6 +43,9 @@ import { ObjectRenderer } from './ObjectRenderer'
 import { InstancedObjectRenderer } from './InstancedObjectRenderer'
 import { FinalInvertMaskContext } from '../../core/visual/finalInvertMask'
 import { PassLightPool, refreshPosterLightDir } from '../../core/visual/sceneLights'
+import { hoverGlowColor, hoverTargetsForTrack, rootSceneOf } from '../../core/visual/hoverTargets'
+import { isExportPinned } from '../../core/export/frameDriver'
+import { useUIStore } from '../../store/UIStore'
 import { resolveActiveColorFilter } from '../../instruments/ColorFilters'
 import { resolveActiveStrobe } from '../../instruments/Strobe'
 import { BASS_RIPPLE_FIELD_GLSL, resolveActiveBassRipple } from '../../instruments/BassRipple'
@@ -103,6 +108,41 @@ varying vec2 vUv;
 void main() {
   vUv = uv;
   gl_Position = vec4(position, 1.0);
+}`
+
+// The Shift-hover highlight (CanvasHoverPicker): the hovered track's objects
+// are rendered alone into an alpha mask, and this pass draws a dilated edge
+// of that mask in the track's colour ADDITIVELY over the finished frame - a
+// silhouette glow, never a repaint of the object. The mask is the hovered
+// scene's full frame; `viewport` maps it into the composited layer rect the
+// scene occupies. Colour arrives as sRGB components and goes straight to the
+// screen buffer (raw ShaderMaterial: no tone map, no encode), so the glow is
+// literally the row's colour.
+/** The spare three.js layer the hover mask renders on (0 is everything's default). */
+const HOVER_MASK_LAYER = 7
+
+const HOVER_GLOW_FRAGMENT = `
+uniform sampler2D tMask;
+uniform vec3 color;
+uniform vec2 resolution;
+uniform vec4 viewport;
+varying vec2 vUv;
+void main() {
+  vec2 uv = (vUv - viewport.xy) / viewport.zw;
+  if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) discard;
+  float center = texture2D(tMask, uv).a;
+  vec2 texel = 1.0 / resolution;
+  float near = 0.0;
+  float far = 0.0;
+  for (int i = 0; i < 12; i++) {
+    float a = float(i) * 0.5235988;
+    vec2 d = vec2(cos(a), sin(a)) * texel;
+    near = max(near, texture2D(tMask, uv + d * 2.0).a);
+    far = max(far, texture2D(tMask, uv + d * 4.5).a);
+  }
+  float edge = clamp(max(near, far * 0.55) - center, 0.0, 1.0);
+  vec3 glow = color * edge + color * center * 0.12;
+  gl_FragColor = vec4(glow, 1.0);
 }`
 
 // Backdrop gradient, painted over the clear color before a scene's objects
@@ -818,11 +858,29 @@ export function VisualScene() {
       depthTest: false,
       depthWrite: false,
     })
+    // Shift-hover highlight: the hovered track's alpha mask (half-res is
+    // plenty for a soft edge) and the additive glow pass over the screen.
+    const hoverMaskTarget = new WebGLRenderTarget(1, 1, { minFilter: LinearFilter, magFilter: LinearFilter })
+    const hoverGlowMaterial = new ShaderMaterial({
+      vertexShader: COLOR_FILTER_VERTEX,
+      fragmentShader: HOVER_GLOW_FRAGMENT,
+      uniforms: {
+        tMask: { value: hoverMaskTarget.texture },
+        color: { value: new Vector3(1, 1, 1) },
+        resolution: { value: new Vector2(1, 1) },
+        viewport: { value: new Vector4(0, 0, 1, 1) },
+      },
+      transparent: true,
+      blending: AdditiveBlending,
+      depthTest: false,
+      depthWrite: false,
+    })
     return {
       scene, invertScene, cam, meshes, invertMeshes,
       filterScene, filterCam, filterMesh, filterMaterial, warpMaterial, impactWarpMaterial, cropMaskMaterial, gradientMaterial,
       sceneFxMaterials,
       compositeTarget, bloomEffect, finalMaterial,
+      hoverMaskTarget, hoverGlowMaterial,
     }
   }, [gl])
 
@@ -841,6 +899,10 @@ export function VisualScene() {
     // FXAA texel steps sample the composite target, so this must be the
     // target's (scaled) size, not the canvas size.
     compositor.finalMaterial.uniforms.resolution.value.set(width, height)
+    const maskW = Math.max(1, width >> 1)
+    const maskH = Math.max(1, height >> 1)
+    compositor.hoverMaskTarget.setSize(maskW, maskH)
+    compositor.hoverGlowMaterial.uniforms.resolution.value.set(maskW, maskH)
     // A scale change while paused must repaint - RenderGovernor only watches
     // the stores and the CSS size, both untouched by a resolution switch.
     invalidate()
@@ -917,6 +979,8 @@ export function VisualScene() {
     compositor.bloomEffect.dispose()
     compositor.finalMaterial.dispose()
     compositor.compositeTarget.dispose()
+    compositor.hoverGlowMaterial.dispose()
+    compositor.hoverMaskTarget.dispose()
   }, [compositor])
 
   const bassRippleTrackIds = useMemo(() => postProcessTracksByScene(objects, 'bassRipple'), [objects])
@@ -1419,6 +1483,47 @@ export function VisualScene() {
           applyCompositorLayer(mesh, layer, i, runtime.invertTarget.texture, layerAspect)
         })
         gl.render(compositor.invertScene, compositor.cam)
+      }
+
+      // Shift-hover highlight - editor chrome, so it never reaches an export
+      // or a pinned capture (the frame driver's pin), and costs nothing while
+      // nothing is hovered. The hovered track's roots are re-rendered alone
+      // on a spare layer into the alpha mask (their own materials, so the
+      // silhouette is exactly what is on screen - lights are on layer 0, so
+      // they come out unlit, which the mask does not care about), then the
+      // glow pass dilates that mask over the finished frame.
+      const hover = useUIStore.getState().canvasHover
+      if (hover && !isExportPinned()) {
+        const roots = hoverTargetsForTrack(hover.trackId).filter((t) => t.sceneId === hover.sceneId)
+        const track = useProjectStore.getState().scenes[hover.sceneId]?.tracks[hover.trackId]
+        const layer = layers.find((l) => l.sceneId === hover.sceneId)
+        if (roots.length > 0 && track && layer) {
+          const maskScenes = new Set<ThreeScene>()
+          for (const root of roots) {
+            const scene = rootSceneOf(root.object)
+            if (scene) maskScenes.add(scene)
+            root.object.traverse((o) => o.layers.enable(HOVER_MASK_LAYER))
+          }
+          camera.layers.set(HOVER_MASK_LAYER)
+          gl.setRenderTarget(compositor.hoverMaskTarget)
+          gl.setClearColor(0x000000, 0)
+          gl.clear(true, true, true)
+          for (const scene of maskScenes) gl.render(scene, camera)
+          camera.layers.set(0)
+          for (const root of roots) root.object.traverse((o) => o.layers.disable(HOVER_MASK_LAYER))
+
+          const glow = compositor.hoverGlowMaterial
+          const hex = hoverGlowColor(track)
+          ;(glow.uniforms.color.value as Vector3).set(
+            parseInt(hex.slice(1, 3), 16) / 255,
+            parseInt(hex.slice(3, 5), 16) / 255,
+            parseInt(hex.slice(5, 7), 16) / 255,
+          )
+          ;(glow.uniforms.viewport.value as Vector4).set(layer.viewport.x, layer.viewport.y, layer.viewport.width, layer.viewport.height)
+          compositor.filterMesh.material = glow
+          gl.setRenderTarget(previous)
+          gl.render(compositor.filterScene, compositor.filterCam)
+        }
       }
     } finally {
       gl.setRenderTarget(previous)

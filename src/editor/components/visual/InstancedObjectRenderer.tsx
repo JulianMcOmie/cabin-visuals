@@ -1,10 +1,12 @@
-import { Fragment, Suspense, useMemo } from 'react'
+import { Fragment, Suspense, useEffect, useMemo, useRef } from 'react'
+import type { Group } from 'three'
 import { getInstrument } from '../../instruments'
 import { InstrumentPending } from '../../instruments/lazyInstrument'
 import { isFullFrameTrack } from '../../instruments/types'
 import { useProjectStore } from '../../store/ProjectStore'
 import { InstancedScaleContext } from '../../core/visual/instancedFrame'
 import { SceneIdContext } from '../../core/visual/sceneContext'
+import { registerHoverTarget } from '../../core/visual/hoverTargets'
 import { isTrackStaggered, type ObjectListEntry } from '../../core/visual/VisualEngine'
 import { ObjectRenderer } from './ObjectRenderer'
 
@@ -72,6 +74,13 @@ export function InstancedObjectRenderer({
   const modeParams = useProjectStore((s) => def?.fullFrameParam
     ? s.scenes[sceneId]?.tracks[trackId]?.params
     : undefined)
+  // Shift-hover root for the whole instanced pool (one mount = every copy).
+  const hoverRootRef = useRef<Group>(null)
+  useEffect(() => {
+    const g = hoverRootRef.current
+    if (!g) return
+    return registerHoverTarget({ sceneId, trackId, object: g, fullFrame: false })
+  }, [sceneId, trackId])
   if (!def) return null
   const Instanced = def.instancedComponent
   const masked = entries.some((o) => o.maskSourceIds.length > 0)
@@ -99,9 +108,11 @@ export function InstancedObjectRenderer({
   return (
     <SceneIdContext.Provider value={sceneId}>
       <InstancedScaleContext.Provider value={scaleInstances}>
-        <Suspense fallback={<InstrumentPending />}>
-          <Instanced trackId={trackId} />
-        </Suspense>
+        <group ref={hoverRootRef}>
+          <Suspense fallback={<InstrumentPending />}>
+            <Instanced trackId={trackId} />
+          </Suspense>
+        </group>
       </InstancedScaleContext.Provider>
     </SceneIdContext.Provider>
   )

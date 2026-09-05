@@ -159,6 +159,19 @@ interface UIState {
   libraryRequest: { tab: LibraryTabId; nonce: number } | null
   requestLibraryTab: (tab: LibraryTabId) => void
 
+  // Shift-hover in the visualizer (components/visual/CanvasHoverPicker): the
+  // track whose objects are under the pointer. VisualScene reads it per frame
+  // to draw the silhouette glow, the track row reads it for its wash. Written
+  // only when the hovered track CHANGES, never per pointermove.
+  canvasHover: { trackId: string; sceneId: string } | null
+  setCanvasHover: (hover: { trackId: string; sceneId: string } | null) => void
+
+  // "Take me to this track": TimelineArea scrolls the row into view. Same
+  // change-not-presence contract as libraryRequest (the nonce re-fires a
+  // repeat). Callers select / expand / switch scene themselves first.
+  trackReveal: { trackId: string; nonce: number } | null
+  revealTrack: (trackId: string) => void
+
   // Live state of a loop-pattern drag from the library: non-null lights the
   // lane region as the drop zone, and `target` is the row/bar under the
   // cursor - Track.tsx draws the would-be block there so the drag literally
@@ -287,6 +300,15 @@ export const useUIStore = create<UIState>((set) => ({
 
   libraryRequest: null,
   requestLibraryTab: (tab) => set({ libraryRequest: { tab, nonce: Date.now() } }),
+
+  canvasHover: null,
+  setCanvasHover: (hover) => set((s) => {
+    if (s.canvasHover?.trackId === hover?.trackId && s.canvasHover?.sceneId === hover?.sceneId) return s
+    return { canvasHover: hover }
+  }),
+
+  trackReveal: null,
+  revealTrack: (trackId) => set({ trackReveal: { trackId, nonce: Date.now() } }),
 
   loopDrag: null,
   setLoopDrag: (v) => set({ loopDrag: v }),

@@ -314,6 +314,10 @@ reference port. Facts that cost time to establish:
     lanes' sliders — and it REPLACES the lane array rather than mutating it, because
     `instrumentFrame`'s signature compares it by reference. Mutating in place drags a
     knob with no repaint at all while paused, which reads exactly like a dead panel.
+- `hoverTargets.ts` / `hoverPickCore.ts` — the visualizer's Shift-hover: a registry of
+  occurrence roots (scene, track, full-frame flag) the picker raycasts and the glow pass
+  re-renders, plus the pure layer-remap + hit-ranking half with its test. See
+  components/CLAUDE.md's visual/ section for the whole gesture.
 - `sceneLights.ts` — the Light-track machinery: the anchor registry (LightVisual
   registers `{anchor group, LightDesc}` per occurrence), `PassLightPool` (each
   render pass mirrors the registry into its own THREE.Scene per frame - how one

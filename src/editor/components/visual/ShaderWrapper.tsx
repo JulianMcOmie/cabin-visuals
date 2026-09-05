@@ -9,6 +9,7 @@ import { useTimeStore } from '../../store/TimeStore'
 import { getBeatOverride } from '../../core/visual/beatOverride'
 import { getObjectState, getVisualCopy } from '../../core/visual/VisualEngine'
 import { PassLightPool, refreshPosterLightDir, sceneHasLightAnchors } from '../../core/visual/sceneLights'
+import { registerHoverTarget } from '../../core/visual/hoverTargets'
 import { applyMaterialOpacity } from '../../core/visual/animatedOpacity'
 import { getEffect } from '../../effects'
 import { effectiveEffectState } from '../../effects/automation'
@@ -130,6 +131,15 @@ export function ShaderWrapper({
   // legacy set). Slots empty until the scene actually has light anchors.
   const lightPool = useMemo(() => new PassLightPool(rig.scene), [rig])
   useEffect(() => () => lightPool.dispose(), [lightPool])
+
+  // Shift-hover root: the object's meshes render in this offscreen rig, not in
+  // the pass scene (the pass scene only holds the output quad), so the holder
+  // is what the picker must raycast. A full-frame occurrence (no copy index)
+  // is a viewport-filling plane - lowest pick priority.
+  useEffect(() => {
+    if (!sceneId) return
+    return registerHoverTarget({ sceneId, trackId, object: rig.holder, fullFrame: visualCopyIndex === undefined })
+  }, [sceneId, trackId, rig, visualCopyIndex])
 
   // Target size: the canvas' CSS size scaled by the preview-quality factor
   // (1 at Final and under an export pin). Floor, not round: the wrapper has

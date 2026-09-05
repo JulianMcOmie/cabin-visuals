@@ -1,4 +1,4 @@
-import { memo, Suspense, useMemo, useRef } from 'react'
+import { memo, Suspense, useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Group, Matrix4 } from 'three'
 import { getInstrument } from '../../instruments'
@@ -9,6 +9,7 @@ import { composeScreenAnchor } from '../../core/visual/screenAnchor'
 import { applyMaterialOpacity } from '../../core/visual/animatedOpacity'
 import { InstrumentCopyContext } from '../../core/visual/instrumentColor'
 import { SceneIdContext } from '../../core/visual/sceneContext'
+import { registerHoverTarget } from '../../core/visual/hoverTargets'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
@@ -148,6 +149,16 @@ export const ObjectRenderer = memo(function ObjectRenderer({
   }), [def, visualCopyIndex])
   // NOTE: the per-track "In front" switch is applied a level up - VisualScene
   // mounts on-top tracks into a second, depth-cleared render pass (drei Hud).
+
+  // Shift-hover pick + highlight root (core/visual/hoverTargets.ts). On the
+  // shader path the group below is inside ShaderWrapper's offscreen holder,
+  // which registers itself too - both resolve to this track, so a double
+  // registration is harmless.
+  useEffect(() => {
+    const g = groupRef.current
+    if (!g) return
+    return registerHoverTarget({ sceneId, trackId, object: g, fullFrame: isFullFrame })
+  }, [sceneId, trackId, isFullFrame])
 
   useFrame(({ camera }) => {
     const g = groupRef.current

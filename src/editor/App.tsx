@@ -16,6 +16,7 @@ import { PREVIEW_QUALITIES, useUIStore, type PreviewQuality } from './store/UISt
 import { VisualScene } from './components/visual/VisualScene'
 import { ExportDriver } from './components/visual/ExportDriver'
 import { RenderGovernor } from './components/visual/RenderGovernor'
+import { CanvasHoverPicker } from './components/visual/CanvasHoverPicker'
 import { DevRenderStats } from './components/visual/DevRenderStats'
 import { VisualBeatSync } from './core/visual/VisualBeatSync'
 import { getCompositionLayers, getMountedRenderScenes, getObjectState, getSceneBackdrop, getVisualCopies, getVisualCopyCount, setEditorPreviewSceneId, subscribeObjects } from './core/visual/VisualEngine'
@@ -186,6 +187,7 @@ function Scene({
       <VisualBeatSync />
       <ExportDriver />
       <RenderGovernor />
+      <CanvasHoverPicker />
       {process.env.NODE_ENV === 'development' && <DevThreeHook />}
       {process.env.NODE_ENV === 'development' && <DevRenderStats />}
       {/* Suspense: instruments may load assets through useLoader. */}

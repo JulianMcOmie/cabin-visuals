@@ -124,6 +124,26 @@ A tracker grammar over the roll: a cursor with a size, modes (ground → `Tab` �
   empty, parked BELOW those rows via its `topOffset` prop.
 
 - `VisualScene.tsx` — mounts one `ObjectRenderer` per `ObjectListEntry` from the engine (structural list; per-frame values are pulled imperatively). Renders scenes to render targets and composites the composition instruments' `CompositionLayer`s (partitions/flash/blur/bloom) into the final frame. Backdrop gradients are painted by `paintBackdropGradient` right after each backdrop clear (per-scene targets + the main composite) — a fullscreen no-depth pass, so filters/bloom/directors/export inherit them exactly like a flat clear color. The shader mixes stops in sRGB to match the panel's CSS previews pixel-for-pixel; keep it and `cssGradient` in SceneSettingsPanel in step.
+- **Shift-hover / Shift+double-click in the visualizer** (`CanvasHoverPicker.tsx`, mounted
+  inside the Canvas, 2026-09-04): hold Shift and move over the canvas to highlight every
+  copy of the instrument under the pointer (a silhouette glow in the track's colour) and
+  light its timeline row; Shift+double-click switches to its scene if needed, expands
+  collapsed ancestors, selects it and scrolls the row into view (`UIStore.revealTrack`,
+  consumed by TimelineArea). Objects live in offscreen portaled scenes, so r3f pointer
+  events never see them: every occurrence root registers in
+  `core/visual/hoverTargets.ts` (ObjectRenderer's placement group, InstancedObjectRenderer's
+  wrapper group, ShaderWrapper's offscreen holder) and the picker raycasts those by hand
+  after mapping the pointer through the composited layer it lands in (`hoverPickCore.ts` -
+  a Cut director's viewport squashes a full-aspect scene into a rect, so the pointer is
+  un-squashed into that scene's camera NDC; partition MASKS are not evaluated, the
+  topmost full-frame layer wins). Ranking: real objects before full-frame planes (Text,
+  Video, Film Stock cover every pixel), the front/invert passes before base, nearest within
+  a pass. The glow is VisualScene's `hoverMaskTarget` + `hoverGlowMaterial`: the hovered
+  roots are re-rendered alone on layer `HOVER_MASK_LAYER` into an alpha mask (their own
+  materials - lights stay on layer 0, so they render unlit, which a mask does not mind),
+  then a dilated edge is drawn additively after the final grade and invert overlay. Gated
+  on `isExportPinned()` so it never reaches an export or a thumbnail capture. Hover state
+  is written only when the hovered track CHANGES (UIStore.canvasHover), never per move.
 - `ObjectRenderer.tsx` — one OCCURRENCE of one object: placement group → post-mover scale → its VisualCopy transform; `MaterialWrapper`/`TransformWrapper`/`ShaderWrapper` apply the effect chain inside (material innermost, closest to the meshes). Never resolves copy logic itself.
 - `MaterialWrapper.tsx` — `material` effects: patches the target's own materials via `onBeforeCompile` so a generated surface travels WITH the mesh, and restores them on unmount/disable. See `effects/CLAUDE.md` for the contract and its limits.
 - **`placementKey` in VisualScene IS the pass partition**, not a cache key: it builds one character per object (`'B'` base / `'F'` front / `'I'` final-invert) and the three `createPortal` blocks at the bottom filter on it. Both it and ObjectRenderer's full-frame branch resolve through `instruments/types.ts`'s `isFullFrameTrack` / `isOnTopTrack` — change one and you must change the other, or an object mounts in a pass its renderer isn't expecting.
