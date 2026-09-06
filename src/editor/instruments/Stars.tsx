@@ -7,12 +7,13 @@ import { lazyInstrument } from './lazyInstrument'
 // pure function of the current beat (the pause invariant): drift/warp are per-note
 // first-order velocity responses integrated in closed form, roll/tumble angles and the
 // pulse/streak/background envelopes are closed-form in note age, so a static playhead
-// is a static frame and scrub == playback. The Points shaders are copied verbatim.
+// is a static frame and scrub == playback. Per-star motion, size, tint and alpha
+// are evaluated in the GPU vertex shader; note history stays on the CPU.
 //
 // The visual itself lives in ./StarsVisual (lazy: fetched when a project mounts
 // a starfield); this file is the def - params, rows, and nothing heavy.
 
-export const MAX_STARS = 3000
+export const MAX_STARS = 100_000
 
 // MIDI pitch mappings
 export const PITCH_WARP_FWD = 48

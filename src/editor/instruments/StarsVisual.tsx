@@ -2,6 +2,11 @@ import { useRef, useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
+import { FORCE_TRANSPARENT_KEY } from '../core/visual/animatedOpacity'
+import {
+  createStarsUniforms, createStarsMotionState, updateStarsMotion, writeStarsPickPositions,
+  STARS_VERTEX_SHADER, STARS_FRAGMENT_SHADER, type StarsUniforms, type StarsMotionState,
+} from './starsGpu'
 import {
   MAX_STARS,
   PITCH_WARP_FWD, PITCH_WARP_BWD, PITCH_DRIFT_RIGHT, PITCH_DRIFT_LEFT, PITCH_DRIFT_UP, PITCH_DRIFT_DOWN,
@@ -11,48 +16,6 @@ import {
 
 // The Stars visual - the lazy half of ./Stars (see that file's header for what
 // this is and why every motion term is closed-form in note age).
-
-// --- Shaders (verbatim from Tyler's Stars) ---
-
-const vertexShader = `
-  attribute float aSize;
-  attribute vec3 aColor;
-  attribute float aAlpha;
-  varying vec3 vColor;
-  varying float vAlpha;
-  varying float vStreak;
-  uniform float uStreakFactor;
-
-  void main() {
-    vColor = aColor;
-    vAlpha = aAlpha;
-    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = aSize * (1.0 + uStreakFactor * 2.0);
-    gl_Position = projectionMatrix * mvPosition;
-    vStreak = uStreakFactor;
-  }
-`
-
-const fragmentShader = `
-  varying vec3 vColor;
-  varying float vAlpha;
-  varying float vStreak;
-
-  void main() {
-    vec2 cxy = gl_PointCoord * 2.0 - 1.0;
-    // Stretch horizontally when streaking for an elongated look
-    float r;
-    if (vStreak > 0.0) {
-      float sx = cxy.x / (1.0 + vStreak * 3.0);
-      r = sx * sx + cxy.y * cxy.y;
-    } else {
-      r = dot(cxy, cxy);
-    }
-    if (r > 1.0) discard;
-    float alpha = vAlpha * (1.0 - smoothstep(0.4, 1.0, r));
-    gl_FragColor = vec4(vColor, alpha);
-  }
-`
 
 // --- Star generation (seeded, so a reload regenerates the identical layout) ---
 
@@ -64,12 +27,6 @@ function generateStarfield(count: number, spread: number, depth: number): Float3
     positions[i * 3 + 2] = (seededRand(i * 3 + 2) - 0.5) * depth
   }
   return positions
-}
-
-// Wrap a coordinate into [-half, half) (translation displacement can be many spans out)
-function wrapCentered(v: number, half: number): number {
-  const span = half * 2
-  return ((((v + half) % span) + span) % span) - half
 }
 
 // Closed-form displacement of the old per-frame velocity smoothing: velocity chases a
@@ -125,14 +82,11 @@ export function StarsVisual({ trackId }: { trackId: string }) {
   const geomRef = useRef<THREE.BufferGeometry | null>(null)
   const matRef = useRef<THREE.ShaderMaterial | null>(null)
 
-  // Pre-allocated buffers (max size)
-  const basePosBuf = useRef(new Float32Array(MAX_STARS * 3))
-  const parallaxBuf = useRef(new Float32Array(MAX_STARS))
-  const posBuf = useRef(new Float32Array(MAX_STARS * 3))
-  const sizeBuf = useRef(new Float32Array(MAX_STARS))
-  const colBuf = useRef(new Float32Array(MAX_STARS * 3))
-  const alphaBuf = useRef(new Float32Array(MAX_STARS))
-
+  // Positions and parallax upload on layout changes and occasional coordinate
+  // rebases. All regular per-star frame work runs in the shader.
+  const uniformsRef = useRef<StarsUniforms | null>(null)
+  const motionRef = useRef<StarsMotionState | null>(null)
+  const pickGeometryRef = useRef<THREE.BufferGeometry | null>(null)
   // Build tracking
   const builtCount = useRef(0)
   const builtSpread = useRef(0)
@@ -142,9 +96,6 @@ export function StarsVisual({ trackId }: { trackId: string }) {
   const groundGroup = useRef<THREE.Group | null>(null)
   const groundBuilt = useRef(false)
 
-  // Scratch color
-  const scratchColor = useRef(new THREE.Color())
-
   function build(count: number, spread: number, depth: number) {
     const root = rootRef.current
     if (!root) return
@@ -152,53 +103,68 @@ export function StarsVisual({ trackId }: { trackId: string }) {
     if (pointsObj.current) root.remove(pointsObj.current)
     geomRef.current?.dispose()
     matRef.current?.dispose()
+    pickGeometryRef.current?.dispose()
+    pickGeometryRef.current = null
 
     // Generate the home layout; rendered positions are derived from it each frame
     const initPos = generateStarfield(count, spread, depth)
-    basePosBuf.current.set(initPos)
-    posBuf.current.set(initPos)
+    const parallax = new Float32Array(count)
 
     // Fixed per-star parallax from the star's home depth: closer stars move faster.
     // (The old code recomputed parallax from the live z each frame, so stars sped up
     // as they neared the camera; a fixed factor keeps displacement closed-form.)
     const depthHalf = depth / 2
     for (let i = 0; i < count; i++) {
-      parallaxBuf.current[i] = depthHalf / (Math.abs(initPos[i * 3 + 2]) + 0.5)
+      parallax[i] = depthHalf / (Math.abs(initPos[i * 3 + 2]) + 0.5)
     }
 
+    const motion = createStarsMotionState(initPos, parallax)
     const geom = new THREE.BufferGeometry()
-    const posAttr = new THREE.BufferAttribute(posBuf.current, 3)
-    posAttr.setUsage(THREE.DynamicDrawUsage)
-    const sizeAttr = new THREE.BufferAttribute(sizeBuf.current, 1)
-    sizeAttr.setUsage(THREE.DynamicDrawUsage)
-    const colorAttr = new THREE.BufferAttribute(colBuf.current, 3)
-    colorAttr.setUsage(THREE.DynamicDrawUsage)
-    const alphaAttr = new THREE.BufferAttribute(alphaBuf.current, 1)
-    alphaAttr.setUsage(THREE.DynamicDrawUsage)
-
-    geom.setAttribute('position', posAttr)
-    geom.setAttribute('aSize', sizeAttr)
-    geom.setAttribute('aColor', colorAttr)
-    geom.setAttribute('aAlpha', alphaAttr)
+    geom.setAttribute('position', new THREE.BufferAttribute(motion.positions, 3))
+    geom.setAttribute('aParallax', new THREE.BufferAttribute(parallax, 1))
     geom.setDrawRange(0, count)
+    // Home-position bounds alone miss stars that have moved on the GPU. Every
+    // final position is wrapped back into this volume, even after a pulse.
+    geom.boundingSphere = new THREE.Sphere(new THREE.Vector3(), Math.hypot(spread, spread, depthHalf))
 
+    const uniforms = createStarsUniforms()
     const mat = new THREE.ShaderMaterial({
-      vertexShader,
-      fragmentShader,
+      vertexShader: STARS_VERTEX_SHADER,
+      fragmentShader: STARS_FRAGMENT_SHADER,
       transparent: true,
       depthWrite: false,
       depthTest: false,
-      uniforms: {
-        uStreakFactor: { value: 0 },
-      },
+      userData: { [FORCE_TRANSPARENT_KEY]: true },
+      uniforms,
     })
 
     const pts = new THREE.Points(geom, mat)
+    pts.name = 'Stars GPU'
+    // Native Points.raycast reads CPU positions. Reconstruct them only when
+    // the user picks a star; the separate geometry never enters the renderer.
+    let pickPoints: THREE.Points | null = null
+    pts.raycast = (raycaster, intersections) => {
+      if (!pickPoints) {
+        const pickGeometry = new THREE.BufferGeometry()
+        pickGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3))
+        pickGeometry.boundingSphere = geom.boundingSphere!.clone()
+        pickGeometryRef.current = pickGeometry
+        pickPoints = new THREE.Points(pickGeometry, mat)
+      }
+      writeStarsPickPositions(motion.positions, parallax, uniforms, pickPoints.geometry.attributes.position.array as Float32Array)
+      pickPoints.geometry.boundingSphere!.copy(geom.boundingSphere!)
+      pickPoints.matrixWorld.copy(pts.matrixWorld)
+      const start = intersections.length
+      pickPoints.raycast(raycaster, intersections)
+      for (let i = start; i < intersections.length; i++) intersections[i].object = pts
+    }
     root.add(pts)
 
     pointsObj.current = pts
     geomRef.current = geom
     matRef.current = mat
+    uniformsRef.current = uniforms
+    motionRef.current = motion
     builtCount.current = count
     builtSpread.current = spread
     builtDepth.current = depth
@@ -275,8 +241,6 @@ export function StarsVisual({ trackId }: { trackId: string }) {
     const driftSpeed = p.drift ?? DEFAULTS.drift
     const tint = p.tint ?? DEFAULTS.tint
 
-    const depthHalf = depth / 2
-
     // Rebuild if settings changed
     if (
       starCount !== builtCount.current ||
@@ -288,9 +252,10 @@ export function StarsVisual({ trackId }: { trackId: string }) {
 
     const geom = geomRef.current
     const mat = matRef.current
-    if (!geom || !mat) return false
+    const uniforms = uniformsRef.current
+    const motion = motionRef.current
+    if (!geom || !mat || !uniforms || !motion) return false
 
-    const n = starCount
     const secPerBeat = state.secPerBeat
     const tSec = state.beat * secPerBeat
     const notes = state.notes
@@ -395,95 +360,11 @@ export function StarsVisual({ trackId }: { trackId: string }) {
         ? 0
         : streakParity + (1 - 2 * streakParity) * Math.exp(-6 * (tSec - lastStreakOn))
 
-    // Tint color for distant stars
-    const tintHue = tint / 360
-    const sc = scratchColor.current
-
-    const base = basePosBuf.current
-    const par = parallaxBuf.current
-    const pos = posBuf.current
-    const sz = sizeBuf.current
-    const col = colBuf.current
-    const alp = alphaBuf.current
-
-    const cosRoll = Math.cos(rollAngle)
-    const sinRoll = Math.sin(rollAngle)
-    const cosT = Math.cos(tumbleAngle)
-    const sinT = Math.sin(tumbleAngle)
-
-    for (let i = 0; i < n; i++) {
-      const parallax = par[i]
-
-      // Translation displacement with parallax, wrapped back into the volume
-      let x = wrapCentered(base[i * 3] + dispX * parallax, spread)
-      let y = wrapCentered(base[i * 3 + 1] + dispY * parallax, spread)
-      let z = wrapCentered(base[i * 3 + 2] + dispZ * parallax, depthHalf)
-
-      // Pulse burst - radial push outward from center in XY
-      if (pulseAmount > 0) {
-        const pDist = Math.sqrt(x * x + y * y)
-        if (pDist > 0.01) {
-          const pushStr = pulseAmount * parallax
-          x += (x / pDist) * pushStr
-          y += (y / pDist) * pushStr
-        }
-      }
-
-      // Barrel roll (rotate XY around Z axis by the accumulated roll angle)
-      if (rollAngle !== 0) {
-        const tmpX = x
-        const tmpY = y
-        x = tmpX * cosRoll - tmpY * sinRoll
-        y = tmpX * sinRoll + tmpY * cosRoll
-      }
-
-      // Tumble (arbitrary axis rotation by the accumulated tumble angle)
-      if (tumbleAngle > 0) {
-        const dot = tax * x + tay * y + taz * z
-        const cx = tay * z - taz * y
-        const cy = taz * x - tax * z
-        const cz = tax * y - tay * x
-        const nx = x * cosT + cx * sinT + tax * dot * (1 - cosT)
-        const ny = y * cosT + cy * sinT + tay * dot * (1 - cosT)
-        const nz = z * cosT + cz * sinT + taz * dot * (1 - cosT)
-        x = nx
-        y = ny
-        z = nz
-      }
-
-      // Wrap coordinates (pulse push and rotations can carry stars back out)
-      x = wrapCentered(x, spread)
-      y = wrapCentered(y, spread)
-      z = wrapCentered(z, depthHalf)
-
-      pos[i * 3] = x
-      pos[i * 3 + 1] = y
-      pos[i * 3 + 2] = z
-
-      // Size: perspective scaling - closer = bigger
-      const absZ = Math.abs(z) + 0.5
-      const perspSize = dotSize * (depthHalf / absZ)
-      sz[i] = Math.max(0.5, perspSize)
-
-      // Color: near stars are white, far stars pick up tint
-      const depthFrac = Math.abs(z) / depthHalf // 0 = near, 1 = far
-      if (tintHue === 0 || depthFrac < 0.1) {
-        // Pure white for near stars or no tint
-        col[i * 3] = 1
-        col[i * 3 + 1] = 1
-        col[i * 3 + 2] = 1
-      } else {
-        // Blend toward tinted color with distance
-        sc.setHSL(tintHue, 0.4 * depthFrac, 0.9 - 0.3 * depthFrac)
-        const blend = depthFrac * 0.6
-        col[i * 3] = 1 + (sc.r - 1) * blend
-        col[i * 3 + 1] = 1 + (sc.g - 1) * blend
-        col[i * 3 + 2] = 1 + (sc.b - 1) * blend
-      }
-
-      // Alpha: near = fully opaque, far = dimmer
-      alp[i] = 1.0 - depthFrac * 0.7
-    }
+    if (updateStarsMotion(motion, uniforms, {
+      displacement: [dispX, dispY, dispZ], spread, depth, pulseAmount,
+      rollAngle, tumbleAngle, tumbleAxis: [tax, tay, taz], dotSize, tint,
+    })) geom.attributes.position.needsUpdate = true
+    geom.boundingSphere!.radius = Math.hypot(spread, spread, depth / 2)
 
     // --- Background color ---
     // Target = theme of a held BG note (latest onset wins), else the setting color.
@@ -563,30 +444,23 @@ export function StarsVisual({ trackId }: { trackId: string }) {
       }
     }
 
-    // Flag attributes for GPU upload
-    const posAttr = geom.getAttribute('position') as THREE.BufferAttribute
-    const sizeAttr = geom.getAttribute('aSize') as THREE.BufferAttribute
-    const colorAttr = geom.getAttribute('aColor') as THREE.BufferAttribute
-    const alphaAttr = geom.getAttribute('aAlpha') as THREE.BufferAttribute
-    posAttr.needsUpdate = true
-    sizeAttr.needsUpdate = true
-    colorAttr.needsUpdate = true
-    alphaAttr.needsUpdate = true
   })
 
   useEffect(() => {
+    const root = rootRef.current
     return () => {
       // Restore default background
       scene.background = new THREE.Color('#0a0a0f')
       if (scene.fog && scene.fog instanceof THREE.Fog) {
         scene.fog.color.set('#0a0a0f')
       }
-      if (pointsObj.current && rootRef.current)
-        rootRef.current.remove(pointsObj.current)
+      if (pointsObj.current && root)
+        root.remove(pointsObj.current)
       geomRef.current?.dispose()
       matRef.current?.dispose()
-      if (groundGroup.current && rootRef.current) {
-        rootRef.current.remove(groundGroup.current)
+      pickGeometryRef.current?.dispose()
+      if (groundGroup.current && root) {
+        root.remove(groundGroup.current)
         groundGroup.current.traverse((child) => {
           if ((child as THREE.Mesh).geometry) (child as THREE.Mesh).geometry.dispose()
           if ((child as THREE.Mesh).material) ((child as THREE.Mesh).material as THREE.Material).dispose()

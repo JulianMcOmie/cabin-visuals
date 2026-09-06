@@ -46,6 +46,28 @@ a DEF file usually imports nothing but types and `lazyInstrument`, so importing
 a def in a test is fine again - it is the VIEW file that still closes the cycle;
 never import a `*Visual.tsx` from a test.)
 
+## GPU Stars: immutable seeds, bounded coordinates, explicit picking
+
+`StarsVisual.tsx` resolves note history once per frame; `starsGpu.ts` computes
+per-star motion, size, linear-space HSL and alpha in the vertex shader. Keep the
+order **wrap → pulse → roll → tumble → wrap**. The default count remains 1,500.
+
+- Long accumulated displacement loses precision in GLSL float32. `updateStarsMotion`
+  rebases the position attribute at deterministic 32-unit displacement boundaries,
+  always from the immutable seed layout. Ordinary frames update only uniforms;
+  rebases/layout changes upload positions. Never integrate a previous GPU frame:
+  backward seeks, shifted copies and export must agree with direct seeks.
+- `Points.raycast` cannot see vertex displacement. Stars reconstructs positions in
+  a separate CPU-only geometry **on picking**, preserves the visible Points as the
+  hit object, and bounds the whole wrapped volume for culling. Do not upload the
+  picking geometry or put that loop back into playback.
+- The fragment shader needs `uOpacity` AND `FORCE_TRANSPARENT_KEY` to preserve the
+  placement wrapper's fades and soft dots at full opacity.
+- `scripts/perf/stars-gpu.mjs` compiles the production GLSL and compares it with a
+  frozen independent legacy CPU fixture. It separates CPU update, draw submission
+  and GPU timing. `scripts/perf/stars-gpu-app.mjs` exercises the real editor; see
+  `docs/stars-gpu.md` for commands and measurement limits.
+
 ## Per-instance opacity on an InstancedMesh
 
 `instanceColor` / `vertexColors` carry RGB only — there is no built-in per-instance
