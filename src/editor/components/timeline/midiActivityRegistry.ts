@@ -62,12 +62,56 @@ function setBlockPromotion(block: MidiActivityBlock, on: boolean): void {
   }
 }
 
-export function registerMidiActivityBlock(
+export interface MidiActivityRegistration {
+  setVisible(visible: boolean): void
+  dispose(): void
+}
+
+/** Prepare a preview lazily on its first viewport entry, then retain the note
+ * lookup while it is parked. Scrolling must not re-flatten notes or query the
+ * same DOM each time. Replace this handle whenever the block or preview DOM
+ * changes; disposal releases the cached references. */
+export function createMidiActivityBlock(
   block: Block,
   beatsPerBar: number,
   element: HTMLDivElement,
   muted = false,
-): () => void {
+): MidiActivityRegistration {
+  let registration: MidiActivityBlock | null = null
+  let visible = false
+  let disposed = false
+  const setVisible = (next: boolean) => {
+    if (disposed || visible === next) return
+    visible = next
+    if (!next) {
+      if (registration && blocks.get(block.id) === registration) {
+        blocks.delete(block.id)
+        for (const pulse of registration.pulses) pulse.style.opacity = ZERO
+        setBlockPromotion(registration, false)
+        registration.lastOpacity = ZERO
+        for (const note of registration.notes) {
+          if (note.lastActivity !== ZERO) note.element.style.removeProperty('--midi-note-activity')
+          note.lastActivity = ZERO
+        }
+      }
+      return
+    }
+    registration ??= prepareMidiActivityBlock(block, beatsPerBar, element, muted)
+    blocks.set(block.id, registration)
+    for (const pulse of registration.pulses) pulse.style.opacity = ZERO
+    if (transportPlaying) setBlockPromotion(registration, true)
+  }
+  return {
+    setVisible,
+    dispose() {
+      setVisible(false)
+      disposed = true
+      registration = null
+    },
+  }
+}
+
+function prepareMidiActivityBlock(block: Block, beatsPerBar: number, element: HTMLDivElement, muted: boolean): MidiActivityBlock {
   const triggers = midiActivityTriggersForBlock(block, beatsPerBar)
   const elements = new Map<string, HTMLElement>()
   element.querySelectorAll<HTMLElement>('[data-midi-preview-key]').forEach((noteElement) => {
@@ -87,24 +131,13 @@ export function registerMidiActivityBlock(
       return [{ element: noteElement, trigger, lastActivity: ZERO }]
     }),
   }
-  blocks.set(block.id, registration)
-  for (const pulse of registration.pulses) pulse.style.opacity = ZERO
-  if (transportPlaying) setBlockPromotion(registration, true)
-
-  return () => {
-    if (blocks.get(block.id) === registration) blocks.delete(block.id)
-    for (const pulse of registration.pulses) pulse.style.opacity = ZERO
-    setBlockPromotion(registration, false)
-    for (const note of registration.notes) {
-      if (note.lastActivity !== ZERO) note.element.style.removeProperty('--midi-note-activity')
-    }
-  }
+  return registration
 }
 
 // Once a paused sweep has zeroed every block, later paused frames skip the
 // whole walk - the RAF calls this every frame forever, and iterating every
 // note of a large project just to confirm zeros is real per-frame cost.
-// Blocks registered while paused start at 0 (registerMidiActivityBlock), so
+// Blocks registered while paused start at 0 (createMidiActivityBlock), so
 // the cleared state stays truthful without re-sweeping.
 let idleCleared = false
 

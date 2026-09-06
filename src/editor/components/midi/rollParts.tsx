@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useRef, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react'
 import { midiNoteColor, midiRowLabelColor } from '../../utils/midiEditorPalette'
-import { beatToX, rowIndexToY } from './coords'
+import { beatToX } from './coords'
 import type { TiledNote } from '../../core/visual/noteFlatten'
 import type { Note } from '../../types'
 import type { MidiRow } from './types'
@@ -14,18 +14,24 @@ import type { MidiRow } from './types'
 // hundreds of inline style objects and closures per frame for a one-note move.
 // Each piece here takes primitives plus callbacks that MidiEditor keeps
 // referentially stable (ref-backed), so a drag re-renders only the notes that
-// actually moved. The markup and styles are byte-for-byte what MidiEditor
-// rendered inline; scripts/perf/roll-rows-check.mjs pins that.
+// actually moved. Vertical note geometry is relative to the grid height so
+// row zoom can also reuse note elements; timeline-density.mjs ROLL=1 VERIFY=1
+// checks computed geometry and pointer gestures.
 
-/** One note body. `noteId` rides the callbacks (and the `data-note-id`
+/** One note body. Vertical geometry is a fraction of the full row grid, whose
+ * height is rowCount * rowHeight. Resizing rows then needs only browser layout,
+ * with no per-note React updates or inherited custom-property invalidation.
+ *
+ * `noteId` rides the callbacks (and the `data-note-id`
  *  attribute, which scripts/perf/roll-smoke.mjs targets) so the handlers can be
  *  shared by every note instead of closing over each one. */
 export interface NoteRectProps {
   noteId: string
   left: number
-  top: number
+  rowIndex: number
+  rowCount: number
+  wordFontSize: number
   width: number
-  height: number
   color: string
   isSelected: boolean
   /** Selected or being drawn: lifted fill plus the laser glow. */
@@ -49,9 +55,10 @@ export interface NoteRectProps {
 export const NoteRect = memo(function NoteRect({
   noteId,
   left,
-  top,
+  rowIndex,
+  rowCount,
+  wordFontSize,
   width,
-  height,
   color,
   isSelected,
   isLive,
@@ -73,9 +80,9 @@ export const NoteRect = memo(function NoteRect({
       style={{
         position: 'absolute',
         left,
-        top,
+        top: `calc(${rowIndex * 100 / rowCount}% + 2px)`,
         width,
-        height,
+        height: `calc(${100 / rowCount}% - 4px)`,
         backgroundColor: color,
         borderRadius: 3,
         boxShadow: isLive
@@ -98,7 +105,7 @@ export const NoteRect = memo(function NoteRect({
             alignItems: 'center',
             overflow: 'hidden',
             whiteSpace: 'nowrap',
-            fontSize: Math.min(11, height - 4),
+            fontSize: wordFontSize,
             fontWeight: 700,
             color: word === '∅' ? '#f0a0a0' : 'rgba(10,12,16,0.9)',
             pointerEvents: 'none',
@@ -312,7 +319,6 @@ export interface LoopGhostsProps {
   pitchToRowIndex: (pitch: number) => number
   blockStartPx: number
   pixelsPerBeat: number
-  rowHeight: number
 }
 
 interface GhostCacheEntry {
@@ -322,11 +328,12 @@ interface GhostCacheEntry {
   element: ReactElement | null
 }
 
-export const LoopGhosts = memo(function LoopGhosts({ ghosts, rows, pitchToRowIndex, blockStartPx, pixelsPerBeat, rowHeight }: LoopGhostsProps) {
+export const LoopGhosts = memo(function LoopGhosts({ ghosts, rows, pitchToRowIndex, blockStartPx, pixelsPerBeat }: LoopGhostsProps) {
   const cacheRef = useRef<{ geometry: string; rows: MidiRow[]; entries: Map<string, GhostCacheEntry> }>({ geometry: '', rows, entries: new Map() })
-  const geometry = `${blockStartPx}|${pixelsPerBeat}|${rowHeight}`
+  const geometry = `${blockStartPx}|${pixelsPerBeat}`
   const prev = cacheRef.current
-  // Any change to how a beat/row maps to pixels invalidates every ghost.
+  // Horizontal geometry and row vocabulary invalidate ghosts; vertical zoom
+  // follows the grid height through percentages without rebuilding elements.
   const reusable = prev.geometry === geometry && prev.rows === rows ? prev.entries : null
   const next = new Map<string, GhostCacheEntry>()
   const out: (ReactElement | null)[] = []
@@ -350,9 +357,9 @@ export const LoopGhosts = memo(function LoopGhosts({ ghosts, rows, pitchToRowInd
           style={{
             position: 'absolute',
             left: ghostLeft,
-            top: rowIndexToY(rowIndex, rowHeight) + 2,
+            top: `calc(${rowIndex * 100 / rows.length}% + 2px)`,
             width: Math.max(ghostRight - ghostLeft, 8),
-            height: rowHeight - 4,
+            height: `calc(${100 / rows.length}% - 4px)`,
             backgroundColor: midiNoteColor(row.color, t.note.velocity),
             opacity: 0.3,
             borderRadius: 3,

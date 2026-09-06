@@ -306,6 +306,20 @@ export function TimelineArea() {
     return () => observer.disconnect()
   }, [labelWidth])
 
+  // Row-height changes otherwise lay out every note in the project. During
+  // the gesture, park only far-offscreen block contents; restore their raster
+  // caches after settling so ordinary scrolling never pays reveal churn.
+  const previousRowHeight = useRef(rowHeight)
+  useLayoutEffect(() => {
+    if (previousRowHeight.current === rowHeight) return
+    previousRowHeight.current = rowHeight
+    const sc = scrollRef.current
+    if (!sc) return
+    sc.setAttribute('data-row-zooming', '')
+    const timer = window.setTimeout(() => sc.removeAttribute('data-row-zooming'), 180)
+    return () => window.clearTimeout(timer)
+  }, [rowHeight])
+
   // Alt+scroll over the lanes zooms: deltaY → row height (vertical zoom), deltaX →
   // pixels-per-beat (horizontal zoom). Mirrors the MIDI editor's alt-scroll.
   useEffect(() => {
@@ -579,7 +593,7 @@ export function TimelineArea() {
         <div
           ref={scrollRef}
           data-tracks-scroll
-          className="absolute inset-0 overflow-auto timeline-scrollbar select-none"
+          className="absolute inset-0 overflow-auto timeline-scrollbar midi-scroll-surface select-none"
           onScroll={onTimelineScroll}
         >
           <div
@@ -608,44 +622,48 @@ export function TimelineArea() {
                 ...laneGrid,
               }}
             />
-            {visualRows.map((row, i) => {
-              const isLast = i === visualRows.length - 1
-              const track = tracks[row.id]
-              // The label divider below this row starts at the bracket line of the
-              // NEXT row's depth; a deeper next row is a first child, whose curve
-              // draws that divider itself (so this row draws none).
-              const nextDepth = visualRows[i + 1]?.depth
-              const dividerInset = isLast || nextDepth === undefined || nextDepth > row.depth
-                ? null
-                : rowIndentPx(nextDepth)
-              // Visible rows in this track's subtree - its background strip beside
-              // the children spans exactly these rows.
-              let descendantRows = 0
-              while (visualRows[i + 1 + descendantRows] && visualRows[i + 1 + descendantRows].depth > row.depth) descendantRows++
-              return track ? (
-                <Track
-                  key={row.id}
-                  track={track}
-                  depth={row.depth}
-                  guides={rowGuides[i]}
-                  dividerInset={dividerInset}
-                  descendantRows={descendantRows}
-                  isLast={isLast}
-                  liftOffset={dragActive ? (dragHasTarget && dragGapRow != null && i >= dragGapRow ? dragRowHeight : 0) : undefined}
-                  dimmed={trackDrop?.activeId === row.id}
-                  dropInto={trackDrop?.intoId === row.id}
-                  replacePreview={trackDrop?.replace?.trackId === row.id ? trackDrop.replace : undefined}
-                  onCopyDragStart={startTrackCopyDrag}
-                  onNestDragStart={startNestDrag}
-                  onLabelContextMenu={handleLabelContextMenu}
-                  barWidthPx={barWidthPx}
-                  pickupPx={pickupPx}
-                  selectedBlockIds={selectedBlockIds}
-                  onBlockPointerDown={handleBlockPointerDown}
-                  onLanePointerDown={handleLanePointerDown}
-                />
-              ) : null
-            })}
+            {/* One grid track per row: changing this size lets the browser lay
+                out the rows without re-rendering every track's controls. */}
+            <div style={{ display: 'grid', gridAutoRows: rowHeight, flexShrink: 0 }}>
+              {visualRows.map((row, i) => {
+                const isLast = i === visualRows.length - 1
+                const track = tracks[row.id]
+                // The label divider below this row starts at the bracket line of the
+                // NEXT row's depth; a deeper next row is a first child, whose curve
+                // draws that divider itself (so this row draws none).
+                const nextDepth = visualRows[i + 1]?.depth
+                const dividerInset = isLast || nextDepth === undefined || nextDepth > row.depth
+                  ? null
+                  : rowIndentPx(nextDepth)
+                // Visible rows in this track's subtree - its background strip beside
+                // the children spans exactly these rows.
+                let descendantRows = 0
+                while (visualRows[i + 1 + descendantRows] && visualRows[i + 1 + descendantRows].depth > row.depth) descendantRows++
+                return track ? (
+                  <Track
+                    key={row.id}
+                    track={track}
+                    depth={row.depth}
+                    guides={rowGuides[i]}
+                    dividerInset={dividerInset}
+                    descendantRows={descendantRows}
+                    isLast={isLast}
+                    liftOffset={dragActive ? (dragHasTarget && dragGapRow != null && i >= dragGapRow ? dragRowHeight : 0) : undefined}
+                    dimmed={trackDrop?.activeId === row.id}
+                    dropInto={trackDrop?.intoId === row.id}
+                    replacePreview={trackDrop?.replace?.trackId === row.id ? trackDrop.replace : undefined}
+                    onCopyDragStart={startTrackCopyDrag}
+                    onNestDragStart={startNestDrag}
+                    onLabelContextMenu={handleLabelContextMenu}
+                    barWidthPx={barWidthPx}
+                    pickupPx={pickupPx}
+                    selectedBlockIds={selectedBlockIds}
+                    onBlockPointerDown={handleBlockPointerDown}
+                    onLanePointerDown={handleLanePointerDown}
+                  />
+                ) : null
+              })}
+            </div>
 
             {/* The project boundary controls playback/export, not how much ruler
                 and grid we render. This overlay desaturates and darkens every

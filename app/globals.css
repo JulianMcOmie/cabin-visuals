@@ -475,6 +475,21 @@ body.drag-moving * {
 }
 
 
+/* Keep the note surface's raster separate from the page when the panel moves
+   or changes height. These scrollers have externally determined dimensions;
+   containment must stay here, never on rows whose blooms cross row edges. */
+.midi-scroll-surface {
+  contain: strict;
+  will-change: transform;
+}
+
+/* Only skip offscreen note layout while row heights are changing. Keeping
+   content hidden during ordinary scrolling throws away useful raster caches
+   and makes viewport entry slower. Notes remain mounted in either case. */
+[data-tracks-scroll][data-row-zooming] [data-midi-offscreen] {
+  content-visibility: hidden;
+}
+
 /* Slim, dark, minimal scrollbar for timeline panels (tracks + MIDI editor) */
 .timeline-scrollbar {
   scrollbar-width: thin;                                   /* Firefox */

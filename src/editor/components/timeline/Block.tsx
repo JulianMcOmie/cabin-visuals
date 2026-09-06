@@ -4,9 +4,9 @@ import { LOOP_CURSOR } from '../../utils/dragCursor'
 import { BLOCK_EDGE_HIT, edgeHitPx } from '../../constants'
 import { midiBlockPalette, type MidiBlockPalette } from '../../utils/colors'
 import { notePreviewPitchPositions } from '../../core/visual/notePreviewLayout'
-import { memo, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Block as BlockType } from '../../types'
-import { registerMidiActivityBlock } from './midiActivityRegistry'
+import { createMidiActivityBlock, type MidiActivityRegistration } from './midiActivityRegistry'
 import { observeTimelineViewport } from './observeTimelineViewport'
 
 interface BlockProps {
@@ -32,13 +32,18 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
   const isEditing = useUIStore((s) => s.editingBlock?.blockId === block.id)
   const setEditingBlock = useUIStore((s) => s.setEditingBlock)
   const blockRef = useRef<HTMLDivElement>(null)
-  // Keep note DOM stable while scrolling; only activity subscriptions and
-  // promoted pulse layers need to follow the nearby viewport. Mount churn
-  // costs more than retaining the browser's already-rasterized note previews.
-  const [activityVisible, setActivityVisible] = useState(false)
+  const activityRef = useRef<MidiActivityRegistration | null>(null)
+  const visibleRef = useRef(false)
   useEffect(() => {
     const element = blockRef.current
-    if (element) return observeTimelineViewport(element, setActivityVisible)
+    if (!element) return
+    return observeTimelineViewport(element, visible => {
+      // Visibility is transient browser state, not a React render. Keep the
+      // observer alive across edits; its callback uses the current activity.
+      visibleRef.current = visible
+      element.toggleAttribute('data-midi-offscreen', !visible)
+      activityRef.current?.setVisible(visible)
+    })
   }, [])
 
   const left = block.startBar * barWidthPx
@@ -61,14 +66,18 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
 
   useEffect(() => {
     const element = blockRef.current
-    if (!element || !activityVisible) return
-    return registerMidiActivityBlock(block, beatsPerBar, element, muted)
-  }, [beatsPerBar, block, muted, previewRowPitches, strictPreviewRows, activityVisible, active])
+    if (!element) return
+    const activity = createMidiActivityBlock(block, beatsPerBar, element, muted)
+    activityRef.current = activity
+    activity.setVisible(visibleRef.current)
+    return () => { activityRef.current = null; activity.dispose() }
+  }, [beatsPerBar, block, muted, previewRowPitches, strictPreviewRows, active])
 
   return (
     <div
       ref={blockRef}
       data-block-id={block.id}
+      data-midi-offscreen=""
       data-looped-block={hasLoopSections ? '' : undefined}
       title="Double-click to edit notes"
       className="absolute top-0 bottom-0 overflow-hidden rounded-[6px]"

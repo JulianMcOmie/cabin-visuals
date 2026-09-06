@@ -48,7 +48,24 @@ re-resolves one track, not the scene.
   during scrolling was slower than retaining it. Leaving the viewport releases
   pulse layer promotion and clears active note flashes; entering while playing
   resumes on the next playhead frame. Selection/editing changes must refresh the
-  registration too, because selected blocks remove their wash overlays.
+  activity handle too, because selected blocks remove their wash overlays.
+  The observer lives for the mounted block and writes the viewport attribute
+  directly, without React state. Each activity handle prepares notes lazily on
+  first entry and retains its lookup while parked; edits/selection dispose it.
+- **Panel resize and row zoom**: `.midi-scroll-surface` isolates the arrangement
+  and piano-roll scrollers for painting; containment must stay on those sized,
+  clipped viewports, not rows whose selection blooms cross boundaries. During
+  arrangement row-height changes only, `data-row-zooming` skips offscreen block
+  contents (never unmounts notes), then clears after 180ms. Permanent skipping
+  was slower for ordinary scrolling. The piano roll's notes and loop ghosts use
+  grid-height percentages; preserve their element cache across vertical zoom.
+  An inherited row-height variable invalidated all note styles and lost the
+  benefit. `timeline-density.mjs resize|zoom` and `ROLL=1` reproduce these cases.
+- **Track heights come from one CSS grid** in TimelineArea. Do not subscribe
+  every Track to `tracksRowHeight` again: that rebuilds the whole control strip
+  on each zoom step. Descendant bracket heights are multiples of the parent
+  row height in percent; tag badges subscribe only to their visibility threshold.
+  `timeline-layout-check.mjs` checks nested spans, tags, sticky labels and collapse.
 - **Write pulse opacity on the wash element itself**, never an inherited custom
   property on its block. In a 30-track/30,720-note fixture the inherited variable
   invalidated every note descendant and cost ~1.54s of style work per six seconds

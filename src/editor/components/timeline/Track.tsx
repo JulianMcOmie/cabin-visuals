@@ -106,7 +106,6 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
   const isPrimarySelected = useUIStore((s) => s.selectedTrackId === track.id)
   const inMultiSelection = useUIStore((s) => s.selectedTrackIds.has(track.id))
   const loopDragHere = useUIStore((s) => (s.loopDrag?.target?.trackId === track.id ? s.loopDrag : null))
-  const rowHeight = useUIStore((s) => s.tracksRowHeight)
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
   const setTrackCollapsed = useUIStore((s) => s.setTrackCollapsed)
   const isCollapsed = useUIStore((s) => s.collapsedTrackIds.has(track.id))
@@ -157,9 +156,10 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
 
   const canvasHovered = useUIStore((s) => s.canvasHover?.trackId === track.id)
 
-  // Tag badges are a second label line, shown only on deliberately-tall rows.
+  // The grid owns row height. Only crossing the tag threshold needs React
+  // work here; ordinary zoom steps must not rebuild every track control.
   const tagList = isObjectTrack ? track.tags ?? [] : []
-  const showTagBadges = tagList.length > 0 && rowHeight >= TAG_BADGES_MIN_ROW_HEIGHT
+  const showTagBadges = useUIStore((s) => tagList.length > 0 && s.tracksRowHeight >= TAG_BADGES_MIN_ROW_HEIGHT)
 
   // Hovering the label plays the row's element in the shared preview popup
   // (the same warm canvas the library uses) - objects run their instrument,
@@ -297,7 +297,6 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
         // below them (z-10), or the bottom row hides under it as it reflows down.
         zIndex: inCopyDrag ? 15 : undefined,
         position: 'relative',
-        height: rowHeight,
       }}
       className="flex items-stretch cursor-default"
     >
@@ -374,7 +373,8 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
                 // not - so the fill meets the curved divider without leaving
                 // a bare notch.
                 width: childBracketLeft - regionLeft + BRACKET_CORNER_RADIUS_PX,
-                height: descendantRows * rowHeight,
+                // Relative to this row, so the bracket follows grid sizing.
+                height: `${descendantRows * 100}%`,
               }}
             />
           )}
@@ -389,7 +389,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
           <>
             <span
               className="pointer-events-none absolute right-0 rounded-tl-md border-l border-t border-[var(--accent)]"
-              style={{ left: childBracketLeft, top: '100%', height: descendantRows * rowHeight }}
+              style={{ left: childBracketLeft, top: '100%', height: `${descendantRows * 100}%` }}
             />
             <span
               className="pointer-events-none absolute border-b border-l border-[var(--accent)]"
@@ -397,7 +397,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
                 left: regionLeft,
                 top: '100%',
                 width: childBracketLeft - regionLeft,
-                height: descendantRows * rowHeight,
+                height: `${descendantRows * 100}%`,
               }}
             />
           </>

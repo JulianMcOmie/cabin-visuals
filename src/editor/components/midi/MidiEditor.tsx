@@ -469,6 +469,59 @@ export function MidiEditor({
   const blockStartPx = beatToX(blockStartBeat, pixelsPerBeat)
   const blockWidthPx = beatToX(blockDurationBeats, pixelsPerBeat)
 
+  const wordFontSize = noteWords ? Math.min(11, rowHeight - 8) : 11
+  // Stable elements skip the whole note list on vertical zoom. Gestures use
+  // ref-backed callbacks, so cached bodies still read the current coordinates.
+  const noteRects = useMemo(() => allNotes.map((note) => {
+    const rowIndex = pitchToRowIndex(note.pitch)
+    if (rowIndex === -1) return null
+    const row = rows[rowIndex]
+    // Pixel-snap the horizontal geometry: fractional lefts/widths
+    // antialias the edges, and on the bright neon fills that soft
+    // edge reads as blur. Snapping left and right independently
+    // keeps rounding drift under half a pixel at any zoom. The 1px
+    // trimmed off the right edge is the note separator - notes have
+    // NO stroke (pure flat fills), so back-to-back notes on a row
+    // read apart through the gap alone.
+    const left = Math.round(blockStartPx + beatToX(note.startBeat, pixelsPerBeat))
+    const right = Math.round(blockStartPx + beatToX(note.startBeat + note.durationBeats, pixelsPerBeat))
+    const w = Math.max(right - left - 1, 8)
+    const isSelected = selectedNoteIds.has(note.id)
+    // Selected notes (which includes every note mid-drag) and the
+    // note being drawn read purely from the body: a lifted fill plus
+    // the laser glow.
+    const isLive = isSelected || note.id === drawingNote?.id
+    const noteColor = midiNoteColor(row.color, note.velocity, isSelected)
+
+    return (
+      <NoteRect
+        key={note.id}
+        noteId={note.id}
+        left={left}
+        rowIndex={rowIndex}
+        rowCount={rows.length}
+        wordFontSize={wordFontSize}
+        width={w}
+        color={noteColor}
+        isSelected={isSelected}
+        isLive={isLive}
+        word={noteWords ? (noteWords[note.id] ?? '') : undefined}
+        wordEditable={!!(onNoteWordEdit && noteWords)}
+        editValue={wordEdit?.noteId === note.id ? wordEdit.value : null}
+        onPointerDown={onNoteRectPointerDown}
+        onPointerMove={handleNotePointerMove}
+        onPointerOut={onNoteRectPointerOut}
+        onWordEditStart={onWordEditStart}
+        onWordEditChange={onWordEditChange}
+        onWordEditCommit={onWordEditCommit}
+        onWordEditCancel={onWordEditCancel}
+      />
+    )
+  }), [allNotes, pitchToRowIndex, rows, blockStartPx, pixelsPerBeat, selectedNoteIds,
+    drawingNote?.id, noteWords, onNoteWordEdit, wordEdit, wordFontSize,
+    onNoteRectPointerDown, handleNotePointerMove, onNoteRectPointerOut,
+    onWordEditStart, onWordEditChange, onWordEditCommit, onWordEditCancel])
+
   return (
     <div className="relative flex-1 flex flex-col min-h-0 bg-[#1e1e21] select-none">
       {/* Resize handle along the label gutter's right edge - spans the full height
@@ -538,7 +591,8 @@ export function MidiEditor({
 
       <div
         ref={containerRef}
-        className="flex-1 overflow-auto timeline-scrollbar min-h-0"
+        data-midi-scroll
+        className="flex-1 overflow-auto timeline-scrollbar midi-scroll-surface min-h-0"
         style={{ cursor: 'default' }}
         onClick={handleContainerClick}
         onScroll={onScrollSync}
@@ -738,7 +792,6 @@ export function MidiEditor({
             pitchToRowIndex={pitchToRowIndex}
             blockStartPx={blockStartPx}
             pixelsPerBeat={pixelsPerBeat}
-            rowHeight={rowHeight}
           />
 
           {/* Drag ghosts: the footprint each dragged note LEFT. Read from the
@@ -781,53 +834,7 @@ export function MidiEditor({
             })}
 
           {/* Notes */}
-          {allNotes.map((note) => {
-            const rowIndex = pitchToRowIndex(note.pitch)
-            if (rowIndex === -1) return null
-            const row = rows[rowIndex]
-            // Pixel-snap the horizontal geometry: fractional lefts/widths
-            // antialias the edges, and on the bright neon fills that soft
-            // edge reads as blur. Snapping left and right independently
-            // keeps rounding drift under half a pixel at any zoom. The 1px
-            // trimmed off the right edge is the note separator - notes have
-            // NO stroke (pure flat fills), so back-to-back notes on a row
-            // read apart through the gap alone.
-            const left = Math.round(blockStartPx + beatToX(note.startBeat, pixelsPerBeat))
-            const right = Math.round(blockStartPx + beatToX(note.startBeat + note.durationBeats, pixelsPerBeat))
-            const y = rowIndexToY(rowIndex, rowHeight) + 2
-            const w = Math.max(right - left - 1, 8)
-            const h = rowHeight - 4
-            const isSelected = selectedNoteIds.has(note.id)
-            // Selected notes (which includes every note mid-drag) and the
-            // note being drawn read purely from the body: a lifted fill plus
-            // the laser glow.
-            const isLive = isSelected || note.id === drawingNote?.id
-            const noteColor = midiNoteColor(row.color, note.velocity, isSelected)
-
-            return (
-              <NoteRect
-                key={note.id}
-                noteId={note.id}
-                left={left}
-                top={y}
-                width={w}
-                height={h}
-                color={noteColor}
-                isSelected={isSelected}
-                isLive={isLive}
-                word={noteWords ? (noteWords[note.id] ?? '') : undefined}
-                wordEditable={!!(onNoteWordEdit && noteWords)}
-                editValue={wordEdit?.noteId === note.id ? wordEdit.value : null}
-                onPointerDown={onNoteRectPointerDown}
-                onPointerMove={handleNotePointerMove}
-                onPointerOut={onNoteRectPointerOut}
-                onWordEditStart={onWordEditStart}
-                onWordEditChange={onWordEditChange}
-                onWordEditCommit={onWordEditCommit}
-                onWordEditCancel={onWordEditCancel}
-              />
-            )
-          })}
+          {noteRects}
 
           {/* Marquee overlay */}
           {marqueeStyle && <div style={marqueeStyle} />}
