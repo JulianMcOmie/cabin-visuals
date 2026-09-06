@@ -353,7 +353,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   // 'Smart' keeps the note grid in sync with the header: quantize = half the
   // smallest subdivision the ruler currently shows at this zoom (computeRulerGrid),
   // matching playheadSnapBeats so notes and the playhead share one grid.
-  const smartQuantize = computeRulerGrid(midiPixelsPerBeat, beatsPerBar, Math.max(totalBars, INITIAL_TOTAL_BARS)).smallestBeats / 2
+  const smartQuantize = computeRulerGrid(midiPixelsPerBeat, beatsPerBar, Math.max(totalBars, INITIAL_TOTAL_BARS)).playheadSnapBeats
   const effectiveQuantize = quantize === 'smart' ? smartQuantize : quantize
 
   const setTrackInterpolation = useProjectStore((s) => s.setTrackInterpolation)

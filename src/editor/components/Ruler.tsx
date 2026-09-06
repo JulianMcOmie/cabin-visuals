@@ -59,7 +59,7 @@ interface RulerProps {
   loopEdge?: string
 }
 
-/** The minor + 16th tick forest. Thousands of divs at deep zoom on a long
+/** The minor + subdivision tick forest. Thousands of divs at deep zoom on a long
  *  project, so it is memoized on the four primitives that shape it: the Ruler
  *  itself re-renders on every store write during a drag (its parents subscribe
  *  broadly by design), and re-diffing this forest per pointermove was the
@@ -77,11 +77,12 @@ const RulerTicks = memo(function RulerTicks({ pixelsPerBeat, beatsPerBar, totalB
     .filter((k) => (majorBars === 1 ? k % beatsPerBar !== 0 : k % 4 !== 0))
     .map((k) => k * minorBeats)
   const subs = subBeats != null
-    ? Array.from({ length: Math.ceil(beatExtent / subBeats) }, (_, k) => k).filter((k) => k % 4 !== 0).map((k) => k * subBeats)
+    ? Array.from({ length: Math.ceil(beatExtent / subBeats) }, (_, k) => k * subBeats)
+      .filter((beat) => beat % minorBeats !== 0)
     : []
   return (
     <>
-      {/* Faint 16th sub-ticks (deep zoom only) - shortest and dimmest.
+      {/* Faint eighth/16th sub-ticks (zoomed in only) - shortest and dimmest.
           Tick/number/line colors read through --ruler-* vars so the
           TIMELINE (.timeline-neon) can voice them as faint etched white on
           its near-black stage while the piano roll keeps these defaults. */}
@@ -91,7 +92,7 @@ const RulerTicks = memo(function RulerTicks({ pixelsPerBeat, beatsPerBar, totalB
 
       {/* Short minor ticks - 4 per major span (one per measure when zoomed
           out). Clearly shorter than the numbered major lines, still a hair
-          taller than the 16th sub-ticks. */}
+          taller than the subdivision ticks. */}
       {minors.map((beat) => (
         <div key={`b${beat}`} className="absolute bottom-0 w-px bg-[var(--ruler-tick-minor,#2c2c33)]" style={{ left: beat * pixelsPerBeat, top: '74%' }} />
       ))}
@@ -216,7 +217,7 @@ export function Ruler({
 
   // Zoom-adaptive grid (Logic-style), shared with the playhead snap - see
   // computeRulerGrid. Zooming out thins the numbered lines 1 → 2 → 4 → 8...
-  // bars; each major span carries 4 minor ticks; deep zoom adds 16th sub-ticks.
+  // bars; each major span carries 4 minor ticks; zoom adds eighth, then 16th sub-ticks.
   const { majorBars } = computeRulerGrid(pixelsPerBeat, beatsPerBar, totalBars)
   const bars = useMemo(
     () => Array.from({ length: Math.ceil(totalBars / majorBars) }, (_, i) => i * majorBars),

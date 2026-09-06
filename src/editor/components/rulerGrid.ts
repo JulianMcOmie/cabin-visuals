@@ -7,7 +7,7 @@ export interface RulerGrid {
   /** Minor tick interval (beats) - 4 per major span (beats when majors are
    *  single bars, the musical case). */
   minorBeats: number
-  /** Faint 16th sub-tick interval (beats); null below the zoom threshold. */
+  /** Faint eighth/16th sub-tick interval (beats); null below the zoom threshold. */
   subBeats: number | null
   /** The smallest subdivision currently visible (beats). */
   smallestBeats: number
@@ -17,8 +17,8 @@ export interface RulerGrid {
 
 /** Minimum spacing (px) between numbered bar lines before they thin 2x. */
 const MIN_MAJOR_PX = 64
-/** Beat width (px) at which faint 16th sub-ticks appear. */
-const SUB_TICK_MIN_BEAT_PX = 48
+/** Minimum spacing between faint sub-ticks; halve their beat interval as zoom doubles. */
+const MIN_SUB_TICK_PX = 12
 
 export function computeRulerGrid(pixelsPerBeat: number, beatsPerBar: number, totalBars: number): RulerGrid {
   const barWidthPx = beatsPerBar * pixelsPerBeat
@@ -26,7 +26,12 @@ export function computeRulerGrid(pixelsPerBeat: number, beatsPerBar: number, tot
   while (majorBars < totalBars && majorBars * barWidthPx < MIN_MAJOR_PX) majorBars *= 2
   const majorBeats = majorBars * beatsPerBar
   const minorBeats = majorBars === 1 ? 1 : majorBeats / 4
-  const subBeats = majorBars === 1 && pixelsPerBeat >= SUB_TICK_MIN_BEAT_PX ? 0.25 : null
+  // Include eighth-note ticks before sixteenths so Smart MIDI snapping (half
+  // this interval) progresses through 1/2, 1/4, then 1/8 beat without a jump.
+  const subBeats = majorBars !== 1 ? null
+    : pixelsPerBeat * 0.25 >= MIN_SUB_TICK_PX ? 0.25
+    : pixelsPerBeat * 0.5 >= MIN_SUB_TICK_PX ? 0.5
+    : null
   const smallestBeats = subBeats ?? minorBeats
   return { majorBars, minorBeats, subBeats, smallestBeats, playheadSnapBeats: smallestBeats / 2 }
 }
