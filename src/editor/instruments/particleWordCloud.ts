@@ -23,8 +23,8 @@ import { fieldHash } from './particleFieldCore'
 // the caller can derive morph progress purely from beat-distance to a note and
 // keep the pause invariant: scrub == playback.
 
-// 30k is comfortably CPU-cheap per frame (one lerp per particle) and the
-// buffers are allocated once; the real cost of high counts is fill-rate from
+// Frame updates reuse deterministic samples and allocated buffers; the
+// remaining cost of high counts includes fill-rate from
 // overlapping dots, which the per-word brightness normalization already keeps
 // in check.
 export const MAX_PARTICLES = 30000
@@ -160,6 +160,8 @@ export interface ParticleCloudHandles {
   colorAttr: BufferAttribute
   /** Cache key of the last per-particle color fill. */
   lastColorKey: string
+  /** Initialized prefix; count increases must fill newly visible particles. */
+  colorCount: number
 }
 
 export function createParticleCloud(): ParticleCloudHandles {
@@ -182,7 +184,7 @@ export function createParticleCloud(): ParticleCloudHandles {
   material.userData[FORCE_TRANSPARENT_KEY] = true
   const points = new Points(geometry, material)
   points.frustumCulled = false
-  return { points, positionAttr, colorAttr, lastColorKey: '' }
+  return { points, positionAttr, colorAttr, lastColorKey: '', colorCount: 0 }
 }
 
 export function disposeParticleCloud(handles: ParticleCloudHandles): void {
@@ -218,21 +220,80 @@ export interface ParticleCloudFrame {
   stackComp: number
 }
 
-/** Per-particle colors: the sketch's per-channel jitter around a base color,
- *  cached by (color, variation) key. Shared by the cloud and field updaters. */
-function fillCloudColors(handles: ParticleCloudHandles, color: string, variation: number): void {
+// These samples depend only on particle index, not on the color or beat.
+// A colorizer used to repeat 90,000 sine hashes on EVERY color change, even
+// when only 8,000 particles were visible. Float64 preserves the original JS
+// numbers exactly; rounding cached samples to Float32 changes final vertices.
+let colorJitter: Float64Array | undefined
+let colorJitterCount = 0
+
+function cloudColorJitter(count: number): Float64Array {
+  colorJitter ??= new Float64Array(MAX_PARTICLES * 3)
+  for (let i = colorJitterCount; i < count; i++) {
+    colorJitter[i * 3] = seededRand(i * 5.13) - 0.5
+    colorJitter[i * 3 + 1] = seededRand(i * 5.13 + 17.7) - 0.5
+    colorJitter[i * 3 + 2] = seededRand(i * 5.13 + 35.4) - 0.5
+  }
+  colorJitterCount = Math.max(colorJitterCount, count)
+  return colorJitter
+}
+
+// A cloud has one transition; field mode can have the current word and its
+// departing predecessor. Keep just two salts per mounted cloud, so a long
+// lyric/export never accumulates a random table for every word it passes.
+const morphSamples = new WeakMap<ParticleCloudHandles, Map<number, { values: Float64Array; count: number }>>()
+function cloudMorphSamples(handles: ParticleCloudHandles, seed: number, count: number): Float64Array {
+  let cache = morphSamples.get(handles)
+  if (!cache) { cache = new Map(); morphSamples.set(handles, cache) }
+  let samples = cache.get(seed)
+  if (!samples) {
+    if (cache.size >= 2) {
+      const oldest = cache.keys().next().value!
+      samples = cache.get(oldest)!
+      cache.delete(oldest)
+      samples.count = 0
+    } else {
+      samples = { values: new Float64Array(MAX_PARTICLES), count: 0 }
+    }
+  } else {
+    cache.delete(seed)
+  }
+  cache.set(seed, samples)
+  for (let i = samples.count; i < count; i++) samples.values[i] = seededRand(seed + i * 7.7)
+  samples.count = Math.max(samples.count, count)
+  return samples.values
+}
+
+// Three clears ranges after an upload. A hidden cloud may keep updating
+// without uploading, so merge pending writes into ONE prefix instead of
+// accumulating a range per frame (and retain older, larger color writes).
+function markParticlePrefix(attribute: BufferAttribute, count: number): void {
+  let end = count * 3
+  for (const range of attribute.updateRanges) end = Math.max(end, range.start + range.count)
+  attribute.clearUpdateRanges()
+  attribute.addUpdateRange(0, end)
+  attribute.needsUpdate = true
+}
+
+/** Only fill the visible prefix, extending it when the count grows. Shared by
+ *  cloud and field mode; switching modes cannot expose stale particle colors. */
+function fillCloudColors(handles: ParticleCloudHandles, color: string, variation: number, count: number): void {
   const colorKey = `${color}|${variation}`
-  if (colorKey === handles.lastColorKey) return
+  const sameColor = colorKey === handles.lastColorKey
+  if (sameColor && count <= handles.colorCount) return
+  const start = sameColor ? handles.colorCount : 0
   handles.lastColorKey = colorKey
+  handles.colorCount = count
   _baseColor.set(color)
   const colors = handles.colorAttr.array as Float32Array
-  for (let i = 0; i < MAX_PARTICLES; i++) {
+  const jitter = cloudColorJitter(count)
+  for (let i = start; i < count; i++) {
     const i3 = i * 3
-    colors[i3] = Math.max(0, _baseColor.r * (1 + (seededRand(i * 5.13) - 0.5) * variation))
-    colors[i3 + 1] = Math.max(0, _baseColor.g * (1 + (seededRand(i * 5.13 + 17.7) - 0.5) * variation))
-    colors[i3 + 2] = Math.max(0, _baseColor.b * (1 + (seededRand(i * 5.13 + 35.4) - 0.5) * variation))
+    colors[i3] = Math.max(0, _baseColor.r * (1 + jitter[i3] * variation))
+    colors[i3 + 1] = Math.max(0, _baseColor.g * (1 + jitter[i3 + 1] * variation))
+    colors[i3 + 2] = Math.max(0, _baseColor.b * (1 + jitter[i3 + 2] * variation))
   }
-  handles.colorAttr.needsUpdate = true
+  markParticlePrefix(handles.colorAttr, count)
 }
 
 /** Write one frame of the cloud: per-particle colors (cached by key), material
@@ -242,7 +303,7 @@ export function updateParticleCloud(handles: ParticleCloudHandles, frame: Partic
   const { points, positionAttr } = handles
   const count = Math.max(1, Math.min(MAX_PARTICLES, Math.round(frame.count)))
 
-  fillCloudColors(handles, frame.color, frame.variation)
+  fillCloudColors(handles, frame.color, frame.variation, count)
 
   const material = points.material as PointsMaterial
   material.size = frame.dotSize
@@ -290,11 +351,12 @@ export function updateParticleCloud(handles: ParticleCloudHandles, frame: Partic
 
   const { prevTargets, curTargets, progress, morphSeed, stagger, pulseScale } = frame
   const positions = positionAttr.array as Float32Array
+  const samples = cloudMorphSamples(handles, morphSeed, count)
   for (let i = 0; i < count; i++) {
     const i3 = i * 3
     // Staggered onset per particle; everything still lands exactly at
     // progress 1 (delay < 1 always, so the divisor never vanishes).
-    const delay = seededRand(morphSeed + i * 7.7) * stagger * 0.6
+    const delay = samples[i] * stagger * 0.6
     const t = progress >= 1 ? 1 : Math.max(0, Math.min(1, (progress - delay) / (1 - delay)))
     const e = easeInOutQuad(t)
     positions[i3] = (prevTargets[i3] + (curTargets[i3] - prevTargets[i3]) * e) * pulseScale
@@ -302,7 +364,7 @@ export function updateParticleCloud(handles: ParticleCloudHandles, frame: Partic
     positions[i3 + 2] = (prevTargets[i3 + 2] + (curTargets[i3 + 2] - prevTargets[i3 + 2]) * e) * pulseScale
   }
   points.geometry.setDrawRange(0, count)
-  positionAttr.needsUpdate = true
+  markParticlePrefix(positionAttr, count)
 }
 
 // --- Field mode ---
@@ -353,7 +415,7 @@ export function updateParticleField(handles: ParticleCloudHandles, frame: Partic
   const { points, positionAttr } = handles
   const count = Math.max(1, Math.min(MAX_PARTICLES, Math.round(frame.count)))
 
-  fillCloudColors(handles, frame.color, frame.variation)
+  fillCloudColors(handles, frame.color, frame.variation, count)
 
   // Material: dot size + bloom lift. Unlike the word cloud's hundreds-deep
   // additive stacks, the field is mostly UNstacked (spread over the whole
@@ -396,10 +458,11 @@ export function updateParticleField(handles: ParticleCloudHandles, frame: Partic
   // the same salt so a letter frays apart the way it condensed.
   const applyFormation = (f: FieldFormation) => {
     const { shape, map } = f
+    const samples = cloudMorphSamples(handles, f.seed, Math.min(map.length, MAX_PARTICLES))
     for (let r = 0; r < map.length; r++) {
       const i = map[r]
       if (i >= count) continue
-      const delay = seededRand(f.seed + r * 7.7) * frame.stagger * 0.6
+      const delay = samples[r] * frame.stagger * 0.6
       const tIn = f.progress >= 1 ? 1 : Math.max(0, Math.min(1, (f.progress - delay) / (1 - delay)))
       const tOut = f.release <= 0 ? 0 : f.release >= 1 ? 1 : Math.max(0, Math.min(1, (f.release - delay) / (1 - delay)))
       const amp = easeInOutQuad(tIn) * (1 - easeInOutQuad(tOut))
@@ -419,5 +482,5 @@ export function updateParticleField(handles: ParticleCloudHandles, frame: Partic
   if (frame.cur) applyFormation(frame.cur)
 
   points.geometry.setDrawRange(0, count)
-  positionAttr.needsUpdate = true
+  markParticlePrefix(positionAttr, count)
 }

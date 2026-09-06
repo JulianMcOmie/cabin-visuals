@@ -10,9 +10,9 @@ import {
 // this higher ceiling. That remains translucent, but reads clearly at a glance.
 const GLOW_OPACITY_SCALE = 0.65
 const MAX_GLOW_OPACITY = 0.5
+const ZERO = (0).toFixed(4)
 
 interface MidiActivityBlock {
-  element: HTMLDivElement
   /** The matte pulse washes inside this block - one, or one per loop section. */
   pulses: HTMLElement[]
   triggers: MidiActivityTrigger[]
@@ -75,28 +75,28 @@ export function registerMidiActivityBlock(
     if (key) elements.set(key, noteElement)
   })
   const registration: MidiActivityBlock = {
-    element,
     pulses: [...element.querySelectorAll<HTMLElement>('[data-midi-activity-pulse]')],
     triggers,
     muted,
-    lastOpacity: '0',
+    lastOpacity: ZERO,
     notes: triggers.flatMap((trigger) => {
       const noteElement = trigger.previewKey ? elements.get(trigger.previewKey) : undefined
       if (!noteElement) return []
-      noteElement.style.setProperty('--midi-note-activity', '0')
-      return [{ element: noteElement, trigger, lastActivity: '0' }]
+      // CSS already defaults to zero. Writing it here made every drag and
+      // viewport entry invalidate every note, even while paused.
+      return [{ element: noteElement, trigger, lastActivity: ZERO }]
     }),
   }
   blocks.set(block.id, registration)
-  element.style.setProperty('--midi-activity-opacity', '0')
+  for (const pulse of registration.pulses) pulse.style.opacity = ZERO
   if (transportPlaying) setBlockPromotion(registration, true)
 
   return () => {
     if (blocks.get(block.id) === registration) blocks.delete(block.id)
-    element.style.removeProperty('--midi-activity-opacity')
+    for (const pulse of registration.pulses) pulse.style.opacity = ZERO
     setBlockPromotion(registration, false)
     for (const note of registration.notes) {
-      note.element.style.removeProperty('--midi-note-activity')
+      if (note.lastActivity !== ZERO) note.element.style.removeProperty('--midi-note-activity')
     }
   }
 }
@@ -108,7 +108,6 @@ export function registerMidiActivityBlock(
 // the cleared state stays truthful without re-sweeping.
 let idleCleared = false
 
-const ZERO = (0).toFixed(4)
 // One reusable single-element array for the per-note evaluation.
 const singleTrigger: MidiActivityTrigger[] = [{ beat: 0, velocity: 0 }]
 const SINGLE_TRIGGER = (t: MidiActivityTrigger) => { singleTrigger[0] = t; return singleTrigger }
@@ -138,7 +137,9 @@ export function updateMidiActivityAtBeat(beat: number, isPlaying: boolean): void
     const activity = live ? evaluateMidiActivity(block.triggers, beat) : 0
     const opacity = Math.min(MAX_GLOW_OPACITY, activity * GLOW_OPACITY_SCALE).toFixed(4)
     if (block.lastOpacity !== opacity) {
-      block.element.style.setProperty('--midi-activity-opacity', opacity)
+      // Writing an inherited custom property on the BLOCK invalidated styles
+      // for every note descendant each frame. Only the wash needs this value.
+      for (const pulse of block.pulses) pulse.style.opacity = opacity
       block.lastOpacity = opacity
     }
 

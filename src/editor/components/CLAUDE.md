@@ -42,6 +42,22 @@ re-resolves one track, not the scene.
 
 ## timeline/ — the arrangement view
 
+- **MIDI activity is viewport-scoped** (`observeTimelineViewport.ts`): one shared
+  IntersectionObserver per lane scroller enables registrations only near the
+  visible region (200px overscan). Note DOM stays mounted: repeated mount/unmount
+  during scrolling was slower than retaining it. Leaving the viewport releases
+  pulse layer promotion and clears active note flashes; entering while playing
+  resumes on the next playhead frame. Selection/editing changes must refresh the
+  registration too, because selected blocks remove their wash overlays.
+- **Write pulse opacity on the wash element itself**, never an inherited custom
+  property on its block. In a 30-track/30,720-note fixture the inherited variable
+  invalidated every note descendant and cost ~1.54s of style work per six seconds
+  of playback; direct opacity plus viewport activity brought that to ~88ms.
+  Silent notes use the CSS fallback instead of an explicit zero style: even
+  rewriting `0` to `0.0000` across the project caused a playback-start hitch.
+  `scripts/perf/timeline-density.mjs` reproduces playback/scroll/drag workloads;
+  `TRACKS=100 VERIFY=1` exercises 102,400 notes and the viewport/selection lifecycle.
+
 - `TimelineArea.tsx` orchestrates: ruler, playhead (`usePlayhead` writes px via RAF, no re-render per frame), scrub, loop-region drag, track rows.
 - `trackTree.ts` flattens the track forest into visible rows (collapse-aware); `Track.tsx` renders a row (label strip + lane); `Block.tsx`/`AudioBlock.tsx` the blocks.
 - Gestures: `useTrackGestures` (block move/resize/draw), `useTrackNestDrag` (reparenting, drop indicators via `trackDrop.ts`), `useTrackCopyDrag` (alt-drag duplicate). Child-lane rules: envelope/ability lanes never re-parent by plain drag but alt-drag COPIES them onto any parent; AUTOMATION lanes both move and copy between parents — landing under a parent that can't take the lane's target calls the store's `remapAutomationTarget` with the caller-resolved option list (`utils/automationTargets.ts` — the store can't read instrument defs), which defaults the target and remembers the displaced one so dragging back restores it. All three lane types are barred from ROOT drops (they live only on a parent). Sibling drops land on ROW BOUNDARIES, and one boundary can mean several nesting depths (after a grandchild: its sibling, an uncle, a root track — same line): `computeDropTarget` picks the depth from the pointer's X, one `INDENT_PX` step per level, clamped to the boundary's valid range and falling back shallower past parents that can't nest or are being dragged. Any level is reachable, arbitrarily deep; the middle band still nest-appends into the hovered row. (`utils/edgeResize.ts` is the LABEL-COLUMN gutter drag, shared with the piano roll — not block edges.)

@@ -4,9 +4,10 @@ import { LOOP_CURSOR } from '../../utils/dragCursor'
 import { BLOCK_EDGE_HIT, edgeHitPx } from '../../constants'
 import { midiBlockPalette, type MidiBlockPalette } from '../../utils/colors'
 import { notePreviewPitchPositions } from '../../core/visual/notePreviewLayout'
-import { memo, useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Block as BlockType } from '../../types'
 import { registerMidiActivityBlock } from './midiActivityRegistry'
+import { observeTimelineViewport } from './observeTimelineViewport'
 
 interface BlockProps {
   block: BlockType
@@ -31,6 +32,14 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
   const isEditing = useUIStore((s) => s.editingBlock?.blockId === block.id)
   const setEditingBlock = useUIStore((s) => s.setEditingBlock)
   const blockRef = useRef<HTMLDivElement>(null)
+  // Keep note DOM stable while scrolling; only activity subscriptions and
+  // promoted pulse layers need to follow the nearby viewport. Mount churn
+  // costs more than retaining the browser's already-rasterized note previews.
+  const [activityVisible, setActivityVisible] = useState(false)
+  useEffect(() => {
+    const element = blockRef.current
+    if (element) return observeTimelineViewport(element, setActivityVisible)
+  }, [])
 
   const left = block.startBar * barWidthPx
   const width = block.durationBars * barWidthPx
@@ -52,9 +61,9 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
 
   useEffect(() => {
     const element = blockRef.current
-    if (!element) return
+    if (!element || !activityVisible) return
     return registerMidiActivityBlock(block, beatsPerBar, element, muted)
-  }, [beatsPerBar, block, muted, previewRowPitches, strictPreviewRows])
+  }, [beatsPerBar, block, muted, previewRowPitches, strictPreviewRows, activityVisible, active])
 
   return (
     <div
@@ -160,7 +169,7 @@ function MattePulse({ color }: { color: string }) {
       aria-hidden="true"
       data-midi-activity-pulse=""
       className="absolute inset-0 pointer-events-none rounded-[6px]"
-      style={{ backgroundColor: color, opacity: 'var(--midi-activity-opacity, 0)' }}
+      style={{ backgroundColor: color, opacity: 0 }}
     />
   )
 }
