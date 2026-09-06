@@ -37,7 +37,7 @@ import { Matrix4, Vector3 } from 'three'
 import type { MidiRowDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
-import { normalizedVelocity } from './motionBasis'
+import { midiVelocity } from '../../utils/midiVelocity'
 import { placementAxisScale } from './tunnel'
 import type { VisualCopy } from './types'
 import { APPROACH_COLOR } from './identityColors'
@@ -285,7 +285,7 @@ export function allocateApproachFlights(
       noteBeat: note.beat,
       startBeat,
       endBeat,
-      sizeScale: normalizedVelocity(note.velocity),
+      sizeScale: midiVelocity(note.velocity),
     }
     allocation.push(claim)
     freeAt[slot] = endBeat

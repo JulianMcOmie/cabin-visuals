@@ -2,9 +2,7 @@ import { paramDefault, type ObjectInstrumentDef } from './types'
 import { lazyInstrument } from './lazyInstrument'
 import { WIREFRAME_DEFAULT_SHAPE, WIREFRAME_SHAPES } from './wireframeCore'
 
-// The Wireframe def - params, rows, transform. The visual itself lives in
-// ./WireframeVisual (lazy: fetched when a project mounts a wireframe), and
-// the pure shape catalog + geometry in ./wireframeCore.
+// Pure shape catalog and geometry live in wireframeCore.
 
 export const DEFAULT_COLOR = '#7dd3fc'
 

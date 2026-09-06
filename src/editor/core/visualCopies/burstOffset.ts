@@ -4,6 +4,7 @@
 // would be a cycle. library.ts re-exports both so existing importers - the
 // Burst mover's UI panel and its tests - are unaffected.
 
+import { midiVelocity } from '../../utils/midiVelocity'
 import type { ResolvedNote } from '../visual/types'
 import { BURST_EASINGS } from './burstEasings'
 
@@ -56,7 +57,7 @@ export function evaluateBurstOffset(
     if (!dir) continue
     const progress = Math.min(1, (beat - note.beat) / beats)
     const eased = ease(Math.pow(progress, 1 / sharpness))
-    const velocity = note.velocity <= 1 ? note.velocity : note.velocity / 127
+    const velocity = midiVelocity(note.velocity)
     out[dir.axis] += dir.sign * axisDistance[dir.axis] * settings.distance * velocity * eased
   }
   return out

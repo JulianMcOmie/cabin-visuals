@@ -60,7 +60,7 @@
 import { Matrix4, Vector3 } from 'three'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
-import { normalizedVelocity } from './motionBasis'
+import { midiVelocity } from '../../utils/midiVelocity'
 import { METEOR_IMPACT_COLOR } from './identityColors'
 import { smoothstep } from '../../utils/math'
 
@@ -378,7 +378,7 @@ export const meteorImpactMover: MoverOrSplitterDefinition<MeteorImpactSettings> 
     const swirlAxis = SWIRL_AXES[settings.swirlAxis] ?? SWIRL_AXES[2]
     const impacts = notes
       .filter((note: ResolvedNote) => note.pitch === METEOR_IMPACT_PITCH)
-      .map((note) => ({ beat: note.beat, power: normalizedVelocity(note.velocity) }))
+      .map((note) => ({ beat: note.beat, power: midiVelocity(note.velocity) }))
     // ONE band shared by every copy - this is what makes the field churn. A
     // copy that reaches the outer radius recycles to the inner radius, so it
     // reappears INSIDE copies it used to be outside of, and rings continuously
@@ -398,7 +398,7 @@ export const meteorImpactMover: MoverOrSplitterDefinition<MeteorImpactSettings> 
         // Opposed holds subtract, so an inward note under an outward one stalls
         // the flow rather than fighting it - the phase just stops advancing.
         direction: note.pitch === VORTEX_OUT_PITCH ? 1 : -1,
-        power: normalizedVelocity(note.velocity),
+        power: midiVelocity(note.velocity),
       }))
 
     return {

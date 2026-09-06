@@ -36,7 +36,7 @@ import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import type { VisualCopy } from './types'
 import { BURST_EASINGS } from './burstEasings'
-import { normalizedVelocity } from './motionBasis'
+import { midiVelocity } from '../../utils/midiVelocity'
 import { SYMMETRIC_MOTION_COLOR } from './identityColors'
 
 export interface SymmetricMotionSettings {
@@ -157,7 +157,7 @@ export function evaluateSymmetricMotionChannels(
     const route = radial ? RADIAL_CHANNELS[note.pitch] : undefined
     const mirror = radial ? undefined : MIRROR_CHANNELS[note.pitch]
     if (!route && !mirror) continue
-    const contribution = symmetricMotionEnvelope(note, settings, beat) * normalizedVelocity(note.velocity)
+    const contribution = symmetricMotionEnvelope(note, settings, beat) * midiVelocity(note.velocity)
     if (contribution === 0) continue
     if (route) {
       if (route.channel === 'out') channels.out += route.sign * contribution * settings.distance

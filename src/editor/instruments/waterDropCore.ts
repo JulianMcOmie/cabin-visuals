@@ -1,3 +1,4 @@
+import { midiVelocity } from '../utils/midiVelocity'
 import type { ObjectState } from '../core/visual/types'
 
 // The pure half of the Water Drop instrument: which drops are alive at a beat
@@ -64,7 +65,7 @@ export function collectLiveDrops(
       // duration keeps two same-pitch notes on the same beat from twinning.
       seed: n.beat * 137.13 + n.pitch * 31.7 + (n.durationBeats || MIN_NOTE_BEATS) * 3.1,
       pitch: n.pitch,
-      velocity: n.velocity <= 1 ? n.velocity : n.velocity / 127,
+      velocity: midiVelocity(n.velocity),
     })
   }
   return alive.length > MAX_ACTIVE_DROPS ? alive.slice(-MAX_ACTIVE_DROPS) : alive

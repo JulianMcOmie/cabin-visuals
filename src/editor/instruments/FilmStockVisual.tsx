@@ -1,12 +1,9 @@
+import { midiVelocity } from '../utils/midiVelocity'
 import { useMemo, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import { Vector3, type Mesh, type ShaderMaterial } from 'three'
 import { useInstrumentFrame, seededRand, beatInBlock } from '../core/visual/instrumentFrame'
 import { FORCE_TRANSPARENT_KEY } from '../core/visual/animatedOpacity'
-
-// The Film Stock + Film Grain visuals - the lazy half of ./FilmStock (see that
-// file's header for the pair, why both are pure GPU, and how the pause invariant
-// survives it). Both instruments' shaders and components live here.
 
 // Film cadence. Grain re-rolls on this index, dust and flicker on divisions of
 // it, so the wear steps like a projector instead of sliding like a screensaver.
@@ -368,7 +365,7 @@ export function FilmStockVisual({ trackId }: { trackId: string }) {
     for (const n of state.notes) {
       const age = elapsed - n.beat * state.secPerBeat
       if (age < 0) continue
-      const velN = n.velocity <= 1 ? n.velocity : n.velocity / 127
+      const velN = midiVelocity(n.velocity)
       if (n.pitch < 64) {
         if (age >= flashDur || flashCount >= MAX_MARKS) continue
         const k = 1 - age / flashDur
@@ -443,7 +440,7 @@ export function FilmGrainVisual({ trackId }: { trackId: string }) {
     for (const n of state.notes) {
       const age = elapsed - n.beat * state.secPerBeat
       if (age < 0) continue
-      const velN = n.velocity <= 1 ? n.velocity : n.velocity / 127
+      const velN = midiVelocity(n.velocity)
       if (n.pitch < 60) {
         const holdSec = Math.max(0.08, n.durationBeats * state.secPerBeat)
         if (age < holdSec) staticEnv = Math.max(staticEnv, velN)

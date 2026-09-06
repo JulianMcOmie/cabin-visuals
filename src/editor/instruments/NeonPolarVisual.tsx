@@ -1,3 +1,4 @@
+import { midiVelocity } from '../utils/midiVelocity'
 import { useRef, useEffect } from 'react'
 import { extend, useThree } from '@react-three/fiber'
 import { Group, Vector2, Color } from 'three'
@@ -8,9 +9,6 @@ import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import { clamp } from '../utils/math'
 import { DEFAULT_CYCLES, DEFAULT_MAX_RADIUS, DEFAULT_MIN_RADIUS, LINE_WIDTH } from './NeonPolar'
-
-// The Neon Polar visual - the lazy half of ./NeonPolar (see that file's header
-// for what this is).
 
 extend({ Line2, LineGeometry, LineMaterial })
 
@@ -276,7 +274,7 @@ export function NeonPolarVisual({ trackId }: { trackId: string }) {
     for (const n of state.activeNotes) {
       if (n.pitch >= PITCH_JITTER_MIN && n.pitch <= PITCH_JITTER_MAX) {
         const pitchIdx = n.pitch - PITCH_JITTER_MIN
-        const v = n.velocity <= 1 ? n.velocity : n.velocity / 127
+        const v = midiVelocity(n.velocity)
         jitterNotes.push({ pitchIdx, velScale: v })
         multAccum += FREQ_MULTIPLIERS[pitchIdx]
         heldCount++

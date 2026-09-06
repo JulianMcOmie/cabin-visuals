@@ -60,7 +60,7 @@ docs/                       architecture + implementation-plan docs (start with
                             visual-architecture.html; rapid-todos.html = backlog)
 ```
 
-Useful invariants beyond the big one: the project document is versioned and upgrade steps in `persistence/upgrade.ts` are append-only and frozen once shipped; `HistoryStore` and `serialize` both pick store fields generically, so a new ProjectStore field is undoable and persisted with zero wiring; the timeline and the piano roll have separate gesture systems on purpose.
+Useful invariants beyond the big one: the project document is versioned and upgrade steps in `persistence/upgrade.ts` are append-only and frozen once shipped; `HistoryStore` snapshots data fields automatically, while persistence requires adding new fields to `serialize` and `ProjectDocument` and defaulting them on hydrate; the timeline and the piano roll have separate gesture systems on purpose.
 
 ## Docs
 

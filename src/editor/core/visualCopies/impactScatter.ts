@@ -58,7 +58,7 @@
 import { Matrix4, Vector3 } from 'three'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
-import { normalizedVelocity } from './motionBasis'
+import { midiVelocity } from '../../utils/midiVelocity'
 import { IMPACT_SCATTER_COLOR } from './identityColors'
 import { clamp01 } from '../../utils/math'
 
@@ -491,9 +491,9 @@ export const impactScatterMover: MoverOrSplitterDefinition<ImpactScatterSettings
         && note.beat >= note.blockStartBeat && note.beat < note.blockEndBeat)
       .map((note) => ({
         beat: note.beat,
-        power: normalizedVelocity(note.velocity),
+        power: midiVelocity(note.velocity),
         direction: note.pitch === SCATTER_IMPACT_PITCH ? 1 : note.pitch === SCATTER_IMPLODE_PITCH ? -1 : 0,
-        damp: note.pitch === SCATTER_SETTLE_PITCH ? normalizedVelocity(note.velocity) : 0,
+        damp: note.pitch === SCATTER_SETTLE_PITCH ? midiVelocity(note.velocity) : 0,
         parity: 1,
       }))
       .sort((a, b) => a.beat - b.beat)

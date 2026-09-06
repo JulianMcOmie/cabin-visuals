@@ -6,9 +6,6 @@ import {
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 
-// The Icosahedron Burst visual - the lazy half of ./IcosahedronBurst (see that
-// file's header for what this is and why each shell is closed-form in note age).
-
 let sharedEdges: BufferGeometry | null = null
 function edgeGeometry(): BufferGeometry {
   if (!sharedEdges) sharedEdges = new EdgesGeometry(new IcosahedronGeometry(1))

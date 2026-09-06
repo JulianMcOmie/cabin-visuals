@@ -9,9 +9,6 @@ import { lazyInstrument } from './lazyInstrument'
 // preset; position and wobble are seeded from the note, so every stroke is a
 // pure function of the beat (scrub == playback) while no two look alike.
 // Full-frame canvas plane (CrtScanlines' plumbing), transparent, on top.
-//
-// The visual itself lives in ./ScribbleVisual (lazy: fetched when a project
-// mounts a scribble); this file is the def - params, rows, and nothing heavy.
 
 export const PITCH_SWOOSH = 60
 export const PITCH_LOOP = 62

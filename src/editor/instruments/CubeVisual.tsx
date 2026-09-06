@@ -1,3 +1,4 @@
+import { midiVelocity } from '../utils/midiVelocity'
 import { useContext, useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, Color, Euler, Group, Matrix4, Mesh, MeshPhysicalMaterial, Quaternion, Vector3 } from 'three'
 import { InstancedMesh2 } from '@three.ez/instanced-mesh'
@@ -21,9 +22,6 @@ import {
 import { createInstancedPosterMaterial, createPosterMaterial } from './posterShading'
 import { paramDefault } from './types'
 import { DEFAULT_BASE_COLOR, cubeInstrument } from './Cube'
-
-// The 3D Shape visual - the lazy half of ./Cube (see that file for the def:
-// params, rows, the Shatter ability and the local transform).
 
 // Eight evenly distributed directions for the fragments to fly along.
 const CORNERS: [number, number, number][] = [
@@ -49,7 +47,7 @@ function shatterAt(state: ObjectState): { a: number; spread: number } {
       if (env > a) { a = env; vel = n.velocity }
     }
   }
-  const nvel = vel <= 1 ? vel : vel / 127 // tolerate 0–1 or 0–127 velocity scales
+  const nvel = midiVelocity(vel)
   return { a, spread: 1.4 + Math.min(1, nvel) * 2.2 }
 }
 

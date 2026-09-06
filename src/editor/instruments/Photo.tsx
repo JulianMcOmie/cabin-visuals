@@ -18,9 +18,6 @@ import { lazyInstrument } from './lazyInstrument'
 // Pause invariant: the frame at a beat is f(beat, notes). A photo loads once
 // per ref into a module cache; while paused, a load arrival redraws the last
 // request (the frame callback is skip-gated and won't re-fire itself).
-//
-// The visual itself lives in ./PhotoVisual (lazy: fetched when a project mounts
-// a Photo track); this file is the def - params and nothing heavy.
 
 // Transition modes, matched to the `transition` param's option values. Kept in
 // one place so the param list and the shader agree.

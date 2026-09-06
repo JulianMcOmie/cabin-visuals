@@ -7,10 +7,10 @@ import {
   RETURN_PITCH,
   SIGNED_BASIS_DIRECTIONS,
   SIGNED_BASIS_ROWS,
-  normalizedVelocity,
   resolveBasis,
   type BasisSettings,
 } from './motionBasis'
+import { midiVelocity } from '../../utils/midiVelocity'
 // RETIRED from the registry (2026-08): the unified `mover` definition's
 // translate-oscillate cell is this exact behaviour, and persistence
 // UPGRADES[12] rewrites old saves onto it. The definition survives as an All
@@ -62,7 +62,7 @@ export function evaluateTranslationOscillation(
     const wave = (1 - Math.cos(phase)) / 2
     offset.addScaledVector(
       basis[direction.axis],
-      direction.sign * distances[direction.axis] * settings.distance * normalizedVelocity(note.velocity) * wave,
+      direction.sign * distances[direction.axis] * settings.distance * midiVelocity(note.velocity) * wave,
     )
   }
 

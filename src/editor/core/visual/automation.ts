@@ -1,3 +1,4 @@
+import { midiVelocity } from '../../utils/midiVelocity'
 import type { AdsrEnvelope, AutomationMode, Block, InterpolationMode, Track } from '../../types'
 import { automationValueBounds, pitchToValueRanged, type AutomationRange } from '../trackTypes'
 import { adsrGateGain, type AdsrGate } from './adsr'
@@ -358,11 +359,11 @@ function springGateGain(note: BurstGate, beat: number, spring: BurstSpring): num
  *  Velocity scales every shape the same way the ADSR always scaled. */
 export function burstGateGain(note: BurstGate, beat: number, cfg: BurstConfig): number {
   if (cfg.shape === 'bezier') {
-    const velocity = note.velocity <= 1 ? note.velocity : note.velocity / 127
+    const velocity = midiVelocity(note.velocity)
     return velocity * bezierGateGain(note, beat, cfg.bezier ?? DEFAULT_BURST_BEZIER)
   }
   if (cfg.shape === 'spring') {
-    const velocity = note.velocity <= 1 ? note.velocity : note.velocity / 127
+    const velocity = midiVelocity(note.velocity)
     return velocity * springGateGain(note, beat, cfg.spring ?? DEFAULT_BURST_SPRING)
   }
   return adsrGateGain(note, beat, cfg)

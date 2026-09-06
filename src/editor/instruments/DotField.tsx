@@ -17,9 +17,6 @@ import { lazyInstrument } from './lazyInstrument'
 //     note. Displacement/shake/ripple/blade math is Tyler's verbatim. Tyler's
 //     palette color-mode is dropped; colorMode selects one of his three hardcoded
 //     schemes.
-//
-// The visual itself lives in ./DotFieldVisual (lazy: fetched when a project
-// mounts a dot field); this file is the def - params, rows, and nothing heavy.
 
 export const MAX_PARTICLES = 2000
 

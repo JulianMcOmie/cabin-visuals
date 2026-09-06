@@ -37,7 +37,7 @@ Persistence  = serialize ⟷ hydrate ⟷ Supabase, autosave, upgrades     src/pe
 
 ## Load-bearing invariants (violating these breaks distant code)
 
-1. **Generic field picking**: `HistoryStore` (undo) and `persistence/serialize.ts` both snapshot ProjectStore by enumerating every non-function field. A new ProjectStore data field is automatically undoable AND persisted — but you must add it to `ProjectDocument` (persistence/types.ts) to keep the type honest, and consider a schema upgrade if the shape changed.
+1. **Document field boundaries**: `HistoryStore` automatically snapshots ProjectStore's non-function fields except the flattened view and active scene selection. Persistence uses an explicit field list: add new persisted fields to `persistence/serialize.ts` and `ProjectDocument` in `persistence/types.ts`, default additive fields on hydrate, and consider a schema upgrade if the shape changed.
 2. **Upgrade steps are append-only and frozen** (`persistence/upgrade.ts`): bump `CURRENT_VERSION`, append `UPGRADES[N]`, never edit a shipped step.
 3. **Registries everywhere**: instruments, effects, movers/splitters (visualCopies), directors, templates, and settings UIs each register in one index file. "Adding an X" is: one new file + one registry entry (+ for instruments, a curated picker entry in `LeftSidebar.tsx` — the add menu does NOT read the registry).
 4. **The engine is not React**: `core/visual/VisualEngine.ts` is a module singleton; per-frame state must never trigger re-renders. Only the structural object LIST is a React-visible external store.

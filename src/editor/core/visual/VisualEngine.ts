@@ -1,5 +1,5 @@
 import { Color, Matrix4, type Scene as ThreeScene } from 'three'
-import { mixOklabLinearRgb, rotateHueOklabLinearRgb } from '../../utils/oklch'
+import { applyColorShiftToColor, HEX_COLOR } from './colorShift'
 import { sceneTrackView } from '../sceneTrack'
 import { resolveAutomationLanes, resolveProject, type ProjectSnapshot } from './resolve'
 import { evaluatePulse } from './energy'
@@ -870,25 +870,9 @@ function shiftedGradient(gradient: SceneGradient, shift: VisualCopy['colorShift'
 }
 
 function shiftHex(hex: string, shift: VisualCopy['colorShift']): string {
-  if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex
+  if (!HEX_COLOR.test(hex)) return hex
   _backdropColor.set(hex)
-  const tintMix = shift.tint && /^#[0-9a-f]{6}$/i.test(shift.tint)
-    ? clamp(shift.tintAmount, 0, 1)
-    : 0
-  if (tintMix > 0) {
-    _backdropTint.set(shift.tint as string)
-    if (shift.tintPerceptual) mixOklabLinearRgb(_backdropColor, _backdropTint, tintMix)
-    else _backdropColor.lerp(_backdropTint, tintMix)
-  }
-  // Same order and the same two hue regimes as instrumentColor.ts, which is the
-  // object-side twin of this function - a colorizer must not mean one thing on
-  // a cube and another on the wall behind it.
-  if (shift.huePerceptual) {
-    rotateHueOklabLinearRgb(_backdropColor, shift.hue)
-    _backdropColor.offsetHSL(0, shift.saturation, shift.lightness)
-  } else {
-    _backdropColor.offsetHSL(shift.hue, shift.saturation, shift.lightness)
-  }
+  applyColorShiftToColor(_backdropColor, shift, _backdropTint)
   return `#${_backdropColor.getHexString()}`
 }
 

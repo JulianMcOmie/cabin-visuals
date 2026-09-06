@@ -1,15 +1,13 @@
 import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
-import { isNumberParam } from '../../instruments/types'
 import { listMoverOrSplitterDefinitions, getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { ENVELOPE_OPACITY_TARGET } from '../../core/visual/resolve'
-import { TRANSFORM_PARAM_DEFS, withSpatialTransformParams, withTransformParams } from '../../core/transform'
-import { compositionAutomatableParams, compositionDef, isCompositionTrack } from '../../core/directors'
-import { getEffect } from '../../effects'
-import { fxTarget } from '../../effects/automation'
+import { compositionDef, isCompositionTrack } from '../../core/directors'
+import { parseFxTarget } from '../../effects/automation'
 import { NestedMenu, type NestedMenuGroup } from '../NestedMenu'
 import { useUIStore } from '../../store/UIStore'
 import { isSceneTrackId } from '../../core/sceneTrack'
+import { automationTargetsForParent } from '../../utils/automationTargets'
 
 interface TrackContextMenuProps {
   x: number
@@ -44,7 +42,6 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   // object def is masked out for it below even for a dual-surface id like
   // crop.
   const activeIsMain = !!scenes[activeSceneId]?.isMain
-  const directorDef = activeIsMain && track.type === 'base' ? compositionDef(track.instrumentId) : undefined
   const isComposition = activeIsMain && isCompositionTrack(track)
   const def = isComposition ? undefined : getInstrument(track.instrumentId)
   // Mover/splitter tracks have no instrument, but their definition has numeric
@@ -53,21 +50,9 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
     track.type === 'mover' ? track.moverId : track.type === 'splitter' ? track.splitterId : undefined,
   )
   const abilities = def?.abilities ?? []
-  // Only numeric params can be automated (keyframes interpolate a number). Object
-  // tracks also offer the canonical transform params (core/transform.ts); SPLITTER
-  // tracks offer the spatial ones - such a lane moves the splitter's copies in the
-  // splitter's own reference frame, like a mover child (resolve.ts's splitter weave).
-  const params = (def
-    ? withTransformParams(def.params)
-    : moverDef
-      ? track.type === 'splitter' ? withSpatialTransformParams(moverDef.params) : moverDef.params
-      // A GROUP automates its canonical transform (opacity included) - the
-      // formation-as-one channel, inherited by the whole subtree.
-      // A GROUP and a SWITCHER both automate their canonical transform - the
-      // formation-as-one channel, inherited by the whole subtree.
-      : track.type === 'group' || track.type === 'switcher' ? TRANSFORM_PARAM_DEFS
-        : isComposition ? compositionAutomatableParams(directorDef) : []
-  ).filter(isNumberParam)
+  const targets = automationTargetsForParent(track, activeIsMain)
+  const params = targets.filter((target) => !parseFxTarget(target.key))
+  const fxItems = targets.filter((target) => parseFxTarget(target.key))
   // A mover/splitter track offers movers too, but they mean something different
   // there, and never join the object's chain: under a MOVER a child moves its
   // parent's field (core/visualCopies/moverFrame.ts); under a SPLITTER it moves
@@ -117,36 +102,6 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
         : !moveDef?.mainOnly))
     : []
 
-  // Effect automation targets: per instance, its On/Off pseudo-param plus every
-  // numeric plugin param, addressed by the fx-namespaced targetParam. Not
-  // offered on a group: its broadcast effects have no engine-side lane
-  // sampling yet, so a lane would be silently inert. The SCENE INSTRUMENT is
-  // the exception even though it materializes as a group: its chain is the
-  // scene EFFECT chain, whose fx lanes the engine samples per frame
-  // (graph.sceneFxAutomations → getSceneFxOverrides).
-  const automatableEffects = isGroup && !isSceneTrack ? [] : track.effects ?? []
-  const fxNumericItems = automatableEffects.flatMap((inst) => {
-    const plugin = getEffect(inst.pluginId)
-    if (!plugin) return []
-    return plugin.params.filter(isNumberParam).map((p) => ({
-      key: fxTarget(inst.id, p.key),
-      label: `${plugin.name} · ${p.label}`,
-      envTarget: p.max,
-    }))
-  })
-  const fxItems = automatableEffects.flatMap((inst) => {
-    const plugin = getEffect(inst.pluginId)
-    if (!plugin) return []
-    return [
-      { key: fxTarget(inst.id, 'enabled'), label: `${plugin.name} · On/Off` },
-      ...plugin.params.filter(isNumberParam).map((p) => ({
-        key: fxTarget(inst.id, p.key),
-        label: `${plugin.name} · ${p.label}`,
-        integer: p.integer,
-      })),
-    ]
-  })
-
   // Envelope targets: object tracks only - the reserved renderer-level Opacity first
   // (it wins over an instrument's own 'opacity' param, which is skipped to avoid a
   // duplicate entry), then the numeric params, then numeric effect settings. Each
@@ -154,10 +109,10 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const envelopeItems = def
     ? [
         { key: ENVELOPE_OPACITY_TARGET, label: 'Opacity', envTarget: undefined as number | undefined },
-        ...params
+        ...targets
           .filter((p) => p.key !== ENVELOPE_OPACITY_TARGET)
-          .map((p) => ({ key: p.key, label: p.label, envTarget: p.max as number | undefined })),
-        ...fxNumericItems.map((f) => ({ key: f.key, label: f.label, envTarget: f.envTarget as number | undefined })),
+          .filter((p) => p.bounds)
+          .map((p) => ({ key: p.key, label: p.label, envTarget: p.bounds!.max as number | undefined })),
       ]
     : []
 
@@ -266,7 +221,7 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       if (item) addEnvelopeTrack(trackId, item.key, item.label, item.envTarget)
     } else if (groupKey === 'effect') {
       const item = fxItems.find((f) => f.key === itemId)
-      if (item) addAutomationTrack(trackId, item.key, item.label, { integer: 'integer' in item ? item.integer : undefined })
+      if (item) addAutomationTrack(trackId, item.key, item.label, { integer: item.integer })
     } else if (groupKey === 'move-scene') {
       moveTrackToScene(trackId, itemId)
       useUIStore.getState().setSelectedTrackId(null)

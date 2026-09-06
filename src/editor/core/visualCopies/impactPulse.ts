@@ -40,7 +40,7 @@ import { Matrix4 } from 'three'
 import type { MidiRowDef, ParamDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
-import { normalizedVelocity } from './motionBasis'
+import { midiVelocity } from '../../utils/midiVelocity'
 import { IMPACT_PULSE_COLOR } from './identityColors'
 import { clamp } from '../../utils/math'
 
@@ -156,7 +156,7 @@ export function evaluateImpactPulse(
     // Note duration is deliberately absent: this is an onset, not a gate.
     if (age < 0 || age >= decay) continue
     const gain = pulseFalloff(1 - age / decay, settings.falloff)
-      * clamp(normalizedVelocity(note.velocity), 0, 1)
+      * clamp(midiVelocity(note.velocity), 0, 1)
     if (swellRow) swell = Math.max(swell, gain)
     else squash = Math.max(squash, gain)
   }

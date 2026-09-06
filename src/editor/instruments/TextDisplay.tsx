@@ -1,3 +1,4 @@
+import { midiVelocity } from '../utils/midiVelocity'
 import { useContext, useRef, useEffect, useMemo, useState } from 'react'
 import { useThree } from '@react-three/fiber'
 import {
@@ -1228,7 +1229,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         const age = currentBeat - lastBassNote.beat
         if (age < 0.6) {
           const decay = 1 - age / 0.6
-          const velocity = lastBassNote.velocity <= 1 ? lastBassNote.velocity : lastBassNote.velocity / 127
+          const velocity = midiVelocity(lastBassNote.velocity)
           pulseEnv = decay * decay * velocity
         }
       }

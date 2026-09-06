@@ -7,9 +7,6 @@ import {
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
 import { MAX_PARTICLES } from './ParticleBurst'
 
-// The Particle Burst visual - the lazy half of ./ParticleBurst (see that file's
-// header for the port and why bursts are derived from the note stream each frame).
-
 // ── Easing (Tyler verbatim) ─────────────────────────────────────────────────
 type EaseCurve = 'log' | 'expo' | 'power' | 'circ' | 'sine'
 type BurstType = 'sphere' | 'cone' | 'jet' | 'spiralOut' | 'polarRose' | 'ring' | 'doubleHelix'

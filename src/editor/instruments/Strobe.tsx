@@ -1,3 +1,4 @@
+import { midiVelocity } from '../utils/midiVelocity'
 import type { ObjectState, ResolvedNote } from '../core/visual/types'
 import { paramDefault, type MidiRowDef, type ObjectInstrumentDef, type ParamDef } from './types'
 
@@ -194,7 +195,7 @@ export function resolveActiveStrobe(
   const width = Math.max(0, Math.min(1, par('width')))
   if (strobeGate(state.beat, strobeCycleBeats(row, state.secPerBeat), width) <= 0) return null
 
-  const velocity = selected.velocity <= 1 ? selected.velocity : selected.velocity / 127
+  const velocity = midiVelocity(selected.velocity)
   const amount = Math.max(0, Math.min(1, par('depth') * state.opacity * velocity))
   if (amount <= 0) return null
 

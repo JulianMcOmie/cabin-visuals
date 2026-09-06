@@ -5,10 +5,6 @@ import { NextRequest, NextResponse } from 'next/server'
 // size); this route fetches the audio itself and forwards it to ElevenLabs'
 // Scribe speech-to-text with word-level timestamps.
 //
-// EXPERIMENT (uncommitted): this used to call OpenAI Whisper - `git checkout
-// -- app/api/transcribe/route.ts` restores that. Scribe is being trialed for
-// better word timing on sung vocals.
-//
 // Needs ELEVENLABS_API_KEY in the server env. Without it the route answers
 // 503 with a human-readable message the dialog shows verbatim.
 

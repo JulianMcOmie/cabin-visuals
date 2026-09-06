@@ -8,11 +8,11 @@ import {
   SIGNED_BASIS_DIRECTIONS,
   SIGNED_BASIS_ROWS,
   basisRotation,
-  normalizedVelocity,
   pivotedRotation,
   resolveBasis,
   type BasisSettings,
 } from './motionBasis'
+import { midiVelocity } from '../../utils/midiVelocity'
 import type { VisualCopy } from './types'
 
 // RETIRED from the registry (2026-08): the unified `mover` definition covers
@@ -93,7 +93,7 @@ export function evaluateRotationBurstAngles(
     const progress = Math.min(1, (beat - note.beat) / burstBeats)
     const eased = easing.ease(Math.pow(progress, 1 / sharpness))
     angles[direction.axis] += direction.sign * axisAngles[direction.axis] * settings.angle
-      * normalizedVelocity(note.velocity) * eased * DEG_TO_RAD
+      * midiVelocity(note.velocity) * eased * DEG_TO_RAD
   }
   return angles
 }
@@ -197,7 +197,7 @@ function rawConstantAngles(
     if (!direction || beat <= note.beat) continue
     const heldBeats = Math.min(Math.max(0, note.durationBeats), beat - note.beat)
     angles[direction.axis] += direction.sign * heldBeats * speeds[direction.axis] * settings.speed
-      * normalizedVelocity(note.velocity) * DEG_TO_RAD
+      * midiVelocity(note.velocity) * DEG_TO_RAD
   }
   return angles
 }

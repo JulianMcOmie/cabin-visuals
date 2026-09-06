@@ -5,6 +5,7 @@
 // instruments/index cycle in (the "Cannot access X before initialization"
 // trap this directory's guide documents).
 
+import { midiVelocity } from '../utils/midiVelocity'
 import type { ResolvedNote } from '../core/visual/types'
 import { hexToRgb } from '../utils/colors'
 
@@ -105,7 +106,7 @@ export function resolveZoneFlashes(
     if (t < 0) continue
     const heldSec = note.durationBeats * secPerBeat
     if (t > heldSec + env.releaseSec) continue
-    const velN = note.velocity <= 1 ? note.velocity : note.velocity / 127
+    const velN = midiVelocity(note.velocity)
     const level = flashEnvelopeAt(env, t, heldSec) * (0.25 + 0.75 * velN)
     if (level <= 0) continue
     const z = zoneOfPitch(note.pitch, zones)

@@ -18,9 +18,7 @@ import { lazyInstrument } from './lazyInstrument'
 // frame-exact (engine.drawExact); a paused decode arrival redraws the last
 // request (the frame callback is skip-gated and won't re-fire on its own).
 //
-// The visual itself (and the export frame preparer it registers on mount)
-// lives in ./VideoVisual (lazy: fetched when a project mounts a video track);
-// this file is the def - params and nothing heavy.
+// VideoVisual registers the export frame preparer while mounted.
 
 export const videoInstrument: ObjectInstrumentDef = {
   id: 'video',

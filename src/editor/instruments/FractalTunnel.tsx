@@ -27,9 +27,6 @@ import { lazyInstrument } from './lazyInstrument'
 //    slightly hotter, which suits the neon look.
 //  - Color Pulse rings are a hue rotation applied per-fragment inside the ring
 //    bands (injected into the line shader) rather than a composited second render.
-//
-// The visual itself lives in ./FractalTunnelVisual (lazy: fetched when a project
-// mounts a fractal tunnel); this file is the def - params, rows, and nothing heavy.
 
 const PARAMS: ParamDef[] = [
   { key: 'symmetry', label: 'Symmetry', min: 2, max: 12, step: 1, default: 6 },

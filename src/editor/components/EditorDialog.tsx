@@ -44,7 +44,6 @@ export function EditorDialog({
   dismissOnScrimClick = true,
   dismissible = true,
   claimModal = true,
-  animated = true,
   closeLabel = 'Close',
   panelRef: panelRefProp,
   portalClassName = '',
@@ -87,15 +86,6 @@ export function EditorDialog({
   dismissible?: boolean
   /** False for a dialog opened INSIDE another one - the outer already claimed it. */
   claimModal?: boolean
-  /**
-   * False to appear instantly. Nothing passes it today: the export gate did,
-   * on the theory that a nested card over an already-open dialog shouldn't
-   * re-announce itself, and in practice popping in on one frame just read as a
-   * glitch beside the panel it floats over (Tyler, 2026-08-13). A nested dialog
-   * wants the shell's motion; reach for this only if a surface genuinely must
-   * appear without any.
-   */
-  animated?: boolean
   /** Announced on the close square; say where it goes when it isn't "close". */
   closeLabel?: string
   /** Supply one if the caller needs to hit-test the panel itself. */
@@ -188,41 +178,32 @@ export function EditorDialog({
   )
 
   return createPortal(
-    animated ? (
-      <MotionConfig reducedMotion="user">
+    <MotionConfig reducedMotion="user">
+      <motion.div
+        className={scrimClass}
+        style={scrimStyle}
+        onPointerDown={onScrimDown}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0, transition: { duration: 0.15, ease: 'easeIn' } }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+      >
         <motion.div
-          className={scrimClass}
-          style={scrimStyle}
-          onPointerDown={onScrimDown}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0, transition: { duration: 0.15, ease: 'easeIn' } }}
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
+          className={panelClass}
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15, ease: 'easeIn' } }}
           transition={{ duration: 0.2, ease: 'easeOut' }}
         >
-          <motion.div
-            ref={panelRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label={title}
-            className={panelClass}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15, ease: 'easeIn' } }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
-          >
-            {head}
-            {children}
-          </motion.div>
-        </motion.div>
-      </MotionConfig>
-    ) : (
-      <div className={scrimClass} style={scrimStyle} onPointerDown={onScrimDown}>
-        <div ref={panelRef} role="dialog" aria-modal="true" aria-label={title} className={panelClass}>
           {head}
           {children}
-        </div>
-      </div>
-    ),
+        </motion.div>
+      </motion.div>
+    </MotionConfig>,
     document.body,
   )
 }

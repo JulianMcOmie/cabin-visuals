@@ -9,9 +9,6 @@ import { lazyInstrument } from './lazyInstrument'
 // Velocity → size and particle count. The palette cycles per pitch class through
 // six baked retro palettes. Everything is derived per frame from note age
 // (state.beat - note.beat), seeded per particle - scrub == playback.
-//
-// The visual itself lives in ./PixelBlastVisual (lazy: fetched when a project
-// mounts a pixel blast); this file is the def - params, rows, palettes.
 
 // Six PICO-8-ish palettes; palette index = (pitch % 12) % 6.
 // Exported for the settings UI's palette reference strip (presentation only).

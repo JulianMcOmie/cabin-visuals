@@ -1,7 +1,7 @@
 import { Matrix4, Vector3 } from 'three'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
-import { normalizedVelocity } from './motionBasis'
+import { midiVelocity } from '../../utils/midiVelocity'
 import { FORCE_FIELD_PUSH_COLOR } from './identityColors'
 import { smoothstep } from '../../utils/math'
 
@@ -64,7 +64,7 @@ export function evaluateForceFieldPulse(
 
   for (const note of notes) {
     if (beat < note.blockStartBeat || beat >= note.blockEndBeat) continue
-    const velocity = normalizedVelocity(note.velocity)
+    const velocity = midiVelocity(note.velocity)
 
     if (note.pitch === FORCE_FIELD_OUTWARD_PITCH || note.pitch === FORCE_FIELD_INWARD_PITCH) {
       const direction = note.pitch === FORCE_FIELD_OUTWARD_PITCH ? 1 : -1
@@ -120,7 +120,7 @@ export function evaluateForceFieldTwist(
     ) continue
     degrees += settings.twistDegrees
       * pulseEnvelope(beat - note.beat, duration)
-      * normalizedVelocity(note.velocity)
+      * midiVelocity(note.velocity)
   }
   return degrees
 }

@@ -32,12 +32,10 @@ import type { MidiRowDef, ObjectInstrumentDef, ParamDef } from './types'
 // than the shape's own: running it from the base would make two crossing
 // shapes nearly the color of one.
 //
-// The whole mechanism is the five-pass stencil recipe in overlapShapeCore.ts
-// (see the essay there); ./OverlapShapeVisual (lazy: fetched when a project
-// mounts the instrument) maps that pure spec onto three.js materials - a
-// per-copy path and an instanced one. It depends on the scene render target
-// carrying a stencil buffer (VisualScene / ShaderWrapper enable one); on a
-// context without stencil it degrades to a plain single-color shape.
+// OverlapShapeVisual maps overlapShapeCore's stencil recipe onto per-copy and
+// instanced materials. Scene render targets must carry stencil buffers
+// (VisualScene / ShaderWrapper enable them); without stencil the visual
+// degrades to a plain single-color shape.
 
 export const DEFAULT_OVERLAP_SHAPE_BASE_COLOR = '#ff5470'
 export const DEFAULT_OVERLAP_SHAPE_OVERLAP_COLOR = '#2dd4bf'

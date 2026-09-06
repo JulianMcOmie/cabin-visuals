@@ -1,3 +1,4 @@
+import { midiVelocity } from '../../utils/midiVelocity'
 import type { Block } from '../../types'
 import { loopLengthBeats, tileLoopNotes } from './noteFlatten'
 
@@ -17,7 +18,7 @@ const MIDI_ACTIVITY_COMPRESSION = 0.72
 const MIDI_ACTIVITY_TRIGGER_CAP = 4096
 
 function normalizedVelocity(velocity: number): number {
-  const normalized = velocity <= 1 ? velocity : velocity / 127
+  const normalized = midiVelocity(velocity)
   return Math.max(0, Math.min(1, normalized))
 }
 

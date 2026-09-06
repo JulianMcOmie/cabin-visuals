@@ -17,32 +17,9 @@ import { useMemo, type ComponentType } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { contourHeight, type ContourSettings } from '../core/visualCopies/contour'
 import { CONTOUR_COLOR } from '../core/visualCopies/identityColors'
-import { isNumberParam, type NumberParamDef, type SelectParamDef } from '../instruments/types'
-import { LaserKnob } from './laserKnob'
+import { bindPanel, Knob } from './console'
 import { ParameterList } from './ParametersUserInterface'
-import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
-
-interface NumBinding { def: NumberParamDef; value: number; set: (v: number) => void }
-interface SelectBinding { def: SelectParamDef; value: number; set: (v: number) => void }
-
-function bind(parameters: readonly UserInterfaceParameter[]) {
-  const pool = new Map(parameters.map((p) => [p.definition.key, p]))
-  return {
-    num(key: string): NumBinding | null {
-      const b = pool.get(key)
-      if (!b || !isNumberParam(b.definition) || typeof b.value !== 'number') return null
-      pool.delete(key)
-      return { def: b.definition, value: b.value, set: b.setValue }
-    },
-    select(key: string): SelectBinding | null {
-      const b = pool.get(key)
-      if (!b || b.definition.type !== 'select' || typeof b.value !== 'number') return null
-      pool.delete(key)
-      return { def: b.definition, value: b.value, set: b.setValue }
-    },
-    rest(): UserInterfaceParameter[] { return [...pool.values()] },
-  }
-}
+import type { UserInterfaceRendererDefinition } from './types'
 
 /** A cone seen from the side: the glyph for the one shipped surface family.
  *  (lucide's Cone reads as a party hat at 14px; this one keeps the open base
@@ -113,7 +90,7 @@ function ProfileWindow({ slope, centerX, centerY, shape }: ContourSettings) {
 }
 
 export const ContourMoverUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
-  const pool = bind(parameters)
+  const pool = bindPanel(parameters)
   const shape = pool.select('shape')
   const slope = pool.num('slope')
   const centerX = pool.num('centerX')
@@ -187,23 +164,19 @@ export const ContourMoverUserInterfaceRenderer: UserInterfaceRendererDefinition 
         />
 
         <div className="flex items-end justify-center gap-2">
-          <LaserKnob
-            value={slope.value} min={slope.def.min} max={slope.def.max} step={slope.def.step}
-            defaultValue={slope.def.default} curve={slope.def.curve} label="SLOPE"
+          <Knob
+            b={slope} label="SLOPE"
             ariaLabel="Depth per unit radius" accent={accent} large bipolar
-            onChange={slope.set}
           />
-          <LaserKnob
-            value={centerX.value} min={centerX.def.min} max={centerX.def.max} step={centerX.def.step}
-            defaultValue={centerX.def.default} curve={centerX.def.curve} label="CENTER X"
+          <Knob
+            b={centerX} label="CENTER X"
             ariaLabel="Surface center X" accent={accent} bipolar
-            format={(v) => v.toFixed(1)} onChange={centerX.set}
+            format={(v) => v.toFixed(1)}
           />
-          <LaserKnob
-            value={centerY.value} min={centerY.def.min} max={centerY.def.max} step={centerY.def.step}
-            defaultValue={centerY.def.default} curve={centerY.def.curve} label="CENTER Y"
+          <Knob
+            b={centerY} label="CENTER Y"
             ariaLabel="Surface center Y" accent={accent} bipolar
-            format={(v) => v.toFixed(1)} onChange={centerY.set}
+            format={(v) => v.toFixed(1)}
           />
         </div>
 

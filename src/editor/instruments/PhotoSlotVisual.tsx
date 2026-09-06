@@ -10,9 +10,6 @@ import {
   BORDER_NONE, BORDER_CORNER_ARCS, BORDER_WAVY, BORDER_RAYS,
 } from './PhotoSlot'
 
-// The Photo Slot visual - the lazy half of ./PhotoSlot (see that file's header
-// for what a slot is and how the counter / placeholder model works).
-
 const BASE = PHOTO_BASE_PITCH
 
 // Reference space: the slot geometry is authored against a 422x254 frame (the

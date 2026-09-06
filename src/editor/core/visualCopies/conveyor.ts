@@ -49,7 +49,8 @@ import type { MidiRowDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { wrapToBound } from './motion'
-import { SIGNED_BASIS_DIRECTIONS, normalizedVelocity } from './motionBasis'
+import { SIGNED_BASIS_DIRECTIONS } from './motionBasis'
+import { midiVelocity } from '../../utils/midiVelocity'
 import type { VisualCopy } from './types'
 import { CONVEYOR_COLOR } from './identityColors'
 import { smoothstep } from '../../utils/math'
@@ -150,7 +151,7 @@ export function evaluateConveyorTravel(
     if (!direction || beat <= note.beat) continue
     const end = note.beat + Math.max(0, note.durationBeats)
     const held = glidedHeldBeats(beat, note.beat, end, settings.glide)
-    travel[direction.axis] += direction.sign * held * settings.speed * normalizedVelocity(note.velocity)
+    travel[direction.axis] += direction.sign * held * settings.speed * midiVelocity(note.velocity)
   }
   return travel
 }

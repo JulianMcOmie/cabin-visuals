@@ -9,7 +9,7 @@ import { Matrix4, Vector3 } from 'three'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { BURST_EASINGS } from './burstEasings'
-import { normalizedVelocity } from './motionBasis'
+import { midiVelocity } from '../../utils/midiVelocity'
 import { WAVE_TERRAIN_COLOR } from './identityColors'
 
 export const WAVE_TERRAIN_AMP_UP_PITCH = 60
@@ -98,7 +98,7 @@ export function evaluateWaveAmplitude(
     if (direction === 0 || note.beat > beat) continue
     const progress = Math.min(1, (beat - note.beat) / beats)
     const eased = ease(Math.pow(progress, 1 / sharpness))
-    extra += direction * settings.amount * normalizedVelocity(note.velocity) * eased
+    extra += direction * settings.amount * midiVelocity(note.velocity) * eased
   }
   return settings.amplitude + extra
 }

@@ -123,7 +123,6 @@ function captureStill(src: HTMLCanvasElement): string | null {
  * The whole export: pin the canvas, walk every frame through the encoder with
  * backpressure, flush, finalize the MP4. The pin/unpin bracket lives in a
  * finally - an error or cancel can never leave the editor wedged at export size.
- * Video-only for now; the audio track joins the writer in the next phase.
  */
 export async function runExport(
   settings: ExportSettings,
@@ -175,20 +174,8 @@ export async function runExport(
     audio: wantAudio ? { sampleRate: EXPORT_AUDIO_SAMPLE_RATE, numberOfChannels: 2 } : undefined,
   })
 
-  // A/V alignment is arithmetic and UNCOMPENSATED, on purpose. History: on
-  // 2026-07-10 an "AAC priming compensation" delayed every video frame after
-  // the first by AAC_PRIMING_US (2112 samples / 48k ≈ 44ms), on the theory
-  // that players render the encoder's priming samples as leading silence and
-  // the audio therefore lands ~44ms late. Empirically muxing the shifted
-  // timestamps through mp4-muxer (see mux.test.ts) showed the container
-  // faithfully encodes the shift - first video sample held 60.7ms, everything
-  // after +44ms - i.e. the mechanism "worked", but the premise was wrong:
-  // AAC decoders discard the priming samples themselves (implicit codec
-  // delay), so the audio was never late and the shift made audio audibly
-  // EARLY. Kept at 0 = no compensation; both tracks start at PTS 0 and both
-  // timelines derive from the same bpm arithmetic.
-  const AAC_PRIMING_US = 0 // documented above; do not resurrect without a verified mux dump
-  void AAC_PRIMING_US
+  // Both tracks start at PTS 0, using the same beat arithmetic. Adding an AAC
+  // priming offset to video breaks that alignment (see mux.test.ts).
   const video = createVideoEncodeSession(settings, writer)
 
   const watermark = settings.watermark ? createWatermarkCompositor(settings.width, settings.height) : null

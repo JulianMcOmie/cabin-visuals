@@ -1,3 +1,4 @@
+import { midiVelocity } from '../utils/midiVelocity'
 import type { ResolvedNote } from '../core/visual/types'
 
 // Kaleido Solid's note response, kept in its own module with NO engine or React
@@ -31,8 +32,7 @@ export function barrelTwist(notes: readonly ResolvedNote[], beat: number): numbe
   let twist = 0
   for (const note of notes) {
     if (note.beat > beat) continue
-    // Tolerate both 0-1 and 0-127 velocity scales, as the other instruments do.
-    const velocity = note.velocity <= 1 ? note.velocity : note.velocity / 127
+    const velocity = midiVelocity(note.velocity)
     const pitchSpan = Math.max(0, Math.min(1, (note.pitch - TWIST_PITCH_LOW) / (TWIST_PITCH_HIGH - TWIST_PITCH_LOW)))
     const step = TWIST_PER_NOTE * (0.3 + 0.7 * pitchSpan) * (0.45 + 0.55 * Math.min(1, velocity))
     twist += step * (1 - Math.exp(-(beat - note.beat) / TWIST_SETTLE_BEATS))

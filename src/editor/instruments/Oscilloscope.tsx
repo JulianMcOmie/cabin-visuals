@@ -1,9 +1,6 @@
 import type { ObjectInstrumentDef, ParamDef } from './types'
 import { lazyInstrument } from './lazyInstrument'
 
-// The visual lives in ./OscilloscopeVisual (lazy: fetched when a project mounts
-// a scope); this file is the def - params and nothing heavy.
-
 const PARAMS: ParamDef[] = [
   { key: 'color', label: 'Color', type: 'color', default: '#ffffff' },
   { key: 'lineWidth', label: 'Thickness', min: 1, max: 24, step: 1, default: 4 },

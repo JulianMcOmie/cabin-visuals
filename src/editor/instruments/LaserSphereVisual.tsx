@@ -13,8 +13,7 @@ import {
   laserSphereInstrument,
 } from './LaserSphere'
 
-// The Laser Sphere visual - the lazy half of ./LaserSphere (the def keeps the
-// shaders, which the settings panel's preview also runs).
+// Shaders are shared with the settings preview in ./LaserSphere.
 
 const DEFAULT_COLOR = DEFAULT_LASER_SPHERE_COLOR
 const WHITE = new Color(1, 1, 1)

@@ -7,9 +7,6 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { FORCE_TRANSPARENT_KEY } from '../core/visual/animatedOpacity'
 
-// The Fractal Tunnel visual - the lazy half of ./FractalTunnel (see that file's
-// header for the port's history and why it is GPU line geometry, not a canvas).
-
 interface Point3D {
   x: number
   y: number

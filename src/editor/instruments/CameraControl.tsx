@@ -1,3 +1,4 @@
+import { midiVelocity } from '../utils/midiVelocity'
 import { useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import { PerspectiveCamera, Vector3 } from 'three'
@@ -89,7 +90,7 @@ function CameraControlVisual({ trackId }: { trackId: string }) {
         const ageSec = (state.beat - n.beat) * state.secPerBeat
         if (ageSec < 0) continue // not struck yet
         if (ageSec > punchDecay) break // sorted: everything earlier is older still
-        const velocity = clamp(n.velocity <= 1 ? n.velocity : n.velocity / 127, 0.05, 1)
+        const velocity = clamp(midiVelocity(n.velocity), 0.05, 1)
         const env = easeOutDecay(ageSec / punchDecay) * velocity
         punch += env
         // Deterministic per-hit shake direction from pitch, oscillating on the hit's

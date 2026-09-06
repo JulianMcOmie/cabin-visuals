@@ -1,10 +1,8 @@
+import { midiVelocity } from '../utils/midiVelocity'
 import { useRef, useEffect, useMemo } from 'react'
 import { Group, Points, BufferGeometry, BufferAttribute, DynamicDrawUsage, ShaderMaterial, Color } from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
 import { MAX_PARTICLES, EFFECT_COUNT, DEFAULTS } from './DotField'
-
-// The Dot Field visual - the lazy half of ./DotField (see that file's header for
-// what this is and how Tyler's onset counter became a pure function of the note stream).
 
 // Golden angle for sunflower distribution
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
@@ -342,7 +340,7 @@ export function DotFieldVisual({ trackId }: { trackId: string }) {
       // Each note kicks the field scale, scaled by velocity (lives 0.7s).
       // Damped spring: outward burst → contracts past rest → settles
       if (ageSec < 0.7) {
-        const velocity = nt.velocity <= 1 ? nt.velocity : nt.velocity / 127
+        const velocity = midiVelocity(nt.velocity)
         const envelope = Math.exp(-ageSec * 7) * Math.cos(ageSec * 14)
         kickScale += (0.35 + velocity * 0.3) * envelope
       }
@@ -356,7 +354,7 @@ export function DotFieldVisual({ trackId }: { trackId: string }) {
       if (nt.pitch >= PITCH_BASS_MIN && nt.pitch <= PITCH_BASS_MAX) {
         bassNotes.push({
           pitchIdx: nt.pitch - PITCH_BASS_MIN,
-          velScale: nt.velocity <= 1 ? nt.velocity : nt.velocity / 127,
+          velScale: midiVelocity(nt.velocity),
         })
       }
     }

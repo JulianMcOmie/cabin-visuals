@@ -78,7 +78,3 @@ export function pivotedRotation(rotation: Matrix4, pivot: [number, number, numbe
     .multiply(rotation)
     .multiply(new Matrix4().makeTranslation(-pivot[0], -pivot[1], -pivot[2]))
 }
-
-export function normalizedVelocity(velocity: number): number {
-  return velocity <= 1 ? velocity : velocity / 127
-}

@@ -38,6 +38,7 @@
 // as the colour. LINEAR is kept as an option because it is what every project
 // authored before this was written already looks like.
 
+import { midiVelocity } from '../../utils/midiVelocity'
 import { Vector3 } from 'three'
 import type { MidiRowDef, ParamDef } from '../../instruments/types'
 import { colorToOklch, oklchToHex } from '../../utils/oklch'
@@ -221,7 +222,7 @@ export function rainbowDiagonal(x: number, y: number): number {
 }
 
 function normalizedVelocity(velocity: number): number {
-  return Math.max(0, Math.min(1, velocity <= 1 ? velocity : velocity / 127))
+  return Math.max(0, Math.min(1, midiVelocity(velocity)))
 }
 
 /** Only SWELL softens the onset. SPIKE and EVEN rise linearly so that a

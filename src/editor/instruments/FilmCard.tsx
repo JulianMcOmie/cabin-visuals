@@ -15,9 +15,6 @@ import { lazyInstrument } from './lazyInstrument'
 // Playfair Display is lazy-loaded (core/visual/fonts.ts); the frame callback
 // returns false until it's usable so no frame ever renders the fallback face.
 // All wobble/jitter derives from beat-time windows - scrub == playback.
-//
-// The visual itself lives in ./FilmCardVisual (lazy: fetched when a project
-// mounts a film card); this file is the def - params, rows, and nothing heavy.
 
 const PARAMS: ParamDef[] = [
   {

@@ -32,9 +32,8 @@ import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
 import { LINE_COLOR } from '../core/visualCopies/identityColors'
 import { lineSplitter, type LineSettings } from '../core/visualCopies/library'
 import { resolveVisualCopies } from '../core/visualCopies/resolveVisualCopies'
-import { isNumberParam, type NumberParamDef } from '../instruments/types'
 import { withAlpha } from './colorWheel'
-import { usePreviewLoop } from './console'
+import { bindPanel, Knob, usePreviewLoop, type NumBinding } from './console'
 import { LaserKnob } from './laserKnob'
 import { ParameterList } from './ParametersUserInterface'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
@@ -46,21 +45,6 @@ const ACCENT = LINE_COLOR
 const PANEL_SHADE = '#0b1309'
 const ROOM = '#05070c'
 const PREVIEW_HEIGHT = 140
-
-interface NumBinding { def: NumberParamDef; value: number; set: (v: number) => void }
-
-function bind(parameters: readonly UserInterfaceParameter[]) {
-  const pool = new Map(parameters.map((p) => [p.definition.key, p]))
-  return {
-    num(key: string): NumBinding | null {
-      const b = pool.get(key)
-      if (!b || !isNumberParam(b.definition) || typeof b.value !== 'number') return null
-      pool.delete(key)
-      return { def: b.definition, value: b.value, set: b.setValue }
-    },
-    rest(): UserInterfaceParameter[] { return [...pool.values()] },
-  }
-}
 
 // ── 3D formation preview ─────────────────────────────────────────────────────
 // Same painter-sorted-cube-faces approach as the Radial and Grid panels: the
@@ -229,32 +213,6 @@ function FormationPreview({ settings }: { settings: LineSettings }) {
 
 // ── Controls ─────────────────────────────────────────────────────────────────
 
-function Knob({ b, label, large = false, bipolar = false, format }: {
-  b: NumBinding
-  label: string
-  large?: boolean
-  bipolar?: boolean
-  format?: (value: number) => string
-}) {
-  return (
-    <LaserKnob
-      value={b.value}
-      min={b.def.min}
-      max={b.def.max}
-      step={b.def.step}
-      defaultValue={b.def.default}
-      curve={b.def.curve ?? 1}
-      label={label}
-      ariaLabel={b.def.label}
-      accent={ACCENT}
-      large={large}
-      bipolar={bipolar}
-      format={format}
-      onChange={b.set}
-    />
-  )
-}
-
 /** The stored ratio param behind a knob travelling log2(ratio), so the ×1
  *  neutral sits at the bipolar arc's dark center and ×2/×0.5 mirror exactly. */
 function GrowthKnob({ b }: { b: NumBinding }) {
@@ -312,14 +270,14 @@ function LineConsole({ bound }: { bound: LineBindings }) {
         style={{ background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(ACCENT, 0.14)}, transparent)` }}
       />
       <div className="flex items-end justify-center gap-5 px-4 pt-2.5">
-        <Knob b={copies} label="COPIES" format={(v) => `${Math.round(v)}`} />
-        <Knob b={spacing} label="SPACING" large />
-        {size && <Knob b={size} label="SIZE" />}
+        <Knob accent={ACCENT} b={copies} label="COPIES" format={(v) => `${Math.round(v)}`} />
+        <Knob accent={ACCENT} b={spacing} label="SPACING" large />
+        {size && <Knob accent={ACCENT} b={size} label="SIZE" />}
       </div>
       <div className="flex items-end justify-center gap-5 px-4 pb-1 pt-2">
         <GrowthKnob b={growth} />
-        <Knob b={angle} label="ANGLE" bipolar format={(v) => `${Math.round(v)}°`} />
-        <Knob b={tilt} label="TILT" bipolar format={(v) => `${Math.round(v)}°`} />
+        <Knob accent={ACCENT} b={angle} label="ANGLE" bipolar format={(v) => `${Math.round(v)}°`} />
+        <Knob accent={ACCENT} b={tilt} label="TILT" bipolar format={(v) => `${Math.round(v)}°`} />
       </div>
       <div className="px-4 pb-3">
         {rest.length > 0 && (
@@ -345,11 +303,11 @@ function LineConsole({ bound }: { bound: LineBindings }) {
 }
 
 export const LineSplitterUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
-  const pool = bind(parameters)
+  const pool = bindPanel(parameters)
   const copies = pool.num('copies')
   const spacing = pool.num('spacing')
   // Optional binding: the console must still render without the shared knob.
-  const size = pool.num('size')
+  const size = pool.num('size', { optional: true })
   const growth = pool.num('growth')
   const angle = pool.num('angle')
   const tilt = pool.num('tilt')

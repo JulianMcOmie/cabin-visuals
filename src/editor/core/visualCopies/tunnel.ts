@@ -37,7 +37,7 @@ import { Matrix4, Quaternion, Vector3 } from 'three'
 import type { MidiRowDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
-import { normalizedVelocity } from './motionBasis'
+import { midiVelocity } from '../../utils/midiVelocity'
 import { applySplitterSize, splitterSize, SPLITTER_SIZE_PARAM } from './splitterSize'
 import type { VisualCopy } from './types'
 import { TUNNEL_COLOR } from './identityColors'
@@ -230,7 +230,7 @@ export function evaluateTunnelTravel(
         : 0
     if (direction === 0 || beat <= note.beat) continue
     const heldBeats = Math.min(Math.max(0, note.durationBeats), beat - note.beat)
-    travel += direction * heldBeats * normalizedVelocity(note.velocity) * settings.midiSpeed
+    travel += direction * heldBeats * midiVelocity(note.velocity) * settings.midiSpeed
   }
   return travel
 }

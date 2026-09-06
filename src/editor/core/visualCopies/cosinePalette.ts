@@ -29,6 +29,7 @@
 // cannot say. Chain rule as ever - a later tint (a note Colorizer's flash)
 // takes the color over, and relative hue sweeps ride on top.
 
+import { midiVelocity } from '../../utils/midiVelocity'
 import { Vector3 } from 'three'
 import type { MidiRowDef, ParamDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
@@ -210,7 +211,7 @@ export function cosinePalettePosition(
 }
 
 function normalizedVelocity(velocity: number): number {
-  return clamp01(velocity <= 1 ? velocity : velocity / 127)
+  return clamp01(midiVelocity(velocity))
 }
 
 /**

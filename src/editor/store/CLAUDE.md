@@ -27,7 +27,7 @@ Conventions baked into actions:
   effects, children, targets, color are untouched. Colocated
   `setTrackInstrument.test.ts` pins the round trip.
 
-**Adding a data field**: it's automatically undoable (HistoryStore) and persisted (serialize) via generic field picking — but add it to `persistence/types.ts` `ProjectDocument`, and default it on hydrate for older saves (see `viewAspect` precedent). Fields excluded from snapshots: the flattened view (`tracks`, `rootTrackIds`, `activeSceneId` is normalized on restore).
+**Adding a data field**: HistoryStore automatically includes it in undo snapshots. To persist it, add it to `persistence/serialize.ts`'s explicit field list and `persistence/types.ts` `ProjectDocument`, and default it on hydrate for older saves (see `viewAspect` precedent). Undo excludes the flattened view (`tracks`, `rootTrackIds`) and `activeSceneId`; the active scene is normalized on restore.
 
 ## The others
 

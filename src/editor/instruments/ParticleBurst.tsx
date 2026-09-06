@@ -8,9 +8,6 @@ import { lazyInstrument } from './lazyInstrument'
 // Pitch (36–71) picks one of Tyler's hardcoded colour presets; velocity scales brightness.
 // Tyler's palette colour-mode is dropped (no palettes here). Burst math + golden-ratio
 // sphere distribution + easing are Tyler's verbatim; only state reads + params are rewired.
-//
-// The visual itself lives in ./ParticleBurstVisual (lazy: fetched when a project
-// mounts a particle burst); this file is the def - params, rows, and nothing heavy.
 
 // ── Config ──────────────────────────────────────────────────────────────────
 export const MAX_PARTICLES = 8000

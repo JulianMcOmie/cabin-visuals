@@ -6,9 +6,6 @@ import { lazyInstrument } from './lazyInstrument'
 // (48-59) perturb the curves and shift their base frequency (velocity-scaled). The
 // polar-curve math (layerRadius / updateLayerCurve) is Tyler's verbatim. Tyler's
 // palette-toggle notes (60-63) are replaced by a `color` param + `hue` port.
-//
-// The visual itself lives in ./NeonPolarVisual (lazy: fetched when a project
-// mounts a neon polar); this file is the def - params, rows, and nothing heavy.
 
 // --- Configuration ---
 export const DEFAULT_CYCLES = 8

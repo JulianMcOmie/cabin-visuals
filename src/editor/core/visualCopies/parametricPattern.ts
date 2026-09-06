@@ -2,7 +2,7 @@ import { Matrix4, Quaternion, Vector3 } from 'three'
 import type { MidiRowDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
-import { normalizedVelocity } from './motionBasis'
+import { midiVelocity } from '../../utils/midiVelocity'
 import { applySplitterSize, splitterSize, SPLITTER_SIZE_PARAM } from './splitterSize'
 import type { VisualCopy } from './types'
 import { PARAMETRIC_PATTERN_COLOR } from './identityColors'
@@ -88,7 +88,7 @@ export function evaluatePatternMidi(
   const offsets: PatternMidiOffsets = { amount: 0, phaseDegrees: 0, frequencyA: 0, frequencyB: 0 }
   for (const note of notes) {
     if (note.beat <= resetBeat || note.beat > beat) continue
-    const velocity = normalizedVelocity(note.velocity)
+    const velocity = midiVelocity(note.velocity)
     const heldBeats = Math.min(Math.max(0, note.durationBeats), Math.max(0, beat - note.beat))
     if (note.pitch === PATTERN_MIDI.amountUp) offsets.amount += heldBeats * velocity * settings.midiAmountRate
     else if (note.pitch === PATTERN_MIDI.amountDown) offsets.amount -= heldBeats * velocity * settings.midiAmountRate

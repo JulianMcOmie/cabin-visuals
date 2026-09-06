@@ -2,10 +2,6 @@ import { paramDefault, type ObjectInstrumentDef } from './types'
 import { lazyInstrument } from './lazyInstrument'
 import { DEFAULT_WHITE_CORE } from './laserSphereCore'
 
-// The Laser Line def - params, panel spec, rows, transform. The visual itself
-// (the shader emitter + its GLSL) lives in ./LaserLineVisual, lazy: fetched
-// when a project mounts a laser line.
-
 export const DEFAULT_COLOR = '#25dfff'
 
 export const laserLineInstrument: ObjectInstrumentDef = {

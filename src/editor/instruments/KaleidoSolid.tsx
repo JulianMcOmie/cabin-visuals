@@ -18,9 +18,6 @@ import { lazyInstrument } from './lazyInstrument'
  * The field is injected into a MeshPhysicalMaterial rather than drawn with a raw
  * ShaderMaterial, so the scene's real lights, clearcoat and shadows still model
  * the form; the kaleidoscope supplies base colour and tints the emissive glow.
- *
- * The visual itself lives in ./KaleidoSolidVisual (lazy: fetched when a project
- * mounts one); this file is the def - params, rows, and nothing heavy.
  */
 
 /** Sphere shows the mandala most clearly, so it is the shape the instrument

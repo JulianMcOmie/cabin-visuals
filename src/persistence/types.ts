@@ -8,14 +8,11 @@ import type { ViewAspect } from '../editor/store/ProjectStore'
 
 /**
  * The serialized project - the shape of the `projects.data` blob. A thin
- * envelope over the editor's own model: the non-function fields of
- * ProjectStore, plus the audioClips catalog and a schemaVersion that
- * drives upgradeDocument() on load.
+ * envelope over the editor's document state, plus media catalogs, the loop
+ * region, and a schemaVersion that drives upgradeDocument() on load.
  *
- * The field list deliberately mirrors ProjectStore's state; serialize() picks
- * fields generically (like HistoryStore does), so a field added to the store
- * is persisted by default without touching this file's runtime behavior -
- * only this type needs the new field to stay honest.
+ * Add persisted fields to both this type and serialize()'s explicit field
+ * list, and default additive fields on hydrate for older saves.
  *
  * v2: `audioClips` (the catalog, keyed by ref) replaced v1's single `audioClip`;
  * audio placement lives inside `tracks` as `audioBlocks`.

@@ -7,9 +7,6 @@ import { lazyInstrument } from './lazyInstrument'
 // scrub-accurate. n.pitch picks the shape (edge count). Thick lines are drawn with a batched
 // screen-space line shader - all copies in one BufferGeometry. Palette / automation lanes
 // from Tyler's source are dropped. The geometry / flight / burst math is Tyler's verbatim.
-//
-// The visual itself lives in ./ShapeFlightVisual (lazy: fetched when a project
-// mounts a shape flight); this file is the def - params, rows, and nothing heavy.
 
 const PARAMS: ParamDef[] = [
   { key: 'shapeMode', type: 'select', label: 'Shape Mode', options: [

@@ -8,10 +8,9 @@ import type { ProjectDocument } from './types'
 import { CURRENT_VERSION } from './upgrade'
 
 /**
- * ProjectStore state → document. Picks fields generically (every non-function
- * field), the same boundary HistoryStore snapshots - so a field added to the
- * store is persisted by default, with no extra wiring. The audioClips catalog
- * rides along from AudioStore (metadata only; bytes are the bucket's job).
+ * ProjectStore state → document. Add persisted fields here and to
+ * ProjectDocument; the flattened scene view stays out of the document.
+ * Media catalogs and the loop region ride along from their own stores.
  */
 export function serialize(state = useProjectStore.getState()): ProjectDocument {
   return {

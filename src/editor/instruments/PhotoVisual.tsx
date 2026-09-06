@@ -11,9 +11,6 @@ import { registerFramePreparer } from '../core/export/framePreparers'
 import { paramDefault } from './types'
 import { MODE_CUT, photoInstrument } from './Photo'
 
-// The Photo visual - the lazy half of ./Photo (see that file's header for the
-// bank/latch model and why a load arrival while paused redraws the last request).
-
 // One texture per ref, shared across every Photo track and the export preparer.
 // A photo's bytes never change, so a loaded texture is reusable forever this
 // session; the promise dedupes concurrent loads of the same ref.

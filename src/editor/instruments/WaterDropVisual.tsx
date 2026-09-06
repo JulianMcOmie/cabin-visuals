@@ -12,9 +12,6 @@ import {
 import { paramDefault } from './types'
 import { waterDropInstrument } from './WaterDrop'
 
-// The Water Drop visual - the lazy half of ./WaterDrop (see that file's header
-// for what this is).
-
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
 const TAU = Math.PI * 2
 

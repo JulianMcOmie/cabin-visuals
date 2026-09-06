@@ -1,3 +1,4 @@
+import { midiVelocity } from '../utils/midiVelocity'
 import { useRef, useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
@@ -7,9 +8,6 @@ import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import type { ResolvedNote } from '../core/visual/types'
-
-// The Hopf Fibration visual - the lazy half of ./HopfFibration (see that file's
-// header for the port's provenance and how the note history folds into state).
 
 // ────────────────────────────────────────────
 // Hopf Fibration Mathematics (verbatim)
@@ -181,7 +179,7 @@ function computeHopfState(notes: ResolvedNote[], beat: number, secPerBeat: numbe
     if (note.beat > beat) break
 
     const n = ((note.pitch % 12) + 12) % 12
-    const v = note.velocity <= 1 ? note.velocity : note.velocity / 127
+    const v = midiVelocity(note.velocity)
     const ageSec = (beat - note.beat) * secPerBeat
     // Flash decay 0.05^age drops below the 0.005 cutoff within 2s - skip older notes.
     const flashDecay = ageSec < 2 ? Math.pow(0.05, ageSec) : 0

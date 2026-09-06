@@ -4,9 +4,6 @@ import { lazyInstrument } from './lazyInstrument'
 // Ported from Excellent DAW. Nested icosahedron wireframes spawn on each note and expand
 // outward, fading as they grow. Each shell's size/opacity is closed-form in how long ago
 // (in beats → seconds) its note played, so it's fully scrub-accurate. Lines are pooled.
-//
-// The visual itself lives in ./IcosahedronBurstVisual (lazy: fetched when a
-// project mounts one); this file is the def - params, rows, and nothing heavy.
 
 const PARAMS: ParamDef[] = [
   { key: 'startSize', label: 'Start Size', min: 0.05, max: 1, step: 0.05, default: 0.15 },

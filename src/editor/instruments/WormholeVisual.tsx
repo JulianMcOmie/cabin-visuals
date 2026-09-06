@@ -1,3 +1,4 @@
+import { midiVelocity } from '../utils/midiVelocity'
 import { useEffect, useMemo, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import {
@@ -14,9 +15,6 @@ import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { FORCE_TRANSPARENT_KEY } from '../core/visual/animatedOpacity'
 import { clamp } from '../utils/math'
 import { MAX_LENGTH, MAX_RADIAL } from './Wormhole'
-
-// The Wormhole visual - the lazy half of ./Wormhole (see that file's header for
-// what this is and why every motion term is closed-form in the beat).
 
 const TUBE_LENGTH = 200
 const BASE_RADIUS = 3
@@ -283,7 +281,7 @@ export function WormholeVisual({ trackId }: { trackId: string }) {
     for (const n of state.notes) {
       const age = (state.beat - n.beat) * state.secPerBeat
       if (age < 0) continue
-      const velocity = clamp(n.velocity <= 1 ? n.velocity : n.velocity / 127, 0.05, 1)
+      const velocity = clamp(midiVelocity(n.velocity), 0.05, 1)
       const strength = pulseStrength(n.pitch) * velocity
       // Past its span a note is inert: it keeps the forward ground it took and stops
       // contributing to the visual pulse entirely. Also makes old notes near-free.

@@ -1,11 +1,4 @@
-// The uniform-naming contract, shared by the plugins that WRITE GLSL and the
-// wrapper that WRITES THE VALUES.
-//
-// It lives here, in effects/, rather than in MaterialWrapper because both sides
-// must agree exactly and a mismatch is silent: the shader compiles fine, the
-// uniform simply never receives a value and the effect does nothing. Two copies
-// of a five-line string formatter is precisely the kind of drift that produces
-// an afternoon of debugging a plugin that "isn't applied".
+// Shared by GLSL declarations and runtime setters; mismatched names fail silently.
 
 /** `facets` becomes `uKFacets`; with a suffix, `uKFacets_a1b2`. */
 export function uniformName(key: string, suffix = ''): string {

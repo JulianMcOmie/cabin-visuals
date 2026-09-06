@@ -1,10 +1,8 @@
+import { midiVelocity } from '../utils/midiVelocity'
 import { useInstrumentFrame, seededRand, beatInBlock } from '../core/visual/instrumentFrame'
 import { useFullFrameCanvas, commitCanvasFrame } from '../core/visual/fullFrameCanvas'
 import { FORCE_TRANSPARENT_KEY } from '../core/visual/animatedOpacity'
 import { PITCH_LOOP, PITCH_FLOURISH, PITCH_CIRCLE } from './Scribble'
-
-// The Scribble visual - the lazy half of ./Scribble (see that file's header for
-// what this is and why every stroke is a pure function of the beat).
 
 const POINTS = 64 // samples per stroke path
 // Strokes reveal at film cadence like the rest of the template, which also
@@ -92,7 +90,7 @@ export function ScribbleVisual({ trackId }: { trackId: string }) {
       const heldSec = n.durationBeats * state.secPerBeat
 
       const seed = n.beat * 997 + n.pitch * 57
-      const velN = n.velocity <= 1 ? n.velocity : n.velocity / 127
+      const velN = midiVelocity(n.velocity)
       const reveal = Math.min(1, age / drawTime)
       const fadeStart = Math.max(drawTime, heldSec)
       const alpha = age > fadeStart ? Math.max(0, 1 - (age - fadeStart) / fadeTime) : 1

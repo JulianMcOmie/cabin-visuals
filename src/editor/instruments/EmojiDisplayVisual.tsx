@@ -6,9 +6,6 @@ import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import type { ResolvedNote } from '../core/visual/types'
 import { DEFAULT_EMOJIS } from './EmojiDisplay'
 
-// The Emoji Display visual - the lazy half of ./EmojiDisplay (see that file's
-// header for the port and how every trigger is refolded from state.notes).
-
 // MIDI pitch assignments - trigger rows below the emoji selector.
 const SWITCH_CORNERS_PITCH = 35 // B1
 const SWAP_HALVES_PITCH = 34    // A#1

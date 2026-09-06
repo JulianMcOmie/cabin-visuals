@@ -1,3 +1,4 @@
+import { midiVelocity } from '../utils/midiVelocity'
 import type { ObjectState, ResolvedNote } from '../core/visual/types'
 import type { MidiRowDef, ObjectInstrumentDef, ParamDef } from './types'
 
@@ -38,7 +39,7 @@ export function resolveActiveColorFilter(
   }
   if (!selected) return null
   const row = FILTER_BY_PITCH.get(selected.pitch)!
-  const velocity = selected.velocity <= 1 ? selected.velocity : selected.velocity / 127
+  const velocity = midiVelocity(selected.velocity)
   const amount = Math.max(0, Math.min(1, (state.params.amount ?? 1) * state.opacity * velocity))
   return amount > 0 ? { mode: row.mode, amount, beat: state.beat } : null
 }

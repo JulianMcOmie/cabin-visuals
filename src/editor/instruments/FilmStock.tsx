@@ -24,10 +24,6 @@ import { lazyInstrument } from './lazyInstrument'
 // "random" value from hashes of that index plus screen position. Same beat in,
 // same pixels out - scrub still equals playback, and export still matches
 // preview.
-//
-// The visuals themselves (both shaders and both components) live in
-// ./FilmStockVisual (lazy: fetched when a project mounts either); this file is
-// the defs - params, rows, and nothing heavy.
 
 // ---------------------------------------------------------------------------
 // Film Stock - the background.

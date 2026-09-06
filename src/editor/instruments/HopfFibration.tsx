@@ -7,9 +7,6 @@ import { lazyInstrument } from './lazyInstrument'
 // state reads are rewired (the note history is folded into the fibration state each frame,
 // so everything is a pure function of the playhead - pause is static, scrub == playback).
 // Tyler's palette is dropped. Not full-frame - it renders fiber curves in 3D space.
-//
-// The visual itself lives in ./HopfFibrationVisual (lazy: fetched when a project
-// mounts a fibration); this file is the def - params, rows, and nothing heavy.
 
 const PARAMS: ParamDef[] = [
   { key: 'coreWidth', label: 'Core Width', min: 0.5, max: 6, step: 0.5, default: 2.5 },

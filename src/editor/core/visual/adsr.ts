@@ -1,3 +1,4 @@
+import { midiVelocity } from '../../utils/midiVelocity'
 import type { AdsrEnvelope } from '../../types'
 import { clamp01 } from '../../utils/math'
 import { noteArrayIndex, noteWindow } from './noteWindow'
@@ -62,7 +63,7 @@ export function adsrGateGain(note: AdsrGate, beat: number, p: AdsrEnvelope): num
     if (u < attack + decay) return 1 - (1 - sustain) * ((u - attack) / decay)
     return sustain
   }
-  const velocity = note.velocity <= 1 ? note.velocity : note.velocity / 127
+  const velocity = midiVelocity(note.velocity)
   return velocity * (t <= hold ? held(t) : held(hold) * (1 - (t - hold) / release))
 }
 

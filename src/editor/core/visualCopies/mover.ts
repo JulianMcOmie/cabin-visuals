@@ -52,11 +52,11 @@ import {
   RETURN_PITCH,
   SIGNED_BASIS_DIRECTIONS,
   basisRotation,
-  normalizedVelocity,
   pivotedRotation,
   resolveBasis,
   type BasisSettings,
 } from './motionBasis'
+import { midiVelocity } from '../../utils/midiVelocity'
 import { MOVER_COLOR } from './identityColors'
 
 const DEG_TO_RAD = Math.PI / 180
@@ -212,7 +212,7 @@ export function evaluateOscillationAmounts(
     const phase = age * Math.max(0, cyclesPerBeat) * Math.PI * 2
     const wave = (1 - Math.cos(phase)) / 2
     out[direction.axis] += direction.sign * perAxis[direction.axis] * multiplier
-      * normalizedVelocity(note.velocity) * wave
+      * midiVelocity(note.velocity) * wave
   }
 
   const beats = Math.max(0.0001, returnBeats)

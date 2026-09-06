@@ -2,9 +2,7 @@ import { paramDefault, type ObjectInstrumentDef } from './types'
 import { lazyInstrument } from './lazyInstrument'
 import { DEFAULT_WHITE_CORE } from './laserSphereCore'
 
-// The visual itself lives in ./LaserSphereVisual (lazy: fetched when a project
-// mounts a laser sphere); this file is the def plus the shaders the settings
-// panel's preview shares.
+// The settings preview and LaserSphereVisual share the shaders defined here.
 
 export const DEFAULT_LASER_SPHERE_COLOR = '#25dfff'
 const DEFAULT_COLOR = DEFAULT_LASER_SPHERE_COLOR

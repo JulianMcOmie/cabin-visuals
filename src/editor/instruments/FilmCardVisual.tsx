@@ -1,10 +1,8 @@
+import { midiVelocity } from '../utils/midiVelocity'
 import { useInstrumentFrame, seededRand, beatInBlock } from '../core/visual/instrumentFrame'
 import { useFullFrameCanvas, commitCanvasFrame } from '../core/visual/fullFrameCanvas'
 import { FORCE_TRANSPARENT_KEY } from '../core/visual/animatedOpacity'
 import { ensureFont } from '../core/visual/fonts'
-
-// The Film Card visual - the lazy half of ./FilmCard (see that file's header for
-// the two card modes and why every wobble derives from beat-time windows).
 
 const WAVE_BARS = 72
 const FILM_FPS = 24
@@ -14,7 +12,7 @@ const FILM_FPS = 24
 // and the frame skip below cuts its repaints to film cadence.
 const CANVAS_H = 1024
 
-// Baked per (size, amount, mode) - see FilmStock's vignette cache.
+// Cache the vignette per canvas size, amount and card mode.
 const vignetteCache = new Map<string, HTMLCanvasElement>()
 
 function drawVignette(ctx: CanvasRenderingContext2D, w: number, h: number, amount: number, outro: boolean) {
@@ -179,7 +177,7 @@ export function FilmCardVisual({ trackId }: { trackId: string }) {
         if (n.beat > state.beat) continue
         const age = (state.beat - n.beat) * state.secPerBeat
         if (age >= 0.3) continue
-        const velN = n.velocity <= 1 ? n.velocity : n.velocity / 127
+        const velN = midiVelocity(n.velocity)
         ctx.fillStyle = '#ffffff'
         ctx.globalAlpha = (1 - age / 0.3) * velN * 0.7
         ctx.fillRect(-h * 0.02, -h * 0.02, w + h * 0.04, h + h * 0.04)

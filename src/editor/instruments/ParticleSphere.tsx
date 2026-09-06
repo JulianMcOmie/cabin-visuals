@@ -1,3 +1,4 @@
+import { midiVelocity } from '../utils/midiVelocity'
 import { useEffect, useMemo, useRef } from 'react'
 import {
   BoxGeometry,
@@ -189,7 +190,7 @@ export function ParticleSphere({ trackId }: { trackId: string }) {
       if (placement === undefined) continue
       const env = pokeEnvelope(state.beat - note.beat, note.durationBeats, releaseBeats)
       if (env <= 0.001) continue
-      const velocity = note.velocity <= 1 ? note.velocity : note.velocity / 127
+      const velocity = midiVelocity(note.velocity)
       const repulsor = placement
         ? scratch.repulsor.copy(placement).multiplyScalar(REPULSOR_DISTANCE).applyQuaternion(scratch.invRotation).clone()
         : null

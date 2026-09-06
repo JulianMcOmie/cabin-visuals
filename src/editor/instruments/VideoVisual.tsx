@@ -14,9 +14,6 @@ import { useTimeStore } from '../store/TimeStore'
 import { paramDefault } from './types'
 import { videoInstrument } from './Video'
 
-// The Video visual - the lazy half of ./Video (see that file's header for the
-// clip-bank model, the decode engine and the pause invariant it honours).
-
 export function VideoComponent({ trackId }: { trackId: string }) {
   const meshRef = useRef<Mesh>(null)
   const invalidate = useThree((s) => s.invalidate)

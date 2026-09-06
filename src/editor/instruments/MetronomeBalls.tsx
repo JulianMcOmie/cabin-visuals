@@ -10,9 +10,6 @@ import { lazyInstrument } from './lazyInstrument'
 // beat <= state.beat, so any scrub path lands on the identical picture. Tyler's
 // Managed* line/dot pools, displacement shader, ink/spiral/snare-bounce sub-effects
 // are collapsed away - this keeps the signature look with plain three primitives.
-//
-// The visual itself lives in ./MetronomeBallsVisual (lazy: fetched when a
-// project mounts one); this file is the def - params, rows, and nothing heavy.
 
 // MIDI trigger pitches (subset of Tyler's - the ones that map to what we render)
 export const PITCH_FG = 48          // nudge foreground angles + rotate

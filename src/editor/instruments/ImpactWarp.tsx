@@ -1,3 +1,4 @@
+import { midiVelocity } from '../utils/midiVelocity'
 import type { ObjectState } from '../core/visual/types'
 import type { MidiRowDef, ObjectInstrumentDef, ParamDef } from './types'
 
@@ -288,7 +289,7 @@ export function resolveActiveImpactWarp(
     if (note.beat > state.beat) continue
     const age = (state.beat - note.beat) / release
     if (age >= 1) continue
-    const velocity = note.velocity <= 1 ? note.velocity : note.velocity / 127
+    const velocity = midiVelocity(note.velocity)
     const strike = impactEnvelope(age) * velocity
     drive += strike
     const direction = impactShoveDirection(hitIndex)

@@ -1,3 +1,4 @@
+import { midiVelocity } from '../utils/midiVelocity'
 import { useRef, useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
@@ -13,9 +14,6 @@ import {
   PITCH_BARREL_CW, PITCH_BARREL_CCW, PITCH_TUMBLE, PITCH_PULSE, PITCH_BRAKE, PITCH_STREAK,
   BG_THEMES, DEFAULTS,
 } from './Stars'
-
-// The Stars visual - the lazy half of ./Stars (see that file's header for what
-// this is and why every motion term is closed-form in note age).
 
 // --- Star generation (seeded, so a reload regenerates the identical layout) ---
 
@@ -297,7 +295,7 @@ export function StarsVisual({ trackId }: { trackId: string }) {
       const age = tSec - onSec
       const heldSec = Math.min(age, durSec)
       const v = nt.velocity
-      const velScale = ((v <= 1 ? v : v / 127)) * speed
+      const velScale = midiVelocity(v) * speed
 
       switch (nt.pitch) {
         case PITCH_WARP_FWD:

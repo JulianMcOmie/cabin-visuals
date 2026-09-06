@@ -3,9 +3,6 @@ import { useThree } from '@react-three/fiber'
 import { BufferGeometry, BufferAttribute, ShaderMaterial, Color, Vector2, AdditiveBlending } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 
-// The Shape Flight visual - the lazy half of ./ShapeFlight (see that file's
-// header for the port's provenance and the scrub-accurate depth model).
-
 // --- Geometry helpers (Tyler verbatim) ---
 
 function gcd(a: number, b: number): number {

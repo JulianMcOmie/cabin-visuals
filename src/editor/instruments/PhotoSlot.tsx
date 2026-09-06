@@ -15,9 +15,6 @@ import { lazyInstrument } from './lazyInstrument'
 // see and edit. The counter in the counter label style is the running sum of
 // note velocities inside the current block - each note advances the picture
 // AND ticks the counter by its velocity, a pure function of (beat, notes).
-//
-// The visual itself lives in ./PhotoSlotVisual (lazy: fetched when a project
-// mounts a slot); this file is the def - params and nothing heavy.
 
 export const STYLE_COUNTER = 0
 export const STYLE_CAPS = 1

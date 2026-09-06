@@ -290,7 +290,7 @@ reference port. Facts that cost time to establish:
 - **Per-copy colorShift on shared materials reaches DIFFUSE only** (instance
   color): gloss emissive and the unlit-gloss surface carry the track's own
   color, not the copy's. Documented fidelity trade; the poster path is fully
-  per-copy. The shift math is `applyColorShiftToColor` (instrumentColor.ts),
+  per-copy. The shift math is `applyColorShiftToColor` (colorShift.ts),
   the same function the string-param path uses, so the two paths cannot drift.
 
 ## Supporting files worth knowing

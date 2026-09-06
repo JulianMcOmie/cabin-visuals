@@ -9,7 +9,7 @@ import type { PanelSpec } from '../userInterfaceRenderers/console/spec'
 
 // A param is either numeric-valued (number / select / boolean - stored in track.params)
 // or string-valued (color / string - stored in track.stringParams). The union keeps the
-// numeric engine paths (localTransform / spec / automation) untouched.
+// numeric engine paths (localTransform / automation) untouched.
 interface ParamBase {
   key: string
   label: string

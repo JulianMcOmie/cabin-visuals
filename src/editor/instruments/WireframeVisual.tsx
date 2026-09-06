@@ -18,8 +18,7 @@ import {
 } from './wireframeCore'
 import { DEFAULT_COLOR, wireframeInstrument } from './Wireframe'
 
-// The Wireframe visual - the lazy half of ./Wireframe (the def); the pure shape
-// catalog and geometry it draws live in ./wireframeCore.
+// Pure shape catalog and geometry live in wireframeCore.
 
 const WHITE = new Color(1, 1, 1)
 // Solids sit under a fixed presentation tilt so a cube reads as a cube rather

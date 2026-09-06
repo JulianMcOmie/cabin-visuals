@@ -4,7 +4,8 @@ import {
   MeshBasicMaterial, Object3D,
 } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
-import { InstrumentCopyContext, applyColorShiftToColor } from '../core/visual/instrumentColor'
+import { InstrumentCopyContext } from '../core/visual/instrumentColor'
+import { applyColorShiftToColor } from '../core/visual/colorShift'
 import { getVisualCopy } from '../core/visual/VisualEngine'
 import { rotateHueOklabLinearRgb } from '../utils/oklch'
 import { MOD_SYNTH_DEFAULT_COLOR } from './ModSynth'

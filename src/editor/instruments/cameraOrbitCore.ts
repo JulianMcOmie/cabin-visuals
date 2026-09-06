@@ -29,6 +29,7 @@
 // spherical distance-plus-height pair can describe the same poses but hides the
 // one number the operator actually wants to hold still.
 
+import { midiVelocity } from '../utils/midiVelocity'
 import type { MidiRowDef } from './types'
 import { clamp } from '../utils/math'
 
@@ -230,12 +231,6 @@ export interface OrbitNote {
   durationBeats: number
 }
 
-/** MIDI velocity as 0..1, tolerating both the 0..1 and 0..127 conventions the
- *  rest of the engine accepts. */
-function normalizedVelocity(velocity: number): number {
-  return velocity <= 1 ? velocity : velocity / 127
-}
-
 /** Degrees, folded into (-180, 180] - the short way round. */
 function shortestAngle(degrees: number): number {
   return degrees - Math.round(degrees / 360) * 360
@@ -262,7 +257,7 @@ function accumulatedAngles(
     const direction = ORBIT_DIRECTIONS[note.pitch]
     if (!direction || beat <= note.beat) continue
     const heldBeats = Math.min(Math.max(0, note.durationBeats), beat - note.beat)
-    const travel = direction.sign * heldBeats * normalizedVelocity(note.velocity)
+    const travel = direction.sign * heldBeats * midiVelocity(note.velocity)
     if (direction.axis === 'azimuth') azimuth += travel * settings.swingSpeed
     else elevation += travel * settings.tiltSpeed
   }

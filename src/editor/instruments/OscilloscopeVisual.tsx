@@ -6,8 +6,6 @@ import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { paramDefault } from './types'
 import { oscilloscopeInstrument } from './Oscilloscope'
 
-// The Oscilloscope visual - the lazy half of ./Oscilloscope (the def).
-
 const TEXTURE_HEIGHT = 1024
 
 // Billboard scratch (see the facing math in the frame callback).

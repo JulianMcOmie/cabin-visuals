@@ -9,9 +9,6 @@ import { POSTER_SHADE_DEFAULT } from './posterShading'
 import type { ObjectInstrumentDef } from './types'
 import { lazyInstrument } from './lazyInstrument'
 
-// The visual lives in ./CubeVisual (lazy: fetched when a project mounts a
-// 3D Shape) - both the per-copy `Cube` and the instanced `CubeInstanced`
-// path; this file is the def.
 export const DEFAULT_BASE_COLOR = DEFAULT_FUNDAMENTAL_COLOR
 
 // The cube's definition lives next to its visual - schema and component can't drift.

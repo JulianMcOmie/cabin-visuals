@@ -27,9 +27,6 @@ import { lazyInstrument } from './lazyInstrument'
 
 // The "which drops exist, and how high" half lives in ./waterDropCore so it can
 // be tested without dragging the engine in through `instrumentFrame`.
-//
-// The visual itself lives in ./WaterDropVisual (lazy: fetched when a project
-// mounts a water drop); this file is the def - params, rows, and nothing heavy.
 
 const PARAMS: ParamDef[] = [
   { key: 'color', label: 'Ink', type: 'color', default: '#2f8fff' },

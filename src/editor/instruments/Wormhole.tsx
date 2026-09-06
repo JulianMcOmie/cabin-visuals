@@ -28,9 +28,6 @@ import { lazyInstrument } from './lazyInstrument'
 //
 // Two tubes chase each other end-to-end; when the leader passes the camera it wraps
 // to the back, so the flight never ends.
-//
-// The visual itself lives in ./WormholeVisual (lazy: fetched when a project
-// mounts a wormhole); this file is the def - params, rows, and nothing heavy.
 
 // Lattice ceilings, shared by the sliders here and the builder in the visual.
 export const MAX_RADIAL = 192

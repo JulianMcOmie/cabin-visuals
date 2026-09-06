@@ -14,9 +14,6 @@ import {
   PITCH_PAL_PLUM, PITCH_PAL_CRIMSON, PITCH_PAL_SCARLET,
 } from './MetronomeBalls'
 
-// The Metronome Balls visual - the lazy half of ./MetronomeBalls (see that
-// file's header for the port's provenance and the pure-in-the-beat derivation).
-
 // --- Palettes: [background, foreground/lines, accent/bg-flower] ---
 interface Palette { bg: number; fg: number; accent: number }
 const PALETTES: Record<string, Palette> = {

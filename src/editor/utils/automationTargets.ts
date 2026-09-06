@@ -1,15 +1,16 @@
 // The targets an automation lane under a given parent can drive, resolved at
 // the COMPONENT layer: ProjectStore can't read instrument defs (components
-// import stores - instant cycle), so the timeline drag commits resolve this
-// list here and hand it to the store's remapAutomationTarget.
+// import stores - instant cycle). Menus, the inspector and drag retargeting
+// share these definitions so they offer the same targets and bounds.
 
 import { getInstrument } from '../instruments'
-import { isNumberParam } from '../instruments/types'
+import { isNumberParam, type NumberParamDef } from '../instruments/types'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { compositionAutomatableParams, compositionDef, isCompositionTrack } from '../core/directors'
 import { TRANSFORM_PARAM_DEFS, withSpatialTransformParams, withTransformParams } from '../core/transform'
 import { getEffect } from '../effects'
 import { fxTarget } from '../effects/automation'
+import { isSceneTrackId } from '../core/sceneTrack'
 import type { Track } from '../types'
 
 export interface AutomationTargetOption {
@@ -18,6 +19,12 @@ export interface AutomationTargetOption {
   /** The target is a whole-number count (NumberParamDef.integer): a lane
    *  landing on it starts on the integer row grid. */
   integer?: boolean
+  /** Numeric bounds for the inspector and envelope peak; absent for effect On/Off. */
+  bounds?: Pick<NumberParamDef, 'min' | 'max'>
+}
+
+function numericTarget(param: NumberParamDef, key = param.key, label = param.label): AutomationTargetOption {
+  return { key, label, integer: param.integer, bounds: { min: param.min, max: param.max } }
 }
 
 /**
@@ -38,24 +45,23 @@ export function automationTargetsForParent(parent: Track, mainActive: boolean): 
     ? withTransformParams(def.params)
     : moverDef
       ? parent.type === 'splitter' ? withSpatialTransformParams(moverDef.params) : moverDef.params
-      // A GROUP's lanes drive its canonical transform (opacity included).
-      : parent.type === 'group'
+      // Containers move their contents through the canonical transform.
+      : parent.type === 'group' || parent.type === 'switcher'
         ? TRANSFORM_PARAM_DEFS
         : composition ? compositionAutomatableParams(compositionDef(parent.instrumentId)) : []
   ).filter(isNumberParam)
-  const fxItems = (parent.effects ?? []).flatMap((inst) => {
+  // Group effects broadcast without lane sampling. A virtual scene group owns
+  // the scene FX chain, whose automation is sampled normally.
+  const effects = parent.type === 'group' && !isSceneTrackId(parent.id) ? [] : parent.effects ?? []
+  const fxItems = effects.flatMap((inst) => {
     const plugin = getEffect(inst.pluginId)
     if (!plugin) return []
     return [
       { key: fxTarget(inst.id, 'enabled'), label: `${plugin.name} · On/Off` },
-      ...plugin.params.filter(isNumberParam).map((p) => ({
-        key: fxTarget(inst.id, p.key),
-        label: `${plugin.name} · ${p.label}`,
-        integer: p.integer,
-      })),
+      ...plugin.params.filter(isNumberParam).map((p) => numericTarget(p, fxTarget(inst.id, p.key), `${plugin.name} · ${p.label}`)),
     ]
   })
-  return [...params.map((p) => ({ key: p.key, label: p.label, integer: p.integer })), ...fxItems]
+  return [...params.map((p) => numericTarget(p)), ...fxItems]
 }
 
 /** Whether the lane still wears its auto-name (its current target's label under

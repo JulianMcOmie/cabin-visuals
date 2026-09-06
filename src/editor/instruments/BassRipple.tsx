@@ -1,3 +1,4 @@
+import { midiVelocity } from '../utils/midiVelocity'
 import type { ObjectState, ResolvedNote } from '../core/visual/types'
 import type { MidiRowDef, ObjectInstrumentDef, ParamDef } from './types'
 
@@ -236,7 +237,7 @@ export function resolveActiveBassRipple(
     tail = (1 - age) * (1 - age)
   }
 
-  const velocity = selected.velocity <= 1 ? selected.velocity : selected.velocity / 127
+  const velocity = midiVelocity(selected.velocity)
   const amount = Math.max(0, Math.min(1, (state.params.amount ?? 0.5) * state.opacity * velocity)) * tail
   return amount > 0
     ? {

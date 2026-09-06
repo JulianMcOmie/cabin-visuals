@@ -8,8 +8,6 @@ import { paramDefault } from './types'
 import { evaluateCoreAppearance } from './laserSphereCore'
 import { DEFAULT_COLOR, laserLineInstrument } from './LaserLine'
 
-// The Laser Line visual - the lazy half of ./LaserLine (the def).
-
 const WHITE = new Color(1, 1, 1)
 
 const LASER_LINE_VERTEX_SHADER = `

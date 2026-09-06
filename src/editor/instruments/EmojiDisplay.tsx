@@ -15,9 +15,6 @@ import { lazyInstrument } from './lazyInstrument'
 // at the driving note's beat, and the trail phase is total held time so far - so a paused
 // playhead is a static frame and scrub == playback. Tyler's layout / rotation / trail math
 // is copied verbatim; only the trigger reads are rewired.
-//
-// The visual itself lives in ./EmojiDisplayVisual (lazy: fetched when a project
-// mounts an emoji display); this file is the def - params, rows, and nothing heavy.
 
 export const DEFAULT_EMOJIS =
   '😀 😎 🔥 💀 👻 🎉 🌈 ⭐ 💖 🎵 🚀 🌊 🍕 🎸 👑 💎 🦋 🌺 🎭 🤖 👽 🦄 🐉 🌙 ' +

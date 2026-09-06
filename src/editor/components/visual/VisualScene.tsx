@@ -1224,15 +1224,24 @@ export function VisualScene() {
         let filteredTexture: Texture = runtime.target.texture
         let filterPass = 0
 
+        const drawFilter = (material: ShaderMaterial) => {
+          const output = runtime.filterTargets[filterPass % runtime.filterTargets.length]
+          compositor.filterMesh.material = material
+          material.uniforms.tDiffuse.value = filteredTexture
+          gl.setRenderTarget(output)
+          gl.setClearColor(0x000000, 0)
+          gl.clear(true, true, true)
+          gl.render(compositor.filterScene, compositor.filterCam)
+          filteredTexture = output.texture
+          filterPass++
+        }
+
         // Positional warp runs BEFORE the colour filters: it decides where the
         // pixels are, they decide what colour those pixels end up. Warping a
         // graded image instead would drag the grade's own gradients around.
         for (const trackId of bassRippleTrackIds.get(sceneId) ?? []) {
           const ripple = resolveActiveBassRipple(getObjectState(trackId))
           if (!ripple) continue
-          const output = runtime.filterTargets[filterPass % runtime.filterTargets.length]
-          compositor.filterMesh.material = compositor.warpMaterial
-          compositor.warpMaterial.uniforms.tDiffuse.value = filteredTexture
           compositor.warpMaterial.uniforms.pattern.value = ripple.pattern
           compositor.warpMaterial.uniforms.amount.value = ripple.amount
           compositor.warpMaterial.uniforms.scale.value = ripple.scale
@@ -1240,12 +1249,7 @@ export function VisualScene() {
           compositor.warpMaterial.uniforms.frequency.value = ripple.frequency
           compositor.warpMaterial.uniforms.time.value = ripple.beat
           compositor.warpMaterial.uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
-          gl.setRenderTarget(output)
-          gl.setClearColor(0x000000, 0)
-          gl.clear(true, true, true)
-          gl.render(compositor.filterScene, compositor.filterCam)
-          filteredTexture = output.texture
-          filterPass++
+          drawFilter(compositor.warpMaterial)
         }
         // Impact Warp is the OUTERMOST positional gesture: it runs after the
         // ripple, so a scene already rumbling gets punched as one image rather
@@ -1253,10 +1257,7 @@ export function VisualScene() {
         for (const trackId of impactWarpTrackIds.get(sceneId) ?? []) {
           const hit = resolveActiveImpactWarp(getObjectState(trackId))
           if (!hit) continue
-          const output = runtime.filterTargets[filterPass % runtime.filterTargets.length]
-          compositor.filterMesh.material = compositor.impactWarpMaterial
           const uniforms = compositor.impactWarpMaterial.uniforms
-          uniforms.tDiffuse.value = filteredTexture
           uniforms.style.value = hit.style
           uniforms.amount.value = hit.amount
           ;(uniforms.dir.value as Vector2).set(hit.dirX, hit.dirY)
@@ -1264,28 +1265,15 @@ export function VisualScene() {
           uniforms.size.value = hit.size
           uniforms.seed.value = hit.seed
           uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
-          gl.setRenderTarget(output)
-          gl.setClearColor(0x000000, 0)
-          gl.clear(true, true, true)
-          gl.render(compositor.filterScene, compositor.filterCam)
-          filteredTexture = output.texture
-          filterPass++
+          drawFilter(compositor.impactWarpMaterial)
         }
         for (const trackId of colorFilterTrackIds.get(sceneId) ?? []) {
           const filter = resolveActiveColorFilter(getObjectState(trackId))
           if (!filter) continue
-          const output = runtime.filterTargets[filterPass % runtime.filterTargets.length]
-          compositor.filterMesh.material = compositor.filterMaterial
-          compositor.filterMaterial.uniforms.tDiffuse.value = filteredTexture
           compositor.filterMaterial.uniforms.mode.value = filter.mode
           compositor.filterMaterial.uniforms.amount.value = filter.amount
           compositor.filterMaterial.uniforms.time.value = filter.beat
-          gl.setRenderTarget(output)
-          gl.setClearColor(0x000000, 0)
-          gl.clear(true, true, true)
-          gl.render(compositor.filterScene, compositor.filterCam)
-          filteredTexture = output.texture
-          filterPass++
+          drawFilter(compositor.filterMaterial)
         }
         // Strobe runs LAST of the scene's own passes: it is a flash over the
         // finished look, not one more colour in the grade. Inverting a graded
@@ -1294,18 +1282,10 @@ export function VisualScene() {
         for (const trackId of strobeTrackIds.get(sceneId) ?? []) {
           const strobe = resolveActiveStrobe(getObjectState(trackId))
           if (!strobe) continue
-          const output = runtime.filterTargets[filterPass % runtime.filterTargets.length]
-          compositor.filterMesh.material = compositor.filterMaterial
-          compositor.filterMaterial.uniforms.tDiffuse.value = filteredTexture
           compositor.filterMaterial.uniforms.mode.value = strobe.mode
           compositor.filterMaterial.uniforms.amount.value = strobe.amount
           compositor.filterMaterial.uniforms.time.value = strobe.beat
-          gl.setRenderTarget(output)
-          gl.setClearColor(0x000000, 0)
-          gl.clear(true, true, true)
-          gl.render(compositor.filterScene, compositor.filterCam)
-          filteredTexture = output.texture
-          filterPass++
+          drawFilter(compositor.filterMaterial)
         }
         // The scene EFFECT chain (Scene.effects - the scene instrument's
         // effect channel, chain order = array order) runs after every
@@ -1327,10 +1307,7 @@ export function VisualScene() {
             const { enabled, settings } = effectiveEffectState(inst, fxOverrides)
             if (!enabled) continue
             if (settings.amount !== undefined && settings.amount <= 0) continue
-            const output = runtime.filterTargets[filterPass % runtime.filterTargets.length]
-            compositor.filterMesh.material = material
             const uniforms = material.uniforms
-            uniforms.tDiffuse.value = filteredTexture
             uniforms.time.value = fxBeat
             ;(uniforms.resolution.value as Vector2).set(runtime.target.width, runtime.target.height)
             uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
@@ -1338,12 +1315,7 @@ export function VisualScene() {
               const u = uniforms[p.key]
               if (u) u.value = settings[p.key] ?? (typeof p.default === 'number' ? p.default : 0)
             }
-            gl.setRenderTarget(output)
-            gl.setClearColor(0x000000, 0)
-            gl.clear(true, true, true)
-            gl.render(compositor.filterScene, compositor.filterCam)
-            filteredTexture = output.texture
-            filterPass++
+            drawFilter(material)
           }
         }
         // The in-scene Crop mask runs after even the Strobe: it is a matte
@@ -1354,10 +1326,7 @@ export function VisualScene() {
         for (const trackId of cropTrackIds.get(sceneId) ?? []) {
           const mask = resolveActiveCropMask(getObjectState(trackId))
           if (!mask) continue
-          const output = runtime.filterTargets[filterPass % runtime.filterTargets.length]
-          compositor.filterMesh.material = compositor.cropMaskMaterial
           const uniforms = compositor.cropMaskMaterial.uniforms
-          uniforms.tDiffuse.value = filteredTexture
           uniforms.sliceState.value = mask.sliceState
           uniforms.count.value = mask.count
           uniforms.angle.value = mask.angle
@@ -1366,12 +1335,7 @@ export function VisualScene() {
           uniforms.blur.value = mask.blur
           uniforms.wet.value = mask.wet
           uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
-          gl.setRenderTarget(output)
-          gl.setClearColor(0x000000, 0)
-          gl.clear(true, true, true)
-          gl.render(compositor.filterScene, compositor.filterCam)
-          filteredTexture = output.texture
-          filterPass++
+          drawFilter(compositor.cropMaskMaterial)
         }
         runtime.outputTexture = filteredTexture
 

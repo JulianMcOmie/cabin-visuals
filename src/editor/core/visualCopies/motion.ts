@@ -53,11 +53,11 @@ import {
   RETURN_PITCH,
   SIGNED_BASIS_DIRECTIONS,
   basisRotation,
-  normalizedVelocity,
   pivotedRotation,
   resolveBasis,
   type BasisSettings,
 } from './motionBasis'
+import { midiVelocity } from '../../utils/midiVelocity'
 import { evaluateConstantRotationAngles, type ConstantRotationSettings } from './rotationMovers'
 import type { VisualCopy } from './types'
 import { MOTION_COLOR } from './identityColors'
@@ -176,7 +176,7 @@ function rawDrift(
     if (!direction || beat <= note.beat) continue
     const heldBeats = Math.min(Math.max(0, note.durationBeats), beat - note.beat)
     out[direction.axis] += direction.sign * heldBeats * speeds[direction.axis] * settings.drift
-      * normalizedVelocity(note.velocity)
+      * midiVelocity(note.velocity)
   }
   return out
 }
@@ -233,7 +233,7 @@ export function evaluateSnapAngles(
     const progress = Math.min(1, (beat - note.beat) / burstBeats)
     const eased = ease(Math.pow(progress, 1 / sharpness))
     angles[direction.axis] += direction.sign * axisAngles[direction.axis] * settings.angle
-      * normalizedVelocity(note.velocity) * eased * DEG_TO_RAD
+      * midiVelocity(note.velocity) * eased * DEG_TO_RAD
   }
   return angles
 }

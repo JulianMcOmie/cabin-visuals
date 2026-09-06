@@ -26,10 +26,8 @@ import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
 import { GRID_COLOR } from '../core/visualCopies/identityColors'
 import { gridSplitter, type GridSettings } from '../core/visualCopies/library'
 import { resolveVisualCopies } from '../core/visualCopies/resolveVisualCopies'
-import { isNumberParam, type NumberParamDef, type SelectParamDef } from '../instruments/types'
 import { withAlpha } from './colorWheel'
-import { usePreviewLoop } from './console'
-import { LaserKnob } from './laserKnob'
+import { bindPanel, Knob, usePreviewLoop, type NumBinding, type SelectBinding } from './console'
 import { ParameterList } from './ParametersUserInterface'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 import { clamp } from '../utils/math'
@@ -42,28 +40,6 @@ const ROOM = '#05070c'
 const PREVIEW_HEIGHT = 148
 /** Above this copy count the preview drops from lit cubes to points. */
 const CUBE_BUDGET = 360
-
-interface NumBinding { def: NumberParamDef; value: number; set: (v: number) => void }
-interface SelectBinding { def: SelectParamDef; value: number; set: (v: number) => void }
-
-function bind(parameters: readonly UserInterfaceParameter[]) {
-  const pool = new Map(parameters.map((p) => [p.definition.key, p]))
-  return {
-    num(key: string): NumBinding | null {
-      const b = pool.get(key)
-      if (!b || !isNumberParam(b.definition) || typeof b.value !== 'number') return null
-      pool.delete(key)
-      return { def: b.definition, value: b.value, set: b.setValue }
-    },
-    select(key: string): SelectBinding | null {
-      const b = pool.get(key)
-      if (!b || b.definition.type !== 'select' || typeof b.value !== 'number') return null
-      pool.delete(key)
-      return { def: b.definition, value: b.value, set: b.setValue }
-    },
-    rest(): UserInterfaceParameter[] { return [...pool.values()] },
-  }
-}
 
 // ── 3D layout preview ────────────────────────────────────────────────────────
 
@@ -348,30 +324,9 @@ function AxisStrip({ axis, role, mode, count, radius }: {
         <span className="text-[7px] font-semibold tracking-[0.14em] text-white/35">{role}</span>
       </div>
       <ModeControl b={mode} axis={axis} />
-      <LaserKnob
-        value={count.value}
-        min={count.def.min}
-        max={count.def.max}
-        step={count.def.step}
-        defaultValue={count.def.default}
-        label="COUNT"
-        ariaLabel={count.def.label}
-        accent={ACCENT}
-        format={(v) => `${Math.round(v)}`}
-        onChange={count.set}
-      />
+      <Knob b={count} label="COUNT" accent={ACCENT} format={(v) => `${Math.round(v)}`} />
       {circular && radius && (
-        <LaserKnob
-          value={radius.value}
-          min={radius.def.min}
-          max={radius.def.max}
-          step={radius.def.step}
-          defaultValue={radius.def.default}
-          label="RADIUS"
-          ariaLabel={radius.def.label}
-          accent={ACCENT}
-          onChange={radius.set}
-        />
+        <Knob b={radius} label="RADIUS" accent={ACCENT} />
       )}
     </div>
   )
@@ -504,29 +459,8 @@ function GridConsole({ bound }: { bound: GridBindings }) {
         {/* The two independent axes of the layout, side by side: SPACING moves
             the cells apart, SIZE grows them in place. */}
         <div className="flex items-center gap-3">
-          <LaserKnob
-            value={spacing.value}
-            min={spacing.def.min}
-            max={spacing.def.max}
-            step={spacing.def.step}
-            defaultValue={spacing.def.default}
-            label="SPACING"
-            accent={ACCENT}
-            onChange={spacing.set}
-          />
-          {size && (
-            <LaserKnob
-              value={size.value}
-              min={size.def.min}
-              max={size.def.max}
-              step={size.def.step}
-              defaultValue={size.def.default}
-              label="SIZE"
-              ariaLabel={size.def.label}
-              accent={ACCENT}
-              onChange={size.set}
-            />
-          )}
+          <Knob b={spacing} label="SPACING" ariaLabel="SPACING" accent={ACCENT} />
+          <Knob b={size} label="SIZE" accent={ACCENT} />
         </div>
         <div className="flex flex-col items-end gap-1">
           <IconRadioRow b={plane} glyph={(value) => <PlaneGlyph value={value} />} />
@@ -543,23 +477,23 @@ function GridConsole({ bound }: { bound: GridBindings }) {
 }
 
 export const GridSplitterUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
-  const pool = bind(parameters)
+  const pool = bindPanel(parameters)
   const rows = pool.num('rows')
   const columns = pool.num('columns')
   const depth = pool.num('depth')
   const spacing = pool.num('spacing')
   // Optional binding, like the radii below: the console must still render if a
   // definition ever ships without the shared SIZE knob.
-  const size = pool.num('size')
+  const size = pool.num('size', { optional: true })
   const columnsMode = pool.select('columnsMode')
   const rowsMode = pool.select('rowsMode')
   const depthMode = pool.select('depthMode')
   // showIf-gated on their mode. The mover branch of TrackEditor passes gated
   // params through today, but keep these OPTIONAL: listing them in the
   // fallback check would silently drop the whole console if that ever changes.
-  const columnsRadius = pool.num('columnsRadius')
-  const rowsRadius = pool.num('rowsRadius')
-  const depthRadius = pool.num('depthRadius')
+  const columnsRadius = pool.num('columnsRadius', { optional: true })
+  const rowsRadius = pool.num('rowsRadius', { optional: true })
+  const depthRadius = pool.num('depthRadius', { optional: true })
   const plane = pool.select('plane')
   const indexing = pool.select('indexing')
 

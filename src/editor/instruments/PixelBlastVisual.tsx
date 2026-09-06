@@ -1,11 +1,9 @@
+import { midiVelocity } from '../utils/midiVelocity'
 import { useRef, useEffect } from 'react'
 import { Group, Mesh, BoxGeometry, MeshBasicMaterial, AdditiveBlending } from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
 import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import { PALETTES } from './PixelBlast'
-
-// The Pixel Blast visual - the lazy half of ./PixelBlast (see that file's
-// header for the pitch/velocity mapping and why every particle is seeded).
 
 const boxGeo = new BoxGeometry(1, 1, 1)
 
@@ -58,7 +56,7 @@ export function PixelBlastVisual({ trackId }: { trackId: string }) {
       const ageSec = (beat - n.beat) * secPerBeat
       if (ageSec >= life) continue
 
-      const velN = n.velocity <= 1 ? n.velocity : n.velocity / 127
+      const velN = midiVelocity(n.velocity)
       const pc = ((n.pitch % 12) + 12) % 12
       const cx = ((pc - 5.5) / 5.5) * spreadX
       const cy = Math.max(-2.6, Math.min(2.6, (Math.floor(n.pitch / 12) - 5) * spreadY))

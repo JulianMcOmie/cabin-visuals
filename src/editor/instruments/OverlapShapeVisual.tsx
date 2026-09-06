@@ -27,7 +27,7 @@ import {
 import { InstancedMesh2 } from '@three.ez/instanced-mesh'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { useInstancedCopyFrame } from '../core/visual/instancedFrame'
-import { applyColorShiftToColor } from '../core/visual/instrumentColor'
+import { applyColorShiftToColor } from '../core/visual/colorShift'
 import type { VisualCopy } from '../core/visualCopies/types'
 import {
   OVERLAP_RAMP_GRADIENT,
@@ -43,12 +43,9 @@ import {
 import { paramDefault, stringParamDefault } from './types'
 import { overlapShapeInstrument } from './OverlapShape'
 
-// The Overlap Shape visuals - the lazy half of ./OverlapShape (see that file
-// for the def and the instrument's "why"; the pass recipe itself lives in
-// ./overlapShapeCore.ts). Two render paths, exactly like CubeVisual:
-// OverlapShapeVisual draws ONE occurrence (mounted per copy by ObjectRenderer),
-// OverlapShapeInstanced draws every VisualCopy occurrence of a track through
-// one InstancedMesh2 object per stencil pass.
+// The pass recipe lives in overlapShapeCore. OverlapShapeVisual draws one
+// occurrence; OverlapShapeInstanced draws every copy of a track through one
+// InstancedMesh2 per stencil pass.
 //
 // BOTH recipes are mounted at once and the frame makes one of them visible
 // (`overlapShapePassActive`). The pass list IS the mesh list, so deriving it
