@@ -1654,6 +1654,13 @@ export default function EditorApp() {
 
         {/* Tracks / Piano Roll - full width, running under the library (4a). */}
         <SceneTabs />
+        <div className="relative h-0 shrink-0">
+          <div
+            onPointerDown={startResize}
+            className={`absolute inset-x-0 z-50 cursor-ns-resize ${modalOpen ? 'pointer-events-none' : ''}`}
+            style={{ top: -DIVIDER_GRAB_INSET, bottom: -DIVIDER_GRAB_INSET }}
+          />
+        </div>
         {/* timeline-glass-scope makes --bg-timeline (the lanes + ruler
             strip) slightly translucent. Label rows and blocks keep their
             opaque chrome. */}

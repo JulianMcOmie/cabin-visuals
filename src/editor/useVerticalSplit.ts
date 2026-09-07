@@ -31,6 +31,11 @@ export function useVerticalSplit() {
   const setTopPanelFraction = useUIStore((s) => s.setTopPanelFraction)
 
   const startResize = useCallback((e: ReactPointerEvent) => {
+    const panel = topPanelRef.current
+    if (!panel) return
+    // Both edges of the scene bar move the same split. Preserve the grab
+    // offset so starting at the lower edge doesn't jump by the bar's height.
+    const grabOffset = e.clientY - panel.getBoundingClientRect().bottom
     e.preventDefault()
     e.stopPropagation()
     lockCursor('ns-resize')
@@ -42,7 +47,7 @@ export function useVerticalSplit() {
       const r = c.getBoundingClientRect()
       // Same clamp as the store's setter, so the live preview never shows a
       // size the commit would then snap away from.
-      last = Math.max(0.3, Math.min(0.85, (ev.clientY - r.top) / r.height))
+      last = Math.max(0.3, Math.min(0.85, (ev.clientY - grabOffset - r.top) / r.height))
       if (topPanelRef.current) topPanelRef.current.style.flexBasis = `${last * 100}%`
     }, { signal: controller.signal })
     const onUp = () => {
