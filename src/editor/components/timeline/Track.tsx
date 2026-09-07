@@ -9,8 +9,9 @@ import { AudioBlock } from './AudioBlock'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { BRACKET_CORNER_RADIUS_PX, INDENT_PX, LABEL_BASE_PX, rowIndentPx } from './trackDrop'
 import type { RowGuide } from './trackTree'
-import { resolveTrackDisplayColor } from '../../utils/trackDisplayColor'
+import { resolveTrackDisplayColor, resolveTrackIdentityColor } from '../../utils/trackDisplayColor'
 import { midiSelectionSpill } from '../../utils/colors'
+import { trackChromeColor } from '../../utils/trackChromeColor'
 import { selectTrack, selectTrackRange, shouldSuppressTrackSelect, toggleTrackInSelection } from '../../utils/selection'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { canPreview, clearInstrumentPreviewFor, setInstrumentPreview } from '../instrumentPreviewStore'
@@ -20,6 +21,7 @@ import { resolveDeclaredMidiRows } from '../midi/resolveDeclaredRows'
 import type { InstrumentItem } from '../LeftSidebar'
 import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react'
 import type { Track as TrackType } from '../../types'
+import { TrackLivePreview } from './TrackLivePreview'
 import { TrackIcon, TRACK_ICON_WIDTH } from './TrackIcon'
 import { trackGlyph } from './trackGlyphs'
 import { TrackTransformPanel, beginTransformDrag, resetTransformValues, transformValue } from './TrackTransformPanel'
@@ -140,8 +142,9 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
   // column is too narrow for name + fader + buttons, so it never crowds the
   // M/S cluster out of alignment. The icon slot eats into that room, so it is
   // part of the sum - otherwise adding icons silently shrinks the name instead.
+  const showLivePreview = track.type !== 'audio' && labelWidth - depth * INDENT_PX >= 216
   const showFader = hasTransform
-    && labelWidth - (LABEL_BASE_PX + depth * INDENT_PX) >= 210 + TRACK_ICON_WIDTH
+    && labelWidth - (LABEL_BASE_PX + depth * INDENT_PX) >= 210 + TRACK_ICON_WIDTH + (showLivePreview ? 64 : 0)
 
   // Double-click the name → inline rename. Enter/blur commits, Esc cancels.
   const [renaming, setRenaming] = useState(false)
@@ -221,6 +224,8 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
   // A live replace-drop previews the post-swap identity instead, so the row
   // (name, blocks, wash) shows the future the drop commits.
   const blockColor = replacePreview?.color ?? resolveTrackDisplayColor(track)
+  // Icons and faders share the real identity, with neutrals kept readable.
+  const identityColor = replacePreview?.color ?? resolveTrackIdentityColor(track)
   // Recomputed only when THIS track changes, and the pitch array keeps its
   // identity (it is a prop of every memoized Block and a dep of their activity
   // effects). Mover-lane rows technically also depend on sibling chains for
@@ -446,7 +451,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
             content box in this label (the name group, the control cluster)
             carries `relative` for the same reason. */}
         <span className="relative flex flex-shrink-0 items-center" style={{ opacity: ghostOpacity }}>
-          <TrackIcon glyph={trackGlyph(track, activeIsMain)} color={blockColor} muted={isDarkenedRow} />
+          <TrackIcon glyph={trackGlyph(track, activeIsMain)} color={identityColor} muted={isDarkenedRow} gradient={track.moverId === 'gradient' ? (track.inputValues?.flip ?? 0) >= 0.5 ? [track.stringParams?.colorB ?? '#ff4d88', track.stringParams?.colorA ?? '#4dd2ff'] : [track.stringParams?.colorA ?? '#4dd2ff', track.stringParams?.colorB ?? '#ff4d88'] : undefined} />
         </span>
         {/* Name + its collapse toggle, grouped so the chevron hugs the name text
             (the empty space sits to their right, not between them). */}
@@ -540,8 +545,8 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
                   stands well taller than the track it rides. */}
               <div className="relative h-[3px] w-full rounded-full bg-black/55 shadow-[inset_0_1px_1px_rgba(0,0,0,0.65)]">
                 <div
-                  className="absolute inset-y-0 left-0 rounded-l-full opacity-60 group-hover:opacity-80"
-                  style={{ width: `${opacityValue * 100}%`, background: blockColor }}
+                  className="absolute inset-y-0 left-0 rounded-l-full opacity-90 group-hover:opacity-100"
+                  style={{ width: `${opacityValue * 100}%`, background: trackChromeColor(identityColor) }}
                 />
                 <div className="absolute left-1/2 top-[-3px] h-[2px] w-px bg-white/25" />
                 <div
@@ -635,6 +640,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
             </button>
           )}
         </div>
+        {showLivePreview && <TrackLivePreview trackId={track.id} />}
         {panelAnchor && hasTransform && (
           <TrackTransformPanel trackId={track.id} anchor={panelAnchor} onClose={() => setPanelAnchor(null)} />
         )}
@@ -709,6 +715,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
                 key={block.id}
                 block={block}
                 trackId={track.id}
+                name={replacePreview?.name ?? track.name}
                 barWidthPx={barWidthPx}
                 beatsPerBar={beatsPerBar}
                 color={blockColor}

@@ -102,8 +102,8 @@ export const RADIAL_MOTION_COLOR = '#8b7bff'
 export const RISO_DUOTONE_COLOR = '#ff7587'
 /** Hue 26°. */
 export const FORCE_FIELD_PUSH_COLOR = '#ff786e'
-/** Hue 39°. */
-export const GRADIENT_COLORIZER_COLOR = '#ff7c50'
+/** Default gradient's perceptual midpoint; live tracks follow their selected stops. */
+export const GRADIENT_COLORIZER_COLOR = '#b499ff'
 /** Hue 62° - chosen when Meteor Impact (51°) and the Mover (73°) still left the
  *  slot free; Symmetry has since landed on the same hue, which the palette now
  *  tolerates (the mutual-exclusion rule was dropped 2026-08-15). */

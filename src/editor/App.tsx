@@ -1,5 +1,6 @@
 'use client'
 
+import { GradientStageEditor } from './components/visual/GradientStageEditor'
 import dynamic from 'next/dynamic'
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import { InstantLink as Link } from '../components/instantNavigation'
@@ -183,6 +184,7 @@ function Scene({
       <ExportDriver />
       <RenderGovernor />
       <CanvasHoverPicker />
+      <GradientStageEditor />
       {process.env.NODE_ENV === 'development' && <DevThreeHook />}
       {process.env.NODE_ENV === 'development' && <DevRenderStats />}
       {/* Suspense: instruments may load assets through useLoader. */}

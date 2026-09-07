@@ -6,6 +6,8 @@ import { useUIStore } from '../store/UIStore'
 export interface NestedMenuItem {
   id: string
   label: string
+  /** Optional leading mark, sized by the shared menu shell. */
+  icon?: ReactNode
   /** Disabled rows keep their place in the list but ignore clicks. */
   disabled?: boolean
   /** Checked rows show a trailing checkmark (e.g. "already added"). */
@@ -18,6 +20,8 @@ export interface NestedMenuGroup {
   /** Passed back through onPick so the consumer knows which submenu the item came from. */
   key: string
   label: string
+  /** Optional leading mark, sized by the shared menu shell. */
+  icon?: ReactNode
   items: NestedMenuItem[]
 }
 
@@ -133,8 +137,11 @@ export function NestedMenu({
           onMouseEnter={() => setOpenSub(group.key)}
           onMouseLeave={() => setOpenSub(null)}
         >
-          <div className="flex items-center justify-between px-3 py-1.5 text-zinc-200 hover:bg-zinc-700/60 cursor-default">
-            <span>{group.label}</span>
+          <div className="flex items-center justify-between gap-4 px-3 py-1.5 text-zinc-200 hover:bg-zinc-700/60 cursor-default">
+            <span className="flex items-center gap-2">
+              {group.icon && <span aria-hidden="true" className="flex h-4 w-4 shrink-0 items-center justify-center text-zinc-400">{group.icon}</span>}
+              <span>{group.label}</span>
+            </span>
             <ChevronRight size={12} className="text-zinc-500" />
           </div>
           {openSub === group.key && (
@@ -149,7 +156,8 @@ export function NestedMenu({
                   }`}
                 >
                   <span className="flex items-center gap-1.5 min-w-0">
-                    {item.swatchColor && (
+                    {item.icon && <span aria-hidden="true" className="flex h-4 w-4 shrink-0 items-center justify-center opacity-80" style={{ color: item.swatchColor }}>{item.icon}</span>}
+                    {!item.icon && item.swatchColor && (
                       <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.swatchColor }} />
                     )}
                     <span className="truncate">{item.label}</span>

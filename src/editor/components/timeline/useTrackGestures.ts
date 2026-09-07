@@ -139,15 +139,20 @@ interface UseTrackGesturesOptions {
   laneRef: RefObject<HTMLDivElement | null>
   /** Imperative overlay spanning the ruler and timeline during a MIDI drag. */
   dragGuideRef: RefObject<HTMLDivElement | null>
+  /** Match block movement to the smallest tick the timeline ruler displays. */
+  moveSnapBeats: number
 }
 
 /**
  * Gesture state machine for the tracks timeline. Mirrors useNoteGestures in
  * shape, but writes ProjectStore directly and continuously during a drag (no
  * local copy / debounce). Reads current positions from the store each frame,
- * so it never needs a stale-closure latest ref for data.
+ * so document data does not need a stale-closure latest ref.
  */
-export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOptions) {
+export function useTrackGestures({ laneRef, dragGuideRef, moveSnapBeats }: UseTrackGesturesOptions) {
+  // Pointer listeners survive renders; keep their grid current as zoom changes.
+  const moveSnapBeatsRef = useRef(moveSnapBeats)
+  moveSnapBeatsRef.current = moveSnapBeats
   const selectedBlockIds = useUIStore((s) => s.selectedBlockIds)
   const setSelectedBlockIds = useUIStore((s) => s.setSelectedBlockIds)
 
@@ -278,12 +283,14 @@ export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOpti
       let requiredProjectEndBar = store.totalBars
 
       if (d.type === 'moving') {
+        const stepBars = moveSnapBeatsRef.current / store.beatsPerBar
         for (const [blockId, o] of d.origins) {
           // Plain MIDI regions may enter the dark zone and grow the project.
           // Looped regions retain their existing project-edge clamp.
           const movementLimitBars = o.loop ? d.totalBars : MAX_TOTAL_BARS
           const maxStart = Math.max(0, movementLimitBars - o.durationBars)
-          const newStartBar = Math.max(0, Math.min(maxStart, snapBar(o.startBar + deltaBars)))
+          const snappedStartBar = Math.round((o.startBar + deltaBars) / stepBars) * stepBars
+          const newStartBar = Math.max(0, Math.min(maxStart, snappedStartBar))
           if (blockId === d.guideBlockId) guideStartBar = newStartBar
           if (!o.loop) {
             requiredProjectEndBar = Math.max(requiredProjectEndBar, newStartBar + o.durationBars)
@@ -484,9 +491,7 @@ export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOpti
       localX < edge ? 'resizing-left' : localX > w - edge ? 'resizing-right' : 'moving'
     // Only the TOP half of the right edge arms looping; the bottom half is a
     // plain resize (see the resizing-right move handler).
-    const blockCanLoop = (useProjectStore.getState().tracks[trackId]?.blocks
-      .find((block) => block.id === blockId)?.notes.length ?? 0) > 0
-    const loopArm = type === 'resizing-right' && e.clientY < rect.top + rect.height / 2 && blockCanLoop
+    const loopArm = type === 'resizing-right' && e.clientY < rect.top + rect.height / 2
 
     // Select this block (keep an existing multi-selection it belongs to), then
     // arm the drag for the whole selection.

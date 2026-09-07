@@ -1,6 +1,7 @@
 import { getInstrument } from '../instruments'
 import type { ObjectInstrumentDef } from '../instruments/types'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
+import { gradientAccent } from './gradientAccent'
 import { colorToOklch } from './oklch'
 import { AUDIO_TRACK_COLOR } from './trackColors'
 import type { Track } from '../types'
@@ -63,9 +64,12 @@ function instrumentIdentity(track: Track): string | undefined {
  * return covers a legacy id that no longer resolves and test fakes, which fall
  * through to the cycle color like any other lane.
  */
-function moverIdentity(track: Track): string | undefined {
+function moverIdentity(track: Track, preserveNeutral = false): string | undefined {
   if (track.type !== 'mover' && track.type !== 'splitter') return undefined
   const def = getMoverOrSplitterDefinition(track.moverId ?? track.splitterId)
+  if (def?.id === 'gradient') {
+    return gradientAccent(track.stringParams?.colorA, track.stringParams?.colorB)
+  }
   const identity = def?.identityColor
   if (!identity) return undefined
   if (typeof identity === 'string') return identity
@@ -74,7 +78,8 @@ function moverIdentity(track: Track): string | undefined {
   const picked = track.stringParams?.[identity.param]
     ?? (def!.params.find((pd) => pd.key === identity.param) as { default?: string } | undefined)?.default
   if (!picked) return undefined
-  return (colorToOklch(picked)?.c ?? 0) > ACHROMATIC_CHROMA ? picked : undefined
+  const parsed = colorToOklch(picked)
+  return parsed && (preserveNeutral || parsed.c > ACHROMATIC_CHROMA) ? picked : undefined
 }
 
 /**
@@ -113,7 +118,7 @@ export function resolveTrackDisplayColor(track: Track): string {
  */
 export function resolveTrackIdentityColor(track: Track): string {
   if (track.type === 'audio') return AUDIO_TRACK_COLOR
-  const declared = moverIdentity(track)
+  const declared = moverIdentity(track, true)
   if (declared) return declared
   if (track.type === 'base') {
     const derived = instrumentIdentity(track)

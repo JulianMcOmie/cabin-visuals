@@ -24,6 +24,7 @@ export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRenderer
   calmHueRotate: lazyPanel(() => import('./ColorizerUserInterface'), 'ColorizerUserInterfaceRenderer'),
   gradient: lazyPanel(() => import('./GradientColorizerUserInterface'), 'GradientColorizerUserInterfaceRenderer'),
   cosinePalette: lazyPanel(() => import('./CosinePaletteUserInterface'), 'CosinePaletteUserInterfaceRenderer'),
+  hueRotate: lazyPanel(() => import('./HueRotateUserInterface'), 'HueRotateUserInterfaceRenderer'),
   impactScatter: lazyPanel(() => import('./ImpactScatterMoverUserInterface'), 'ImpactScatterMoverUserInterfaceRenderer'),
   impactPulse: lazyPanel(() => import('./ImpactPulseMoverUserInterface'), 'ImpactPulseMoverUserInterfaceRenderer'),
   conveyor: lazyPanel(() => import('./ConveyorMoverUserInterface'), 'ConveyorMoverUserInterfaceRenderer'),

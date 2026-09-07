@@ -252,3 +252,12 @@ round particles alone cannot show reflection parity. Scatter binds the gated
 CLUSTERS knob optionally and shows it only in Clustered mode. Lissajous keeps
 legacy functions on their existing generic controls, while its preset buttons
 write the normal frequency/phase parameter bindings (no hidden preset state).
+
+`HueRotateUserInterface.tsx` gives Hue Rotate a console with a two-ring demo
+palette (source inside, processed copies outside), Fixed/Continuous segments,
+and Rotate/Spread/Rate knobs. Rate stays in place but disables in Fixed mode;
+Mapping & Color folds away the spatial mapping and color-space controls.
+The canvas uses the actual colorizer resolve and shared color-shift function,
+on the visibility-gated preview loop at a labelled demo 120 BPM. Its clock is
+illustrative, independent of transport. Speed is an optional binding because
+of `showIf`; future unclaimed parameters remain reachable through More.

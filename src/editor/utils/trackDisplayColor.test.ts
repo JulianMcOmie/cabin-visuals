@@ -141,3 +141,30 @@ test('an achromatic primary sends the Colorizer to its own cycle color', () => {
   })
   assert.equal(resolveTrackDisplayColor(colorizer), '#123456')
 })
+
+
+test('neutral instrument and Colorizer icons stay neutral instead of taking the cycle hue', async () => {
+  const { midiNoteBaseColor } = await import('./midiEditorPalette')
+  const { colorToOklch } = await import('./oklch')
+  for (const color of ['#ffffff', '#808080', '#000000', '#f8f7f6']) {
+    for (const track of [
+      baseTrack({ stringParams: { baseColor: color } }),
+      baseTrack({ type: 'mover', moverId: 'calmHueRotate', stringParams: { color } }),
+    ]) {
+      const identity = resolveTrackIdentityColor(track)
+      assert.equal(identity, color)
+      const tint = colorToOklch(midiNoteBaseColor(identity))!
+      assert.ok(tint.c < 0.001, `${color} icon must remain neutral`)
+      assert.ok(tint.l > 0.8, `${color} icon must remain readable on a dark row`)
+    }
+  }
+})
+
+test('Gradient tint follows both endpoints and preserves a neutral palette', () => {
+  const lane=baseTrack({type:'mover',moverId:'gradient',stringParams:{colorA:'#ff0000',colorB:'#ff0000'}})
+  assert.equal(resolveTrackIdentityColor(lane),'#ff0000')
+  const changed={...lane,stringParams:{colorA:'#ff0000',colorB:'#00ff00'}}
+  assert.notEqual(resolveTrackIdentityColor(changed),resolveTrackIdentityColor(lane))
+  const neutral={...lane,stringParams:{colorA:'#ffffff',colorB:'#ffffff'}}
+  assert.equal(resolveTrackDisplayColor(neutral),'#ffffff')
+})

@@ -1,3 +1,4 @@
+import { TrackPreviewRenderer, TrackPreviewRoot } from './TrackPreviewRenderer'
 import { Fragment, useEffect, useMemo, useRef, useSyncExternalStore, type ReactElement } from 'react'
 import { createPortal, useFrame, useThree } from '@react-three/fiber'
 import {
@@ -1506,6 +1507,7 @@ export function VisualScene() {
 
   return (
     <>
+      <TrackPreviewRenderer />
       {[...mounted.entries()].map(([sceneId, runtime]) => {
         // One pass with the index in hand (indexOf inside three filters was
         // O(n²) per render of this component).
@@ -1563,26 +1565,28 @@ function mountObjects(list: readonly ObjectListEntry[], keySuffix: string) {
       const entries: ObjectListEntry[] = []
       for (let j = i; j < list.length && list[j].trackId === o.trackId; j++) entries.push(list[j])
       out.push(
-        <InstancedObjectRenderer
-          key={`${o.trackId}${keySuffix}:instanced`}
-          sceneId={o.sceneId}
-          trackId={o.trackId}
-          instrumentId={o.instrumentId}
-          entries={entries}
-          keySuffix={keySuffix}
-        />,
+        <TrackPreviewRoot key={`${o.trackId}${keySuffix}:instanced`} sceneId={o.sceneId} trackId={o.trackId}>
+          <InstancedObjectRenderer
+            sceneId={o.sceneId}
+            trackId={o.trackId}
+            instrumentId={o.instrumentId}
+            entries={entries}
+            keySuffix={keySuffix}
+          />
+        </TrackPreviewRoot>,
       )
       continue
     }
     out.push(
-      <ObjectRenderer
-        key={`${o.trackId}:${o.visualCopyIndex}${keySuffix}`}
-        sceneId={o.sceneId}
-        trackId={o.trackId}
-        instrumentId={o.instrumentId}
-        visualCopyIndex={o.visualCopyIndex}
-        maskSourceIds={o.maskSourceIds}
-      />,
+      <TrackPreviewRoot key={`${o.trackId}:${o.visualCopyIndex}${keySuffix}`} sceneId={o.sceneId} trackId={o.trackId}>
+        <ObjectRenderer
+          sceneId={o.sceneId}
+          trackId={o.trackId}
+          instrumentId={o.instrumentId}
+          visualCopyIndex={o.visualCopyIndex}
+          maskSourceIds={o.maskSourceIds}
+        />
+      </TrackPreviewRoot>,
     )
   }
   return out

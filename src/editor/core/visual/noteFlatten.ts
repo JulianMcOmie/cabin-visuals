@@ -21,38 +21,32 @@ export function loopLengthBeats(block: Pick<Block, 'loopLengthBars' | 'notes'>, 
 export interface TiledNote {
   note: Note
   startBeat: number
-  /** Clipped at the block end. */
+  /** Clipped at both the source-window boundary and the block end. */
   durationBeats: number
   /** 0 = the pattern occurrence, 1+ = repeats. */
   repeat: number
 }
 
-/** Tile a looped block's pattern across the block length. Each pattern note's
- *  phase is its startBeat modulo the loop length (split-produced blocks store
- *  shifted phases, possibly NEGATIVE - folding those is their storage
- *  contract); the final partial repeat clips at the block end.
- *
- *  Notes PAST the pattern window (startBeat >= loop length) do not loop: they
- *  play once, where they were authored. Folding them into the window turned a
- *  note the user placed after the pattern into a mystery repeat inside it. */
+/** Repeat only the source window. Notes at/past its end remain authored data
+ *  (resizing or unlooping can reveal them), but never sound in the repetitions.
+ *  Clip crossing note tails to the window so consecutive repeats cannot overlap.
+ *  Negative starts retain the legacy split-block phase convention. */
 export function tileLoopNotes(notes: Note[], loopBeats: number, blockBeats: number, maxNotes = NOTE_CAP_PER_BLOCK): TiledNote[] {
   const out: TiledNote[] = []
-  if (loopBeats <= 0 || blockBeats <= 0) return out
-  for (const note of notes) {
-    if (note.startBeat < loopBeats || note.startBeat >= blockBeats) continue
-    out.push({ note, startBeat: note.startBeat, durationBeats: Math.min(note.durationBeats, blockBeats - note.startBeat), repeat: 0 })
-    if (out.length >= maxNotes) return out
-  }
+  if (loopBeats <= 0 || blockBeats <= 0 || maxNotes <= 0) return out
+  const pattern = notes.filter(note => note.startBeat < loopBeats && note.durationBeats > 0).map(note => {
+    // Avoid a double modulo so an in-window start stays bit-identical.
+    const rem = note.startBeat % loopBeats
+    const phase = rem < 0 ? rem + loopBeats : rem
+    return { note, phase, duration: Math.min(note.durationBeats, loopBeats - phase) }
+  })
+  // Empty clips can loop; no need to visit every empty repetition.
+  if (pattern.length === 0) return out
   for (let repeat = 0, offset = 0; offset < blockBeats; repeat++, offset += loopBeats) {
-    for (const note of notes) {
-      if (note.startBeat >= loopBeats) continue
-      // Plain remainder, not a double modulo: an in-window startBeat must come
-      // back bit-identical so previews can match occurrences to authored notes.
-      const rem = note.startBeat % loopBeats
-      const phase = rem < 0 ? rem + loopBeats : rem
+    for (const { note, phase, duration } of pattern) {
       const startBeat = offset + phase
       if (startBeat >= blockBeats) continue
-      out.push({ note, startBeat, durationBeats: Math.min(note.durationBeats, blockBeats - startBeat), repeat })
+      out.push({ note, startBeat, durationBeats: Math.min(duration, blockBeats - startBeat), repeat })
       if (out.length >= maxNotes) return out
     }
   }

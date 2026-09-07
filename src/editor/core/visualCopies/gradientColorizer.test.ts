@@ -168,3 +168,27 @@ test('declares itself passive: zero strict MIDI rows', () => {
   assert.equal(gradientColorizer.midiRows!(settings()).length, 0)
   assert.equal(gradientColorizer.strictMidiRows, true)
 })
+
+test('depth reads Z independently of XY and supports reversed ranges and flip', () => {
+  close(gradientPosition(settings({ mode: 2 }), 0, 1, 50, -30, 3), 0)
+  close(gradientPosition(settings({ mode: 2 }), 0, 1, 50, -30, -3), 1)
+  close(gradientPosition(settings({ mode: 2, flip: 1 }), 0, 1, 0, 0, -3), 0)
+  close(gradientPosition(settings({ mode: 2, near: 0, far: 0 }), 0, 1, 0, 0, 9), 0.5)
+})
+
+test('3D line samples along its axis or distance to its finite segment', () => {
+  const path = JSON.stringify([{ point: [0,0,0], incoming:[0,0,0], outgoing:[0,0,0] },{ point:[0,0,10], incoming:[0,0,10], outgoing:[0,0,10] }])
+  close(gradientPosition(settings({ mode: 3, path }), 0, 1, 5, 0, 2), 0.2)
+  close(gradientPosition(settings({ mode: 3, path, mapping: 1, width: 10 }), 0, 1, 3, 4, 2), 0.5)
+  close(gradientPosition(settings({ mode: 3, path, mapping: 1, width: 10 }), 0, 1, 0, 0, 15), 0.5)
+  close(gradientPosition(settings({ mode: 3, path }), 0, 1, 0, 0, 20), 1)
+})
+
+test('depth includes track placement Z when applying the gradient', () => {
+  const opts = settings({ mode: 2 })
+  const resolved = gradientColorizer.resolve({ settings: opts, notes: [] })
+  const [copy] = resolved.apply(identityVisualCopy(), {
+    beat: 0, index: 0, count: 1, placementTransform: new Matrix4().makeTranslation(0, 0, -3),
+  })
+  assert.equal(copy.colorShift.tint, opts.colorB)
+})

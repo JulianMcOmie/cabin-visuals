@@ -12,6 +12,7 @@ import { observeTimelineViewport } from './observeTimelineViewport'
 interface BlockProps {
   block: BlockType
   trackId: string
+  name: string
   barWidthPx: number
   beatsPerBar: number
   color: string
@@ -28,7 +29,7 @@ interface BlockProps {
 /** Memoized: during a drag every pointermove rewrites the store, and only the
  *  dragged block's identity changes - every other block must skip. Depends on
  *  Track keeping `previewRowPitches` and the handlers referentially stable. */
-export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelected, muted, previewRowPitches, strictPreviewRows, onBlockPointerDown }: BlockProps) {
+export const Block = memo(function Block({ block, trackId, name, barWidthPx, beatsPerBar, color, isSelected, muted, previewRowPitches, strictPreviewRows, onBlockPointerDown }: BlockProps) {
   const isEditing = useUIStore((s) => s.editingBlock?.blockId === block.id)
   const setEditingBlock = useUIStore((s) => s.setEditingBlock)
   const blockRef = useRef<HTMLDivElement>(null)
@@ -56,7 +57,7 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
   const palette = useMemo(() => vividMidiBlockPalette(color), [color])
   const active = isSelected || isEditing
 
-  // Solid track color in both states; the perimeter is painted above the
+  // Vivid body in both states; the perimeter is painted above the
   // loop sections so their opaque fills cannot hide the selection outline.
 
   useEffect(() => {
@@ -121,7 +122,9 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
       }}
     >
       {!hasLoopSections && !active && <MattePulse color={palette.activeFill} />}
+      {!hasLoopSections && <ClipBanner name={name} palette={palette} selected={active} />}
       <NotePreview
+        name={name}
         notes={block.notes}
         totalBeats={totalBeatsInBlock}
         loopBeats={loopBeats}
@@ -130,14 +133,42 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
         rowPitches={previewRowPitches}
         strictRows={strictPreviewRows}
       />
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 pointer-events-none rounded-[6px]"
-        style={{ border: `${active ? 2 : 1}px solid ${active ? palette.selectedOutline : palette.edge}` }}
-      />
+      {!hasLoopSections && <BlockOutline color={active ? palette.selectedOutline : palette.edge} />}
     </div>
   )
 })
+
+// The fixed band leaves a useful note area even at the minimum 28px row height.
+const CLIP_BANNER_HEIGHT = 14
+
+function ClipBanner({ name, palette, selected, repeated = false }: { name: string; palette: MidiBlockPalette; selected?: boolean; repeated?: boolean }) {
+  return <div
+    data-midi-banner=""
+    className="absolute inset-x-0 top-0 pointer-events-none overflow-hidden rounded-t-[6px]"
+    style={{
+      height: CLIP_BANNER_HEIGHT,
+      backgroundColor: selected ? palette.selectedOutline : 'transparent',
+      color: repeated ? palette.repeatedNote : palette.note,
+    }}
+  >
+    <span className="block truncate px-1.5 text-[11px] font-semibold" style={{ lineHeight: `${CLIP_BANNER_HEIGHT}px` }}>{name}</span>
+  </div>
+}
+
+/** Draw the rounded section perimeter without vertical seams between repeats.
+ *  Only internal straight sides are masked away; their curved top/bottom
+ *  corners remain, so the outline follows the divot instead of bridging it. */
+function BlockOutline({ color, first = true, last = true }: { color: string; first?: boolean; last?: boolean }) {
+  const masks = ['linear-gradient(to bottom, #000 6px, transparent 6px, transparent calc(100% - 6px), #000 calc(100% - 6px))']
+  if (first) masks.push('linear-gradient(to right, #000 6px, transparent 6px)')
+  if (last) masks.push('linear-gradient(to left, #000 6px, transparent 6px)')
+  return <div
+    aria-hidden="true"
+    data-midi-outline=""
+    className="absolute inset-0 pointer-events-none rounded-[6px]"
+    style={{ border: `1px solid ${color}`, maskImage: masks.join(', ') }}
+  />
+}
 
 // Preview divs per looped block stay bounded; a tiny pattern in a huge block
 // caps out instead of flooding the DOM.
@@ -198,7 +229,7 @@ interface LoopSection {
 /** Memoized separately from Block: a plain block MOVE keeps `notes` (and every
  *  other prop) referentially identical, so the potentially hundreds of preview
  *  divs skip reconciliation entirely while the block repositions. */
-const NotePreview = memo(function NotePreview({ notes, totalBeats, loopBeats, palette, selected, rowPitches, strictRows }: { notes: BlockType['notes']; totalBeats: number; loopBeats: number | null; palette: MidiBlockPalette; selected?: boolean; rowPitches?: number[]; strictRows?: boolean }) {
+const NotePreview = memo(function NotePreview({ name, notes, totalBeats, loopBeats, palette, selected, rowPitches, strictRows }: { name: string; notes: BlockType['notes']; totalBeats: number; loopBeats: number | null; palette: MidiBlockPalette; selected?: boolean; rowPitches?: number[]; strictRows?: boolean }) {
   if (totalBeats <= 0) return null
   // Loop boundaries describe the block's repeated pattern even when that
   // pattern is currently empty, so note previews and divisions stay separate.
@@ -235,22 +266,21 @@ const NotePreview = memo(function NotePreview({ notes, totalBeats, loopBeats, pa
               background: selected ? palette.selectedBody : palette.fill,
               // The shared perimeter is above every section; touching
               // corners retain the existing loop notches.
-
             }}
           >
             {!selected && <MattePulse color={palette.activeFill} />}
+            <ClipBanner name={name} palette={palette} selected={selected} repeated={startBeat > 0} />
           </div>
         )
       })}
+      <div data-midi-note-area="" className="absolute inset-x-0 pointer-events-none overflow-hidden" style={{ top: CLIP_BANNER_HEIGHT + 2, bottom: 4 }}>
       {occurrences.map(({ note, startBeat, durationBeats, repeat }) => {
         const pitchPosition = pitchPositions.get(note.pitch)
         if (pitchPosition == null) return null
         const leftPct = (startBeat / totalBeats) * 100
         const widthPct = (durationBeats / totalBeats) * 100
-        // 8%–88% band keeps dashes inside the rounded border. Semantic tracks
-        // follow their declared row order; plain piano rolls keep high pitch up.
-        const topPct = 8 + pitchPosition * 80
-        // Notes stay dark in both states and deepen slightly on activity.
+        // Notes occupy only the area below the banner, with the last dash
+        // inset by its own height so it cannot cross the bottom perimeter.
         const noteFill = selected
           ? (repeat > 0
               ? noteActivityMix(palette.selectedRepeatedNote, palette.activeSelectedRepeatedNote)
@@ -266,14 +296,27 @@ const NotePreview = memo(function NotePreview({ notes, totalBeats, loopBeats, pa
             style={{
               left: `${leftPct}%`,
               width: `max(${widthPct}%, 3px)`,
-              top: `${topPct}%`,
+              top: `calc(${pitchPosition * 100}% - ${pitchPosition * 2}px)`,
               height: 2,
               background: noteFill,
-
             }}
           />
         )
       })}
+      </div>
+      {sections.map(({ startBeat, durationBeats }, index) => (
+        <div
+          key={`loop-outline:${startBeat}`}
+          className="absolute inset-y-0 pointer-events-none"
+          style={{ left: `${startBeat / totalBeats * 100}%`, width: `max(${durationBeats / totalBeats * 100}%, 1px)` }}
+        >
+          <BlockOutline
+            color={selected ? palette.selectedOutline : palette.edge}
+            first={index === 0}
+            last={index === sections.length - 1}
+          />
+        </div>
+      ))}
     </>
   )
 })

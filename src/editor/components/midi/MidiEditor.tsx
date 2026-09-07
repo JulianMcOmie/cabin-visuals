@@ -422,8 +422,8 @@ export function MidiEditor({
   // the live local notes so they track in-flight edits. repeat 0 is the authored
   // note itself and is skipped - except for split-shifted (negative-phase)
   // notes, whose folded position shows as a ghost because that is where they
-  // play. Notes PAST the window don't loop at all (they play once, in place),
-  // so they produce no ghosts.
+  // play. Notes past the source window stay editable but are excluded from playback
+  // and produce no ghosts.
   const loopBeats = useMemo(
     () => (block.loop ? loopLengthBeats({ loopLengthBars: block.loopLengthBars, notes: allNotes }, beatsPerBar) : null),
     [block.loop, block.loopLengthBars, allNotes, beatsPerBar],
