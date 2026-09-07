@@ -251,10 +251,11 @@ const G = {
       <circle cx="8.6" cy="12.6" r="0.85" fill="currentColor" stroke="none" fillOpacity="0.75" />
     </>
   ),
-  waterDrop: (
+  radialBloom: (
     <>
-      <path d="M8 2.4c2.2 2.6 3.4 4.2 3.4 5.8a3.4 3.4 0 0 1-6.8 0c0-1.6 1.2-3.2 3.4-5.8Z" />
-      <path d="M3 12.6q5-2.2 10 0" strokeOpacity="0.55" />
+      <circle cx="6" cy="6" r="3.5" />
+      <circle cx="10" cy="6" r="3.5" />
+      <circle cx="8" cy="10" r="3.5" />
     </>
   ),
   flashWall: (

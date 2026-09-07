@@ -254,13 +254,11 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <path d="M7.4 1 H10.4 L8.6 11 H5.6 Z" fill="#fbbf24" fillOpacity="0.35" />
     </svg>
   )},
-  { id: 'waterDrop', name: 'Water Drop', description: 'Each note drops ink into water - pitch picks the height it spreads at.', icon: (
+  { id: 'radialBloom', name: 'Radial Bloom', description: 'Overlap shapes bloom into a radial gradient. MIDI chooses 1–12 copies; hold a note to sustain, release to fade.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
-      <circle cx="6" cy="6.5" r="2.4" fill="#2f8fff" fillOpacity="0.85" />
-      <circle cx="2.4" cy="4.4" r="1.1" fill="#2f8fff" fillOpacity="0.5" />
-      <circle cx="9.4" cy="8.4" r="1.2" fill="#2f8fff" fillOpacity="0.5" />
-      <circle cx="9" cy="3.2" r="0.8" fill="#bff3ff" fillOpacity="0.8" />
-      <circle cx="3.2" cy="9.4" r="0.7" fill="#bff3ff" fillOpacity="0.7" />
+      <circle cx="4" cy="4" r="3" fill="#ff5470" />
+      <circle cx="8" cy="4" r="3" fill="#2dd4bf" fillOpacity="0.85" />
+      <circle cx="6" cy="8" r="3" fill="#a855f7" fillOpacity="0.9" />
     </svg>
   )},
   { id: 'fractalTunnel', name: 'Fractal Tunnel', description: 'A fractal-flower tunnel - notes shift its hue and fire pulse rings.', icon: (
@@ -396,10 +394,9 @@ const CORE_OBJECT_IDS = new Set(['cube', 'laserLine', 'wireframe', 'particle', '
 const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.has(i.id))
 
 // The Instruments folder. These are object instruments like any other; what
-// they share is that a note is a PERFORMANCE on them - each one spawns its own
-// short-lived event rather than posing a standing shape - so they belong
-// together rather than scattered through Objects and Extras.
-const INSTRUMENT_FOLDER_IDS = new Set(['modSynth', 'waterDrop', 'flashWall'])
+// they share is that MIDI plays their hits, sustains, and releases, so they
+// belong together rather than scattered through Objects and Extras.
+const INSTRUMENT_FOLDER_IDS = new Set(['radialBloom', 'modSynth', 'flashWall'])
 const INSTRUMENT_FOLDER_ITEMS = ALL_OBJECT_INSTRUMENTS.filter((i) => INSTRUMENT_FOLDER_IDS.has(i.id))
 
 // The in-scene Crop masks the whole scene while its rows are held - the
@@ -587,6 +584,8 @@ const MOTION_ITEMS = MOVER_INSTRUMENTS.filter((m) => !IMPACT_IDS.includes(m.id) 
 // exactly what they held before the folder pass - demoted, never deleted -
 // but they now sit INSIDE the folder they belong to rather than at the root.
 const SCENE_FOLDERS: LibraryFolder[] = [
+  { id: 'instruments', title: 'Instruments', description: 'Played rather than posed: MIDI shapes each hit, sustain, and release.', items: INSTRUMENT_FOLDER_ITEMS },
+  { id: 'objects', title: 'Objects', description: 'Object instruments are visual objects that render in the 3D scene - for example, cubes or spheres.', items: OBJECT_INSTRUMENTS },
   // The strikes sit at Impact's root (an Impulse subfolder used to hold them
   // and was Impact's only content - one extra click for nothing).
   {
@@ -627,8 +626,6 @@ const SCENE_FOLDERS: LibraryFolder[] = [
       },
     ],
   },
-  { id: 'objects', title: 'Objects', description: 'Object instruments are visual objects that render in the 3D scene - for example, cubes or spheres.', items: OBJECT_INSTRUMENTS },
-  { id: 'instruments', title: 'Instruments', description: 'Played rather than posed: every note spawns its own short-lived event instead of changing a standing shape.', items: INSTRUMENT_FOLDER_ITEMS },
   { id: 'color', title: 'Color', description: 'Recoloring: the Colorizer flashes its objects toward a picked color; Color Filters remap the whole scene.', items: pick(COLOR_IDS) },
   { id: 'utility', title: 'Utility', description: 'Full-frame media and readouts - video clips, photos, word display, the audio waveform - plus the Switcher rack.', items: pick(UTILITY_IDS) },
   { id: 'extras', title: 'Extras', description: 'The back catalog: older object instruments, all still fully working - just outside the curated folders above.', items: EXTRA_INSTRUMENTS },

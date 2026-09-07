@@ -206,7 +206,7 @@ export function InstrumentPreviewCapture() {
                 dpr={1}
                 frameloop={item ? 'never' : 'always'}
                 camera={{ position: [0, 0.9, 4.2], fov: 55 }}
-                gl={{ antialias: true, preserveDrawingBuffer: true }}
+                gl={{ antialias: true, stencil: true, preserveDrawingBuffer: true }}
                 onCreated={(state) => { glRef.current = state.gl }}
               >
                 {/* MP4 has no alpha, so the backdrop is baked in: the same

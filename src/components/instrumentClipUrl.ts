@@ -15,11 +15,11 @@ export const INSTRUMENT_CLIP_BASE = `${SUPABASE_URL}/storage/v1/object/public/in
 // instruments land before their capture runs), and an id absent from the
 // manifest means "keep the live preview", not "404".
 const manifest = createManifestLoader(`${INSTRUMENT_CLIP_BASE}/manifest.json`, 'cabin.instrumentClipManifest')
-const bundled: Record<string, { version: string }> = posters
+const bundled: Record<string, { version: string; clipSrc?: string }> = posters
 const clipFor = (id: string, version?: string) => version
   ? `${INSTRUMENT_CLIP_BASE}/${id}.mp4?v=${encodeURIComponent(version)}` : null
-const initialUrl = (id: string) => SUPABASE_URL
-  ? clipFor(id, bundled[id]?.version) ?? undefined : null
+const initialUrl = (id: string) => bundled[id]?.clipSrc ?? (SUPABASE_URL
+  ? clipFor(id, bundled[id]?.version) ?? undefined : null)
 // Fetch starts as soon as the editor bundle evaluates, not at first card mount.
 if (SUPABASE_URL) manifest.warm()
 
@@ -34,7 +34,7 @@ if (SUPABASE_URL) manifest.warm()
 export function useInstrumentClipUrl(id: string): string | null | undefined {
   const [result, setResult] = useState(() => ({ id, url: initialUrl(id) }))
   useEffect(() => {
-    if (!SUPABASE_URL) return
+    if (!SUPABASE_URL || bundled[id]?.clipSrc) return
     let live = true
     void manifest.load().then((versions) => {
       if (!live) return

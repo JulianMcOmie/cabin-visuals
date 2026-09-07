@@ -266,6 +266,10 @@ const PREVIEW_PARAM_ANIMATORS: Record<string, (params: Record<string, number>, b
 // its two words on two different lanes (TITLE then PLAIN, the height-styles
 // story in one glance).
 const PREVIEW_NOTES: Record<string, ResolvedNote[]> = {
+  radialBloom: [3, 6, 9, 12].map((copies, i) => ({
+    beat: i * 4, blockStartBeat: 0, blockEndBeat: 16,
+    pitch: 35 + copies, velocity: 100, durationBeats: 3,
+  })),
   textDisplay: [60, 58].map((pitch) => ({
     beat: 0,
     blockStartBeat: 0,

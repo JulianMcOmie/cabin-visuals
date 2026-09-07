@@ -18,7 +18,7 @@ export async function createInstrumentPoster(id, bytes, version) {
   try {
     // Synth voices start at zero size on the exact note onset. Give its
     // attack a moment to open, and start playback at that same frame.
-    const time = id === 'modSynth' ? 0.125 : 0
+    const time = (id === 'modSynth' || id === 'radialBloom') ? 0.125 : 0
     await writeFile(join(temp, 'clip.mp4'), bytes)
     await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', join(temp, 'clip.mp4'),
       '-ss', String(time), '-frames:v', '1', join(temp, 'poster.png')])

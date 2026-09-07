@@ -39,7 +39,7 @@ initialization"**: the component imports `core/visual/instrumentFrame`, which
 reaches `VisualEngine` and back around to `instruments/index.ts`, which imports
 the component again. Only instruments whose file pulls in nothing but types
 (BassRipple) can be tested directly. Everything else splits the pure half into a
-sibling module with type-only imports — `laserSphereCore.ts`, `waterDropCore.ts`
+sibling module with type-only imports — `laserSphereCore.ts`, `radialBloomCore.ts`
 — and the test imports that. Name the test after the core file, not the
 instrument, so the pairing is obvious. (Since the visual moved to `FooVisual.tsx`
 a DEF file usually imports nothing but types and `lazyInstrument`, so importing
@@ -83,8 +83,7 @@ order **wrap → pulse → roll → tumble → wrap**. The default count remains
 `instanceColor` / `vertexColors` carry RGB only — there is no built-in per-instance
 alpha, so one InstancedMesh cannot fade its instances independently (the usual
 reason: N note-spawned things of different ages sharing one mesh). **Encode the
-fade into the instance colour and blend additively** — ParticleBurst and WaterDrop
-both do this. Dimming is fading under additive blending; under normal blending it
+fade into the instance colour and blend additively** — ParticleBurst does this. Dimming is fading under additive blending; under normal blending it
 would darken toward black instead, so this choice picks the blend mode too.
 
 ### Do not reach for `onBeforeCompile`

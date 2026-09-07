@@ -39,7 +39,7 @@ import { wormholeInstrument } from './Wormhole'
 import { particleSphereInstrument } from './ParticleSphere'
 import { photoSlotInstrument } from './PhotoSlot'
 import { polyFxInstrument } from './PolyFx'
-import { waterDropInstrument } from './WaterDrop'
+import { radialBloomInstrument } from './RadialBloom'
 import { flashWallInstrument } from './FlashWall'
 import { overlapShapeInstrument } from './OverlapShape'
 import { overlapSolidInstrument } from './OverlapSolid'
@@ -93,7 +93,7 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [particleSphereInstrument.id]: particleSphereInstrument,
   [photoSlotInstrument.id]: photoSlotInstrument,
   [polyFxInstrument.id]: polyFxInstrument,
-  [waterDropInstrument.id]: waterDropInstrument,
+  [radialBloomInstrument.id]: radialBloomInstrument,
   [flashWallInstrument.id]: flashWallInstrument,
   [overlapShapeInstrument.id]: overlapShapeInstrument,
   [overlapSolidInstrument.id]: overlapSolidInstrument,
