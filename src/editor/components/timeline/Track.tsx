@@ -369,15 +369,22 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
             <span
               className="absolute left-0 top-full bg-inherit"
               style={{
-                // The first child surface has a rounded top-left cutout. The
-                // parent's strip always underpaints that radius - selected or
-                // not - so the fill meets the curved divider without leaving
-                // a bare notch.
-                width: childBracketLeft - regionLeft + BRACKET_CORNER_RADIUS_PX,
+                width: childBracketLeft - regionLeft,
                 // Relative to this row, so the bracket follows grid sizing.
                 height: `${descendantRows * 100}%`,
               }}
-            />
+            >
+              {/* Underpaint only the first child's rounded corner; extending
+                  the entire strip would spill past the highlighted stem. */}
+              <span
+                className="absolute left-full top-0 bg-inherit"
+                style={{
+                  width: BRACKET_CORNER_RADIUS_PX,
+                  height: BRACKET_CORNER_RADIUS_PX,
+                  maskImage: `radial-gradient(circle at bottom right, transparent ${BRACKET_CORNER_RADIUS_PX}px, black ${BRACKET_CORNER_RADIUS_PX}px)`,
+                }}
+              />
+            </span>
           )}
         </div>
         {/* The nest-into outline's bent half, drawn over the children's own chrome
@@ -723,8 +730,9 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
       {replacePreview && (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-30"
+          className={`pointer-events-none absolute inset-y-0 right-0 z-30 ${isFirstChild ? 'rounded-tl-md' : ''}`}
           style={{
+            left: regionLeft,
             background: `color-mix(in srgb, ${replacePreview.color} 13%, transparent)`,
             boxShadow: `inset 0 0 0 1px ${replacePreview.color}`,
           }}
