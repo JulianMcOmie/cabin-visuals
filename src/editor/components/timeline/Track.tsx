@@ -10,7 +10,6 @@ import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { BRACKET_CORNER_RADIUS_PX, INDENT_PX, LABEL_BASE_PX, rowIndentPx } from './trackDrop'
 import type { RowGuide } from './trackTree'
 import { resolveTrackDisplayColor, resolveTrackIdentityColor } from '../../utils/trackDisplayColor'
-import { midiSelectionSpill } from '../../utils/colors'
 import { trackChromeColor } from '../../utils/trackChromeColor'
 import { selectTrack, selectTrackRange, shouldSuppressTrackSelect, toggleTrackInSelection } from '../../utils/selection'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
@@ -99,9 +98,6 @@ interface TrackProps {
  *  plus one refinement for the selection Set. */
 export const Track = memo(function Track({ track, barWidthPx, pickupPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, depth = 0, guides, dividerInset, descendantRows = 0, liftOffset, dimmed, dropInto, replacePreview, onCopyDragStart, onNestDragStart, onLabelContextMenu }: TrackProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
-  // Audio lanes only need this for the selection spill's geometry (an audio
-  // block's width is derived from its trimmed seconds at the current tempo).
-  const bpm = useProjectStore((s) => s.bpm)
   const isPlaying = useTimeStore((s) => s.isPlaying)
 
   // A boolean, not the id: selecting some OTHER row must not re-render this one.
@@ -679,25 +675,6 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
             into the lane, so audio with startBar < 0 still renders on-lane
             (flush with the left edge when it defines the pickup). */}
         <div className="absolute inset-y-0" style={{ left: pickupPx, right: 0, opacity: ghostOpacity }}>
-        {/* Audio retains its selection wash; solid MIDI clips use only their
-            own perimeter. Audio widths follow trimmed seconds at this tempo. */}
-        {(track.type === 'audio'
-          ? (track.audioBlocks ?? []).map((block) => {
-              if (!selectedBlockIds.has(block.id)) return null
-              const widthBars = ((block.trimEnd - block.trimStart) * bpm) / 60 / beatsPerBar
-              const widthPx = Math.max(widthBars * barWidthPx, 4)
-              return { id: block.id, centerPx: block.startBar * barWidthPx + widthPx / 2, widthPx }
-            })
-          : []
-        ).map((spill) =>
-          spill && (
-            <div
-              key={`spill:${spill.id}`}
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0"
-              style={{ background: midiSelectionSpill(blockColor, spill.centerPx, spill.widthPx) }}
-            />
-          ))}
         {track.type === 'audio'
           ? (track.audioBlocks ?? []).map((block) => (
               <AudioBlock
