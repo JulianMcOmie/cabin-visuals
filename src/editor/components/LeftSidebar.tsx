@@ -14,14 +14,8 @@ import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
 import { listCompositionInstruments } from '../core/directors'
 import { canPreview } from './instrumentPreviewStore'
 import { preloadInstrument } from '../instruments'
-// The two preview components pull their own r3f Canvas + Bloom stack; they
-// load after first paint so the shell doesn't wait on them. Both are memo'd
-// AROUND the dynamic wrapper: the sidebar re-renders on tab clicks and on the
-// droppable/ghost flips of a drag, and without the memo each of those walked
-// the r3f preview canvas (the layer) and every visible card's loadable shell.
-// The layer takes no props and a card's `item` is a module constant, so the
-// memo bails them all out.
-const InstrumentCardPreview = memo(dynamic(() => import('./InstrumentHoverPreview').then((m) => m.InstrumentCardPreview), { ssr: false }))
+// Cards paint with the sidebar shell; only the live hover canvas waits for R3F.
+import { InstrumentCardPreview } from './InstrumentCardPreview'
 const InstrumentPreviewLayer = memo(dynamic(() => import('./InstrumentHoverPreview').then((m) => m.InstrumentPreviewLayer), { ssr: false }))
 import { TEMPLATES, LISTED_TEMPLATES, LYRIC_STYLES, isLyricTemplateId } from '../../templates'
 import { TemplatePreviewVideo } from '../../components/TemplatePreviewVideo'

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createManifestLoader } from './clipManifest'
+import posters from './instrumentPreviewPosters.json'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 export const INSTRUMENT_CLIP_BASE = `${SUPABASE_URL}/storage/v1/object/public/instrument-previews`
@@ -14,27 +15,33 @@ export const INSTRUMENT_CLIP_BASE = `${SUPABASE_URL}/storage/v1/object/public/in
 // instruments land before their capture runs), and an id absent from the
 // manifest means "keep the live preview", not "404".
 const manifest = createManifestLoader(`${INSTRUMENT_CLIP_BASE}/manifest.json`, 'cabin.instrumentClipManifest')
+const bundled: Record<string, { version: string }> = posters
+const clipFor = (id: string, version?: string) => version
+  ? `${INSTRUMENT_CLIP_BASE}/${id}.mp4?v=${encodeURIComponent(version)}` : null
+const initialUrl = (id: string) => SUPABASE_URL
+  ? clipFor(id, bundled[id]?.version) ?? undefined : null
 // Fetch starts as soon as the editor bundle evaluates, not at first card mount.
 if (SUPABASE_URL) manifest.warm()
 
 /**
  * The instrument's preview clip URL. Three states on purpose:
- * `undefined` = manifest still resolving - render nothing yet, so a card never
- * pays for a live WebGL preview that a clip is about to replace;
- * `null` = no clip exists for this id - fall back to the live preview;
+ * Bundled posters also record their clip versions, eliminating the manifest
+ * round trip on a first visit. The remote manifest can still update a clip.
+ * `undefined` = unknown id, manifest still resolving;
+ * `null` = no clip exists for this id - keep the still/icon;
  * string = the versioned clip URL.
  */
 export function useInstrumentClipUrl(id: string): string | null | undefined {
-  const [url, setUrl] = useState<string | null | undefined>(SUPABASE_URL ? undefined : null)
+  const [result, setResult] = useState(() => ({ id, url: initialUrl(id) }))
   useEffect(() => {
     if (!SUPABASE_URL) return
     let live = true
     void manifest.load().then((versions) => {
       if (!live) return
-      const version = versions[id]
-      setUrl(version ? `${INSTRUMENT_CLIP_BASE}/${id}.mp4?v=${version}` : null)
+      const version = versions[id] ?? bundled[id]?.version
+      setResult({ id, url: clipFor(id, version) })
     })
     return () => { live = false }
   }, [id])
-  return url
+  return result.id === id ? result.url : initialUrl(id)
 }

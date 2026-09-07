@@ -11,6 +11,7 @@
     "lint": "next lint",
     "previews": "node scripts/generate-previews.mjs",
     "previews:instruments": "node scripts/generate-instrument-previews.mjs",
+    "previews:posters": "node scripts/generate-instrument-posters.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },
@@ -62,6 +63,7 @@
     "eslint-config-next": "15.2.4",
     "pg": "^8.22.0",
     "playwright": "^1.61.1",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4.1.4",
     "tsx": "^4.23.12",
     "typescript": "^5"

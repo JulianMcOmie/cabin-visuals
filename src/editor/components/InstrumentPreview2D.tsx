@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import { strobePreviewGate } from '../instruments/Strobe'
 import { impactEnvelope } from '../instruments/ImpactWarp'
 import { OVERLAP_SHAPE_OPTIONS, overlapShapePoints } from '../instruments/overlapShapeCore'
@@ -1101,10 +1101,10 @@ export function get2DPreview(id: string): Draw2D | undefined {
 
 /** Fills its (positioned) parent with an animated canvas running `draw`.
  *  Same rAF/dpr/reduced-motion skeleton as TemplateSlideshowPreview. */
-export function Preview2D({ draw }: { draw: Draw2D }) {
+export function Preview2D({ draw, active = true }: { draw: Draw2D; active?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const canvas = canvasRef.current
     const parent = canvas?.parentElement
     const ctx = canvas?.getContext('2d')
@@ -1118,26 +1118,25 @@ export function Preview2D({ draw }: { draw: Draw2D }) {
     canvas.height = Math.round(h * dpr)
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      draw(ctx, w, h, 1.3)
-      return
-    }
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    // Paint before the browser exposes the card, even when parked. One shared
+    // clock preserves motion across folder navigation and viewport re-entry.
+    draw(ctx, w, h, reducedMotion ? 1.3 : performance.now() / 1000)
+    if (reducedMotion || !active) return
 
     let raf = 0
-    let start = 0
     let last = 0
     const loop = (ts: number) => {
       raf = requestAnimationFrame(loop)
-      if (!start) start = ts
       // ~30fps: a 100-230px vignette gains nothing from 60, and a folder can
       // hold several of these running at once beside the real render.
       if (ts - last < 30) return
       last = ts
-      draw(ctx, w, h, (ts - start) / 1000)
+      draw(ctx, w, h, ts / 1000)
     }
     raf = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(raf)
-  }, [draw])
+  }, [draw, active])
 
   return <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
 }
