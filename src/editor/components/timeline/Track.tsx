@@ -715,6 +715,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
                 key={block.id}
                 block={block}
                 trackId={track.id}
+                name={replacePreview?.name ?? track.name}
                 barWidthPx={barWidthPx}
                 beatsPerBar={beatsPerBar}
                 color={blockColor}

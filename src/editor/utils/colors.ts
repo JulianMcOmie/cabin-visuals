@@ -97,20 +97,20 @@ export function colorToHsl(color: string): HslColor | null {
   return { hue, saturation, lightness }
 }
 
-/** Graphite + color timeline MIDI: near-neutral charcoal bodies with the
- *  editor's track hue in bright, matte note ink and quieter loop repeats.
+/** Vivid solid timeline MIDI: saturated track-hued bodies with dark note ink
+ *  and quieter loop repeats. The pale title band shares the selection color.
  *  Selection keeps the fill; Block draws a crisp outline above loop sections.
  *  Audio retains its existing palette below. */
-export function graphiteMidiBlockPalette(color: string): MidiBlockPalette {
+export function vividMidiBlockPalette(color: string): MidiBlockPalette {
   const source = colorToOklch(color) ?? { l: 0.5, c: 0.08, h: 240 }
   const c = (target: number) => source.c > 0.02 ? target : 0
   const tone = (l: number, chroma: number) => oklchToHex(l, c(chroma), source.h)
-  const fill = tone(0.245, 0.008)
-  const note = tone(0.78, 0.12)
-  const repeat = tone(0.62, 0.085)
+  const fill = tone(0.73, 0.175)
+  const note = tone(0.23, 0.035)
+  const repeat = tone(0.43, 0.055)
   return {
     fill,
-    edge: tone(0.365, 0.008),
+    edge: tone(0.80, 0.175),
     note,
     noteGlow: 'transparent',
     repeatedNote: repeat,
@@ -119,13 +119,13 @@ export function graphiteMidiBlockPalette(color: string): MidiBlockPalette {
     selectedNote: note,
     selectedNoteWrap: 'transparent',
     selectedRepeatedNote: repeat,
-    activeFill: tone(0.30, 0.018),
-    activeNote: tone(0.88, 0.12),
-    activeRepeatedNote: tone(0.73, 0.10),
-    activeSelectedNote: tone(0.88, 0.12),
-    activeSelectedRepeatedNote: tone(0.73, 0.10),
-    outline: tone(0.365, 0.008),
-    selectedOutline: '#e2e6ee',
+    activeFill: tone(0.78, 0.16),
+    activeNote: tone(0.16, 0.025),
+    activeRepeatedNote: tone(0.32, 0.04),
+    activeSelectedNote: tone(0.16, 0.025),
+    activeSelectedRepeatedNote: tone(0.32, 0.04),
+    outline: tone(0.80, 0.175),
+    selectedOutline: tone(0.93, 0.035),
   }
 }
 
