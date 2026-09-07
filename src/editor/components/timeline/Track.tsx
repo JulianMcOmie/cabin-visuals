@@ -9,8 +9,9 @@ import { AudioBlock } from './AudioBlock'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { BRACKET_CORNER_RADIUS_PX, INDENT_PX, LABEL_BASE_PX, rowIndentPx } from './trackDrop'
 import type { RowGuide } from './trackTree'
-import { resolveTrackDisplayColor } from '../../utils/trackDisplayColor'
+import { resolveTrackDisplayColor, resolveTrackIdentityColor } from '../../utils/trackDisplayColor'
 import { midiSelectionSpill } from '../../utils/colors'
+import { trackChromeColor } from '../../utils/trackChromeColor'
 import { selectTrack, selectTrackRange, shouldSuppressTrackSelect, toggleTrackInSelection } from '../../utils/selection'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { canPreview, clearInstrumentPreviewFor, setInstrumentPreview } from '../instrumentPreviewStore'
@@ -221,6 +222,8 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
   // A live replace-drop previews the post-swap identity instead, so the row
   // (name, blocks, wash) shows the future the drop commits.
   const blockColor = replacePreview?.color ?? resolveTrackDisplayColor(track)
+  // Icons and faders share the real identity, with neutrals kept readable.
+  const identityColor = replacePreview?.color ?? resolveTrackIdentityColor(track)
   // Recomputed only when THIS track changes, and the pitch array keeps its
   // identity (it is a prop of every memoized Block and a dep of their activity
   // effects). Mover-lane rows technically also depend on sibling chains for
@@ -446,7 +449,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
             content box in this label (the name group, the control cluster)
             carries `relative` for the same reason. */}
         <span className="relative flex flex-shrink-0 items-center" style={{ opacity: ghostOpacity }}>
-          <TrackIcon glyph={trackGlyph(track, activeIsMain)} color={blockColor} muted={isDarkenedRow} />
+          <TrackIcon glyph={trackGlyph(track, activeIsMain)} color={identityColor} muted={isDarkenedRow} />
         </span>
         {/* Name + its collapse toggle, grouped so the chevron hugs the name text
             (the empty space sits to their right, not between them). */}
@@ -540,8 +543,8 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
                   stands well taller than the track it rides. */}
               <div className="relative h-[3px] w-full rounded-full bg-black/55 shadow-[inset_0_1px_1px_rgba(0,0,0,0.65)]">
                 <div
-                  className="absolute inset-y-0 left-0 rounded-l-full opacity-60 group-hover:opacity-80"
-                  style={{ width: `${opacityValue * 100}%`, background: blockColor }}
+                  className="absolute inset-y-0 left-0 rounded-l-full opacity-90 group-hover:opacity-100"
+                  style={{ width: `${opacityValue * 100}%`, background: trackChromeColor(identityColor) }}
                 />
                 <div className="absolute left-1/2 top-[-3px] h-[2px] w-px bg-white/25" />
                 <div

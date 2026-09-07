@@ -1,14 +1,13 @@
 import type { ReactNode } from 'react'
-import { midiNoteBaseColor } from '../../utils/midiEditorPalette'
+import { trackChromeColor } from '../../utils/trackChromeColor'
 
 /**
  * The instrument mark at the left of every track row.
  *
  * The mark's SHAPE says which instrument (trackGlyphs.tsx); its COLOR is the
- * track's display color, re-voiced through `midiNoteBaseColor` - the same OKLCH
- * recipe (L .82 / C .16) the blocks and piano-roll notes wear, so the icon and
- * the row's blocks are literally the same color, and a dim or muddy identity
- * color cannot produce an unreadable mark on the near-black label.
+ * track's identity color, re-voiced through `trackChromeColor`. Colored
+ * identities gain saturation; neutrals keep their lightness differences,
+ * lifted enough for dark identities to remain readable on the label.
  *
  * The LOOK is "glow": the tinted glyph over its own soft bloom, chosen from six
  * candidates built into the live editor 2026-08-15 (bare / chip / solid / well /
@@ -24,14 +23,14 @@ export const TRACK_ICON_WIDTH = 22
 
 interface TrackIconProps {
   glyph: ReactNode
-  /** The track's display color (raw identity hex - re-voiced here). */
+  /** The track's identity color (including neutrals - re-voiced here). */
   color: string
   /** Sub-rows (automation / envelope / ability) sit quieter than their object. */
   muted?: boolean
 }
 
 export function TrackIcon({ glyph, color, muted }: TrackIconProps) {
-  const tint = midiNoteBaseColor(color)
+  const tint = trackChromeColor(color)
   return (
     <span
       className="relative flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center"
