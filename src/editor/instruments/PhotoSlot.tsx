@@ -71,8 +71,6 @@ const PARAMS: ParamDef[] = [
     ],
     default: 0,
   },
-  // 'alpha', not 'opacity': the envelope system reserves the 'opacity' target
-  // for object visibility, so an automation lane needs a distinct key.
   { key: 'alpha', label: 'Opacity', min: 0, max: 1, step: 0.01, default: 1 },
   { key: 'label', label: 'Label', type: 'string', default: '' },
   { key: 'palette', label: 'Placeholder Palette', type: 'string', default: '#d8f4f0' },

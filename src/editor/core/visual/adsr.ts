@@ -1,9 +1,8 @@
 import { midiVelocity } from '../../utils/midiVelocity'
 import type { AdsrEnvelope } from '../../types'
 import { clamp01 } from '../../utils/math'
-import { noteArrayIndex, noteWindow } from './noteWindow'
 
-// Closed-form ADSR gain over gate notes - the envelope-track evaluator.
+// Closed-form ADSR gain for Burst automation.
 //
 // The same closed-form-over-notes discipline as ballisticGain (VisualEngine): the
 // gain at any beat is computed from the note list alone - no integrator state, no
@@ -20,22 +19,11 @@ import { noteArrayIndex, noteWindow } from './noteWindow'
 // Release starts from the envelope's value AT note end - a gate shorter than A+D
 // releases from wherever the attack/decay curve had reached, so short notes never
 // pop. Velocity scales each note's contribution (0..1, or 0..127 MIDI-style,
-// same normalization as ballisticGain). Overlapping notes SUM and the total
-// clamps to 0..1 - consistent with ballisticGain's stacking (the design doc's
-// "max wins" predates that engine idiom).
-
-/** New envelope tracks start here; resolve/UI also fall back to these per field. */
-export const DEFAULT_ADSR: AdsrEnvelope = {
-  attackBeats: 0.05,
-  decayBeats: 0.25,
-  sustainLevel: 0.7,
-  releaseBeats: 0.5,
-}
+// same normalization as ballisticGain). Burst automation combines the gains.
 
 const EPS = 0.0001
 
-/** The minimal note shape the evaluator reads (pitch is deliberately ignored -
- *  an envelope lane is a trigger lane, not a pitched one). */
+/** Timing and intensity for a single Burst automation gate. */
 export interface AdsrGate {
   beat: number
   durationBeats: number
@@ -44,9 +32,8 @@ export interface AdsrGate {
 
 /**
  * ONE gate's velocity-scaled contribution at `beat` - 0 before it opens and once
- * it has fully released. This is the per-note piece `evaluateAdsrGain` sums;
- * burst automation lanes (automation.ts) need the pieces apart because each of
- * their notes aims at its OWN target value and has to weight it by this gain.
+ * it has fully released. Burst automation (automation.ts) evaluates gates separately:
+ * each note aims at its own target value, weighted by this gain.
  */
 export function adsrGateGain(note: AdsrGate, beat: number, p: AdsrEnvelope): number {
   const t = beat - note.beat
@@ -65,21 +52,4 @@ export function adsrGateGain(note: AdsrGate, beat: number, p: AdsrEnvelope): num
   }
   const velocity = midiVelocity(note.velocity)
   return velocity * (t <= hold ? held(t) : held(hold) * (1 - (t - hold) / release))
-}
-
-/**
- * The summed, clamped 0..1 envelope gain at `beat` from the gate notes. Pure
- * function of (beat, notes, params) - safe to call per frame at any beat.
- */
-export function evaluateAdsrGain(notes: readonly AdsrGate[], beat: number, p: AdsrEnvelope): number {
-  let gain = 0
-  // A gate contributes exactly 0 once `t >= hold + release` (hold = max(its
-  // duration, attack)) and 0 before it opens, so only onsets within
-  // max(longest duration, attack) + release of the beat can add anything.
-  // Bisect to that window (noteWindow.ts) and sum in the original order -
-  // the skipped terms were zeros, and adding zero leaves a float unchanged.
-  const reach = Math.max(noteArrayIndex(notes).maxDuration, Math.max(EPS, p.attackBeats)) + Math.max(EPS, p.releaseBeats)
-  const { start, end } = noteWindow(notes, beat, reach)
-  for (let i = start; i < end; i++) gain += adsrGateGain(notes[i], beat, p)
-  return clamp01(gain)
 }

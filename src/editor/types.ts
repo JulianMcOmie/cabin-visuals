@@ -46,7 +46,6 @@ export type TrackType =
   | 'ability'
   | 'mover'
   | 'audio'
-  | 'envelope'
   | 'splitter'
   // A folder over member tracks (⌘⇧G). Carries the canonical tf* transform
   // (inherited by the subtree via world-matrix composition), automation lanes
@@ -193,7 +192,7 @@ export interface Scene {
 }
 
 /**
- * ADSR parameters for an `envelope` child track, all in BEATS (tempo-musical and
+ * ADSR parameters for Burst automation, all in BEATS (tempo-musical and
  * deterministic - the gain is a closed-form function of the playhead beat, per the
  * pause invariant). sustainLevel is a 0..1 level, not a time.
  */
@@ -405,15 +404,6 @@ export interface Track {
   /** For an `ability` child track: which of the parent instrument's abilities it drives
    *  (matches an `AbilityLaneDef.key`). Its blocks/notes are the ability's trigger stream. */
   abilityKey?: string
-  /** For an `envelope` child track: its ADSR shape (beats / 0..1 sustain). The track's
-   *  notes are the gates; `targetParam` addresses the modulated parent param (same
-   *  addressing as automation, plus the reserved 'opacity' key). */
-  adsr?: AdsrEnvelope
-  /** Envelope wet/dry (0..1): scales the gain before it modulates the target. */
-  envDepth?: number
-  /** Envelope target value: the param value reached at full gain (base + (envTarget -
-   *  base) * gain). Unused for the reserved 'opacity' target, which multiplies. */
-  envTarget?: number
   /** For a `mover` track: which MoverOrSplitterDefinition this row applies. */
   moverId?: string
   /** For a `splitter` track: which MoverOrSplitterDefinition this row applies. */

@@ -15,7 +15,6 @@ import { setPreviewObjectState } from '../core/visual/VisualEngine'
 import { resolveProject, type ProjectSnapshot } from '../core/visual/resolve'
 import { evaluatePulse } from '../core/visual/energy'
 import { sampleAutomationLane } from '../core/visual/automation'
-import { evaluateAdsrGain } from '../core/visual/adsr'
 import { composeMatrix, localTransformToSV } from '../core/visual/stateVector'
 import { composeScreenAnchor } from '../core/visual/screenAnchor'
 import { applyMaterialOpacity } from '../core/visual/animatedOpacity'
@@ -910,8 +909,8 @@ const _tintColor = new Color()
 // a mover/splitter row previews the object it actually moves, twice: a faint
 // ghost of the chain WITHOUT this track next to the solid chain WITH it, so
 // the row shows exactly what adding it does. Everything routes through the
-// same resolveProject the engine uses, so settings, notes, automation and
-// envelopes all match the canvas.
+// same resolveProject the engine uses, so settings, notes and automation
+// all match the canvas.
 
 const PROJECT_PREVIEW_TRACK_ID = '__project-track-preview__'
 // Copy cap: a 32-copy splitter would mount 32 full instrument components in a
@@ -1032,7 +1031,7 @@ interface ProjectFrame {
 }
 
 /** One object's ObjectState at a beat - the popup's stand-in for computeAtBeat:
- *  energy, automation lanes, envelope lanes and the local transform all follow
+ *  energy, automation lanes and the local transform all follow
  *  the engine's merge order; only the parent world (soloed preview centers the
  *  object) and fx overrides are omitted. */
 export function computeProjectState(
@@ -1051,18 +1050,6 @@ export function computeProjectState(
       if (!Number.isNaN(v)) params[auto.param] = v
     }
   }
-  let opacityGate = 1
-  for (const env of obj.envelopes) {
-    if (env.notes.length === 0) continue
-    const gain = evaluateAdsrGain(env.notes, beat, env.adsr)
-    if (env.kind === 'opacity') {
-      opacityGate *= 1 - env.depth + env.depth * gain
-    } else if (env.kind === 'param' && env.param !== undefined) {
-      if (params === obj.params) params = { ...obj.params }
-      const base = params[env.param] ?? env.paramDefault ?? 0
-      params[env.param] = base + (env.envTarget - base) * (gain * env.depth)
-    }
-  }
   const local = obj.localTransform ? obj.localTransform({ params, energy, beat }) : {}
   localTransformToSV(local, obj.scratchBase)
   // Same split as computeAtBeat: the size scale stays OUT of the placement world
@@ -1070,7 +1057,7 @@ export function computeProjectState(
   const meshScale = Math.exp(obj.scratchBase.logScale)
   obj.scratchBase.logScale = 0
   composeMatrix(obj.scratchBase, world)
-  const opacity = Math.max(0, Math.min(1, obj.scratchBase.opacity * opacityGate))
+  const opacity = Math.max(0, Math.min(1, obj.scratchBase.opacity))
   const activeNotes = obj.notes.filter((n) => beat >= n.beat && beat < n.beat + (n.durationBeats || 0.05))
   return {
     beat,

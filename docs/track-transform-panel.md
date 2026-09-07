@@ -24,12 +24,11 @@ Three overlapping transform systems exist today:
 |---|---|---|
 | Instrument params | 13+ instruments in `src/editor/instruments/` | Inconsistent keys: `x` vs `baseXPosition` vs `posX`; inconsistent units (world / normalized screen / UV / degrees) |
 | Effects stack | `src/editor/effects/transforms/` (`offset`, `rotate`, `scale`, `opacity`) | Already a per-track transform, packaged as opt-in effects, applied via `TransformWrapper` nested groups |
-| Envelope opacity | `resolve.ts` `ENVELOPE_OPACITY_TARGET` | Precedent for a track-level property that isn't an instrument param |
 
 Other load-bearing facts:
 
 - `Track` (`src/editor/types.ts:119`) has no transform/volume fields today.
-- Automation lanes + envelopes target `track.params` keys — removing params
+- Automation lanes target `track.params` keys — removing params
   removes automatability unless transform gets its own automation story.
 - Composition point: `VisualEngine.ts` builds a per-track `StateVector`
   (`stateVector.ts`) then `composeMatrix`; injecting a track transform there
@@ -50,7 +49,7 @@ Other load-bearing facts:
 2. **Scope of "unified":** does one panel cover world-space objects,
    screen-space instruments, and camera — or world-space only at first?
 3. **Automation:** do transform properties remain automatable (lanes /
-   envelopes / movers), and how, once they leave `params`?
+   movers), and how, once they leave `params`?
 4. **Where the panel lives:** popover from the track row, inspector section,
    dedicated mixer view, or several of these over one model?
 
@@ -60,13 +59,13 @@ Other load-bearing facts:
    `track.params`, but under standardized keys owned by the engine, not
    declared by instruments. Instruments stop declaring/reading x/y/z/etc.;
    `VisualEngine` applies the canonical keys generically when composing the
-   `StateVector`. Existing automation-lane and envelope machinery keeps
+   `StateVector`. Existing automation-lane machinery keeps
    working against these keys.
 2. **Scope: world-space first, model for all.** Canonical keys are defined so
    screen-space (2D) and camera tracks can adopt them later; the panel ships
    for world-space object tracks first. fullFrame shader tracks get opacity
    only.
-3. **Automation: from day one.** Automation lanes and envelopes can target
+3. **Automation: from day one.** Automation lanes can target
    canonical transform keys at launch (cheap, since they're still params).
 
 4. **Canonical property set:** `x, y, z` (world units), `rotX, rotY, rotZ`
@@ -120,12 +119,12 @@ ideas below.**
 - `VisualEngine.computeAtBeat` — composes the canonical transform as the
   PARENT of the instrument's localTransform (skipped when identity); `tfSize`
   stays in the world matrix (inherited group fader); `tfOpacity` multiplies
-  rendered opacity alongside envelope gates.
-- Automation/envelopes/context-menu offer transform params on every object
+  rendered opacity.
+- Automations/context-menu offer transform params on every object
   track (`withTransformParams`).
 - v9 → v10 document upgrade migrates cube/circle/triangle/laserSphere/
   laserLine/particleSphere old keys (world size ÷ 1.6 → multiplier) and
-  retargets automation/envelope children; template builder normalizes too.
+  retargets automation children; template builder normalizes too.
 - Instruments stripped of transform params; keep behavior only (spin, pulse,
   length/thickness, ripple scale etc.). CubeUserInterface lost its XY pad /
   size / presets (panel owns placement now).

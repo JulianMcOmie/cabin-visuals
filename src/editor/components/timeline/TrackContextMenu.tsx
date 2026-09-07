@@ -1,7 +1,6 @@
 import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
 import { listMoverOrSplitterDefinitions, getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
-import { ENVELOPE_OPACITY_TARGET } from '../../core/visual/resolve'
 import { compositionDef, isCompositionTrack } from '../../core/directors'
 import { parseFxTarget } from '../../effects/automation'
 import { NestedMenu, type NestedMenuGroup } from '../NestedMenu'
@@ -26,7 +25,6 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const tracks = useProjectStore((s) => s.tracks)
   const addAbilityTrack = useProjectStore((s) => s.addAbilityTrack)
   const addAutomationTrack = useProjectStore((s) => s.addAutomationTrack)
-  const addEnvelopeTrack = useProjectStore((s) => s.addEnvelopeTrack)
   const addMoverTrack = useProjectStore((s) => s.addMoverTrack)
   const moveTrackToScene = useProjectStore((s) => s.moveTrackToScene)
   const ungroupTrack = useProjectStore((s) => s.ungroupTrack)
@@ -87,7 +85,6 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const childTracks = track.childIds.map((cid) => tracks[cid])
   const addedAbilities = new Set(childTracks.filter((c) => c?.type === 'ability').map((c) => c!.abilityKey))
   const automatedParams = new Set(childTracks.filter((c) => c?.type === 'automation').map((c) => c!.targetParam))
-  const envelopedParams = new Set(childTracks.filter((c) => c?.type === 'envelope').map((c) => c!.targetParam))
   // Same three-way rule as moveTrackToScene: Main accepts only composition
   // tracks; mainOnly composers (switcher/cut/radialCut) never leave Main; crop
   // and plain instruments move freely between visual scenes.
@@ -100,20 +97,6 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       .filter((scene) => scene && scene.id !== activeSceneId && (scene.isMain
         ? isCompositionTrack(track)
         : !moveDef?.mainOnly))
-    : []
-
-  // Envelope targets: object tracks only - the reserved renderer-level Opacity first
-  // (it wins over an instrument's own 'opacity' param, which is skipped to avoid a
-  // duplicate entry), then the numeric params, then numeric effect settings. Each
-  // carries the target value reached at full gain (param max; Opacity needs none).
-  const envelopeItems = def
-    ? [
-        { key: ENVELOPE_OPACITY_TARGET, label: 'Opacity', envTarget: undefined as number | undefined },
-        ...targets
-          .filter((p) => p.key !== ENVELOPE_OPACITY_TARGET)
-          .filter((p) => p.bounds)
-          .map((p) => ({ key: p.key, label: p.label, envTarget: p.bounds!.max as number | undefined })),
-      ]
     : []
 
   const groups: NestedMenuGroup[] = [
@@ -151,14 +134,6 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       items: params.map((p) => {
         const added = automatedParams.has(p.key)
         return { id: p.key, label: p.label, disabled: added, checked: added }
-      }),
-    },
-    {
-      key: 'envelope',
-      label: 'Add envelope track',
-      items: envelopeItems.map((item) => {
-        const added = envelopedParams.has(item.key)
-        return { id: item.key, label: item.label, disabled: added, checked: added }
       }),
     },
     {
@@ -216,9 +191,6 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       // Count params (`integer` on the def) start their lane on the
       // whole-number grid with stepped interpolation.
       if (p) addAutomationTrack(trackId, p.key, p.label, { integer: p.integer })
-    } else if (groupKey === 'envelope') {
-      const item = envelopeItems.find((f) => f.key === itemId)
-      if (item) addEnvelopeTrack(trackId, item.key, item.label, item.envTarget)
     } else if (groupKey === 'effect') {
       const item = fxItems.find((f) => f.key === itemId)
       if (item) addAutomationTrack(trackId, item.key, item.label, { integer: item.integer })

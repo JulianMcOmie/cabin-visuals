@@ -379,8 +379,7 @@ function travelCap(cfg: BurstConfig): number {
 /** Sample a burst lane at `beat`: NaN while no burst is live (lane inert), else
  *  `base` travelled toward the live bursts' value. Overlapping bursts blend -
  *  the destination is their gain-weighted average value and the total travel
- *  clamps at the shape's cap (1 for the classic ADSR, matching
- *  evaluateAdsrGain's sum-and-clamp stacking; 2 for the overshooting shapes). */
+ *  clamps at the shape's cap (1 for the classic ADSR; 2 for the overshooting shapes). */
 export function sampleBurstLane(
   cfg: BurstConfig,
   gates: readonly BurstGate[],

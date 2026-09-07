@@ -9,20 +9,16 @@ import { tracksWithTag } from '../utils/trackTags'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { compositionDef, isCompositionTrack } from '../core/directors'
 import { CompositionSettingsPanel } from './CompositionSettingsPanel'
-import { DEFAULT_ADSR } from '../core/visual/adsr'
 import { TRANSFORM_PARAM_DEFS } from '../core/transform'
-import { ENVELOPE_OPACITY_TARGET } from '../core/visual/resolve'
 import { DEFAULT_SPLINE_TENSION, automationMode } from '../core/visual/automation'
 import { getEffect, PLUGIN_LIST, type VisualEffect, type EffectCategory } from '../effects'
-import { parseFxTarget } from '../effects/automation'
 import { NestedMenu, type NestedMenuGroup } from './NestedMenu'
 import { AudioTrackDetail } from './AudioTrackDetail'
 import { SceneSettingsPanel } from './SceneSettingsPanel'
-import { isNumberParam, isStringParam } from '../instruments/types'
+import { isStringParam } from '../instruments/types'
 import { getUserInterfaceRenderer, ParamControl, type UserInterfaceParameter } from '../userInterfaceRenderers'
 import { getEffectUserInterface, getMoverUserInterface } from '../userInterfaceRenderers/bespokeRegistries'
 import { consolePanel } from '../userInterfaceRenderers/console'
-import { EnvelopeUserInterface } from '../userInterfaceRenderers/EnvelopeUserInterface'
 import { AutomationUserInterface } from '../userInterfaceRenderers/AutomationUserInterface'
 import { CopyTargetsUserInterface } from '../userInterfaceRenderers/CopyTargetsUserInterface'
 import { SwitcherUserInterface } from '../userInterfaceRenderers/SwitcherUserInterface'
@@ -297,7 +293,6 @@ function panelIdentity(
         ? getMoverOrSplitterDefinition(track.type === 'splitter' ? track.splitterId : track.moverId)?.label
           ?? (track.type === 'splitter' ? 'Splitter' : 'Mover')
       : track.type === 'automation' ? 'Automation'
-      : track.type === 'envelope' ? 'Envelope'
       : track.type === 'ability' ? 'Ability'
       : track.type === 'group' ? 'Group'
       : track.type === 'switcher' ? 'Switcher'
@@ -457,9 +452,6 @@ export function TrackEditor() {
   const setTrackParam = useProjectStore((s) => s.setTrackParam)
   const setTrackStringParam = useProjectStore((s) => s.setTrackStringParam)
   const setMoverInput = useProjectStore((s) => s.setMoverInput)
-  const setEnvelopeAdsr = useProjectStore((s) => s.setEnvelopeAdsr)
-  const setEnvelopeDepth = useProjectStore((s) => s.setEnvelopeDepth)
-  const setEnvelopeTarget = useProjectStore((s) => s.setEnvelopeTarget)
   const setTrackInterpolation = useProjectStore((s) => s.setTrackInterpolation)
   const setTrackSplineTension = useProjectStore((s) => s.setTrackSplineTension)
   const setTrackNoise = useProjectStore((s) => s.setTrackNoise)
@@ -621,46 +613,6 @@ export function TrackEditor() {
                       </>
                     )
                   }
-                  // Envelope child track → ADSR + depth (+ the value reached at
-                  // full gain, except for the reserved Opacity target, which is a
-                  // pure multiplier). Its notes are the gates - drawn in the MIDI
-                  // editor like any lane; pitch is ignored, velocity scales peak.
-                  if (track.type === 'envelope') {
-                    const target = track.targetParam
-                    const isOpacity = target === ENVELOPE_OPACITY_TARGET
-                    let targetLabel = 'Opacity'
-                    let bounds: { min: number; max: number; step: number } | null = null
-                    if (!isOpacity && target) {
-                      const fx = parseFxTarget(target)
-                      if (fx) {
-                        const inst = (parent?.effects ?? []).find((e) => e.id === fx.instanceId)
-                        const plugin = inst ? getEffect(inst.pluginId) : undefined
-                        const pd = plugin?.params.find((p) => p.key === fx.key)
-                        targetLabel = pd ? `${plugin?.name} · ${pd.label}` : target
-                        if (pd && isNumberParam(pd)) bounds = { min: pd.min, max: pd.max, step: pd.step || 0.01 }
-                      } else {
-                        const pdef = parent ? getInstrument(parent.instrumentId)?.params.find((p) => p.key === target) : undefined
-                        targetLabel = pdef?.label ?? target
-                        if (pdef && isNumberParam(pdef)) bounds = { min: pdef.min, max: pdef.max, step: pdef.step || 0.01 }
-                      }
-                    }
-                    const adsr = { ...DEFAULT_ADSR, ...track.adsr }
-                    return (
-                      <EnvelopeUserInterface
-                        targetLabel={targetLabel}
-                        isOpacity={isOpacity}
-                        adsr={adsr}
-                        depth={track.envDepth ?? 1}
-                        peak={!isOpacity && bounds
-                          ? { value: track.envTarget ?? bounds.max, min: bounds.min, max: bounds.max, step: bounds.step }
-                          : null}
-                        onAdsr={(next) => setEnvelopeAdsr(track.id, next)}
-                        onDepth={(v) => setEnvelopeDepth(track.id, v)}
-                        onPeak={(v) => setEnvelopeTarget(track.id, v)}
-                      />
-                    )
-                  }
-
                   // Automation child track → its MODE (value keyframes on a
                   // curve / seeded noise / ADSR bursts) and that mode's shape,
                   // drawn as the lane's own console. The MIDI editor's toolbar

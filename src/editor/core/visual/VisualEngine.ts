@@ -4,13 +4,12 @@ import { sceneTrackView } from '../sceneTrack'
 import { resolveAutomationLanes, resolveProject, type ProjectSnapshot } from './resolve'
 import { evaluatePulse } from './energy'
 import { sampleAutomationLane } from './automation'
-import { DEFAULT_ADSR, evaluateAdsrGain } from './adsr'
 import { composeMatrix, identitySV, localTransformToSV } from './stateVector'
 import { isIdentityTransform, readTrackTransform, trackOpacity } from '../transform'
 import { identityVisualCopy } from '../visualCopies/identityVisualCopy'
 import { chainEmitsCopyClocks, copyClockShift, resolveVisualCopies, structuralCopyCount, warpChainBeat, type CopyClocks } from '../visualCopies/resolveVisualCopies'
 import type { VisualCopy } from '../visualCopies/types'
-import type { ResolvedGraph, ResolvedGroup, ObjectState, ResolvedEnvelope, ResolvedNote } from './types'
+import type { ResolvedGraph, ResolvedGroup, ObjectState, ResolvedNote } from './types'
 import { MIN_SOUNDING_BEATS, soundingNoteWindow } from './noteWindow'
 import type { ProjectState } from '../../store/ProjectStore'
 import { DEFAULT_SCENE_BACKGROUND, type Scene, type SceneGradient, type Track } from '../../types'
@@ -79,7 +78,7 @@ const copyCountWarned = new Set<string>()
 // ── Per-copy object states (time emitters) ──────────────────────────────────
 // A chain carrying a Stagger gives each copy its OWN CLOCK, and "the copy at
 // its clock" has to mean the WHOLE object, not just its chain: params, energy,
-// active notes, envelopes, the instrument's own local animation. For tracks
+// active notes, the instrument's own local animation. For tracks
 // whose chain declares the time channel (`emitsCopyClocks` - structural, fixed
 // per resolve), computeAtBeat builds one extra ObjectState per shifted copy,
 // each a re-run of the same per-object assembly at `objBeat - offset`. Slots
@@ -287,19 +286,6 @@ export function syncParams(input: ProjectState | ProjectSnapshot) {
       obj.params = track.params ?? {}
       obj.stringParams = track.stringParams ?? {}
     }
-    // Envelope lanes: keep the slider-driven fields (ADSR/depth/target) live at
-    // 60fps like instrument params; structure (notes, target kind) waits for resolve.
-    for (const env of obj.envelopes) {
-      const eTrack = sceneTracks[env.trackId]
-      if (!eTrack) continue
-      env.adsr = { ...DEFAULT_ADSR, ...eTrack.adsr }
-      env.depth = clamp(eTrack.envDepth ?? 1, 0, 1)
-      if (env.kind !== 'opacity') env.envTarget = clamp(eTrack.envTarget ?? env.max, env.min, env.max)
-      if (env.kind === 'fx' && track) {
-        const inst = track.effects?.find((e) => e.id === env.instanceId)
-        if (inst && env.key !== undefined) env.fxBase = inst.settings[env.key] ?? env.fxBase
-      }
-    }
     // Style lanes are a document field; the store's immutable updates hand the
     // resolved object a fresh array identity on any edit, so a paused frame
     // repaints through the frame signature with no work here. (Lyric CLIPS are
@@ -476,30 +462,6 @@ export function computeAtBeat(beat: number) {
         if (!Number.isNaN(v)) params[auto.param] = v
       }
     }
-    // Envelope lanes overlay next - documented merge order: base ← automation ←
-    // envelope. Each lane's ADSR gain is closed-form from its gate notes (adsr.ts),
-    // so this stays a pure function of the beat too. A lane with no notes is inert
-    // (adding an envelope track never changes the picture until you play gates).
-    //  - param target:   value = base + (envTarget - base) * gain * depth
-    //  - opacity target: multiplier = mix(1, gain, depth) = 1 - depth + depth*gain,
-    //    multiplied onto the object's rendered opacity below (depth 1 = fully
-    //    note-gated, invisible between gates; depth 0 = no effect)
-    //  - fx target: same lerp as params, written into effectOverrides further down
-    let opacityGate = 1
-    let fxEnvelopes: { env: ResolvedEnvelope; gain: number }[] | null = null
-    for (const env of obj.envelopes) {
-      if (env.notes.length === 0) continue
-      const gain = evaluateAdsrGain(env.notes, objBeat, env.adsr)
-      if (env.kind === 'opacity') {
-        opacityGate *= 1 - env.depth + env.depth * gain
-      } else if (env.kind === 'param' && env.param !== undefined) {
-        if (params === obj.params) params = { ...obj.params }
-        const base = params[env.param] ?? env.paramDefault ?? 0
-        params[env.param] = base + (env.envTarget - base) * (gain * env.depth)
-      } else if (env.kind === 'fx') {
-        ;(fxEnvelopes ??= []).push({ env, gain })
-      }
-    }
     let world = worldMatrices.get(obj.trackId)
     if (!world) { world = new Matrix4(); worldMatrices.set(obj.trackId, world) }
     const parentWorld = obj.parentId ? worldMatrices.get(obj.parentId) : undefined
@@ -527,7 +489,7 @@ export function computeAtBeat(beat: number) {
     // tfOpacity stays local to it, as it always has for nested tracks.
     const inheritedOpacity = obj.parentId ? inheritedOpacities.get(obj.parentId) ?? 1 : 1
     inheritedOpacities.set(obj.trackId, inheritedOpacity)
-    const opacity = clampOpacity(obj.scratchBase.opacity * opacityGate * trackOpacity(params) * inheritedOpacity)
+    const opacity = clampOpacity(obj.scratchBase.opacity * trackOpacity(params) * inheritedOpacity)
     if (parentWorld) world.multiplyMatrices(parentWorld, _local)
     else world.copy(_local)
 
@@ -545,18 +507,6 @@ export function computeAtBeat(beat: number) {
         if (!Number.isNaN(v)) (effectOverrides[ea.instanceId] ??= {})[ea.key] = v
       }
     }
-    // fx-targeted envelopes lerp on top of the sampled automation (or the stored
-    // setting when no lane drives that key) - same merge order as params.
-    if (fxEnvelopes) {
-      effectOverrides ??= {}
-      for (const { env, gain } of fxEnvelopes) {
-        if (env.instanceId === undefined || env.key === undefined) continue
-        const slot = (effectOverrides[env.instanceId] ??= {})
-        const base = slot[env.key] ?? env.fxBase ?? 0
-        slot[env.key] = base + (env.envTarget - base) * (gain * env.depth)
-      }
-    }
-
     // Muted, soloed-out, or switched off by a rack above it: all hidden the
     // same way. The object stays MOUNTED either way - a switcher gates
     // visibility, never structure, so the object list is unchanged and there is
@@ -666,7 +616,7 @@ export function computeAtBeat(beat: number) {
 
 /** One staggered object's per-copy states: for every copy whose chain clock is
  *  shifted, the same per-object assembly computeAtBeat just ran - energy,
- *  automation/envelope overlays, effect lanes, active notes, the instrument's
+ *  automation overlays, effect lanes, active notes, the instrument's
  *  own localTransform - re-run at `objBeat - offset`. Offset-0 slots stay null
  *  and read through to the shared object state. See the block comment at
  *  `staggeredTracks` for what deliberately stays on the object clock. */
@@ -708,22 +658,6 @@ function computeCopyStates(
         if (!Number.isNaN(v)) params[auto.param] = v
       }
     }
-    let opacityGate = 1
-    let fxEnvelopes: { env: ResolvedEnvelope; gain: number }[] | null = null
-    for (const env of obj.envelopes) {
-      if (env.notes.length === 0) continue
-      const gain = evaluateAdsrGain(env.notes, laneBeatFor(env.clockSkipEmitters), env.adsr)
-      if (env.kind === 'opacity') {
-        opacityGate *= 1 - env.depth + env.depth * gain
-      } else if (env.kind === 'param' && env.param !== undefined) {
-        if (params === obj.params) params = { ...obj.params }
-        const base = params[env.param] ?? env.paramDefault ?? 0
-        params[env.param] = base + (env.envTarget - base) * (gain * env.depth)
-      } else if (env.kind === 'fx') {
-        ;(fxEnvelopes ??= []).push({ env, gain })
-      }
-    }
-
     let state = slots[i]
     if (!state) {
       // A copy state OWNS its world matrix and active-note scratch (the shared
@@ -755,7 +689,7 @@ function computeCopyStates(
     }
     if (parentWorld) state.world.multiplyMatrices(parentWorld, _local)
     else state.world.copy(_local)
-    const opacity = clampOpacity(_copySV.opacity * opacityGate * trackOpacity(params) * inheritedOpacity)
+    const opacity = clampOpacity(_copySV.opacity * trackOpacity(params) * inheritedOpacity)
 
     let effectOverrides: Record<string, Record<string, number>> | undefined
     if (obj.effectAutomations.length) {
@@ -766,16 +700,6 @@ function computeCopyStates(
         if (!Number.isNaN(v)) (effectOverrides[ea.instanceId] ??= {})[ea.key] = v
       }
     }
-    if (fxEnvelopes) {
-      effectOverrides ??= {}
-      for (const { env, gain } of fxEnvelopes) {
-        if (env.instanceId === undefined || env.key === undefined) continue
-        const slot = (effectOverrides[env.instanceId] ??= {})
-        const base = slot[env.key] ?? env.fxBase ?? 0
-        slot[env.key] = base + (env.envTarget - base) * (gain * env.depth)
-      }
-    }
-
     const activeNotes = state.activeNotes
     activeNotes.length = 0
     {

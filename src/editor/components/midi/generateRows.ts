@@ -92,8 +92,8 @@ export function generateInstrumentRows(
 const TRIGGER_PITCHES = [72, 67, 64, 60]
 
 /**
- * Rows for a trigger/region lane (mover ballistic lanes, envelope gates,
- * envelope and ability triggers): a short set of identical rows, all one label and
+ * Rows for a trigger/region lane (mover ballistic lanes and
+ * ability triggers): a short set of identical rows, all one label and
  * colour so they read as interchangeable. Pitches already used by notes outside
  * the slot set get dimmed extra rows (still functional - pitch is ignored) so
  * no note can silently vanish from the editor.

@@ -39,7 +39,7 @@
 <header class="doc">
   <span class="kicker">Cabin Visuals · Effect-Param Automation</span>
   <h1>Effect-Param Automation - Architecture</h1>
-  <p class="sub">Automation lanes learn a second kind of target: an effect instance's setting. The real deliverable is the <strong>param address</strong> - one addressing type that this feature, the envelope modulator, and tag automation all share. Design it once here; the other two become consumers.</p>
+  <p class="sub">Automation lanes learn a second kind of target: an effect instance's setting. The real deliverable is the <strong>param address</strong> - one addressing type that this feature and tag automation share. Design it once here; tag automation becomes another consumer.</p>
 </header>
 
 <h2>1 · The param address - the cluster's shared decision</h2>
@@ -47,7 +47,7 @@
 type ParamAddress =
   | { kind: 'param';  key: string }                          // instrument param (today's targetParam)
   | { kind: 'effect'; instanceId: string; key: string }      // an EffectInstance's setting   ← this doc
-// (the envelope modulator aims a ParamAddress; tag automation fans a ParamAddress
+// (tag automation fans a ParamAddress
 //  across tagged tracks - same address, different scopes)</code></pre>
 
 <figure class="fig">
@@ -93,10 +93,10 @@ type ParamAddress =
   </tbody>
 </table>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> mint the ParamAddress type, give effect settings the same per-frame overlay instrument params already have, point the wrappers at the merged values - and two future features (envelope modulator, tag automation) inherit their targeting for free.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> mint the ParamAddress type, give effect settings the same per-frame overlay instrument params already have, point the wrappers at the merged values - and tag automation inherits its targeting for free.</div>
 
 <hr/>
-<p class="small muted">Architecture - build in <span class="file">effect-param-automation-implementation-plan.html</span>. Cluster companions: <span class="file">envelope-modulator-*.html</span>, <span class="file">tag-automation-*.html</span> - this pair lands first.</p>
+<p class="small muted">Architecture - build in <span class="file">effect-param-automation-implementation-plan.html</span>. Cluster companions: <span class="file">tag-automation-*.html</span> - this pair lands first.</p>
 
 </div>
 </body>

@@ -249,10 +249,10 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
     return next
   }, [declaredRows])
   const strictPreviewRows = declaredRows.strictPreviewRows
-  // Automation, envelope and ability sub-rows render darker than their object; mover
+  // Automation and ability sub-rows render darker than their object; mover
   // and word-formation lanes are first-class creative tracks - you sequence them and
   // they carry their own geometry - so they keep the normal surface.
-  const isDarkenedRow = track.type === 'automation' || track.type === 'ability' || track.type === 'envelope'
+  const isDarkenedRow = track.type === 'automation' || track.type === 'ability'
 
   // While a copy/library drag is in progress, rows shift via liftOffset (with a
   // smooth transition) to open the insertion gap.

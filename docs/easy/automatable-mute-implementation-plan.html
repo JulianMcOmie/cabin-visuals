@@ -44,7 +44,7 @@
 <table>
   <thead><tr><th>In scope</th><th>Out of scope</th></tr></thead>
   <tbody>
-    <tr><td>Verification on both instrument shapes · the <code>hiddenByLane</code> wiring if the gap is real · a README line either way</td><td>Opacity fades (envelope modulator item) · parent/child mute semantics (nested mute/solo design) · audio-track interaction (the Mute lane is a visual-track construct)</td></tr>
+    <tr><td>Verification on both instrument shapes · the <code>hiddenByLane</code> wiring if the gap is real · a README line either way</td><td>Opacity fades · parent/child mute semantics (nested mute/solo design) · audio-track interaction (the Mute lane is a visual-track construct)</td></tr>
   </tbody>
 </table>
 
@@ -92,7 +92,7 @@
 <ul>
   <li><span class="badge b-risk">risk</span> <strong>Semantic surprise:</strong> someone may WANT "mute events but keep the body." If so, that argues for keeping Mute = events-only and adding a separate Hide modifier type instead - surface this to Julia/Tyler before choosing 1b's exact semantics.</li>
   <li><span class="badge b-risk">note</span> Trigger-style instruments already behave as "gone" under the event mute - the verification's track A vs track B split is what makes the decision informed.</li>
-  <li><span class="badge b-risk">note</span> Fades stay out: one fade system (envelope modulator) later, not a second one here.</li>
+  <li><span class="badge b-risk">note</span> Fades stay out: use opacity automation or the Visibility mover.</li>
 </ul>
 
 <div class="rec"><strong>The one-sentence mental model:</strong> ten minutes of verification decides between two sentences of documentation and a two-file change that lets the Mute lane throw the renderer's existing hide-switch on the beat.</div>

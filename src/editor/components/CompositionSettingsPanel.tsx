@@ -13,8 +13,8 @@ import type { Track } from '../types'
  * extracted verbatim): shared opacity + the def's params, then the def-shaped
  * scene surface - a single scene picker for targetsSingleScene (crop), a
  * reorderable scene list for the partition composers (cut / radialCut), or a
- * read-only MIDI-row list. A plain dispatched component like the Envelope and
- * Automation panels, NOT a userInterfaceRenderers entry: its subject is scene
+ * read-only MIDI-row list. A plain dispatched component like the
+ * Automation panel, NOT a userInterfaceRenderers entry: its subject is scene
  * bindings, which aren't params.
  *
  * TrackEditor dispatches here only when the active scene isMain - a crop

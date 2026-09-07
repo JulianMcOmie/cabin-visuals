@@ -18,7 +18,7 @@ export const boilPlugin: VisualEffect = {
   // The wobble is a SUSTAINED texture: intensity plus how long each
   // distortion holds. The traveling line is an EVENT: linePhase is the line's
   // position (0 parked above the frame, 1 exited below), and driving it with
-  // an ENVELOPE lane makes each gate note one top-to-bottom sweep - attack
+  // a Burst automation lane makes each gate note one top-to-bottom sweep - attack
   // time is the travel time, note velocity scales it, and between notes the
   // line simply is not there. (An automation lane ramping 0→1 works too.)
   params: [

@@ -26,7 +26,7 @@ interface TrackIconProps {
   glyph: ReactNode
   /** The track's display color (raw identity hex - re-voiced here). */
   color: string
-  /** Sub-rows (automation / envelope / ability) sit quieter than their object. */
+  /** Sub-rows (automation / ability) sit quieter than their object. */
   muted?: boolean
 }
 

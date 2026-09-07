@@ -12,12 +12,11 @@ import { SWITCHER_MODE_PARAM } from '../core/visualCopies/switcher'
 import { canBeSceneTrackChild, dematerializeSceneTrack, isSceneTrackId, sceneTrackId, sceneTrackView } from '../core/sceneTrack'
 import { defaultLightingTracks } from '../core/defaultLighting'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
-import { DEFAULT_ADSR } from '../core/visual/adsr'
 import { AUTOMATION_AMOUNT_MAX, DEFAULT_BURST, DEFAULT_CYCLE, DEFAULT_FORCE, DEFAULT_NOISE, DEFAULT_SPLINE_TENSION, SPLINE_TENSION_MAX } from '../core/visual/automation'
 import type { ImportedMidiTrack } from '../core/midiImport'
 import type { AspectRatioId } from '../core/aspectRatios'
 import { placeTranscription, invertStrobeSpans, groupTimingIntoLines, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
-import { DEFAULT_SCENE_BACKGROUND, defaultSceneGradient, sceneBackdropMode, type SceneBackdropMode, type SceneGradient, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type AutomationMode, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type SynthMod, type Routing } from '../types'
+import { DEFAULT_SCENE_BACKGROUND, defaultSceneGradient, sceneBackdropMode, type SceneBackdropMode, type SceneGradient, type Scene, type Track, type Block, type Note, type AudioBlock, type AutomationMode, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type SynthMod, type Routing } from '../types'
 import type { ProjectDocument } from '../../persistence/types'
 import { upgradeDocument } from '../../persistence/upgrade'
 import { useVideoStore } from './VideoStore'
@@ -508,15 +507,6 @@ export interface ProjectState {
   /** Add an `ability` child track under `parentId` for one of the parent instrument's
    *  abilities (opt-in). No-op if that ability already has a track. */
   addAbilityTrack: (parentId: string, abilityKey: string, abilityLabel: string) => void
-  /** Add an `envelope` child track under `parentId`: its notes gate an ADSR that
-   *  modulates `targetParam` (a numeric parent param, an fx:<id>:<key> effect
-   *  setting, or the reserved 'opacity' key). `envTarget` is the value reached at
-   *  full gain (callers pass the param's max by default; omitted for 'opacity').
-   *  No-op if an envelope already targets that param. */
-  addEnvelopeTrack: (parentId: string, targetParam: string, targetLabel: string, envTarget?: number) => void
-  setEnvelopeAdsr: (trackId: string, adsr: AdsrEnvelope) => void
-  setEnvelopeDepth: (trackId: string, value: number) => void
-  setEnvelopeTarget: (trackId: string, value: number) => void
   /** Set an automation track's interpolation mode between keyframes. */
   setTrackInterpolation: (trackId: string, mode: InterpolationMode) => void
   /** Set a curve lane's spline tension (the 'spline' interpolation's knot-tangent
@@ -1545,7 +1535,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
   groupTracks: (trackIds) => wrapSelection(set, trackIds, {
     // Lanes live only on their parent and audio is pinned - neither joins.
     eligible: (t) => t.type !== 'audio' && t.type !== 'automation'
-      && t.type !== 'ability' && t.type !== 'envelope'
+      && t.type !== 'ability'
       // The scene instrument is the scene; it cannot be a member of anything.
       && !isSceneTrackId(t.id),
     build: (id, parentId, members, color) => ({
@@ -1567,7 +1557,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     // rows. Only the lanes that live on their parent, and audio, stay out -
     // the same exclusions grouping makes.
     eligible: (t) => t.type !== 'audio' && t.type !== 'automation'
-      && t.type !== 'ability' && t.type !== 'envelope'
+      && t.type !== 'ability'
       // The scene instrument is the scene; it cannot be a member of anything.
       && !isSceneTrackId(t.id),
     build: (id, parentId, members, color) => ({
@@ -1605,7 +1595,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       const memberIds = g.childIds.filter((cid) => {
         const c = s.tracks[cid]
         return !!c && c.type !== 'automation' && c.type !== 'ability'
-          && c.type !== 'envelope'
       })
       const memberSet = new Set(memberIds)
       const doomed = new Set<string>()
@@ -1860,65 +1849,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
           [parentId]: { ...parent, childIds: [...parent.childIds, id] },
         },
       }
-    }),
-
-  addEnvelopeTrack: (parentId, targetParam, targetLabel, envTarget) =>
-    set((s) => {
-      const parent = s.tracks[parentId]
-      if (!parent) return s
-      // One envelope lane per target - don't stack duplicates.
-      const exists = parent.childIds.some((cid) => {
-        const c = s.tracks[cid]
-        return c?.type === 'envelope' && c.targetParam === targetParam
-      })
-      if (exists) return s
-      const id = crypto.randomUUID()
-      const track: Track = {
-        id,
-        name: `Env · ${targetLabel}`,
-        type: 'envelope',
-        instrumentId: '',
-        targetParam,
-        adsr: { ...DEFAULT_ADSR },
-        envDepth: 1,
-        envTarget,
-        // Param lanes have no definition to declare an identity, so they take
-        // their own hue-cycle color - lanes no longer inherit their parent.
-        color: resolveNextTrackColor(s, parentId),
-        muted: false,
-        solo: false,
-        blocks: [],
-        childIds: [],
-        parentId,
-      }
-      return {
-        tracks: {
-          ...s.tracks,
-          [id]: track,
-          [parentId]: { ...parent, childIds: [...parent.childIds, id] },
-        },
-      }
-    }),
-
-  setEnvelopeAdsr: (trackId, adsr) =>
-    set((s) => {
-      const track = s.tracks[trackId]
-      if (!track || track.type !== 'envelope') return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, adsr } } }
-    }),
-
-  setEnvelopeDepth: (trackId, value) =>
-    set((s) => {
-      const track = s.tracks[trackId]
-      if (!track || track.type !== 'envelope') return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, envDepth: value } } }
-    }),
-
-  setEnvelopeTarget: (trackId, value) =>
-    set((s) => {
-      const track = s.tracks[trackId]
-      if (!track || track.type !== 'envelope') return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, envTarget: value } } }
     }),
 
   addLyricClip: (trackId, clip) =>

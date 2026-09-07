@@ -85,7 +85,6 @@
     <li><strong>Effects picker menu + reorder</strong> - "+ Add effect" nested menu (Transform/Clone/Shader) in the track editor, and up/down arrows reorder the chain.</li>
     <li><strong>Loop regions</strong> - drag the top half of either ruler to set a region (whole-beat snap); playback wraps at its end; click clears; bottom half still scrubs.</li>
     <li><strong>Export ranges</strong> - Range picker in the export dialog: whole project / loop region / custom bars (inclusive), audio anchored mid-clip at the range start.</li>
-    <li><strong>Envelope modulator</strong> - "Add envelope track": note-gated ADSR onto any numeric param, effect setting, or the reserved Opacity target (works on every instrument).</li>
   </ul>
   <h3>🟢 Easy remaining</h3>
   <ul>
@@ -202,7 +201,7 @@
 
 <div class="item">
   <h3><span class="badge b-inv">investigate</span>Automating mute (Tyler: "have to move instruments offscreen to remove them")</h3>
-  <p>You suspected this already works via a mute child track - verify: the <strong>Mute modifier</strong> in the library is exactly this (a control lane whose notes silence the target while active). If it does what Tyler needs, this is a docs/onboarding gap, not a feature; if the modifier doesn't reach visuals the way he expects, promote it to a real item. Also related to the generic envelope idea below (opacity ADSR is the smoother version of hard mute).</p>
+  <p>You suspected this already works via a mute child track - verify: the <strong>Mute modifier</strong> in the library is exactly this (a control lane whose notes silence the target while active). If it does what Tyler needs, this is a docs/onboarding gap, not a feature; if the modifier doesn't reach visuals the way he expects, promote it to a real item.</p>
   <p class="where">modifiers (Mute) · core/visual/resolve.ts (modifier application)</p>
 </div>
 
@@ -276,15 +275,10 @@
   <p class="where">core/export/exportEngine.ts (start/end beats) · audioRender.ts (fromBeat) · ExportDialog.tsx</p>
 </div>
 
-<div class="item">
-  <h3><span class="badge b-done">done</span>Generic envelope modulator - shipped 2026-07-11 (envelope child tracks on the automation overlay)</h3>
-  <p>Two of your notes converge here: "midi applies an ADSR to opacity easily" and Tyler's "generic ability for any property." Today modulators target instruments' <em>ports</em> (fixed, per-instrument); the missing piece is a modulator whose target is <strong>any numeric param</strong> - an Envelope modulator with A/D/S/R params, driven by its own MIDI lane, writing into the same per-frame param overlay automation uses. Needs a param-picker in the routing UI (params, not just ports) and an <code>opacity</code> param on instruments that lack one. This is the expressive middle ground between hard Mute and hand-drawn automation.</p>
-  <p class="where">instruments/modulators/* (new Envelope) · routing targets (param addressing) · VisualEngine overlay</p>
-</div>
 
 <div class="item">
   <h3>Automation on tags</h3>
-  <p>"Tagging is so good for this" - let an automation lane target a tag so one lane drives a param across every tagged instrument. The overlay already applies per-object; the new part is tag-scoped targeting (same addressing problem as effect-param automation and the envelope modulator above - solve the richer automation target once, all three land on it).</p>
+  <p>"Tagging is so good for this" - let an automation lane target a tag so one lane drives a param across every tagged instrument. The overlay already applies per-object; the new part is tag-scoped targeting (same addressing problem as effect-param automation - solve the richer automation target once, both land on it).</p>
   <p class="where">types.ts (automation target) · resolve/VisualEngine (fan-out to tagged tracks) · add-automation UI</p>
 </div>
 
@@ -320,9 +314,9 @@
 </div>
 
 <hr/>
-<div class="rec"><strong>Suggested order of attack:</strong> <s>Batch A</s>, <s>Batch B</s>, and <s>video export</s> are done → Batch D (the five new easy fixes in one sitting) → the three investigations while Tyler's reports are fresh → the interp-picker discoverability fix → MIDI import (the deps are already installed) → loop blocks + effects menu → the "richer automation target" cluster (effect params + envelope modulator + tag automation share one addressing design - design it once, then they're three medium items instead of three hard ones) → then pick fights with the big three. The mute/solo design conversation with Tyler can happen in parallel any time.</div>
+<div class="rec"><strong>Suggested order of attack:</strong> <s>Batch A</s>, <s>Batch B</s>, and <s>video export</s> are done → Batch D (the five new easy fixes in one sitting) → the three investigations while Tyler's reports are fresh → the interp-picker discoverability fix → MIDI import (the deps are already installed) → loop blocks + effects menu → the "richer automation target" cluster (effect params + tag automation share one addressing design - design it once, then they're two medium items instead of two hard ones) → then pick fights with the big three. The mute/solo design conversation with Tyler can happen in parallel any time.</div>
 
-<p class="small muted">Triage of the running TODO list, updated 2026-07-03 after the Batch A/B + video-export pushes and the new-todos intake (export ranges, envelope modulator, tag automation, copy-paste automation, model import, and the Batch D quick fixes). Effort tiers assume familiarity with the current codebase layout (core/visual · core/audio · core/export · effects/ · timeline components).</p>
+<p class="small muted">Triage of the running TODO list, updated 2026-07-03 after the Batch A/B + video-export pushes and the new-todos intake (export ranges, tag automation, copy-paste automation, model import, and the Batch D quick fixes). Effort tiers assume familiarity with the current codebase layout (core/visual · core/audio · core/export · effects/ · timeline components).</p>
 
 </div>
 </body>

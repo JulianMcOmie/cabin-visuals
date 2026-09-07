@@ -37,7 +37,7 @@ export function useTrackNestDrag(scrollRef: RefObject<HTMLDivElement | null>) {
     if (!sc) return
     const { tracks, rootTrackIds } = useProjectStore.getState()
     if (!tracks[trackId]) return
-    // Envelope + ability lanes live only on their parent object - they can't be
+    // Ability lanes live only on their parent object - they can't be
     // re-parented (opt+drag copies them; a plain pointer-down still selects the
     // row). AUTOMATION lanes DO move between parents: the drop remaps their
     // target when the new parent can't take it (remapAutomationTarget), so they

@@ -4,7 +4,7 @@
 
 import type { Matrix4 } from 'three'
 import type { LocalTransform, TransformCtx } from '../../instruments/types'
-import type { AdsrEnvelope, LyricClip, LyricNotePayload, PhotoPad, StyleLane, SynthMod, VideoPad } from '../../types'
+import type { LyricClip, LyricNotePayload, PhotoPad, StyleLane, SynthMod, VideoPad } from '../../types'
 import type { AutomationLane } from './automation'
 import type { MoverOrSplitter } from '../visualCopies/types'
 
@@ -45,42 +45,6 @@ export interface ResolvedAutomation extends AutomationLane {
 export interface ResolvedEffectAutomation extends AutomationLane {
   instanceId: string
   key: string
-  /** Clock routing past a time emitter - see ResolvedAutomation. */
-  clockSkipEmitters?: number
-}
-
-/**
- * A resolved `envelope` child track: its notes gate a closed-form ADSR whose gain
- * modulates one target per frame (see adsr.ts + computeAtBeat).
- *  - kind 'opacity': the reserved 'opacity' target - multiplies the object's
- *    rendered opacity by mix(1, gain, depth).
- *  - kind 'param': one of the parent instrument's numeric params - overlays
- *    base + (envTarget - base) * gain * depth on top of automation.
- *  - kind 'fx': an `fx:<instanceId>:<key>` effect setting - same lerp, written
- *    into ObjectState.effectOverrides (fxBase is the stored setting, the fallback
- *    base when no automation lane drives the same key).
- */
-export interface ResolvedEnvelope {
-  /** The envelope child track's id - syncParams refreshes live-editable fields by it. */
-  trackId: string
-  kind: 'opacity' | 'param' | 'fx'
-  /** kind 'param': the parent instrument's param key. */
-  param?: string
-  /** kind 'param': the param's default - the lerp base when the user never set it. */
-  paramDefault?: number
-  /** kind 'fx': the effect instance + setting key. */
-  instanceId?: string
-  key?: string
-  /** kind 'fx': the stored setting value (base when no fx automation lane runs). */
-  fxBase?: number
-  /** Target bounds - envTarget stays clamped inside them. */
-  min: number
-  max: number
-  /** The value the target reaches at full gain (unused for kind 'opacity'). */
-  envTarget: number
-  adsr: AdsrEnvelope
-  depth: number
-  notes: ResolvedNote[]
   /** Clock routing past a time emitter - see ResolvedAutomation. */
   clockSkipEmitters?: number
 }
@@ -142,9 +106,6 @@ export interface ResolvedObject {
   automations: ResolvedAutomation[]
   /** Automation lanes targeting this object's effect instances. */
   effectAutomations: ResolvedEffectAutomation[]
-  /** Envelope lanes (from `envelope` child tracks): note-gated ADSR modulation of
-   *  one param / effect setting / the reserved opacity multiplier per lane. */
-  envelopes: ResolvedEnvelope[]
   /** Video-instrument-only: ordered pads (fresh array per resolve). */
   videoPads?: VideoPad[]
   /** Photo-instrument-only: ordered photos (fresh array per resolve). */
@@ -264,7 +225,7 @@ export interface ObjectState {
    *  when something spawned, say. Sampling is pure, so this does not weaken the
    *  pause invariant. Read it through paramAtBeat rather than directly. */
   automations: ResolvedAutomation[]
-  /** Params before automation/envelope overlay - paramAtBeat's fallback for a
+  /** Params before automation overlay - paramAtBeat's fallback for a
    *  param with no lane. */
   baseParams: Record<string, number>
   /** The notes live at the current beat (`beat ∈ [note.beat, note.beat+duration)`),

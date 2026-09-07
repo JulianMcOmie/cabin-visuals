@@ -226,7 +226,7 @@ draw each option as a mini plot and label the active one beneath, so the choice 
 made by looking rather than by reading option names.
 
 **Signal window** — the live-preview slot for a panel whose subject is a signal
-rather than an object (an automation lane, an envelope). Same frame as the 3D
+rather than an object (an automation lane). Same frame as the 3D
 preview: full-bleed, fixed height (~120px), square-shouldered, near-black
 `#05070c`, bottom hairline only. Rules:
 - **Plot it with the engine's own sampler.** Import the function playback uses
@@ -286,6 +286,3 @@ render `ParameterList` for everything rather than a half-empty custom layout.
   re-ported onto the kit too. The remaining theme-var panels (Stars, Neon
   Polar, Oscilloscope, Fractal Tunnel, TextDisplay, the effect panels…) are
   still pre-guide.
-- `EnvelopeUserInterface.tsx`'s ADSR pad and `AutomationUserInterface.tsx`'s
-  burst window are the same geometry in two skins (theme vars vs. the lane's
-  accent). When the envelope panel is migrated, they should become one pad.

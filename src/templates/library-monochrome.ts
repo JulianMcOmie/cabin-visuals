@@ -73,7 +73,7 @@ const words = lyricPattern()
 
 const INVERT = 72 // Color Filters' Invert row
 
-// The boil instance is held in a variable so the Line Sweeps envelope lane
+// The boil instance is held in a variable so the Line Sweeps Burst automation lane
 // below can address its linePhase setting (fxTarget needs the instance id).
 const boilFx = fx('boil', { wobble: 0.65, wobbleHold: 0.27, line: 1, linePhase: 0 })
 
@@ -117,7 +117,7 @@ function monochromeDocument() {
         },
         // The boil, at Julia's tune: a gentler wobble holding each distortion
         // longer (0.27 beats), line at FULL strength. The line's MOTION is not
-        // here - it is an EVENT, fired by the Line Sweeps envelope lane below.
+        // here - it is an EVENT, fired by the Line Sweeps Burst automation lane below.
         effects: [boilFx],
         blocks: [block(0, BARS, [
           ...words.notes,
@@ -142,13 +142,11 @@ function monochromeDocument() {
           track({
             name: 'Line Sweeps',
             instrumentId: '',
-            type: 'envelope',
+            type: 'automation',
             color: '#e4e4e7',
             targetParam: fxTarget(boilFx, 'linePhase'),
-            adsr: { attackBeats: 5, decayBeats: 0.01, sustainLevel: 1, releaseBeats: 0.01 },
-            envDepth: 1,
-            envTarget: 1,
-            blocks: [loopBlock(2, [n(2, 60, 5, 127)])],
+            burst: { attackBeats: 5, decayBeats: 0.01, sustainLevel: 1, releaseBeats: 0.01, intensity: 1 },
+            blocks: [loopBlock(2, [n(2, 84, 5, 127)])],
           }),
         ],
       }),
