@@ -426,6 +426,7 @@ interface Strike {
 export const impactScatterMover: MoverOrSplitterDefinition<ImpactScatterSettings> = {
   id: 'impactScatter',
   label: 'Impact Scatter',
+  extras: true,
   kind: 'mover',
   identityColor: IMPACT_SCATTER_COLOR,
   params: [

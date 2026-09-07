@@ -187,6 +187,7 @@ export function evaluateWaveHeight(
 export const waveTerrainMover: MoverOrSplitterDefinition<WaveTerrainSettings> = {
   id: 'waveTerrain',
   label: 'Wave Terrain',
+  extras: true,
   kind: 'mover',
   identityColor: WAVE_TERRAIN_COLOR,
   params: [

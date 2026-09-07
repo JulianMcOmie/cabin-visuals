@@ -72,12 +72,10 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const isSwitcher = track.type === 'switcher'
   const isDevice = track.type === 'mover' || track.type === 'splitter'
   const isSceneTrack = isSceneTrackId(track.id)
-  // `legacy` definitions (the library's Extras shelf: All Movers, Motion) are
-  // left out entirely. The library can demote them into a collapsed folder;
-  // this menu is one flat list per kind, so a superseded entry would sit right
-  // beside the definition that replaced it.
+  // Supported Extras-only devices and superseded legacy devices stay in the
+  // library's Extras folders, but never clutter this flat add-device menu.
   const newDefs = (def || moverDef || isGroup || isSwitcher ? listMoverOrSplitterDefinitions() : [])
-    .filter((d) => !d.legacy)
+    .filter((d) => !d.legacy && !d.extras)
   // A `parentGate` definition (Bypass) acts on the DEVICE it is nested under, so
   // it is only offered on a mover/splitter track - never on an object or a
   // group, where it would have nothing to gate - and never in the mover list,

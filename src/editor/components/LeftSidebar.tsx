@@ -578,11 +578,11 @@ const UTILITY_IDS = ['video', 'photo', 'textDisplay', 'oscilloscope', 'switcher'
 const COLOR_IDS = [...COLORIZER_INSTRUMENTS.map((i) => i.id), 'colorFilters']
 
 const IMPACT_IDS = [...IMPULSE_IDS, ...RUMBLE_IDS]
-// The back catalog, declared on the definitions themselves (`legacy`) rather
+// The back catalog, declared on the definitions themselves (`legacy` or `extras`) rather
 // than listed here: the same flag is what keeps them out of the track context
 // menu's add-a-device lists, which have no Extras drawer to demote them into.
-const LEGACY_MOVER_IDS = new Set(
-  listMoverOrSplitterDefinitions().filter((d) => d.legacy).map((d) => d.id),
+const EXTRAS_MOVER_IDS = new Set(
+  listMoverOrSplitterDefinitions().filter((d) => d.legacy || d.extras).map((d) => d.id),
 )
 // Everything else that moves lives under Motion - the compound movers at its
 // top level, the single-behavior ones in its Extras subfolder.
@@ -598,9 +598,23 @@ const SCENE_FOLDERS: LibraryFolder[] = [
     id: 'impact',
     title: 'Impact',
     description: 'One sharp hit per note - camera punches and shockwaves that strike, then decay.',
-    items: pick(IMPULSE_IDS),
+    items: pick(IMPULSE_IDS).filter((i) => !EXTRAS_MOVER_IDS.has(i.id)),
+    subfolders: [{
+      id: 'impact-extras', title: 'Extras',
+      description: 'Additional impact movers, all fully supported.',
+      items: pick(IMPULSE_IDS).filter((i) => EXTRAS_MOVER_IDS.has(i.id)),
+    }],
   },
-  { id: 'rumble', title: 'Rumble', description: 'Continuous shaking, warping or masking while the note is held.', items: [...pick(RUMBLE_IDS), ...CROP_OBJECT_ITEMS] },
+  {
+    id: 'rumble', title: 'Rumble',
+    description: 'Continuous shaking, warping or masking while the note is held.',
+    items: [...pick(RUMBLE_IDS).filter((i) => !EXTRAS_MOVER_IDS.has(i.id)), ...CROP_OBJECT_ITEMS],
+    subfolders: [{
+      id: 'rumble-extras', title: 'Extras',
+      description: 'Additional sustained movers, all fully supported.',
+      items: pick(RUMBLE_IDS).filter((i) => EXTRAS_MOVER_IDS.has(i.id)),
+    }],
+  },
   { id: 'splitters', title: 'Splitters', description: 'Splitters render their objects several times, giving each copy its own reference frame - movers BELOW a splitter move every copy along its own axes.', items: SPLITTER_INSTRUMENTS },
   {
     id: 'motion',
@@ -608,13 +622,13 @@ const SCENE_FOLDERS: LibraryFolder[] = [
     description: 'Movers move, spin, scale, or fade objects - add them under tracks (or drag them onto tracks) and drive them with notes.',
     // The legacy compound movers (All Movers, Motion) are demoted - never
     // deleted - into the Extras shelf; the unified Mover supersedes them.
-    items: MOTION_ITEMS.filter((m) => !LEGACY_MOVER_IDS.has(m.id)),
+    items: MOTION_ITEMS.filter((m) => !EXTRAS_MOVER_IDS.has(m.id)),
     subfolders: [
       {
         id: 'motion-extras',
         title: 'Extras',
         description: 'The legacy compound movers - all fully working, superseded by Mover.',
-        items: MOTION_ITEMS.filter((m) => LEGACY_MOVER_IDS.has(m.id)),
+        items: MOTION_ITEMS.filter((m) => EXTRAS_MOVER_IDS.has(m.id)),
       },
     ],
   },
