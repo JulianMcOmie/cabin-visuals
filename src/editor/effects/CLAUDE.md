@@ -169,3 +169,41 @@ Gotchas:
 - **A shader's GLSL lives in a TS template literal — a stray backtick in a GLSL comment silently ends the string** and Turbopack reports it as "Parsing ecmascript source code failed" pointing at the comment, not as a shader problem. Escape them (`\``) or avoid them. Run `npx tsc --noEmit` after editing shader source; the build catches it instantly, the browser just shows a build overlay.
 - **A screen-space shader pass is frame-relative, and objects are a small part of the frame.** Any spatial constant you pick has to be calibrated against a REAL instrument, not a test shape that fills the frame — otherwise the whole pattern lands inside its own innermost feature and reads as one soft blob. This is invisible in an offscreen harness and obvious in `/editor`. For a surface-locked pattern that travels with the mesh instead, see `instruments/KaleidoSolid.tsx` (object-space field injected into a lit material) — that is a different tool, not an effect.
 - Anything animated must be a continuous function of `time` — a `fract()`-based position wraps and the shape visibly teleports. Drive drift with `sin()` around a stratified base instead.
+
+## Glow v2 (2026-09)
+
+`shaders/glow.ts` declares `multipass: 'glow'`, not a fragment-only fallback.
+`components/visual/GlowPass.ts` extracts premultiplied linear emission, filters
+three Gaussian scales through anisotropic prefiltered targets, and composes an
+independent core. `glowScene.ts` captures source contributions in the REAL scene:
+non-source draws keep depth, alpha discard and sort order, but blend zero source
+radiance. This is essential for translucent occluders; a shared depth-only
+prepass incorrectly extinguishes sources behind transparent depth writers and
+misses opaque-looking non-depth-writing foregrounds. Blend/hook state restores
+in finally blocks; never replace an instrument's material to make emission.
+
+Glow-only objects draw their original geometry in the scene; core changes add
+the visible radiance difference so foreground transparency stays intact.
+Other chains retain array order and use a depth-bearing core output plus an
+additive halo delta. Only a lone active Glow with identical effective settings
+on the same track batches copies; masks/other shader passes prevent batching.
+Shader scratch has separate byte/HDR pool keys, so existing non-Glow effects
+retain their legacy appearance while Glow chains remain half-float end to end.
+
+The final compositor evaluates core-only and full radiance through the SAME
+scene filters/partitions; global bloom consumes core-only, then the full frame
+receives bloom and one final tone map. There is a real extra composition cost
+when local halos are active; this preserves nonlinear downstream scene effects
+without blooming the halo again. Strength 0 with a neutral core skips filtering.
+
+Future depth fog belongs in `GlowPass.emissionStage`, after extraction and
+before blur: Whole Object normalizes chroma, so applying attenuation before
+extraction would undo it. This hook leaves source/core untouched. Emission is
+scratch data valid until the next render; callers needing persistence copy it.
+Scene depth cannot locate every translucent/non-depth-writing emitter, so a
+future spatial fog implementation must supply that depth representation.
+There is no volumetric scattering or surface illumination in this device.
+
+Validation: `scripts/perf/glow-validation.mjs` runs real WebGL pixel assertions;
+`glow-editor.mjs` exercises the editor, chain order, presets and export driver.
+Both write captures/results under `artifacts/glow/`.

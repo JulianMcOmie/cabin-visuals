@@ -21,7 +21,7 @@ import type { AudioClip } from '../editor/store/AudioStore'
 const LEGACY_SCENE_BACKGROUND = '#000000'
 
 /** Bump when the document shape changes, and append the matching step below. */
-export const CURRENT_VERSION = 20
+export const CURRENT_VERSION = 21
 
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
@@ -833,6 +833,39 @@ UPGRADES[19] = (raw) => {
     )),
     audioTracks: preserve(doc.audioTracks ?? {}),
   }
+}
+
+// v20 → v21: Glow v2 intentionally replaces the old disk-blur aesthetic.
+// Keep automation identity and remap its renamed keys; source brightness stays
+// independent of the halo. Legacy size was 0..1, new radius is authored pixels.
+UPGRADES[20] = (raw) => {
+  const doc = raw as unknown as ProjectDocument
+  const migrate = (tracks: Record<string, Track>) => {
+    const glowIds = new Set(Object.values(tracks).flatMap(t => (t.effects ?? []).filter(e => e.pluginId === 'glow').map(e => e.id)))
+    return Object.fromEntries(Object.entries(tracks).map(([id, track]) => {
+      let targetParam = track.targetParam
+      let automationRange = track.automationRange
+      if (targetParam?.startsWith('fx:')) {
+        const sep = targetParam.lastIndexOf(':')
+        if (glowIds.has(targetParam.slice(3, sep))) {
+          const key = targetParam.slice(sep + 1)
+          if (key === 'amount') { targetParam = targetParam.slice(0, sep + 1) + 'strength'; automationRange = { min: 0, max: 3, ...automationRange } }
+          if (key === 'size') {
+            targetParam = targetParam.slice(0, sep + 1) + 'radius'
+            const radius = (v: number) => 6 + 84 * Math.max(0, Math.min(1, v)) ** 2
+            automationRange = { ...automationRange, min: radius(automationRange?.min ?? 0), max: radius(automationRange?.max ?? 1) }
+          }
+        }
+      }
+      if (!track.effects?.some(e => e.pluginId === 'glow') && targetParam === track.targetParam && automationRange === track.automationRange) return [id, track]
+      return [id, { ...track, ...(targetParam ? { targetParam } : {}), ...(automationRange ? { automationRange } : {}), effects: track.effects?.map(e => {
+        if (e.pluginId !== 'glow') return e
+        const { amount = .8, size = .35, ...rest } = e.settings
+        return { ...e, settings: { strength: amount, radius: 6 + 84 * size * size, spread: .4, source: 0, threshold: .35, softness: .35, tintMix: 0, tintHue: 220, tintSaturation: .8, coreBrightness: 1, coreWhite: 0, stretch: 1, angle: 0, ...rest } }
+      }) }]
+    }))
+  }
+  return { ...raw, scenes: Object.fromEntries(Object.entries(doc.scenes).map(([id, scene]) => [id, { ...scene, tracks: migrate(scene.tracks) }])), audioTracks: migrate(doc.audioTracks ?? {}) }
 }
 
 /**

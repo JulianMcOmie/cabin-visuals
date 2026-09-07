@@ -173,6 +173,11 @@ export function TrackPreviewRenderer() {
       gl.setScissorTest(true)
       gl.setClearColor('#101218', 1)
       for (let i = 0; i < count; i++) {
+        // Glow captures can temporarily bind another target from a scene hook.
+        // Keep the atlas tile on its target so rebinding restores the same region.
+        runtime.target.viewport.set(0, i * H, W, H)
+        runtime.target.scissor.set(0, i * H, W, H)
+        runtime.target.scissorTest = true
         gl.setViewport(0, i * H, W, H); gl.setScissor(0, i * H, W, H)
         gl.clear(true, true, true)
         const stage = cache.current.get(surfaces[i].trackId)

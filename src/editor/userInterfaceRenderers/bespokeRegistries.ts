@@ -54,6 +54,7 @@ const sceneFxPanel = (pluginId: string): UserInterfaceRendererDefinition =>
   )
 
 export const EFFECT_USER_INTERFACES: Partial<Record<string, UserInterfaceRendererDefinition>> = {
+  glow: lazyPanel(() => import('./GlowEffectUserInterface'), 'GlowEffectUserInterfaceRenderer'),
   offset: lazyPanel(() => import('./OffsetEffectUserInterface'), 'OffsetEffectUserInterfaceRenderer'),
   rotate: lazyPanel(() => import('./RotateEffectUserInterface'), 'RotateEffectUserInterfaceRenderer'),
   scale: lazyPanel(() => import('./ScaleEffectUserInterface'), 'ScaleEffectUserInterfaceRenderer'),

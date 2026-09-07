@@ -1,4 +1,4 @@
-import { LinearFilter, WebGLRenderTarget } from 'three'
+import { HalfFloatType, UnsignedByteType, LinearFilter, WebGLRenderTarget } from 'three'
 
 /**
  * Scratch render targets shared by every mounted ShaderWrapper.
@@ -30,13 +30,13 @@ interface PoolEntry extends ShaderScratch {
 
 const pool = new Map<string, PoolEntry>()
 
-const keyOf = (width: number, height: number) => `${width}x${height}`
+const keyOf = (width: number, height: number, hdr: boolean) => `${width}x${height}:${hdr ? 'hdr' : 'byte'}`
 
-export function acquireShaderScratch(width: number, height: number): ShaderScratch {
-  const key = keyOf(width, height)
+export function acquireShaderScratch(width: number, height: number, hdr = false): ShaderScratch {
+  const key = keyOf(width, height, hdr)
   let entry = pool.get(key)
   if (!entry) {
-    const opts = { minFilter: LinearFilter, magFilter: LinearFilter }
+    const opts = { type: hdr ? HalfFloatType : UnsignedByteType, minFilter: LinearFilter, magFilter: LinearFilter }
     entry = {
       src: new WebGLRenderTarget(width, height, { ...opts, stencilBuffer: true }),
       ping: new WebGLRenderTarget(width, height, opts),
@@ -50,7 +50,7 @@ export function acquireShaderScratch(width: number, height: number): ShaderScrat
 }
 
 export function releaseShaderScratch(scratch: ShaderScratch): void {
-  const key = keyOf(scratch.src.width, scratch.src.height)
+  const key = keyOf(scratch.src.width, scratch.src.height, scratch.src.texture.type === HalfFloatType)
   const entry = pool.get(key)
   if (!entry || entry !== scratch) return
   entry.refs--
