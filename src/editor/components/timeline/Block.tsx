@@ -1,3 +1,5 @@
+import { midiBlocksToOpen } from '../../utils/midiBlockSelection'
+import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { loopLengthBeats, tileLoopNotes } from '../../core/visual/noteFlatten'
 import { LOOP_CURSOR } from '../../utils/dragCursor'
@@ -31,7 +33,6 @@ interface BlockProps {
  *  Track keeping `previewRowPitches` and the handlers referentially stable. */
 export const Block = memo(function Block({ block, trackId, name, barWidthPx, beatsPerBar, color, isSelected, muted, previewRowPitches, strictPreviewRows, onBlockPointerDown }: BlockProps) {
   const isEditing = useUIStore((s) => s.editingBlock?.blockId === block.id)
-  const setEditingBlock = useUIStore((s) => s.setEditingBlock)
   const blockRef = useRef<HTMLDivElement>(null)
   const activityRef = useRef<MidiActivityRegistration | null>(null)
   const visibleRef = useRef(false)
@@ -75,7 +76,7 @@ export const Block = memo(function Block({ block, trackId, name, barWidthPx, bea
       data-block-id={block.id}
       data-midi-offscreen=""
       data-looped-block={hasLoopSections ? '' : undefined}
-      title="Double-click to edit notes"
+      title="Shift or Cmd/Ctrl-click to select multiple; double-click to edit selected blocks"
       className="absolute top-0 bottom-0 overflow-hidden rounded-[6px]"
       style={{
         left: `${left}px`,
@@ -114,11 +115,13 @@ export const Block = memo(function Block({ block, trackId, name, barWidthPx, bea
             ? 'Drag to resize'
           : onLeftEdge
             ? 'Drag to resize'
-            : 'Double-click to edit notes'
+            : 'Shift or Cmd/Ctrl-click to select multiple; double-click to edit selected blocks'
       }}
       onDoubleClick={(e) => {
         e.stopPropagation()
-        setEditingBlock({ trackId, blockId: block.id })
+        const ui = useUIStore.getState()
+        const active = { trackId, blockId: block.id }
+        ui.setEditingBlocks(midiBlocksToOpen(useProjectStore.getState().tracks, ui.selectedBlockIds, active), active)
       }}
     >
       {!hasLoopSections && !active && <MattePulse color={palette.activeFill} />}

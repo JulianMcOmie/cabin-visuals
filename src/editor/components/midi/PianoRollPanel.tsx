@@ -1,5 +1,8 @@
 'use client'
 
+import { useShallow } from 'zustand/react/shallow'
+import type { MidiBlockView } from './multiBlock'
+
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEventHandler, type ReactNode } from 'react'
 import { X, ChevronDown, Waves, Dices, TrendingUp, Zap } from 'lucide-react'
 import { useUIStore, MIDI_ROW_HEIGHT_MIN, MIDI_ROW_HEIGHT_MAX, type EditingBlockRef } from '../../store/UIStore'
@@ -187,8 +190,27 @@ function quantizeLabel(beats: number, beatsPerBar: number): string {
 export function PianoRollPanel({ frozenRef }: { frozenRef?: EditingBlockRef | null } = {}) {
   const storeEditingBlock = useUIStore((s) => s.editingBlock)
   const editingBlock = storeEditingBlock ?? frozenRef ?? null
+  const openedRefs = useUIStore(s => s.editingBlocks)
+  const refs = useMemo(() => openedRefs.length ? openedRefs : editingBlock ? [editingBlock] : [], [openedRefs, editingBlock])
+  const openedTracks = useProjectStore(useShallow(s => refs.map(ref => s.tracks[ref.trackId])))
+  const liveViews = useMemo(() => refs.flatMap((ref, index) => {
+    const track = openedTracks[index]
+    const blockIndex = track?.blocks.findIndex(block => block.id === ref.blockId) ?? -1
+    return track && blockIndex >= 0 ? [{ trackId: track.id, name: `${track.name} · Block ${blockIndex + 1}`,
+      color: resolveTrackDisplayColor(track), block: track.blocks[blockIndex] }] : []
+  }), [refs, openedTracks])
+  const lastViews = useRef<MidiBlockView[]>([])
+  if (storeEditingBlock && liveViews.length) lastViews.current = liveViews
+  const blockViews = storeEditingBlock ? liveViews : lastViews.current
+  const scrollPosition = useRef<{ left: number; top: number } | null>(null)
+  const groupKey = refs.map(ref => ref.blockId).join(':')
+  const previousGroup = useRef(groupKey)
+  if (storeEditingBlock && previousGroup.current !== groupKey) {
+    previousGroup.current = groupKey
+    scrollPosition.current = null
+  }
   const setEditingBlock = useUIStore((s) => s.setEditingBlock)
-  // Subscribe to the edited track and its parent only - never the whole tracks
+  // In addition to opened tracks, subscribe to the active track and its parent - never the whole tracks
   // record, whose identity changes on EVERY project edit and would re-render
   // the entire piano roll per pointermove of any timeline gesture.
   const liveTrack = useProjectStore((s) => (editingBlock ? s.tracks[editingBlock.trackId] : undefined))
@@ -209,8 +231,11 @@ export function PianoRollPanel({ frozenRef }: { frozenRef?: EditingBlockRef | nu
   // frozen: the store is already closed, and the block legitimately may not
   // exist any more (deleting a block is one of the ways the roll dismisses).
   useEffect(() => {
-    if (storeEditingBlock && !liveBlock) setEditingBlock(null)
-  }, [storeEditingBlock, liveBlock, setEditingBlock])
+    if (storeEditingBlock && !liveBlock) {
+      const remaining = liveViews.map(view => ({ trackId: view.trackId, blockId: view.block.id }))
+      useUIStore.getState().setEditingBlocks(remaining)
+    }
+  }, [storeEditingBlock, liveBlock, liveViews])
 
   // Esc closes (MidiEditor consumes Esc first when notes are selected)
   useEffect(() => {
@@ -294,7 +319,7 @@ export function PianoRollPanel({ frozenRef }: { frozenRef?: EditingBlockRef | nu
 
   return (
     <PianoRollContent
-      key={block.id}
+      key={groupKey}
       trackId={track.id}
       trackName={track.name}
       trackColor={resolveTrackDisplayColor(track)}
@@ -302,6 +327,8 @@ export function PianoRollPanel({ frozenRef }: { frozenRef?: EditingBlockRef | nu
       automation={automation}
       trigger={trigger}
       block={block}
+      blockViews={blockViews}
+      scrollPosition={scrollPosition}
       onClose={() => setEditingBlock(null)}
     />
   )
@@ -318,10 +345,12 @@ interface PianoRollContentProps {
   /** Set for trigger/region lanes - a short set of interchangeable rows shows. */
   trigger?: TriggerInfo
   block: Block
+  blockViews: MidiBlockView[]
+  scrollPosition: React.MutableRefObject<{ left: number; top: number } | null>
   onClose: () => void
 }
 
-function PianoRollContent({ trackId, trackName, trackColor, noteColor, automation, trigger, block, onClose }: PianoRollContentProps) {
+function PianoRollContent({ trackId, trackName, trackColor, noteColor, automation, trigger, block, blockViews, scrollPosition, onClose }: PianoRollContentProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const totalBars = useProjectStore((s) => s.totalBars)
   const bpm = useProjectStore((s) => s.bpm)
@@ -495,7 +524,12 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   // but on a declared vocabulary (where that pitch is already a row) the
   // generated rows come back equal - so hand out the PREVIOUS array whenever
   // the new one says the same thing, and the roll's memos hold through the drag.
-  const rows = useStableRows(computedRows.rows)
+  const ownRows = useStableRows(computedRows.rows)
+  const contextPitchKey = blockViews.flatMap(view => view.block.id === block.id ? [] : view.block.notes.map(note => note.pitch)).sort((a, b) => a - b).join(',')
+  const rows = useStableRows(useMemo(() => blockViews.length > 1
+    ? [...ownRows, ...generateInstrumentRows(ownRows, contextPitchKey ? contextPitchKey.split(',').map(Number) : [], trackColor).slice(ownRows.length)]
+    : ownRows, [ownRows, contextPitchKey, blockViews.length, trackColor]))
+
   const rowsAreEmpty = computedRows.rowsAreEmpty
   // What the note keys MEAN on these rows. A value lane's rows are param
   // values, not pitches, so the keys spread across the range instead of sitting
@@ -615,6 +649,12 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
     if (hasScrolledRef.current || !containerRef.current) return
     const scrollContainer = containerRef.current.querySelector('.overflow-auto')
     if (!scrollContainer) return
+    if (scrollPosition.current) {
+      scrollContainer.scrollLeft = scrollPosition.current.left
+      scrollContainer.scrollTop = scrollPosition.current.top
+      hasScrolledRef.current = true
+      return
+    }
 
     // Vertical: center on the first note's pitch (or C4 when empty).
     const firstNote = notes.length > 0
@@ -630,8 +670,8 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
     // otherwise place the block start a one-bar lead-in from the left edge.
     const gridLeft = useUIStore.getState().midiLabelWidth + PLAYHEAD_TRIANGLE_HALF
     const currentBeat = useTimeStore.getState().currentBeat
-    const blockStartBeat = block.startBar * beatsPerBar
-    const blockEndBeat = blockStartBeat + block.durationBars * beatsPerBar
+    const blockStartBeat = Math.min(block.startBar, ...blockViews.map(view => view.block.startBar)) * beatsPerBar
+    const blockEndBeat = Math.max(block.startBar + block.durationBars, ...blockViews.map(view => view.block.startBar + view.block.durationBars)) * beatsPerBar
     if (currentBeat >= blockStartBeat && currentBeat < blockEndBeat) {
       const playheadPx = gridLeft + currentBeat * midiPixelsPerBeat
       scrollContainer.scrollLeft = Math.max(0, playheadPx - scrollContainer.clientWidth / 2)
@@ -657,6 +697,15 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
         >
           <X size={12} />
         </button>
+
+        {blockViews.length > 1 && <select aria-label="Active MIDI block" value={block.id}
+          className="h-5 max-w-48 rounded bg-zinc-800 px-1 text-[10px] text-zinc-200"
+          onChange={event => {
+            const view = blockViews.find(view => view.block.id === event.target.value)
+            if (view) useUIStore.getState().focusEditingBlock({ trackId: view.trackId, blockId: view.block.id })
+          }}>
+          {blockViews.map(view => <option key={view.block.id} value={view.block.id}>{view.name} · Bar {view.block.startBar + 1}</option>)}
+        </select>}
 
         <button
           onClick={() => setSnapEnabled(!snapEnabled)}
@@ -821,6 +870,9 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
         <EmptyRollBlank trackColor={trackColor} />
       ) : (
       <MidiEditor
+        key={block.id}
+        blockViews={blockViews}
+        scrollPosition={scrollPosition}
         trackId={trackId}
         trackColor={trackColor}
         blockStartBeat={block.startBar * beatsPerBar}

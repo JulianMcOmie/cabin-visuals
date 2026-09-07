@@ -461,13 +461,13 @@ export function useTrackGestures({ laneRef, dragGuideRef, moveSnapBeats }: UseTr
     e.stopPropagation()
     edgeCacheRef.current = null // fresh measurement per gesture
 
-    // Shift toggles selection without starting a drag. preventDefault keeps the
+    // Shift or Cmd/Ctrl toggles selection without starting a drag. preventDefault keeps the
     // shift-click from extending the browser's DOM text selection across the app.
     // Read the selection LIVE rather than closing over it: closing over the
     // Set made this callback (a prop of every Block) change identity on every
     // selection write - a marquee sweep re-rendered every block per pixel.
     const selectedBlockIds = useUIStore.getState().selectedBlockIds
-    if (e.shiftKey) {
+    if (e.shiftKey || e.metaKey || e.ctrlKey) {
       e.preventDefault()
       const next = new Set(selectedBlockIds)
       if (next.has(blockId)) next.delete(blockId)

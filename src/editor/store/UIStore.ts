@@ -81,6 +81,10 @@ interface UIState {
   setSelectedBlockIds: (ids: Set<string>) => void
 
   editingBlock: EditingBlockRef | null
+  /** The opened MIDI clips remain separate; editingBlock is the active one. */
+  editingBlocks: EditingBlockRef[]
+  setEditingBlocks: (refs: EditingBlockRef[], active?: EditingBlockRef) => void
+  focusEditingBlock: (ref: EditingBlockRef) => void
   setEditingBlock: (ref: EditingBlockRef | null) => void
 
   midiPixelsPerBeat: number
@@ -252,7 +256,14 @@ export const useUIStore = create<UIState>((set) => ({
   }),
 
   editingBlock: null,
-  setEditingBlock: (ref) => set({ editingBlock: ref }),
+  editingBlocks: [],
+  setEditingBlock: (ref) => set({ editingBlock: ref, editingBlocks: ref ? [ref] : [] }),
+  setEditingBlocks: (refs, active) => {
+    const unique = [...new Map(refs.map(ref => [ref.blockId, ref])).values()]
+    set({ editingBlocks: unique, editingBlock: unique.find(ref => ref.blockId === active?.blockId && ref.trackId === active.trackId) ?? unique[0] ?? null })
+  },
+  focusEditingBlock: (ref) => set(s => s.editingBlocks.some(item => item.blockId === ref.blockId && item.trackId === ref.trackId)
+    ? { editingBlock: ref } : s),
 
   midiPixelsPerBeat: 40,
   setMidiPixelsPerBeat: (pixels) =>
