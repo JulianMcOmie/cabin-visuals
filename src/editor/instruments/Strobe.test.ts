@@ -10,6 +10,7 @@ import {
   resolveActiveStrobe,
   strobeCycleBeats,
   strobeGate,
+  strobePreviewGate,
 } from './Strobe'
 
 /** Look a row up by its EXACT division token. `startsWith` would be ambiguous now
@@ -249,4 +250,17 @@ test('unrecognized pitches, muted tracks and empty state never flash', () => {
   assert.equal(resolveActiveStrobe({ ...stateAt(0, [note(0)], { width: 0.5 }), blackedOut: true }), null)
   assert.equal(resolveActiveStrobe({ ...stateAt(0, [note(0)], { width: 0.5 }), opacity: 0 }), null)
   assert.equal(resolveActiveStrobe(undefined), null)
+})
+
+test('previews rest for half the time while held MIDI keeps strobing', () => {
+  for (const row of STROBE_RATE_ROWS) {
+    const cycle = strobeCycleBeats(row, 0.5)
+    const notes = [note(-8, 32, row.pitch)]
+    for (const beat of [-8, -4, 0, 3.99, 4, 4.25, 6, 7.99, 8, 11.99, 12]) {
+      const resting = ((beat % 8) + 8) % 8 >= 4
+      const expected = resting ? 0 : strobeGate(beat, cycle, 0.5)
+      assert.equal(strobePreviewGate(beat, cycle, 0.5), expected)
+      assert.equal(resolveActiveStrobe(stateAt(beat, notes))?.amount ?? 0, strobeGate(beat, cycle, 0.5))
+    }
+  }
 })

@@ -27,7 +27,7 @@ import {
   STROBE_STYLE_FLASH,
   STROBE_STYLE_INVERT,
   strobeCycleBeats,
-  strobeGate,
+  strobePreviewGate,
   type StrobeRateRow,
 } from '../instruments/Strobe'
 import {
@@ -104,10 +104,9 @@ function StrobePreview({ style, depth, width, secondsPerCycle }: {
   // this fires ~32 times a second, and re-rendering the panel that often to
   // flash a div would be absurd. The stage mutates; React owns the layout.
   const hostRef = usePreviewLoop((tSec) => {
-    // Seconds, not beats: strobeGate is unit-agnostic, and seconds is the axis
-    // both row kinds already agree on here.
+    // Convert to preview beats for the shared four-beat flash/rest pattern.
     const current = live.current
-    const lit = strobeGate(tSec, current.secondsPerCycle, current.width) * current.depth
+    const lit = strobePreviewGate(tSec / PREVIEW_SEC_PER_BEAT, current.secondsPerCycle / PREVIEW_SEC_PER_BEAT, current.width) * current.depth
     const stage = stageRef.current
     const veil = veilRef.current
     if (stage && veil) {

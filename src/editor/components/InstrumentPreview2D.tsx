@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { strobeGate } from '../instruments/Strobe'
+import { strobePreviewGate } from '../instruments/Strobe'
 import { impactEnvelope } from '../instruments/ImpactWarp'
 import { OVERLAP_SHAPE_OPTIONS, overlapShapePoints } from '../instruments/overlapShapeCore'
 import {
@@ -522,7 +522,7 @@ const STROBE_SHAPES: Array<{ fill: string; flipped: string }> = [
 ]
 const drawStrobe: Draw2D = (ctx, w, h, t) => {
   const beat = t * BEATS_PER_SEC
-  const lit = strobeGate(beat, 1 / 4, 0.5) > 0
+  const lit = strobePreviewGate(beat, 1 / 4, 0.5) > 0
   ctx.fillStyle = lit ? '#f7f8fa' : '#05070c'
   ctx.fillRect(0, 0, w, h)
   const r = h * 0.17

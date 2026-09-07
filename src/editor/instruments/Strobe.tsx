@@ -158,6 +158,12 @@ export function strobeGate(position: number, cycleLength: number, width: number)
   return phase - Math.floor(phase) < width ? 1 : 0
 }
 
+/** Four beats of flashing followed by four beats of rest, on the absolute
+ * beat grid. Preview-only: held MIDI notes keep strobing without these rests. */
+export function strobePreviewGate(beat: number, cycleBeats: number, width: number): number {
+  return strobeGate(beat, 8, 0.5) * strobeGate(beat, cycleBeats, width)
+}
+
 export interface ActiveStrobe {
   /** Mode for the compositor's colour-filter pass. */
   mode: number
