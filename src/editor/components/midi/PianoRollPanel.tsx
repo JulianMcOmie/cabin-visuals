@@ -224,18 +224,14 @@ export function PianoRollPanel({ frozenRef }: { frozenRef?: EditingBlockRef | nu
   if (!editingBlock || !track || !block) return null
 
   // Value lanes edit parameter VALUES (rows labelled by value), not pitches.
-  // Automation tracks target their parent. Trigger lanes (envelope gates and
-  // ability lanes) ignore note PITCH entirely, so they
+  // Automation tracks target their parent. Ability lanes ignore note PITCH entirely, so they
   // get a short set of interchangeable rows instead of the full piano.
   let automation: AutomationInfo | undefined
   let trigger: TriggerInfo | undefined
   let abilityColor: string | undefined
   // Movers/splitters declare their own labelled MIDI vocabulary (midiRows as a
   // function of settings), resolved in PianoRollContent - no lane model here.
-  if (track.type === 'envelope') {
-    // Envelope gates: pitch is ignored, velocity scales the envelope's peak.
-    trigger = { rowLabel: 'Trigger', cornerLabel: 'Envelope · Trigger · velocity = strength' }
-  } else if (track.type === 'ability') {
+  if (track.type === 'ability') {
     // Ability lanes consume note TIMING + VELOCITY only (see Cube's shatter: it
     // reads beat/duration/velocity off abilityEvents, never pitch), so they get the
     // short trigger rows. An ability that wants real pitches must declare

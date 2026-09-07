@@ -2,7 +2,6 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { MIN_SOUNDING_BEATS, noteArrayIndex, noteWindow, soundingNoteWindow } from './noteWindow'
 import { evaluatePulse } from './energy'
-import { evaluateAdsrGain, DEFAULT_ADSR } from './adsr'
 import type { ResolvedNote } from './types'
 
 // The windows exist to skip work, never to change an answer: every consumer
@@ -91,36 +90,6 @@ test('evaluatePulse over the window equals the full scan bit for bit', () => {
     const notes = stream(400, seed)
     for (const beat of [...beats, ...edgeBeats(notes)]) {
       assert.ok(Object.is(evaluatePulse(notes, beat), oracle(notes, beat)), `beat ${beat}`)
-    }
-  }
-})
-
-test('evaluateAdsrGain over the window equals the full sum bit for bit', () => {
-  const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
-  const oracle = (notes: ResolvedNote[], beat: number, p: typeof DEFAULT_ADSR) => {
-    let gain = 0
-    for (const n of notes) {
-      const t = beat - n.beat
-      if (t < 0) continue
-      const attack = Math.max(0.0001, p.attackBeats)
-      const release = Math.max(0.0001, p.releaseBeats)
-      const hold = Math.max(n.durationBeats || 0, attack)
-      if (t >= hold + release) continue
-      const decay = Math.max(0.0001, p.decayBeats)
-      const sustain = clamp01(p.sustainLevel)
-      const held = (u: number) => (u < attack ? u / attack : u < attack + decay ? 1 - (1 - sustain) * ((u - attack) / decay) : sustain)
-      const velocity = n.velocity <= 1 ? n.velocity : n.velocity / 127
-      gain += velocity * (t <= hold ? held(t) : held(hold) * (1 - (t - hold) / release))
-    }
-    return clamp01(gain)
-  }
-  const envelopes = [DEFAULT_ADSR, { attackBeats: 2, decayBeats: 0.1, sustainLevel: 0.5, releaseBeats: 3 }, { attackBeats: 0, decayBeats: 0, sustainLevel: 1, releaseBeats: 0 }]
-  for (const seed of [5, 9]) {
-    const notes = stream(400, seed)
-    for (const p of envelopes) {
-      for (const beat of [...beats, ...edgeBeats(notes)]) {
-        assert.ok(Object.is(evaluateAdsrGain(notes, beat, p), oracle(notes, beat, p)), `beat ${beat}`)
-      }
     }
   }
 })

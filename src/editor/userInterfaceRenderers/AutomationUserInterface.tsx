@@ -20,8 +20,7 @@
 //           repeat so the seam is visible while shaping it.
 //
 // Burst and cycle modes are where the window is also an EDITOR: an envelope's shape
-// is the thing being authored, so the handles ride the curve (the same
-// interaction as EnvelopeUserInterface's pad) while the knobs below give the
+// is the thing being authored, so the handles ride the curve while the knobs below give the
 // same four values fine, numeric control. Everything else keeps the guide's one
 // vocabulary - knobs, no sliders, with ONE deliberate exception: AMOUNT, the
 // lane's master gain, is a full-width fader under the mode's own controls. It
@@ -82,8 +81,7 @@ const PX0 = 5
 const PX1 = 95
 // Burst stage lanes. Each stage gets a fixed lane so a short attack stays
 // grabbable instead of collapsing against the left edge, and the gap between the
-// decay handle and the release lane reads as the sustain hold. (Same split as
-// EnvelopeUserInterface, which this panel's pad is the accent-lit sibling of.)
+// decay handle and the release lane reads as the sustain hold.
 const AX0 = 6, AX1 = 30          // attack lane: 0..ATTACK_MAX beats
 const DX0 = 30, DX1 = 62         // decay lane: 0..DECAY_MAX beats
 const RS = 70                    // release lane start (the gate lifts here)

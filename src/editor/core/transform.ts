@@ -40,7 +40,7 @@ export function transformDefault(key: string): number {
 }
 
 /** An object track's automatable param list: the canonical transform params
- *  first, then the instrument's own. Used everywhere a lane/envelope resolves
+ *  first, then the instrument's own. Used everywhere an automation lane resolves
  *  or offers a target, so transform is automatable exactly like any param. */
 export function withTransformParams(params: ParamDef[]): ParamDef[] {
   return [...TRANSFORM_PARAM_DEFS, ...params]

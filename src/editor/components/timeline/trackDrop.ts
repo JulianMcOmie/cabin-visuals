@@ -43,17 +43,16 @@ export interface DropTarget {
  *  parents (an unknown target param just leaves the lane inert until re-picked),
  *  but never to the root level. */
 export function isPinnedChildType(type: string | undefined): boolean {
-  return type === 'automation' || type === 'ability' || type === 'envelope'
+  return type === 'automation' || type === 'ability'
 }
 
-/** Track types that can hold children. Automation/ability/envelope lanes live only
+/** Track types that can hold children. Automation/ability lanes live only
  *  on their parent object, and nothing nests under the audio track. */
 function canNestInto(track: Track | undefined): boolean {
   return (
     !!track &&
     track.type !== 'automation' &&
     track.type !== 'ability' &&
-    track.type !== 'envelope' &&
     track.type !== 'audio'
   )
 }

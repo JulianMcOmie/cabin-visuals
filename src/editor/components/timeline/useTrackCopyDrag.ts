@@ -111,7 +111,7 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
         tracks, rootTrackIds, rows: s.rows, listTop: s.listTop, listLeft: s.listLeft,
         rowHeight: s.rowHeight, clientX: ev.clientX, clientY: ev.clientY,
       })
-      // Automation + envelope + ability lanes live only ON a parent object: the
+      // Automation + ability lanes live only ON a parent object: the
       // copy targets any parent exactly like a regular track's drag (nest-into or
       // a sibling line at the X-picked depth), but never the root level. A parent
       // without the lane's target param still takes the drop - the lane sits

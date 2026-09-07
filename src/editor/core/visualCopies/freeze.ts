@@ -2,7 +2,7 @@
 //
 // Two rows. Hold FREEZE and the objects it targets stop dead at the instant the
 // note landed - not just their mover motion, but their instrument animation,
-// automation lanes, envelopes and note reactions too. Hold REVERSE and the same
+// automation lanes and note reactions too. Hold REVERSE and the same
 // performance runs backwards out of that instant, retracing exactly the path it
 // arrived by.
 //

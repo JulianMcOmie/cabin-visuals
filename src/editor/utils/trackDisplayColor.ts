@@ -17,7 +17,7 @@ import type { Track } from '../types'
 // they no longer do. A mover/splitter/colorizer wears the color its DEFINITION
 // declares (core/visualCopies/identityColors.ts) - so Impact Pulse's notes are
 // the same rose as the console you write them in, in every project - and the
-// param lanes (automation / envelope / ability), which have no definition to
+// param lanes (automation / ability), which have no definition to
 // declare anything, wear their own hue-cycle color instead.
 //
 // What that trades away is real and was the old rule's whole point: a glance no

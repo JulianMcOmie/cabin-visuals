@@ -54,7 +54,6 @@ function canPasteChildUnder(track: Track, copiedRoot: Track): boolean {
   // A switcher carries the canonical transform like a group does.
   if (copiedRoot.type === 'automation') return track.type === 'base' || track.type === 'mover'
     || track.type === 'group' || track.type === 'switcher'
-  if (copiedRoot.type === 'envelope') return track.type === 'base'
   return true
 }
 

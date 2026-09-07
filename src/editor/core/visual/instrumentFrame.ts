@@ -198,10 +198,6 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
  *
  * Safe for the pause invariant: sampleAutomationLane is a pure function of beat,
  * so this is still a function of (beat, document) and scrub == playback.
- *
- * Does NOT reproduce envelope overlay (the base ← automation ← envelope merge
- * stops at automation here). Envelopes are ADSR-gated around the CURRENT beat, so
- * latching one to a past beat would be meaningless rather than merely incomplete.
  */
 export function paramAtBeat(state: ObjectState, param: string, beat: number): number {
   const base = state.baseParams[param] ?? state.params[param] ?? 0

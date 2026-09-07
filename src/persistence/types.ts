@@ -82,7 +82,7 @@ export function emptyDocument(): ProjectDocument {
     // upgrade.ts imports this module - the constant would be a cycle). A stale
     // stamp is harmless today (fresh docs re-walk no-op steps on load) but
     // misleading to read.
-    schemaVersion: 12,
+    schemaVersion: 19,
     bpm: 120,
     beatsPerBar: 4,
     totalBars: 32,

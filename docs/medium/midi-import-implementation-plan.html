@@ -115,7 +115,7 @@ export function parseMidiFile(bytes: ArrayBuffer): ImportedTrack[] {
   <li><span class="badge b-risk">risk</span> <strong>Type-0 files</strong> (everything on one MIDI track, channels instead of tracks): v1 imports it as one dense track - acceptable; channel-splitting is a refinement if it annoys.</li>
   <li><span class="badge b-risk">risk</span> <strong>Files with pickup/offset silence</strong>: notes land where the file says (bar 3 stays bar 3). If people want "snap content to bar 1," that's a checkbox later.</li>
   <li><span class="badge b-risk">open</span> <strong>Default instrument per imported track</strong> - Cube for all, or cycle the library? Cosmetic; decide at build time.</li>
-  <li><span class="badge b-risk">note</span> CC lanes (mod wheel etc.) are parsed by @tonejs/midi and deliberately dropped in v1 - the natural target is the envelope/automation system once richer targets exist; leave a TODO naming it.</li>
+  <li><span class="badge b-risk">note</span> CC lanes (mod wheel etc.) are parsed by @tonejs/midi and deliberately dropped in v1 - the natural target is the automation system once richer targets exist; leave a TODO naming it.</li>
 </ul>
 
 <div class="rec"><strong>The one-sentence mental model:</strong> a pure ticks-over-PPQ walk mints ordinary tracks/blocks/notes in one undoable store write, reachable from a button and a drop - and every hard-sounding problem (tempo, range, display) was already dissolved by the beat domain and the import-faithfully decision.</div>

@@ -21,7 +21,7 @@ import type { AudioClip } from '../editor/store/AudioStore'
 const LEGACY_SCENE_BACKGROUND = '#000000'
 
 /** Bump when the document shape changes, and append the matching step below. */
-export const CURRENT_VERSION = 18
+export const CURRENT_VERSION = 19
 
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
@@ -273,7 +273,7 @@ UPGRADES[8] = (doc) => {
 // World-space instruments' transform params move to the canonical track
 // transform keys (src/editor/core/transform.ts): position → tfX/tfY/tfZ and
 // size → tfSize (a multiplier of the instrument's natural size, so world sizes
-// divide by the 1.6 reference). Automation/envelope children retarget with
+// divide by the 1.6 reference). Automation children retarget with
 // their parent. See docs/track-transform-panel.md.
 const TRANSFORM_KEY_MIGRATIONS: Record<string, Record<string, { to: string; scale?: number }>> = {
   cube: {
@@ -333,8 +333,8 @@ UPGRADES[9] = (doc) => {
       let next = track
       const params = migrateTransformParams(track.instrumentId, track.params)
       if (params !== track.params) next = { ...next, params }
-      // Automation/envelope children target the parent's params by key.
-      if ((track.type === 'automation' || track.type === 'envelope') && track.targetParam && track.parentId) {
+      // Automation children target the parent's params by key.
+      if ((track.type === 'automation') && track.targetParam && track.parentId) {
         const parent = scene.tracks[track.parentId]
         const m = parent ? TRANSFORM_KEY_MIGRATIONS[parent.instrumentId]?.[track.targetParam] : undefined
         if (m) next = { ...next, targetParam: m.to }
@@ -404,7 +404,7 @@ UPGRADES[11] = (doc) => {
 // 60-65 (+66 Return) pitches, so notes carry over untouched. The only stored
 // values whose KEYS change are Constant Rotate/Orbit's per-axis rates
 // (speedX/Y/Z, speed → angleX/Y/Z, angle - same units, °/beat, same ranges);
-// automation and envelope child lanes targeting those params retarget with
+// automation child lanes targeting those params retarget with
 // their parent, exactly as UPGRADES[9] did for the transform keys.
 const MOVER_CONSOLIDATION: Record<string, { motion: number; mode: number; renames?: Record<string, string> }> = {
   burst: { motion: 0, mode: 0 },
@@ -431,7 +431,7 @@ UPGRADES[12] = (doc) => {
         continue
       }
       // Child lanes keyed to a renamed parent param follow the rename.
-      if ((track.type === 'automation' || track.type === 'envelope') && track.targetParam && track.parentId) {
+      if ((track.type === 'automation') && track.targetParam && track.parentId) {
         const parent = scene.tracks[track.parentId]
         const renamed = parent?.type === 'mover' && parent.moverId
           ? MOVER_CONSOLIDATION[parent.moverId]?.renames?.[track.targetParam]
@@ -774,6 +774,45 @@ UPGRADES[17] = (doc) => {
     scenes[sceneId] = { ...scene, tracks, rootTrackIds: [groupId, ...scene.rootTrackIds] }
   }
   return { ...rest, scenes }
+}
+
+// ── v18 → v19 ────────────────────────────────────────────────────────────────
+// Drop unsupported track kinds and their subtrees from saved arrangements.
+// Keep this vocabulary local to the version step so future track additions do
+// not change how an old document is upgraded.
+UPGRADES[18] = (raw) => {
+  const doc = raw as unknown as ProjectDocument
+  const supported = new Set(['base', 'automation', 'ability', 'mover', 'audio', 'splitter', 'group', 'switcher'])
+  function cleanForest(tracks: Record<string, Track>, roots: string[]) {
+    const removed = new Set(Object.keys(tracks).filter((id) => !supported.has(tracks[id].type)))
+    if (removed.size === 0) return { tracks, rootTrackIds: roots, removed }
+    const queue = [...removed]
+    for (let i = 0; i < queue.length; i++) {
+      for (const id of tracks[queue[i]]?.childIds ?? []) {
+        if (!removed.has(id)) { removed.add(id); queue.push(id) }
+      }
+    }
+    const kept: Record<string, Track> = {}
+    for (const [id, track] of Object.entries(tracks)) {
+      if (removed.has(id)) continue
+      kept[id] = {
+        ...track,
+        childIds: track.childIds.filter((cid) => !removed.has(cid)),
+        ...(track.switcherBindings ? { switcherBindings: track.switcherBindings.filter((b) => !removed.has(b.childTrackId)) } : {}),
+        ...(track.targets ? { targets: track.targets.filter((t) => t.scope.kind === 'tag' || !removed.has(t.scope.id)) } : {}),
+      }
+    }
+    return { tracks: kept, rootTrackIds: roots.filter((id) => !removed.has(id)), removed }
+  }
+  const scenes = Object.fromEntries(Object.entries(doc.scenes).map(([id, scene]) => {
+    const { tracks, rootTrackIds, removed } = cleanForest(scene.tracks, scene.rootTrackIds)
+    return [id, {
+      ...scene, tracks, rootTrackIds,
+      ...(scene.sceneTrackChildIds ? { sceneTrackChildIds: scene.sceneTrackChildIds.filter((cid) => !removed.has(cid)) } : {}),
+    }]
+  }))
+  const audio = cleanForest(doc.audioTracks ?? {}, doc.audioRootTrackIds ?? [])
+  return { ...raw, scenes, audioTracks: audio.tracks, audioRootTrackIds: audio.rootTrackIds }
 }
 
 /**

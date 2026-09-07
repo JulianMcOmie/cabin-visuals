@@ -19,7 +19,7 @@ export interface AutomationTargetOption {
   /** The target is a whole-number count (NumberParamDef.integer): a lane
    *  landing on it starts on the integer row grid. */
   integer?: boolean
-  /** Numeric bounds for the inspector and envelope peak; absent for effect On/Off. */
+  /** Numeric bounds for the inspector; absent for effect On/Off. */
   bounds?: Pick<NumberParamDef, 'min' | 'max'>
 }
 

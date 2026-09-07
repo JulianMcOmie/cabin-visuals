@@ -540,7 +540,6 @@ const G = {
       </g>
     </>
   ),
-  envelope: <path d="M2 13 5 3.4l2.6 6.2h2.4L14 13" />,
   ability: (
     <>
       <path d="M8 2 9.4 6.6 14 8l-4.6 1.4L8 14l-1.4-4.6L2 8l4.6-1.4Z" />
@@ -805,8 +804,6 @@ export function trackGlyph(track: Track, isCompositionTrack = false): ReactNode 
       return G.switcher
     case 'automation':
       return G.automation
-    case 'envelope':
-      return G.envelope
     case 'ability':
       return G.ability
     case 'mover':

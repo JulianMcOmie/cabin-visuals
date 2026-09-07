@@ -5,7 +5,7 @@
 // no generic continuous/amount/ballistic modes. Closures must stay pure
 // functions of beat plus immutable resolved data (no mutable playback state),
 // so pause, scrub, playback, and export agree exactly. Closed-form helpers like
-// evaluateAdsrGain(notes, beat, adsr) may be reused inside apply() - they are
+// adsrGateGain(note, beat, adsr) may be reused inside apply() - they are
 // already pure functions of the playhead beat.
 
 import { isStringParam, type MidiRowDef, type ParamDef } from '../../instruments/types'
@@ -102,7 +102,7 @@ export interface MoverOrSplitterDefinition<Settings> {
  *  Numeric params live in the track's `inputValues`; string-valued ones (color /
  *  string ParamDefs) live in the shared `stringParams` field, exactly as they do
  *  for instruments - the two are kept apart so the engine's numeric paths
- *  (automation lanes, envelopes) never have to consider a string. */
+ *  (automation lanes) never have to consider a string. */
 export function mergeDefinitionSettings(
   def: MoverOrSplitterDefinition<any>,
   inputValues: Record<string, number> | undefined,

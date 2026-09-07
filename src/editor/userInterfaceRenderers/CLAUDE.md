@@ -5,7 +5,7 @@ The inspector panel (in `TrackEditor.tsx`) renders a track's settings through a 
 Three registries:
 - **Object instruments** (`index.ts`, keyed by `UserInterfaceRendererId` from `ids.ts`): every instrument def explicitly names one via `userInterfaceRenderer`. `'parameters'` is the generic auto-generated list (`ParametersUserInterface.tsx`); the rest are bespoke (Cube, TextDisplay, Video…).
 - **Movers/splitters and effects** (`bespokeRegistries.ts`, keyed by definition/plugin id): registration is OPTIONAL — a missing entry falls back to the generic ParamControl list in TrackEditor.
-- Envelope tracks use `EnvelopeUserInterface.tsx` directly; automation tracks use `AutomationUserInterface.tsx` directly; word-formation lanes use `WordFormationUserInterface.tsx` directly (all three are plain presentational components TrackEditor binds, not registry entries).
+- Automation tracks use `AutomationUserInterface.tsx` directly; word-formation lanes use `WordFormationUserInterface.tsx` directly (both are plain presentational components TrackEditor binds, not registry entries).
 
 `WordFormationUserInterface.tsx` is Grid's layout-preview pattern applied to a lane that has no definition, which changes exactly one thing: **its accent is the TRACK's own color** (`resolveTrackDisplayColor`), not an `identityColors` constant — same principle (console and notes are one color), different source, because a formation lane is told apart by which one you play rather than by a definition it names. Its window draws the real `formationSeats` numbered in fill order, so the fill-order segments are made legible by looking at the preview rather than by reading their labels.
 

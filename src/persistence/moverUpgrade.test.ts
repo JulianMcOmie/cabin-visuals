@@ -62,11 +62,11 @@ test('v12 motion movers land on the unified mover with their cell selected', () 
   assert.deepEqual(tracks.vis.inputValues, { fadeBeats: 0.5 })
 })
 
-test('automation and envelope lanes on a constant mover retarget speed → angle', () => {
+test('automation lanes on a constant mover retarget speed → angle', () => {
   const doc = upgradeDocument(v12Doc({
-    cr: moverTrack('cr', 'constantRotate', { speedX: 120 }, { childIds: ['lane', 'env'] }),
+    cr: moverTrack('cr', 'constantRotate', { speedX: 120 }, { childIds: ['lane', 'angleLane'] }),
     lane: { id: 'lane', name: 'Speed X', type: 'automation', instrumentId: '', parentId: 'cr', targetParam: 'speedX', interpolation: 'linear', color: '#fff', muted: false, solo: false, blocks: [], childIds: [] } as Track,
-    env: { id: 'env', name: 'Speed env', type: 'envelope', instrumentId: '', parentId: 'cr', targetParam: 'speed', color: '#fff', muted: false, solo: false, blocks: [], childIds: [] } as Track,
+    angleLane: { id: 'angleLane', name: 'Speed', type: 'automation', instrumentId: '', parentId: 'cr', targetParam: 'speed', color: '#fff', muted: false, solo: false, blocks: [], childIds: [] } as Track,
     // A lane on an untouched mover keeps its target.
     vis: moverTrack('vis', 'visibility', undefined, { childIds: ['visLane'] }),
     visLane: { id: 'visLane', name: 'Fade', type: 'automation', instrumentId: '', parentId: 'vis', targetParam: 'fadeBeats', interpolation: 'linear', color: '#fff', muted: false, solo: false, blocks: [], childIds: [] } as Track,
@@ -74,7 +74,7 @@ test('automation and envelope lanes on a constant mover retarget speed → angle
 
   const tracks = doc.scenes.visual.tracks
   assert.equal(tracks.lane.targetParam, 'angleX')
-  assert.equal(tracks.env.targetParam, 'angle')
+  assert.equal(tracks.angleLane.targetParam, 'angle')
   assert.equal(tracks.visLane.targetParam, 'fadeBeats')
 })
 

@@ -15,7 +15,7 @@ Key behaviors (each has a war-story comment in the file — read before changing
 
 ## transform.ts — the canonical track transform
 
-Reserved `tf*` param keys (`tfX/Y/Z`, `tfRotX/Y/Z` in degrees, `tfSize`, `tfOpacity`) stored in `track.params` so automation/envelope machinery targets them like any param, but **declared here, not by instruments**. Composed as the PARENT of the instrument's own `localTransform`, so they inherit down the track hierarchy; `tfSize` is a "group fader" (scales subtree + mover layouts), unlike instrument mesh scale which stays private to the mesh.
+Reserved `tf*` param keys (`tfX/Y/Z`, `tfRotX/Y/Z` in degrees, `tfSize`, `tfOpacity`) stored in `track.params` so automation machinery targets them like any param, but **declared here, not by instruments**. Composed as the PARENT of the instrument's own `localTransform`, so they inherit down the track hierarchy; `tfSize` is a "group fader" (scales subtree + mover layouts), unlike instrument mesh scale which stays private to the mesh.
 
 ## sceneTrack.ts — the scene instrument (a VIRTUAL track)
 
