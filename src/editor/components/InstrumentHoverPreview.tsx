@@ -702,19 +702,12 @@ const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
     seedScale: 0.36,
     notes: makeLoopNotes([60, 62, 61, 63], 1, 4),
   },
-  // Symmetric Rotation reads each copy's position against ONE axis, so its
-  // card needs a field with real extent either side of that axis: a wall of
-  // cubes wrings itself into a helix (Twist, graded ALONG the axis - the two
-  // halves turn opposite ways, which is the whole idea), then folds its arms up
-  // and back (Fold). Oscillate at one full swing per held note, so the card
-  // returns to a flat wall before the loop wraps. Positions are read UNSCALED
-  // (the seed's scale rides after its translation), so SPAN is in seed-grid
-  // units, not divided by seedScale like the single-seed entries above.
+  // Show the default tangent bow on a wall; a full swing returns home at wrap.
   symmetricRotation: {
     seeds: gridSeeds(5, 5, 0.62),
     seedScale: 0.28,
-    settings: { mode: 3, falloff: 1, span: 1.4, twist: 200, fold: 150, cyclesPerBeat: 0.125 },
-    notes: [holdNote(60, 0, 8), holdNote(62, 8, 8)],
+    settings: { mode: 3, fold: 60, cyclesPerBeat: 0.125 },
+    notes: [holdNote(62, 0, 8)],
   },
   // Gradient is a passive ramp across copies BY WORLD POSITION - a turning
   // ring shows the two-stop ramp sweeping through the field. Span is pinned to

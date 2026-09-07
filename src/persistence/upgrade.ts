@@ -21,7 +21,7 @@ import type { AudioClip } from '../editor/store/AudioStore'
 const LEGACY_SCENE_BACKGROUND = '#000000'
 
 /** Bump when the document shape changes, and append the matching step below. */
-export const CURRENT_VERSION = 19
+export const CURRENT_VERSION = 20
 
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
@@ -813,6 +813,26 @@ UPGRADES[18] = (raw) => {
   }))
   const audio = cleanForest(doc.audioTracks ?? {}, doc.audioRootTrackIds ?? [])
   return { ...raw, scenes, audioTracks: audio.tracks, audioRootTrackIds: audio.rootTrackIds }
+}
+
+// v19 → v20: pin the old implicit Symmetric Rotation pose before changing
+// new-device defaults to a local bow. Keep literals frozen in this migration.
+UPGRADES[19] = (raw) => {
+  const doc = raw as unknown as ProjectDocument
+  const preserve = (tracks: Record<string, Track>) => Object.fromEntries(
+    Object.entries(tracks).map(([id, track]) => [id,
+      track.type === 'mover' && track.moverId === 'symmetricRotation'
+        ? { ...track, inputValues: { axis: 1, falloff: 1, anchor: 0, twist: 45, fold: 0, ...track.inputValues } }
+        : track,
+    ]),
+  )
+  return {
+    ...raw,
+    scenes: Object.fromEntries(Object.entries(doc.scenes).map(([id, scene]) =>
+      [id, { ...scene, tracks: preserve(scene.tracks) }],
+    )),
+    audioTracks: preserve(doc.audioTracks ?? {}),
+  }
 }
 
 /**

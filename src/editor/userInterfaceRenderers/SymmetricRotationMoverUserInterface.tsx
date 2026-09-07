@@ -48,8 +48,8 @@ const ACCENT = SYMMETRIC_ROTATION_COLOR
 
 // ── Live preview: a wall of copies through the real resolve ─────────────────
 
-/** 5×5 wall in the XY plane, spacing 1 - enough extent either side of every
- *  axis choice for all four falloffs to read differently. */
+/** 5×5 wall in the XY plane, spacing 1 - the Z-axis bow is visible immediately.
+ *  Along Z deliberately has zero weight on this plane. */
 const WALL = (() => {
   const seats: [number, number, number][] = []
   for (let y = 2; y >= -2; y--) for (let x = -2; x <= 2; x++) seats.push([x, y, 0])
@@ -78,15 +78,15 @@ function demoNote(beat: number, pitch: number, durationBeats: number): ResolvedN
 function demoPhrase(mode: number, drive: number): { notes: ResolvedNote[]; loopBeats: number } {
   if (mode === SYMMETRIC_ROTATION_MODE_BURST) {
     // One hit per channel row the knobs have dialled in; 4-beat loop.
-    return { notes: [demoNote(0.5, 60, 1), demoNote(2.5, 62, 1)], loopBeats: 4 }
+    return { notes: [60, 62, 64].map((pitch) => demoNote(0.5, pitch, 1)), loopBeats: 4 }
   }
   if (mode === SYMMETRIC_ROTATION_MODE_CONSTANT) {
     return drive === SYMMETRIC_ROTATION_DRIVE_MIDI
-      ? { notes: [demoNote(0, 60, 1e9)], loopBeats: 0 }
+      ? { notes: [60, 62, 64].map((pitch) => demoNote(0, pitch, 1e9)), loopBeats: 0 }
       : { notes: [], loopBeats: 0 }
   }
   if (mode === SYMMETRIC_ROTATION_MODE_OSCILLATE) {
-    return { notes: [demoNote(0, 60, 1e9)], loopBeats: 0 }
+    return { notes: [60, 62, 64].map((pitch) => demoNote(0, pitch, 1e9)), loopBeats: 0 }
   }
   return { notes: [], loopBeats: 0 }
 }
@@ -418,10 +418,29 @@ export const SymmetricRotationMoverUserInterfaceRenderer: UserInterfaceRendererD
   return (
     <Console accent={ACCENT} testId="symmetric-rotation-user-interface">
       <TwistPreview settings={settings} />
+      <button
+        type="button"
+        className="mx-3 mt-2 rounded border border-white/15 px-2 py-1 text-[10px] text-white/70 hover:bg-white/10"
+        onClick={() => {
+          // Apply only the spatial pose and Amount mode; MIDI feel stays stored.
+          const keys = new Set(['axis', 'axisYaw', 'axisPitch', 'centerX', 'centerY', 'centerZ', 'mode', 'falloff', 'anchor', 'twist', 'fold', 'roll', 'angle'])
+          for (const parameter of parameters) {
+            const key = parameter.definition.key
+            if (keys.has(key)) parameter.setValue(SR_DEFAULTS[key as keyof SymmetricRotationSettings])
+          }
+        }}
+      >
+        Bow preset
+      </button>
       <ControlRow spill className="flex-col items-stretch gap-2 px-3 pb-3 pt-2">
         <CaptionedSegments b={axis} />
         <CaptionedSegments b={mode} caption="Mode" />
         <CaptionedSegments b={falloff} glyphs />
+        {falloff?.value === 1 && (
+          <p className="text-[10px] leading-relaxed text-white/50">
+            Along axis gives zero rotation in the plane through the center. Use Uniform to bow a flat ring or grid.
+          </p>
+        )}
         <CaptionedSegments b={anchor} />
 
         <div className="flex flex-col gap-1.5 pt-1">

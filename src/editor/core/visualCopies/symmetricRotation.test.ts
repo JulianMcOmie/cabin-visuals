@@ -30,11 +30,10 @@ function note(beat: number, pitch: number, velocity = 1, durationBeats = 1): Res
 
 const DEFAULTS = mergeDefinitionSettings(symmetricRotationMover, undefined) as unknown as SymmetricRotationSettings
 
-// Baseline falloff is pinned to UNIFORM here: most of these tests probe one
-// channel's geometry and want every copy weighted 1. The SHIPPED default is
-// ALONG (see the def), pinned by its own test below.
+// Pin the historical geometry fixture independently of the new bow defaults.
 function settings(overrides: Partial<SymmetricRotationSettings> = {}): SymmetricRotationSettings {
-  return { ...DEFAULTS, falloff: SYMMETRIC_ROTATION_FALLOFF_UNIFORM, ...overrides }
+  return { ...DEFAULTS, axis: 1, anchor: 0, twist: 45, fold: 0,
+    falloff: SYMMETRIC_ROTATION_FALLOFF_UNIFORM, ...overrides }
 }
 
 /** A copy parked at a position, as an upstream splitter would hand it over. */
@@ -96,19 +95,30 @@ test('the axis is exactly its cardinal until aimed, and unit length after', () =
 
 // ── Falloff ──────────────────────────────────────────────────────────────────
 
-test('the SHIPPED default falloff is ALONG: a formation twists per element out of the box', () => {
-  // Uniform + the axis-line anchor is a rigid whole-formation turn - the
-  // "operates on everything as a whole" report. The default must be the twist
-  // deformer the library card advertises: copies either side of center turn
-  // opposite ways with no settings touched.
-  assert.equal(DEFAULTS.falloff, SYMMETRIC_ROTATION_FALLOFF_ALONG)
-  const above = applyAt(copyAt(2, DEFAULTS.span, 0), DEFAULTS, [], 0)
-  const below = applyAt(copyAt(2, -DEFAULTS.span, 0), DEFAULTS, [], 0)
-  const [ax, , az] = positionOf(above)
-  const [bx, , bz] = positionOf(below)
-  close(ax, bx, 'mirrored heights land at mirrored X')
-  close(az, -bz, 'and at opposite Z - the sign reversal that makes it a twist')
-  assert.notEqual(Math.round(az * 1e6), 0, 'a copy one span up really moved')
+test('default Z bow rotates opposite sides around their own tangents without moving centers', () => {
+  assert.equal(DEFAULTS.axis, SYMMETRIC_ROTATION_AXIS_Z)
+  assert.equal(DEFAULTS.falloff, SYMMETRIC_ROTATION_FALLOFF_UNIFORM)
+  assert.equal(DEFAULTS.anchor, SYMMETRIC_ROTATION_ANCHOR_SELF)
+  for (const x of [-2, 2]) {
+    const copy = copyAt(x, 0, 0)
+    const out = applyAt(copy, DEFAULTS, [], 0)
+    assert.deepEqual(positionOf(out), [x, 0, 0])
+    const normal = new Vector3(0, 0, 1).transformDirection(out.transform)
+    close(normal.x, -Math.sign(x) * Math.SQRT1_2)
+    close(normal.z, Math.SQRT1_2)
+    const reverse = applyAt(copy, { ...DEFAULTS, fold: -45 }, [], 0)
+    close(new Vector3(0, 0, 1).transformDirection(reverse.transform).x, -normal.x)
+    const more = applyAt(copy, { ...DEFAULTS, fold: 60 }, [], 0)
+    assert.notDeepEqual(more.transform.elements, out.transform.elements)
+  }
+})
+
+test('Along axis intentionally zeroes Fold for an XY formation around Z', () => {
+  const copy = copyAt(2, 1, 0)
+  for (const fold of [45, 120]) {
+    const out = applyAt(copy, { ...DEFAULTS, falloff: SYMMETRIC_ROTATION_FALLOFF_ALONG, fold }, [], 0)
+    assert.deepEqual(out.transform.elements, copy.transform.elements)
+  }
 })
 
 test('uniform falloff gives every copy the whole angle', () => {

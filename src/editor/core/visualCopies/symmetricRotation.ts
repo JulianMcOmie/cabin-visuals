@@ -148,7 +148,7 @@ const SYMMETRIC_ROTATION_PARAMS: ParamDef[] = [
       { value: SYMMETRIC_ROTATION_AXIS_Y, label: 'Y' },
       { value: SYMMETRIC_ROTATION_AXIS_Z, label: 'Z' },
     ],
-    default: SYMMETRIC_ROTATION_AXIS_Y,
+    default: SYMMETRIC_ROTATION_AXIS_Z,
   },
   {
     key: 'mode',
@@ -172,14 +172,9 @@ const SYMMETRIC_ROTATION_PARAMS: ParamDef[] = [
       { value: SYMMETRIC_ROTATION_FALLOFF_FROM, label: 'From axis' },
       { value: SYMMETRIC_ROTATION_FALLOFF_INTO, label: 'Into axis' },
     ],
-    // ALONG, not UNIFORM (changed 2026-08-15): uniform + the axis-line anchor
-    // is a rigid whole-formation turn - indistinguishable from a plain rotate
-    // mover, which is exactly the "it moves everything as a whole" report this
-    // default caused. Along is the twist deformer the library card advertises,
-    // and the panel's live preview now carries the lone-object case uniform
-    // was protecting. Untouched saves pick up the new default, as Tunnel's
-    // orientation change did.
-    default: SYMMETRIC_ROTATION_FALLOFF_ALONG,
+    // A perpendicular formation has zero ALONG distance. Uniform keeps Fold
+    // responsive on an XY wall with axis Z; Own center makes it a local bow.
+    default: SYMMETRIC_ROTATION_FALLOFF_UNIFORM,
   },
   {
     key: 'anchor',
@@ -189,14 +184,11 @@ const SYMMETRIC_ROTATION_PARAMS: ParamDef[] = [
       { value: SYMMETRIC_ROTATION_ANCHOR_AXIS, label: 'Axis line' },
       { value: SYMMETRIC_ROTATION_ANCHOR_SELF, label: 'Own center' },
     ],
-    default: SYMMETRIC_ROTATION_ANCHOR_AXIS,
+    default: SYMMETRIC_ROTATION_ANCHOR_SELF,
   },
-  // 45 rather than a rounder 90 or 180: under the ALONG default a copy one
-  // SPAN up the axis turns 45° - a visible shear on any formation - and 90 or
-  // 180 are symmetries of a cube, which would render the stock instrument's
-  // grid identically with the mover and without it and read as a dead mover.
-  { key: 'twist', label: 'Twist (°)', min: -720, max: 720, step: 1, default: 45 },
-  { key: 'fold', label: 'Fold (°)', min: -720, max: 720, step: 1, default: 0 },
+  // 45° visibly bows even cube copies; 90° can hide in their symmetry.
+  { key: 'twist', label: 'Twist (°)', min: -720, max: 720, step: 1, default: 0 },
+  { key: 'fold', label: 'Fold (°)', min: -720, max: 720, step: 1, default: 45 },
   { key: 'roll', label: 'Roll (°)', min: -720, max: 720, step: 1, default: 0 },
   { key: 'angle', label: 'Angle ×', min: 0, max: 10, step: 0.1, default: 1 },
   { key: 'span', label: 'Span', min: 0.1, max: 20, step: 0.1, default: 2 },
