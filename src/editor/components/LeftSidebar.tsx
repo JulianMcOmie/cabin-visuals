@@ -564,15 +564,14 @@ const pick = (ids: readonly string[]): InstrumentItem[] =>
 
 // Impact is notes hitting the scene itself, split by envelope: Impulse
 // strikes once per note and decays; Rumble warps for as long as it's held.
-// Visibility rides with Impulse - its ADSR window is exactly that shape.
-const IMPULSE_IDS = ['impactWarp', 'cameraControl', 'meteorImpact', 'forceFieldPush', 'impactScatter', 'impactPulse', 'visibility']
+const IMPULSE_IDS = ['impactWarp', 'cameraControl', 'meteorImpact', 'forceFieldPush', 'impactScatter', 'impactPulse']
 // Both of the odd ones here file by ENVELOPE, which is what the Impact split is
 // for. Strobe sits in Rumble rather than Color because it is scene-wide and
 // sustained - it keeps flashing for exactly as long as the note is held. Camera
 // Orbit sits here rather than beside Camera in Impulse for the same reason:
 // holding a row to swing the rig is the held shape, not a strike that decays.
 const RUMBLE_IDS = ['bassRipple', 'waveTerrain', 'strobe', 'cameraOrbit']
-const UTILITY_IDS = ['video', 'photo', 'textDisplay', 'oscilloscope', 'switcher']
+const UTILITY_IDS = ['video', 'photo', 'textDisplay', 'oscilloscope', 'switcher', 'visibility']
 const COLOR_IDS = [...COLORIZER_INSTRUMENTS.map((i) => i.id), 'colorFilters']
 
 const IMPACT_IDS = [...IMPULSE_IDS, ...RUMBLE_IDS]
@@ -584,7 +583,7 @@ const LEGACY_MOVER_IDS = new Set(
 )
 // Everything else that moves lives under Motion - the compound movers at its
 // top level, the single-behavior ones in its Extras subfolder.
-const MOTION_ITEMS = MOVER_INSTRUMENTS.filter((m) => !IMPACT_IDS.includes(m.id))
+const MOTION_ITEMS = MOVER_INSTRUMENTS.filter((m) => !IMPACT_IDS.includes(m.id) && !UTILITY_IDS.includes(m.id))
 
 // The scene library's root, in shelf order. Extras folders keep holding
 // exactly what they held before the folder pass - demoted, never deleted -
