@@ -18,21 +18,25 @@
 // actually takes at the current speed, so the last arrival always lands before
 // the loop wraps.
 
-import { useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
+import { Line } from '@react-three/drei'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { Waves, ZoomIn, ZoomOut } from 'lucide-react'
-import { Color, InstancedMesh, Matrix4, Object3D } from 'three'
+import { Box3, Color, InstancedMesh, Matrix4, Object3D, Vector3 } from 'three'
 import {
   APPROACH_CAMERA_Z,
   APPROACH_SPAWN_PITCH,
   approachCount,
+  approachAllocatedCount,
+  allocateApproachFlights,
   approachFlightBeats,
   approachAfterBeats,
   isApproachNoteFlight,
   approachSplitter,
   type ApproachSettings,
 } from '../core/visualCopies/approach'
+import { approachPathPosition, type ApproachPoint } from '../core/visualCopies/approachTrajectory'
 import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
 import type { ResolvedNote } from '../core/visual/types'
 import {
@@ -119,10 +123,13 @@ function ApproachField({ settings }: { settings: ApproachSettings }) {
   // resolve() closes over the settings and notes; apply() is then a cheap pure
   // sample per copy per frame.
   const resolved = useMemo(() => approachSplitter.resolve({ settings, notes }), [settings, notes])
-  const count = approachCount(settings)
+  const noteFlight = isApproachNoteFlight(settings)
+  const count = useMemo(() => noteFlight
+    ? approachAllocatedCount(settings, allocateApproachFlights(settings, notes))
+    : approachCount(settings), [noteFlight, settings, notes])
 
-  const live = useRef({ resolved, count, noteMode, loopBeats })
-  live.current = { resolved, count, noteMode, loopBeats }
+  const live = useRef({ resolved, count, noteMode, noteFlight, loopBeats })
+  live.current = { resolved, count, noteMode, noteFlight, loopBeats }
 
   useFrame(({ clock }) => {
     const mesh = meshRef.current
@@ -139,8 +146,16 @@ function ApproachField({ settings }: { settings: ApproachSettings }) {
     // every flight, so this is RING_POINTS evaluations per frame instead of the
     // quadratic sweep an instance-major loop would do.
     for (let point = 0; point < RING_POINTS; point++) {
+      // One gem per note in Note flight: the legacy ring would misleadingly
+      // suggest that one note sends a group of six objects.
+      if (current.noteFlight && point > 0) {
+        dummy.matrix.makeScale(0, 0, 0)
+        for (let slot = 0; slot < MAX_PREVIEW_SLOTS; slot++) mesh.setMatrixAt(slot * RING_POINTS + point, dummy.matrix)
+        continue
+      }
       const angle = (point / RING_POINTS) * Math.PI * 2
-      base.makeTranslation(Math.cos(angle) * RING_RADIUS, Math.sin(angle) * RING_RADIUS, 0)
+      const radius = current.noteFlight ? 0 : RING_RADIUS
+      base.makeTranslation(Math.cos(angle) * radius, Math.sin(angle) * radius, 0)
       const copies = current.resolved.apply(
         { transform: base, opacity: 1, colorShift: { hue: 0, saturation: 0, lightness: 0, tint: null, tintAmount: 0 } },
         { beat, index: 0, count: 1 },
@@ -177,15 +192,39 @@ function ApproachField({ settings }: { settings: ApproachSettings }) {
   )
 }
 
+/** Looking along the travel axis collapses a depth arc into a straight screen
+ * line. Frame the path obliquely so Bend reads as curvature in the preview. */
+function PathCamera({ points }: { points: ApproachPoint[] }) {
+  const { camera, size } = useThree()
+  useLayoutEffect(() => {
+    const vertices = points.map((point) => new Vector3(...point))
+    const center = new Box3().setFromPoints(vertices).getCenter(new Vector3())
+    const radius = Math.max(2, ...vertices.map((point) => point.distanceTo(center)))
+    const aspect = Math.max(0.1, size.width / Math.max(1, size.height))
+    const halfFov = Math.atan(Math.tan(55 * Math.PI / 360) * Math.min(1, aspect))
+    const distance = radius / Math.sin(halfFov) * 1.15
+    camera.position.copy(center).addScaledVector(new Vector3(-1, 1, 1.5).normalize(), distance)
+    camera.lookAt(center)
+    camera.updateMatrixWorld()
+  }, [camera, points, size.width, size.height])
+  return null
+}
+
 function ApproachPreview({ settings }: { settings: ApproachSettings }) {
+  const path = useMemo(() => {
+    const start: ApproachPoint = [settings.startX ?? 0, settings.startY ?? 0, settings.startZ ?? -24]
+    const target: ApproachPoint = [settings.targetX ?? 0, settings.targetY ?? 0, settings.targetZ ?? 0]
+    return Array.from({ length: 65 }, (_, i) => approachPathPosition(i / 64, start, target, settings.bend, settings.bendDirection))
+  }, [settings])
   return (
     <PreviewWindow height={172} testId="approach-preview">
-      {/* The camera sits exactly where the splitter's defaults assume the stage
-          camera sits, and does NOT orbit: the whole illusion is defined
-          relative to the lens, so a free camera would misrepresent it. */}
-      <PreviewCanvas dpr={[1, 2]} camera={{ position: [0, 0, APPROACH_CAMERA_Z], fov: 55 }} gl={{ antialias: true, alpha: true }}>
+      {/* Legacy streams use the stage camera; Note flight uses a fixed angled
+          view of the actual path. Neither camera orbits during playback. */}
+      <PreviewCanvas key={isApproachNoteFlight(settings) ? 'path' : 'stream'} dpr={[1, 2]} camera={{ position: [0, 0, APPROACH_CAMERA_Z], fov: 55 }} gl={{ antialias: true, alpha: true }}>
         <color attach="background" args={[ROOM]} />
+        {isApproachNoteFlight(settings) && <PathCamera points={path} />}
         <ApproachField settings={settings} />
+        {isApproachNoteFlight(settings) && <Line points={path} color={WARP} transparent opacity={0.35} lineWidth={1} />}
         <pointLight position={[0, 1.5, APPROACH_CAMERA_Z - 1]} color={WARP} intensity={14} distance={30} decay={2} />
         <directionalLight position={[3, 4, 6]} intensity={0.7} color="#cfe6ff" />
         <ambientLight intensity={0.14} />
@@ -254,6 +293,8 @@ export const ApproachSplitterUserInterfaceRenderer: UserInterfaceRendererDefinit
   const arrival = b.select('arrival', { optional: true })
   const lead = b.num('flightBeats', { optional: true })
   const after = b.num('afterBeats', { optional: true })
+  const bend = b.num('bend', { optional: true })
+  const bendDirection = b.num('bendDirection', { optional: true })
   const points = ['start', 'target'].map((point) => ({
     label: point === 'start' ? 'START' : 'TARGET',
     axes: ['X', 'Y', 'Z'].map((axis) => ({ axis, binding: b.num(`${point}${axis}`, { optional: true }) })),
@@ -288,10 +329,11 @@ export const ApproachSplitterUserInterfaceRenderer: UserInterfaceRendererDefinit
         ]} />
         {noteFlight && <Segmented b={arrival} testId="approach-arrival" className="mx-4" />}
         <ControlRow className="flex-wrap gap-3 px-4">
-          <Knob b={noteFlight ? lead : speed} label={noteFlight ? 'LEAD' : 'SPEED'} large />
-          <Knob b={density} label="DENSITY" />
-          <Knob b={noteFlight ? after : depth} label={noteFlight ? 'AFTER' : 'DISTANCE'} />
+          <Knob b={noteFlight ? lead : speed} label={noteFlight ? 'TRAVEL TIME' : 'SPEED'} suffix={noteFlight ? ' beats' : undefined} large />
+          {!noteFlight && <Knob b={density} label="DENSITY" />}
+          {!noteFlight && <Knob b={depth} label="DISTANCE" />}
           <Knob b={size} label="SIZE" />
+          {noteFlight && <Knob b={bend} label="BEND" />}
           {!noteFlight && <div className="ml-auto flex items-end gap-2">
             <IconSegmented
               b={direction}
@@ -305,9 +347,13 @@ export const ApproachSplitterUserInterfaceRenderer: UserInterfaceRendererDefinit
           </div>}
         </ControlRow>
         {noteFlight ? <>
+          <ControlRow className="flex-wrap gap-5 px-4">
+            <Knob b={bendDirection} label="BEND DIRECTION" suffix="°" />
+            <Knob b={after} label="AFTER ARRIVAL" suffix=" beats" />
+          </ControlRow>
           <p className="px-4 text-[10px] text-white/50">
-            Launch {settings.flightBeats} beats early; reach the target on the note.
-            {' '}{Math.round(settings.arrival ?? 0) === 1 ? 'Hold' : 'Continue'} for {settings.afterBeats} beats, fading over the final quarter.
+            Every note sends one identical copy, reaching Target exactly on that note.
+            {' '}Travel time starts the flight early. Bend 0 is straight; turn Bend direction to aim the curve.
           </p>
           <details className="px-4" data-testid="approach-flight-positions">
             <summary className="cursor-pointer text-[10px] text-white/60">Start &amp; target</summary>
@@ -316,7 +362,9 @@ export const ApproachSplitterUserInterfaceRenderer: UserInterfaceRendererDefinit
               <span className="w-12 text-[9px] text-white/50">{point.label}</span>
               {point.axes.map(({ axis, binding }) => <Knob key={axis} b={binding} label={axis} bipolar />)}
             </div>)}
-            <p className="pt-2 text-[10px] text-white/40">Density limits simultaneous flights. Extra notes are skipped while every copy is busy.</p>
+            <p className="pt-2 text-[10px] text-white/40">
+              After arrival: {Math.round(settings.arrival ?? 0) === 1 ? 'hold at Target' : 'continue along the curve'} for {settings.afterBeats} beats, fading over the final quarter.
+            </p>
           </details>
         </> : null}
         <More parameters={b.rest()} label="MORE" className="px-4" />

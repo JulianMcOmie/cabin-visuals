@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { Matrix4 } from 'three'
-import { approachTrajectory } from './approachTrajectory'
+import { approachPathPosition, approachTrajectory, type ApproachPoint } from './approachTrajectory'
 import { allocateApproachFlights, approachFlightsAt, approachFlightTransform, approachSplitter, type ApproachSettings } from './approach'
 import { mergeDefinitionSettings } from './definitions'
 import { resolveVisualCopies } from './resolveVisualCopies'
@@ -83,17 +83,92 @@ test('placement compensation and local composition preserve target offsets', () 
   assert.equal(copy.opacity, 0.8)
 })
 
-test('density exhaustion preserves admitted trajectories and reuses freed slots', () => {
+test('every overlapping note gets a full flight and freed slots are reused', () => {
   const settings = config({ density: 2, flightBeats: 2, afterBeats: 1 })
   const notes = [note(8), note(4), note(4), note(5)]
   const claims = allocateApproachFlights(settings, notes)
-  assert.deepEqual(claims.map((claim) => claim.noteBeat), [4, 4, 8])
-  assert.deepEqual(claims.map((claim) => claim.endBeat - claim.startBeat), [3, 3, 3])
+  assert.deepEqual(claims.map((claim) => claim.noteBeat), [4, 4, 5, 8])
+  assert.deepEqual(claims.map((claim) => claim.endBeat - claim.startBeat), [3, 3, 3, 3])
+  assert.equal(claims[3].slot, claims[0].slot)
   assert.deepEqual(notes.map((n) => n.beat), [8, 4, 4, 5], 'input is immutable')
 })
 
+test('Bend is the midpoint distance and Bend direction rotates the spatial arc', () => {
+  const start: ApproachPoint = [0, 0, -24]
+  const target: ApproachPoint = [0, 0, 0]
+  assert.deepEqual(approachPathPosition(0.5, start, target, 6, 0), [6, 0, -12])
+  const up = approachPathPosition(0.5, start, target, 6, 90)
+  near(up[0], 0)
+  near(up[1], 6)
+  near(up[2], -12)
+  for (const angle of [0, 45, 90, 180, 270, 360]) {
+    assert.deepEqual(approachPathPosition(0, start, target, 6, angle), start)
+    assert.deepEqual(approachPathPosition(1, start, target, 6, angle), target)
+  }
+})
+
+test('bend is perpendicular and finite for arbitrary, axial, reversed and coincident paths', () => {
+  const start: ApproachPoint = [0, 0, 0]
+  for (const target of [[3, 7, -4], [4, 0, 0], [0, -4, 0], [0, 0, -4], [0, 0, 0]] as ApproachPoint[]) {
+    const midpoint = approachPathPosition(0.5, start, target, 5, 70)
+    const bend = midpoint.map((value, i) => value - target[i] / 2)
+    near(Math.hypot(...bend), 5)
+    near(bend.reduce((dot, value, i) => dot + value * target[i], 0), 0)
+    for (const p of [-1, 0, 0.5, 1, 10]) assert.ok(approachPathPosition(p, start, target, 5, 70).every(Number.isFinite))
+  }
+})
+
+test('curved fly-through preserves velocity and acceleration at exact target interception', () => {
+  const position = (u: number) => approachPathPosition(approachTrajectory(u, false), [0, 0, -24], [0, 0, 0], 6, 0)
+  const h = 1e-4
+  assert.deepEqual(position(1), [0, 0, 0])
+  // p(s)=D*s+4B*s(1-s), s=u³. At u=1: v=3D-12B, a=6D-96B.
+  for (const [axis, velocity, acceleration] of [[0, -72, -576], [1, 0, 0], [2, 72, 144]]) {
+    near((position(1 + h)[axis] - position(1 - h)[axis]) / (2 * h), velocity, 1e-4)
+    near((position(1 + h)[axis] - 2 * position(1)[axis] + position(1 - h)[axis]) / (h * h), acceleration, 1e-3)
+  }
+  assert.ok(position(1.01)[0] < 0, 'curve continues through target, rather than clamping its bend')
+})
+
+test('both curved paths leave rest smoothly and settle joins rest at arrival', () => {
+  const h = 1e-5
+  for (const settle of [false, true]) {
+    const f = (u: number) => approachPathPosition(approachTrajectory(u, settle), [2, -1, -24], [4, 3, 0], 6, 45)
+    for (const boundary of settle ? [0, 1] : [0]) {
+      for (let axis = 0; axis < 3; axis++) {
+        const left = (f(boundary)[axis] - f(boundary - h)[axis]) / h
+        const right = (f(boundary + h)[axis] - f(boundary)[axis]) / h
+        near(left, 0, 1e-5)
+        near(right, 0, 1e-5)
+        const aLeft = (f(boundary)[axis] - 2 * f(boundary - h)[axis] + f(boundary - 2 * h)[axis]) / (h * h)
+        const aRight = (f(boundary + 2 * h)[axis] - 2 * f(boundary + h)[axis] + f(boundary)[axis]) / (h * h)
+        near(aLeft, 0, 0.04)
+        near(aRight, 0, 0.04)
+      }
+    }
+    if (settle) assert.deepEqual(f(2), [4, 3, 0])
+  }
+})
+
+test('dense MIDI of any pitch, velocity or duration produces identical independent flights', () => {
+  const settings = config({ density: 1, flightBeats: 2, afterBeats: 1, bend: 5, bendDirection: 45 })
+  const notes = Array.from({ length: 96 }, (_, i) => ({ ...note(4 + i / 100), pitch: i, velocity: i % 2 ? 0.2 : 127, durationBeats: i + 1 }))
+  const claims = allocateApproachFlights(settings, notes)
+  assert.equal(claims.length, notes.length)
+  assert.equal(new Set(claims.map((claim) => claim.slot)).size, 96)
+  const chain = [approachSplitter.resolve({ settings, notes })]
+  for (const relativeBeat of [-1, 0, 0.5]) {
+    const copies = claims.map((claim) => resolveVisualCopies(chain, claim.noteBeat + relativeBeat)[claim.slot])
+    for (const copy of copies) {
+      copy.transform.elements.forEach((value, i) => near(value, copies[0].transform.elements[i]))
+      near(copy.opacity, copies[0].opacity)
+    }
+  }
+  for (const beat of [-10, 3, 4, 10]) assert.equal(resolveVisualCopies(chain, beat).length, 96)
+})
+
 test('playback, backwards seeks and export-style sampling agree on every matrix and opacity', () => {
-  const settings = config({ density: 3 })
+  const settings = config({ density: 3, bend: 8, bendDirection: 125 })
   const notes = [note(0), note(4), note(7)]
   const chain = [approachSplitter.resolve({ settings, notes })]
   const sample = (beat: number) => resolveVisualCopies(chain, beat).map((copy) => [copy.transform.elements, copy.opacity])
@@ -107,6 +182,10 @@ test('new defaults are opt-in for saved content and fly through is the flight de
   assert.equal(defaults.spawnMode, 0)
   assert.equal(defaults.arrival, 0)
   assert.equal(defaults.startZ, -24)
+  assert.equal(defaults.bend, 0)
+  for (const progress of [0, 0.5, 1, 2]) {
+    assert.deepEqual(approachPathPosition(progress, [0, 0, -24], [0, 0, 0]), [0, 0, -24 + 24 * progress])
+  }
   for (const spawnMode of [0, 1]) {
     const original = { density: 8, speed: 5, depth: 24, size: 2, direction: 0, spawnMode, nearEnd: 12 }
     const merged = { ...defaults, ...original }

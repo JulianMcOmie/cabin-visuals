@@ -32,7 +32,8 @@
 //  - NOTE FLIGHT: configurable start/target and lead time, with C2 accelerating
 //    fly-through or a smooth settle at onset. This additive mode preserves the
 //    classic settings and saved motion. Both note modes keep structural slots
-//    at opacity zero when idle; MIDI velocity scales each flight's size.
+//    at opacity zero when idle. Note flight emits the same copy for every note,
+//    independent of MIDI pitch, velocity, duration or overlapping arrivals.
 
 import { Matrix4, Vector3 } from 'three'
 import type { MidiRowDef } from '../../instruments/types'
@@ -42,7 +43,7 @@ import { midiVelocity } from '../../utils/midiVelocity'
 import { placementAxisScale } from './tunnel'
 import type { VisualCopy } from './types'
 import { APPROACH_COLOR } from './identityColors'
-import { approachSmoothstep, approachTrajectory } from './approachTrajectory'
+import { approachPathPosition, approachSmoothstep, approachTrajectory, type ApproachPoint } from './approachTrajectory'
 
 export interface ApproachSettings {
   /** Copies in flight at once - and so how often the next arrival lands. */
@@ -74,6 +75,10 @@ export interface ApproachSettings {
   afterBeats?: number
   /** 0 = fly through (default), 1 = settle exactly at onset. */
   arrival?: number
+  /** Spatial midpoint offset from the straight start→target line. Zero is straight. */
+  bend?: number
+  /** Degrees around travel: 0 = sideways, 90 = up for the default +Z path. */
+  bendDirection?: number
 }
 
 export function isApproachNoteFlight(settings: Pick<ApproachSettings, 'spawnMode'>): boolean {
@@ -233,6 +238,15 @@ export interface ApproachAllocation {
   sizeScale: number
 }
 
+/** Keep legacy density as a minimum pool (including when Spawn is automated),
+ * but grow to fit all overlapping note flights. Document-derived allocation
+ * stays fixed across sampled beats, preserving the structural slot contract. */
+export function approachAllocatedCount(settings: ApproachSettings, allocation: readonly ApproachAllocation[]): number {
+  return isApproachNoteFlight(settings)
+    ? allocation.reduce((count, claim) => Math.max(count, claim.slot + 1), approachCount(settings))
+    : approachCount(settings)
+}
+
 /**
  * Voice allocation for NOTES mode: assign each note a copy slot it holds for
  * exactly as long as its copy is ON SCREEN.
@@ -281,7 +295,7 @@ export function allocateApproachFlights(
   const tail = noteFlight ? approachAfterBeats(settings) : runBeats * (receding ? home : Math.max(0, exit - home))
 
   const spawns = notes
-    .filter((note) => note.pitch === APPROACH_SPAWN_PITCH)
+    .filter((note) => noteFlight || note.pitch === APPROACH_SPAWN_PITCH)
     .sort((a, b) => a.beat - b.beat)
 
   const allocation: ApproachAllocation[] = []
@@ -295,13 +309,14 @@ export function allocateApproachFlights(
 
     // First genuinely free slot.
     let slot = -1
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < freeAt.length; i++) {
       if (freeAt[i] <= startBeat) { slot = i; break }
     }
-    if (slot < 0) {
-      // A smooth flight must not teleport away halfway to its target. At the
-      // structural density cap, omit the new launch rather than steal a flight.
-      if (noteFlight) continue
+    if (slot < 0 && noteFlight) {
+      // Every note gets a complete flight. Reuse an idle slot or grow the pool
+      // at resolve time, never drop a note or steal its neighbor's slot.
+      slot = freeAt.length
+    } else if (slot < 0) {
       // Every copy is on screen. Steal the one that would free soonest and cut
       // its flight off here - the least visible loss available.
       let soonest = 0
@@ -319,7 +334,7 @@ export function allocateApproachFlights(
       noteBeat: note.beat,
       startBeat,
       endBeat,
-      sizeScale: midiVelocity(note.velocity),
+      sizeScale: noteFlight ? 1 : midiVelocity(note.velocity),
     }
     allocation.push(claim)
     freeAt[slot] = endBeat
@@ -333,8 +348,8 @@ export function approachFlightsAt(
   settings: ApproachSettings,
   allocation: readonly ApproachAllocation[],
   beat: number,
+  count = approachAllocatedCount(settings, allocation),
 ): ApproachFlight[] {
-  const count = approachCount(settings)
   const runBeats = approachRunBeats(settings)
   const home = approachHomeProgress(settings)
   const sign = approachDirectionSign(settings)
@@ -396,13 +411,13 @@ export function approachFlightTransform(
   placementScale: [number, number, number],
 ): { transform: Matrix4; opacity: number } {
   if (isApproachNoteFlight(settings)) {
-    const start = [settings.startX ?? 0, settings.startY ?? 0, settings.startZ ?? -24]
-    const target = [settings.targetX ?? 0, settings.targetY ?? 0, settings.targetZ ?? 0]
+    const start: ApproachPoint = [settings.startX ?? 0, settings.startY ?? 0, settings.startZ ?? -24]
+    const target: ApproachPoint = [settings.targetX ?? 0, settings.targetY ?? 0, settings.targetZ ?? 0]
     // Do not clamp progress: fly-through must retain its velocity and
     // acceleration at the target. Size is a ratio of the source object, so
     // perspective alone provides the accelerating whoosh in this mode.
-    const position = start.map((value, axis) =>
-      (value + (target[axis] - value) * flight.progress) / placementScale[axis])
+    const position = approachPathPosition(flight.progress, start, target, settings.bend, settings.bendDirection)
+      .map((value, axis) => value / placementScale[axis])
     const scale = Math.max(MIN_SCALE, settings.size * flight.sizeScale)
     return {
       transform: new Matrix4().makeScale(scale, scale, scale)
@@ -462,11 +477,13 @@ export const approachSplitter: MoverOrSplitterDefinition<ApproachSettings> = {
     },
     // Camera sits at z = 5; recycling at 12 keeps the swap comfortably behind it.
     { key: 'nearEnd', label: 'Near end (past camera)', min: -20, max: 40, step: 0.5, default: 12 },
-    { key: 'flightBeats', label: 'Lead (beats)', min: 0.125, max: 32, step: 0.125, default: 4 },
+    { key: 'flightBeats', label: 'Travel time (beats)', min: 0.125, max: 32, step: 0.125, default: 4 },
     { key: 'afterBeats', label: 'After arrival (beats)', min: 0.125, max: 32, step: 0.125, default: 2 },
     { key: 'arrival', label: 'Arrival', type: 'select', options: [
       { value: 0, label: 'Fly through' }, { value: 1, label: 'Settle' },
     ], default: 0 },
+    { key: 'bend', label: 'Bend', min: 0, max: 100, step: 0.1, default: 0 },
+    { key: 'bendDirection', label: 'Bend direction', min: 0, max: 360, step: 1, default: 0 },
     ...(['start', 'target'] as const).flatMap((point) => (['X', 'Y', 'Z'] as const).map((axis) => ({
       key: `${point}${axis}`, label: `${point === 'start' ? 'Start' : 'Target'} ${axis}`,
       min: -200, max: 200, step: 0.1, default: point === 'start' && axis === 'Z' ? -24 : 0,
@@ -474,16 +491,16 @@ export const approachSplitter: MoverOrSplitterDefinition<ApproachSettings> = {
   ],
   midiRows: () => APPROACH_ROWS,
   resolve({ settings, notes }) {
-    const count = approachCount(settings)
     const noteMode = Math.round(settings.spawnMode) === 1 || isApproachNoteFlight(settings)
     // Voice allocation is a pure function of (settings, notes) - no beat in it -
     // so it is computed once here rather than rebuilt on every frame.
     const allocation = noteMode ? allocateApproachFlights(settings, notes) : []
+    const count = approachAllocatedCount(settings, allocation)
     return {
       apply(visualCopy, { beat, placementTransform }) {
         const placementScale = placementAxisScale(placementTransform)
         const flights = noteMode
-          ? approachFlightsAt(settings, allocation, beat)
+          ? approachFlightsAt(settings, allocation, beat, count)
           : Array.from({ length: count }, (_, slot) => approachStreamFlight(slot, settings, beat))
         return flights.map((flight) => {
           const { transform, opacity } = approachFlightTransform(flight, settings, placementScale)

@@ -368,17 +368,37 @@ u³, extending that SAME polynomial past onset so velocity and acceleration neve
 jump. Settle uses quintic smoothstep, reaching zero velocity/acceleration on the
 onset and holding there. `afterBeats` is the post-onset lifetime (independent of note
 duration), with a smooth fade over its final quarter. Size stays constant, leaving
-perspective to sell the whoosh. Both launch from rest with C2 continuity. The same
-allocator keeps a fixed Density pool, but this mode DROPS new launches when full
-rather than cutting off accepted flights; it never assumes a particular camera
-plane for release, since paths may point sideways. Automating path/timing controls
+perspective to sell the whoosh. Both launch from rest with C2 continuity.
+
+`bend` adds a quadratic Bezier arc, expressed as `start + delta*s + 4*s*(1-s)*B`,
+where B is perpendicular to the start→target line and has length Bend. Bend
+direction rotates B around travel (0 = projected local X, 90 = perpendicular up;
+a near-X path falls back to projected Z). It is a SPATIAL curve, composed with
+the existing time progress, not a different timing ease. Continue the SAME
+polynomial after the target: clamping B there or switching straight to a tangent
+discards curvature and breaks acceleration continuity. Zero Bend defaults old
+paths to exactly straight. Coincident endpoints use a finite +Z bend frame.
+
+Note flight now honors **every note**, regardless of pitch, duration or velocity;
+velocity no longer scales its copies. First-fit allocation reuses idle slots and
+GROWS the structural pool to the peak overlap computed from the entire MIDI part
+at resolve time. It never steals/skips notes. Density remains only a minimum
+pool reservation for compatibility with automated Spawn/Density, and is hidden
+in this mode. More overlap costs more mounted copies; do not silently restore a
+cap. Timing automation's max/min structural probes cover this monotonic peak.
+It never assumes a particular camera plane for release, since paths may point
+sideways. Automating path/timing controls
 re-resolves the current trajectory, like every other splitter; C2 describes each
 fixed configuration, not arbitrary discontinuous parameter automation.
 
 Stream (0) and classic Notes (1) retain their previous defaults and math, so an
 old save with absent keys is unchanged. The panel's Note flight controls replace
-Speed/Distance/Direction/Near End; its demo uses the real resolver and leaves room
-for pre-roll and the entire post-arrival lifetime before wrapping.
+Speed/Distance/Direction/Near End/Density with Travel time, Bend, Bend direction,
+After arrival, Start and Target. Its demo uses one gem per note (the legacy ring
+would falsely teach group spawning), draws the actual spatial arc from a fixed
+angled camera (looking down the depth axis collapses the arc to a straight screen
+line), and leaves room for pre-roll and the entire post-arrival lifetime before
+wrapping. The stage camera is unaffected.
 
 Approach's classic NOTES mode carries a timing contract worth knowing before you touch it: a
 flight is centred on its note so the copy sits at the object's NORMAL placement
