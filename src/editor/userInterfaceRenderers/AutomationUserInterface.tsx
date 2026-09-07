@@ -40,6 +40,7 @@ import {
   DEFAULT_CYCLE,
   DEFAULT_FORCE,
   DEFAULT_NOISE,
+  DEFAULT_PHYSICS, buildPhysicsCurve, samplePhysicsLane, type PhysicsConfig,
   DEFAULT_SPLINE_TENSION,
   SPLINE_TENSION_MAX,
   bezierY,
@@ -155,6 +156,20 @@ function easePath(mode: InterpolationMode, x0: number, x1: number, steps = 40, y
  *  the whole window height at range 1, so the picture is the real signal.
  *  `amount` scales the gate's center and the deviation exactly the way
  *  resolve.ts does, so the fader moves this plot the way it moves playback. */
+function PhysicsPlot({ physics, amount, accent }: { physics: PhysicsConfig; amount: number; accent: string }) {
+  const points = [{ beat: 1, value: 0.3 * amount }, { beat: 3, value: 0.7 * amount }, { beat: 5, value: 0.4 * amount }]
+  const curve = buildPhysicsCurve(points, physics, amount)!
+  const min = Math.min(0, curve.bounds.min), max = Math.max(1, curve.bounds.max)
+  const y = (v: number) => Y_BASE - (v - min) / (max - min) * Y_SPAN
+  const x = (b: number) => PX0 + (PX1 - PX0) * b / 6
+  let d = ''
+  for (let i = 0; i <= 240; i++) d += `${i ? ' L' : 'M'} ${x(i / 40)} ${y(samplePhysicsLane(curve, i / 40))}`
+  return <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
+    <GlowPath d={d} accent={accent} />
+    {points.map(p => <circle key={p.beat} cx={x(p.beat)} cy={y(p.value)} r={2} fill="white" />)}
+  </svg>
+}
+
 function noisePath(cfg: NoiseConfig, amount: number, steps = 200): string {
   const scaled = amount === 1 ? cfg : { ...cfg, range: cfg.range * amount }
   const gates = [{ beat: 0, endBeat: NOISE_WINDOW_BEATS, center: clamp(0.5 * amount, 0, 1), amp: 1 }]
@@ -642,7 +657,7 @@ function ShapeSegmented({ burst, accent, onBurst }: {
 
 const MODE_OPTIONS: { value: AutomationMode; label: string; title: string }[] = [
   { value: 'curve', label: 'CURVE', title: 'Notes are value keyframes joined by a curve' },
-  { value: 'noise', label: 'NOISE', title: 'Held notes gate a seeded random wobble around their value' },
+  { value: 'physics', label: 'PHYSICS', title: 'Cross MIDI values with continuous velocity and acceleration' },
   { value: 'burst', label: 'BURST', title: 'Each note fires an ADSR envelope toward its value' },
   { value: 'cycle', label: 'CYCLE', title: 'A motion curve plays once between each pair of note onsets' },
   { value: 'force', label: 'FORCE', title: 'Notes push a body with mass - nothing aims it anywhere' },
@@ -1085,7 +1100,7 @@ function RangeConsole({ bounds, range, accent, onRange }: {
 }
 
 export function AutomationUserInterface({
-  targetLabel, targetKey, targetOptions, onTarget, color, mode, interpolation, tension, noise, burst, cycle, force, amount, paramBounds, range, onMode, onInterpolation, onTension, onNoise, onBurst, onCycle, onForce, onAmount, onRange,
+  targetLabel, targetKey, targetOptions, onTarget, color, mode, interpolation, tension, physics, onPhysics, noise, burst, cycle, force, amount, paramBounds, range, onMode, onInterpolation, onTension, onNoise, onBurst, onCycle, onForce, onAmount, onRange,
 }: {
   /** What the lane drives - "Size", "Kaleidoscope · Segments". */
   targetLabel: string
@@ -1102,6 +1117,8 @@ export function AutomationUserInterface({
   /** Spline tension (Track.splineTension, defaulted to 1). Ignored by every
    *  other interpolation, so its control only appears on 'spline'. */
   tension: number
+  physics?: PhysicsConfig
+  onPhysics: (physics: PhysicsConfig) => void
   noise: NoiseConfig | undefined
   burst: BurstConfig | undefined
   cycle: CycleConfig | undefined
@@ -1151,6 +1168,10 @@ export function AutomationUserInterface({
             : <BurstWindow burst={burst} accent={accent} onBurst={onBurst} />
       ) : mode === 'cycle' && cycle ? (
         <CycleWindow cycle={cycle} accent={accent} onCycle={onCycle} />
+      ) : mode === 'physics' && physics ? (
+        <LaneWindow testId="automation-physics-plot" title="Cross each note with the chosen velocity and acceleration">
+          <PhysicsPlot physics={physics} amount={amount} accent={accent} />
+        </LaneWindow>
       ) : mode === 'noise' && noise ? (
         <LaneWindow testId="automation-noise-plot" title={`${NOISE_WINDOW_BEATS} beats of this seed`}>
           <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
@@ -1401,6 +1422,16 @@ export function AutomationUserInterface({
           )
         })()}
 
+        {mode === 'physics' && physics && (
+          <div className="flex items-end gap-4">
+            <LaserKnob value={physics.velocity} min={-20} max={20} step={0.05} defaultValue={DEFAULT_PHYSICS.velocity}
+              label="VELOCITY" ariaLabel="Crossing velocity in lane ranges per beat" accent={accent}
+              onChange={(velocity) => onPhysics({ ...physics, velocity })} />
+            <LaserKnob value={physics.acceleration} min={-40} max={40} step={0.1} defaultValue={DEFAULT_PHYSICS.acceleration}
+              label="ACCELERATION" ariaLabel="Crossing acceleration in lane ranges per beat squared" accent={accent}
+              onChange={(acceleration) => onPhysics({ ...physics, acceleration })} />
+          </div>
+        )}
         {mode === 'noise' && noise && (
           <div className="flex items-end gap-4">
             <LaserKnob
@@ -1543,6 +1574,11 @@ export function AutomationUserInterface({
               <span className="text-white/75"> {targetLabel}</span> - {force.aim === 'signed' ? 'the row is the force, and the middle row is none' : 'the row is where it gets pushed'} - and
               {force.drag === 'friction' ? ' friction brings it to a crisp stop.' : force.drag === 'linear' ? ' drag bleeds the speed off smoothly.' : force.drag === 'quad' ? ' air resistance bites at speed, then lets it float.' : ' nothing slows it down.'}
               {force.field === 'gravity' ? ' Gravity is always pulling it toward the bottom.' : force.field === 'pull' ? ' A steady pull always draws it back toward HOME.' : ' Nothing else acts on it, so it stays where it lands.'}</>
+          ) : mode === 'physics' ? (
+            <>Each note sets a value and crossing time for <span className="text-white/75">{targetLabel}</span>.
+              Velocity and acceleration stay continuous through every note; the curve can swing beyond the note range.
+              Positive velocity crosses upward, negative downward. Controls use lane ranges per beat and per beat squared.
+              Motion eases from and to rest one beat before the first and after the last note.</>
           ) : mode === 'noise' ? (
             <>While a note is held, <span className="text-white/75">{targetLabel}</span> wanders around the note&apos;s
               row; between notes the lane lets go. The seed is fixed per take, so scrubbing and export replay the

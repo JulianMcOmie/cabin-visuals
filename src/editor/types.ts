@@ -239,7 +239,7 @@ export type InterpolationMode = 'step' | 'linear' | 'ease-in' | 'ease-out' | 'ea
  *  (`Track.noise` / `Track.burst` / `Track.cycle`); read it through
  *  `automationMode()` in core/visual/automation.ts so the precedence stays in one
  *  place. */
-export type AutomationMode = 'curve' | 'noise' | 'burst' | 'cycle' | 'force'
+export type AutomationMode = 'curve' | 'physics' | 'noise' | 'burst' | 'cycle' | 'force'
 
 /**
  * A targeting route for a top-level mover: `scope` picks a single track, a whole
@@ -310,6 +310,8 @@ export interface Track {
   /** Automation tracks only: flips the lane into noise mode - notes gate
    *  seeded random bursts around their pitch-value instead of keyframing.
    *  (See core/visual/automation.ts NoiseConfig.) */
+  /** Crossing derivatives, in lane spans per beat and per beat squared. */
+  physics?: { velocity: number; acceleration: number }
   noise?: { rate: number; smoothness: number; range: number; seed: number }
   /** Automation tracks only: flips the lane into burst mode - each note fires an
    *  ADSR envelope that carries the param from whatever is underneath toward the

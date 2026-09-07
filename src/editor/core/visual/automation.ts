@@ -76,6 +76,67 @@ export function extractKeyframes(
   }))
 }
 
+/** Prescribed derivatives at every MIDI onset, normalized to the lane span. */
+export interface PhysicsConfig { velocity: number; acceleration: number }
+export const DEFAULT_PHYSICS: PhysicsConfig = { velocity: 1, acceleration: 0 }
+interface PhysicsSegment { start: number; end: number; controls: number[] }
+export interface PhysicsCurve {
+  segments: PhysicsSegment[]
+  bounds: { min: number; max: number }
+}
+
+/** Resolve once. A quintic's six constraints are position, velocity and
+ * acceleration at each end. Shared derivatives make all MIDI crossings C2.
+ * One-beat lead-in/out brings the body from/to rest without clipping overshoot.
+ * Simultaneous notes use the last note in stable flattened order. */
+export function buildPhysicsCurve(
+  notes: AutomationKeyframe[], cfg: PhysicsConfig, span = 1,
+): PhysicsCurve | undefined {
+  const points: AutomationKeyframe[] = []
+  for (const note of [...notes].sort((a, b) => a.beat - b.beat)) {
+    if (!Number.isFinite(note.beat) || !Number.isFinite(note.value)) continue
+    if (points.length && points[points.length - 1].beat === note.beat) points.pop()
+    points.push(note)
+  }
+  if (!points.length) return undefined
+  const v = (Number.isFinite(cfg.velocity) ? cfg.velocity : 1) * span
+  const a = (Number.isFinite(cfg.acceleration) ? cfg.acceleration : 0) * span
+  const knots = points.map(p => ({ ...p, v, a }))
+  const first = knots[0], last = knots[knots.length - 1]
+  knots.unshift({ beat: first.beat - 1, value: first.value - v + a / 2, v: 0, a: 0 })
+  knots.push({ beat: last.beat + 1, value: last.value + v + a / 2, v: 0, a: 0 })
+  const segments: PhysicsSegment[] = []
+  let min = Infinity, max = -Infinity
+  for (let i = 1; i < knots.length; i++) {
+    const p = knots[i - 1], q = knots[i], h = q.beat - p.beat
+    const controls = [p.value, p.value + p.v * h / 5,
+      p.value + 2 * p.v * h / 5 + p.a * h * h / 20,
+      q.value - 2 * q.v * h / 5 + q.a * h * h / 20,
+      q.value - q.v * h / 5, q.value]
+    for (const c of controls) { min = Math.min(min, c); max = Math.max(max, c) }
+    segments.push({ start: p.beat, end: q.beat, controls })
+  }
+  // Bezier control hull conservatively covers every overshoot for copy budgets.
+  return { segments, bounds: { min, max } }
+}
+
+/** Stateless sampling: paused scrubs, playback and export follow the same path. */
+export function samplePhysicsLane(curve: PhysicsCurve, beat: number): number {
+  const segments = curve.segments
+  if (!segments.length || !Number.isFinite(beat)) return NaN
+  let lo = 0, hi = segments.length - 1
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1
+    if (segments[mid].end < beat) lo = mid + 1
+    else hi = mid
+  }
+  const s = segments[lo]
+  const t = Math.max(0, Math.min(1, (beat - s.start) / (s.end - s.start)))
+  const c = [...s.controls]
+  for (let n = 5; n > 0; n--) for (let i = 0; i < n; i++) c[i] += (c[i + 1] - c[i]) * t
+  return c[0]
+}
+
 // ── Noise mode ───────────────────────────────────────────────────────────────
 // An automation track flipped to noise mode stops being a keyframe lane: its
 // notes become GATES - while a note is held, the param wanders randomly
@@ -971,8 +1032,8 @@ export function sampleLane(
  *  several configs (then noise, then cycle) - the same precedence resolve.ts
  *  applies, kept in one place so the editor can never disagree with the engine
  *  about what a lane is. */
-export function automationMode(track: Pick<Track, 'noise' | 'burst' | 'cycle' | 'force'>): AutomationMode {
-  return track.burst ? 'burst'
+export function automationMode(track: Pick<Track, 'noise' | 'burst' | 'cycle' | 'force' | 'physics'>): AutomationMode {
+  return track.physics ? 'physics' : track.burst ? 'burst'
     : track.noise ? 'noise'
     : track.cycle ? 'cycle'
     : track.force ? 'force'
@@ -989,6 +1050,8 @@ export function automationMode(track: Pick<Track, 'noise' | 'burst' | 'cycle' | 
 export interface AutomationLane {
   mode: InterpolationMode
   keyframes: AutomationKeyframe[]
+  physics?: PhysicsConfig
+  physicsCurve?: PhysicsCurve
   noise?: NoiseConfig
   gates?: NoiseGate[]
   burst?: BurstConfig
@@ -1018,6 +1081,7 @@ export interface AutomationLane {
  * there. `base` is what a burst travels away from; the other modes ignore it.
  */
 export function sampleAutomationLane(lane: AutomationLane, beat: number, base: number): number {
+  if (lane.physics) return lane.physicsCurve ? samplePhysicsLane(lane.physicsCurve, beat) : NaN
   if (lane.burst) {
     if (!lane.bursts?.length) return NaN
     const value = sampleBurstLane(lane.burst, lane.bursts, beat, base)
@@ -1067,6 +1131,7 @@ export function automationLaneValueBounds(
   lane: AutomationLane,
   base: number,
 ): { min: number; max: number } {
+  if (lane.physics) return lane.physicsCurve?.bounds ?? { min: base, max: base }
   if (lane.burst) {
     // Shaped bursts may overshoot: their reach is base + cap * (target - base),
     // clamped back to the param range exactly as sampling clamps it. Base and

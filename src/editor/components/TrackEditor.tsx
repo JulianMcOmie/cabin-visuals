@@ -454,6 +454,7 @@ export function TrackEditor() {
   const setMoverInput = useProjectStore((s) => s.setMoverInput)
   const setTrackInterpolation = useProjectStore((s) => s.setTrackInterpolation)
   const setTrackSplineTension = useProjectStore((s) => s.setTrackSplineTension)
+  const setTrackPhysics = useProjectStore((s) => s.setTrackPhysics)
   const setTrackNoise = useProjectStore((s) => s.setTrackNoise)
   const setTrackBurst = useProjectStore((s) => s.setTrackBurst)
   const setTrackCycle = useProjectStore((s) => s.setTrackCycle)
@@ -648,6 +649,8 @@ export function TrackEditor() {
                         mode={automationMode(track)}
                         interpolation={track.interpolation ?? 'linear'}
                         tension={track.splineTension ?? DEFAULT_SPLINE_TENSION}
+                        physics={track.physics}
+                        onPhysics={(physics) => setTrackPhysics(track.id, physics)}
                         noise={track.noise}
                         burst={track.burst}
                         cycle={track.cycle}

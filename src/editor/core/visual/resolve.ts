@@ -10,7 +10,7 @@ import type {
 } from './types'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
-import { automationAmount, automationLaneValueBounds, automationOutputBounds, extractBurstGates, extractCycleGates, extractForceNotes, extractKeyframes, extractNoiseGates, integrateForceLane, sampleAutomationLane, type NoiseConfig } from './automation'
+import { buildPhysicsCurve, automationAmount, automationLaneValueBounds, automationOutputBounds, extractBurstGates, extractCycleGates, extractForceNotes, extractKeyframes, extractNoiseGates, integrateForceLane, sampleAutomationLane, type NoiseConfig } from './automation'
 import { automationValueBounds, type AutomationRange } from '../trackTypes'
 import { isNumberParam, type ObjectInstrumentDef, type ParamDef } from '../../instruments/types'
 import { SPATIAL_TRANSFORM_PARAM_DEFS, TRANSFORM_PARAM_DEFS, transformDefault, withTransformParams } from '../transform'
@@ -123,6 +123,15 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     const bounds = automationOutputBounds(child.automationRange, pdef.min, pdef.max, amount)
     // Burst mode: the notes become ADSR bursts aimed at their own pitch-value,
     // travelling from whatever value sits underneath (hence `base`).
+    if (child.physics) {
+      out.push({ param, sourceTrackId: child.id, mode: 'linear', keyframes: [],
+        physics: child.physics,
+        physicsCurve: buildPhysicsCurve(extractKeyframes(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount, child.automationRange), child.physics,
+          (automationOutputBounds(child.automationRange, pdef.min, pdef.max, 1).max - automationOutputBounds(child.automationRange, pdef.min, pdef.max, 1).min) * amount),
+        min: bounds.min, max: bounds.max,
+      })
+      continue
+    }
     if (child.burst) {
       out.push({
         param,
@@ -290,6 +299,15 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
     // Burst mode: each note fires the ADSR from the stored setting toward its own
     // pitch-value. The 0/1 'enabled' pseudo-param has no range to travel through,
     // so it stays a keyframe lane whatever the track says.
+    if (child.physics && target.key !== 'enabled') {
+      out.push({ instanceId: target.instanceId, key: target.key, clockSkipEmitters,
+        mode: 'linear', keyframes: [], physics: child.physics,
+        physicsCurve: buildPhysicsCurve(extractKeyframes(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount, child.automationRange), child.physics,
+          (automationOutputBounds(child.automationRange, min, max, 1).max - automationOutputBounds(child.automationRange, min, max, 1).min) * amount),
+        min: bounds.min, max: bounds.max, base,
+      })
+      continue
+    }
     if (child.burst && target.key !== 'enabled') {
       out.push({
         instanceId: target.instanceId,

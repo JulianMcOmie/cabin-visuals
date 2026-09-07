@@ -12,7 +12,7 @@ import { SWITCHER_MODE_PARAM } from '../core/visualCopies/switcher'
 import { canBeSceneTrackChild, dematerializeSceneTrack, isSceneTrackId, sceneTrackId, sceneTrackView } from '../core/sceneTrack'
 import { defaultLightingTracks } from '../core/defaultLighting'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
-import { AUTOMATION_AMOUNT_MAX, DEFAULT_BURST, DEFAULT_CYCLE, DEFAULT_FORCE, DEFAULT_NOISE, DEFAULT_SPLINE_TENSION, SPLINE_TENSION_MAX } from '../core/visual/automation'
+import { AUTOMATION_AMOUNT_MAX, DEFAULT_PHYSICS, DEFAULT_BURST, DEFAULT_CYCLE, DEFAULT_FORCE, DEFAULT_NOISE, DEFAULT_SPLINE_TENSION, SPLINE_TENSION_MAX } from '../core/visual/automation'
 import type { ImportedMidiTrack } from '../core/midiImport'
 import type { AspectRatioId } from '../core/aspectRatios'
 import { placeTranscription, invertStrobeSpans, groupTimingIntoLines, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
@@ -513,6 +513,7 @@ export interface ProjectState {
    *  gain). Neutral (1) is stored as field absence. */
   setTrackSplineTension: (trackId: string, tension: number) => void
   /** Set (or clear, with undefined) an automation track's noise mode. */
+  setTrackPhysics: (trackId: string, physics: Track['physics']) => void
   setTrackNoise: (trackId: string, noise: Track['noise'] | undefined) => void
   /** Set (or clear, with undefined) an automation track's burst mode. Setting one
    *  mode clears the others - a lane is in exactly one mode. */
@@ -2014,11 +2015,18 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
 
   // The non-keyframe modes are mutually exclusive: setting one drops the
   // others, so a lane is never ambiguous (the engine would silently prefer burst).
+  setTrackPhysics: (trackId, physics) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, physics, noise: undefined, burst: undefined, cycle: undefined, force: undefined } } }
+    }),
+
   setTrackNoise: (trackId, noise) =>
     set((s) => {
       const track = s.tracks[trackId]
       if (!track) return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, noise, burst: noise ? undefined : track.burst, cycle: noise ? undefined : track.cycle, force: noise ? undefined : track.force } } }
+      return { tracks: { ...s.tracks, [trackId]: { ...track, noise, physics: noise ? undefined : track.physics, burst: noise ? undefined : track.burst, cycle: noise ? undefined : track.cycle, force: noise ? undefined : track.force } } }
     }),
 
   setTrackAutomationRange: (trackId, range) =>
@@ -2032,21 +2040,21 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     set((s) => {
       const track = s.tracks[trackId]
       if (!track) return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, burst, noise: burst ? undefined : track.noise, cycle: burst ? undefined : track.cycle, force: burst ? undefined : track.force } } }
+      return { tracks: { ...s.tracks, [trackId]: { ...track, burst, physics: burst ? undefined : track.physics, noise: burst ? undefined : track.noise, cycle: burst ? undefined : track.cycle, force: burst ? undefined : track.force } } }
     }),
 
   setTrackCycle: (trackId, cycle) =>
     set((s) => {
       const track = s.tracks[trackId]
       if (!track) return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, cycle, noise: cycle ? undefined : track.noise, burst: cycle ? undefined : track.burst, force: cycle ? undefined : track.force } } }
+      return { tracks: { ...s.tracks, [trackId]: { ...track, cycle, physics: cycle ? undefined : track.physics, noise: cycle ? undefined : track.noise, burst: cycle ? undefined : track.burst, force: cycle ? undefined : track.force } } }
     }),
 
   setTrackForce: (trackId, force) =>
     set((s) => {
       const track = s.tracks[trackId]
       if (!track) return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, force, noise: force ? undefined : track.noise, burst: force ? undefined : track.burst, cycle: force ? undefined : track.cycle } } }
+      return { tracks: { ...s.tracks, [trackId]: { ...track, force, physics: force ? undefined : track.physics, noise: force ? undefined : track.noise, burst: force ? undefined : track.burst, cycle: force ? undefined : track.cycle } } }
     }),
 
   setAutomationMode: (trackId, mode) =>
@@ -2057,6 +2065,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       // which one exists. A fresh noise seed per entry = a fresh random take.
       const next: Track = {
         ...track,
+        physics: mode === 'physics' ? track.physics ?? { ...DEFAULT_PHYSICS } : undefined,
         noise: mode === 'noise'
           ? track.noise ?? { ...DEFAULT_NOISE, seed: Math.floor(Math.random() * 1e9) }
           : undefined,

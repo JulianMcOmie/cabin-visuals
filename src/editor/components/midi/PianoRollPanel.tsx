@@ -96,7 +96,7 @@ function ToolbarSlider({ label, title, value, min, max, step, accent, onChange }
  *  panel's segmented control (AutomationUserInterface). */
 const MODE_OPTIONS: { value: AutomationMode; label: string; title: string; icon: typeof Waves }[] = [
   { value: 'curve', label: 'Curve', title: 'Notes are value keyframes joined by a curve', icon: TrendingUp },
-  { value: 'noise', label: 'Noise', title: 'Held notes gate a seeded random wobble around their value', icon: Waves },
+  { value: 'physics', label: 'Physics', title: 'Cross MIDI values with continuous velocity and acceleration', icon: Waves },
   { value: 'burst', label: 'Burst', title: 'Each note fires an ADSR envelope toward its value', icon: Zap },
 ]
 
@@ -354,12 +354,14 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
 
   const setTrackInterpolation = useProjectStore((s) => s.setTrackInterpolation)
   const interpolation = useProjectStore((s) => s.tracks[trackId]?.interpolation) ?? 'linear'
+  const physics = useProjectStore((s) => s.tracks[trackId]?.physics)
+  const setTrackPhysics = useProjectStore((s) => s.setTrackPhysics)
   const noise = useProjectStore((s) => s.tracks[trackId]?.noise)
   const burst = useProjectStore((s) => s.tracks[trackId]?.burst)
   const setTrackNoise = useProjectStore((s) => s.setTrackNoise)
   const setTrackBurst = useProjectStore((s) => s.setTrackBurst)
   const setAutomationMode = useProjectStore((s) => s.setAutomationMode)
-  const mode = automationMode({ noise, burst })
+  const mode = automationMode({ physics, noise, burst })
 
   // In burst mode a row is not a value the lane HOLDS but the value each burst
   // travels to, and velocity is that burst's intensity - the corner says so,
@@ -733,6 +735,13 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
                   accent={accent.slider} onChange={(v) => setTrackBurst(trackId, { ...burst, releaseBeats: v })} />
                 <ToolbarSlider label="Amt" title="Intensity: how far every burst travels" value={burst.intensity} min={0} max={1} step={0.01}
                   accent={accent.slider} onChange={(v) => setTrackBurst(trackId, { ...burst, intensity: v })} />
+              </>
+            ) : mode === 'physics' && physics ? (
+              <>
+                <ToolbarSlider label="Velocity" title="Crossing velocity in lane ranges per beat" value={physics.velocity} min={-20} max={20} step={0.05}
+                  accent={accent.slider} onChange={(velocity) => setTrackPhysics(trackId, { ...physics, velocity })} />
+                <ToolbarSlider label="Accel" title="Crossing acceleration in lane ranges per beat squared" value={physics.acceleration} min={-40} max={40} step={0.1}
+                  accent={accent.slider} onChange={(acceleration) => setTrackPhysics(trackId, { ...physics, acceleration })} />
               </>
             ) : mode === 'noise' && noise ? (
               <>
