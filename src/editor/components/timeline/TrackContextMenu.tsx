@@ -1,3 +1,5 @@
+import { Activity, Split, Move, Palette, Sparkles, ToggleLeft, SlidersHorizontal, Clapperboard, FolderOpen, Ungroup, Layers, ListTree } from 'lucide-react'
+import { deviceGlyph } from './trackGlyphs'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
 import { listMoverOrSplitterDefinitions, getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
@@ -7,6 +9,10 @@ import { NestedMenu, type NestedMenuGroup } from '../NestedMenu'
 import { useUIStore } from '../../store/UIStore'
 import { isSceneTrackId } from '../../core/sceneTrack'
 import { automationTargetsForParent } from '../../utils/automationTargets'
+
+function deviceMenuIcon(id: string) {
+  return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">{deviceGlyph(id)}</svg>
+}
 
 interface TrackContextMenuProps {
   x: number
@@ -101,72 +107,82 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
 
   const groups: NestedMenuGroup[] = [
     {
-      key: 'ability',
-      label: 'Add ability track',
-      items: abilities.map((a) => {
-        const added = addedAbilities.has(a.key)
-        return { id: a.key, label: a.label, disabled: added, checked: added, swatchColor: a.color ?? '#818cf8' }
-      }),
-    },
-    {
-      key: 'mover',
-      label: def || isGroup || isSwitcher ? 'Add mover track' : 'Move this mover with',
-      items: movers.map((d) => ({ id: d.id, label: d.label })),
-    },
-    {
-      key: 'colorizer',
-      label: 'Add colorizer track',
-      items: colorizers.map((d) => ({ id: d.id, label: d.label })),
-    },
-    {
-      key: 'parentGate',
-      label: 'Switch this device with',
-      items: parentGates.map((d) => ({ id: d.id, label: d.label })),
-    },
-    {
-      key: 'splitter',
-      label: 'Add splitter track',
-      items: splitters.map((d) => ({ id: d.id, label: d.label })),
-    },
-    {
       key: 'automation',
+      icon: <Activity size={16} strokeWidth={1.5} />,
       label: 'Add automation track',
       items: params.map((p) => {
         const added = automatedParams.has(p.key)
-        return { id: p.key, label: p.label, disabled: added, checked: added }
+        return { id: p.key, label: p.label, icon: <Activity size={16} strokeWidth={1.5} />, disabled: added, checked: added }
       }),
     },
     {
+      key: 'splitter',
+      icon: <Split size={16} strokeWidth={1.5} />,
+      label: 'Add splitter track',
+      items: splitters.map((d) => ({ id: d.id, label: d.label, icon: deviceMenuIcon(d.id) })),
+    },
+    {
+      key: 'mover',
+      icon: <Move size={16} strokeWidth={1.5} />,
+      label: def || isGroup || isSwitcher ? 'Add mover track' : 'Move this mover with',
+      items: movers.map((d) => ({ id: d.id, label: d.label, icon: deviceMenuIcon(d.id) })),
+    },
+    {
+      key: 'colorizer',
+      icon: <Palette size={16} strokeWidth={1.5} />,
+      label: 'Add colorizer track',
+      items: colorizers.map((d) => ({ id: d.id, label: d.label, icon: deviceMenuIcon(d.id) })),
+    },
+    {
+      key: 'ability',
+      icon: <Sparkles size={16} strokeWidth={1.5} />,
+      label: 'Add ability track',
+      items: abilities.map((a) => {
+        const added = addedAbilities.has(a.key)
+        return { id: a.key, label: a.label, icon: <Sparkles size={16} strokeWidth={1.5} />, disabled: added, checked: added, swatchColor: a.color ?? '#818cf8' }
+      }),
+    },
+    {
+      key: 'parentGate',
+      icon: <ToggleLeft size={16} strokeWidth={1.5} />,
+      label: 'Switch this device with',
+      items: parentGates.map((d) => ({ id: d.id, label: d.label, icon: deviceMenuIcon(d.id) })),
+    },
+    {
       key: 'effect',
+      icon: <SlidersHorizontal size={16} strokeWidth={1.5} />,
       label: 'Automate effect',
       items: fxItems.map((item) => {
         const added = automatedParams.has(item.key)
-        return { id: item.key, label: item.label, disabled: added, checked: added }
+        return { id: item.key, label: item.label, icon: <SlidersHorizontal size={16} strokeWidth={1.5} />, disabled: added, checked: added }
       }),
     },
     {
       key: 'move-scene',
+      icon: <Clapperboard size={16} strokeWidth={1.5} />,
       label: 'Move to scene',
-      items: moveDestinations.map((scene) => ({ id: scene.id, label: scene.name })),
+      items: moveDestinations.map((scene) => ({ id: scene.id, label: scene.name, icon: <Clapperboard size={16} strokeWidth={1.5} /> })),
     },
     // Dissolving a group is a single action (⌘⇧G on the selected group does the
     // same); one item keeps the shared submenu shell.
     {
       key: 'ungroup',
+      icon: <FolderOpen size={16} strokeWidth={1.5} />,
       label: 'Group',
       // Ungroup is meaningless on the scene instrument: it holds no members
       // (the scene's tracks stay at root), and it cannot be dissolved - ⌘⇧S
       // hides it. See core/sceneTrack.ts.
-      items: isGroup && !isSceneTrack ? [{ id: 'ungroup', label: 'Ungroup' }] : [],
+      items: isGroup && !isSceneTrack ? [{ id: 'ungroup', label: 'Ungroup', icon: <Ungroup size={16} strokeWidth={1.5} /> }] : [],
     },
     // Racking a device is the one-track case of wrapTracksInSwitcher; unwrapping
     // splices the devices back where the rack stood, exactly as ungroup does.
     {
       key: 'switcher',
+      icon: <ListTree size={16} strokeWidth={1.5} />,
       label: 'Switcher',
       items: isSwitcher
-        ? [{ id: 'unwrap', label: 'Unwrap switcher' }]
-        : isDevice ? [{ id: 'wrap', label: 'Wrap in a switcher' }] : [],
+        ? [{ id: 'unwrap', label: 'Unwrap switcher', icon: <Ungroup size={16} strokeWidth={1.5} /> }]
+        : isDevice ? [{ id: 'wrap', label: 'Wrap in a switcher', icon: <Layers size={16} strokeWidth={1.5} /> }] : [],
     },
   ]
 

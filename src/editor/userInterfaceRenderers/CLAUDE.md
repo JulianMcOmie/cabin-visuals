@@ -244,3 +244,12 @@ breathing through each other with every depth on screen at once.
 user-resizable; a `w-[38%]` stage that looked right in a 300px sidebar became a wide
 empty field with a 34px object marooned in the middle of it the moment the panel was
 dragged out to 700px.
+
+`HueRotateUserInterface.tsx` gives Hue Rotate a console with a two-ring demo
+palette (source inside, processed copies outside), Fixed/Continuous segments,
+and Rotate/Spread/Rate knobs. Rate stays in place but disables in Fixed mode;
+Mapping & Color folds away the spatial mapping and color-space controls.
+The canvas uses the actual colorizer resolve and shared color-shift function,
+on the visibility-gated preview loop at a labelled demo 120 BPM. Its clock is
+illustrative, independent of transport. Speed is an optional binding because
+of `showIf`; future unclaimed parameters remain reachable through More.

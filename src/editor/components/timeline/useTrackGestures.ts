@@ -484,9 +484,7 @@ export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOpti
       localX < edge ? 'resizing-left' : localX > w - edge ? 'resizing-right' : 'moving'
     // Only the TOP half of the right edge arms looping; the bottom half is a
     // plain resize (see the resizing-right move handler).
-    const blockCanLoop = (useProjectStore.getState().tracks[trackId]?.blocks
-      .find((block) => block.id === blockId)?.notes.length ?? 0) > 0
-    const loopArm = type === 'resizing-right' && e.clientY < rect.top + rect.height / 2 && blockCanLoop
+    const loopArm = type === 'resizing-right' && e.clientY < rect.top + rect.height / 2
 
     // Select this block (keep an existing multi-selection it belongs to), then
     // arm the drag for the whole selection.

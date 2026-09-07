@@ -151,6 +151,32 @@ test('passive of the beat, and the transform and opacity ride through', () => {
   assert.notEqual(early.transform, upstream.transform) // independently owned matrix
 })
 
+test('continuous rotation runs without notes and preserves phase, spread and upstream hue', () => {
+  const resolved = hueRotateColorizer.resolve({
+    settings: settings({ continuous: 1, speed: 0.125, rotate: 0.2, spread: 0.5 }),
+    notes: [],
+  })
+  const upstream = identityVisualCopy()
+  upstream.colorShift.hue = 0.1
+  const at = (beat: number, index = 0) => resolved.apply(upstream, { beat, index, count: 3 })[0].colorShift.hue
+  close(at(0), 0.3)
+  close(at(2), 0.55)
+  close(at(2, 2), 1.05)
+  close(at(8), at(0) + 1)
+  // Revisit earlier beats after later ones: there is no accumulated frame state.
+  close(at(2), 0.55)
+  close(at(-2), 0.05)
+  close(upstream.colorShift.hue, 0.1)
+})
+
+test('continuous speed supports reverse and stopped rotation, and disabling it restores the fixed hue', () => {
+  for (const speed of [-0.25, 0, 0.5]) {
+    const opts = settings({ continuous: 1, speed, rotate: 0.2, spread: 0 })
+    close(hueRotateTurns(opts, 0, 3), 0.2 + speed * 3)
+    close(hueRotateTurns({ ...opts, continuous: 0 }, 0, 3), 0.2)
+  }
+})
+
 test('POSITION maps read the copy\'s world position through the placement transform', () => {
   const opts = settings({ mode: HUE_MAP_X, span: 4, rotate: 0, spread: 1 })
   close(turnOf(opts, 0, 1, new Matrix4().makeTranslation(4, 0, 0)), 1)
