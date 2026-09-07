@@ -2,7 +2,7 @@ import { useUIStore } from '../../store/UIStore'
 import { loopLengthBeats, tileLoopNotes } from '../../core/visual/noteFlatten'
 import { LOOP_CURSOR } from '../../utils/dragCursor'
 import { BLOCK_EDGE_HIT, edgeHitPx } from '../../constants'
-import { vividMidiBlockPalette, type MidiBlockPalette } from '../../utils/colors'
+import { graphiteMidiBlockPalette, type MidiBlockPalette } from '../../utils/colors'
 import { notePreviewPitchPositions } from '../../core/visual/notePreviewLayout'
 import { memo, useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Block as BlockType } from '../../types'
@@ -53,10 +53,10 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
   const loopBeats = block.loop ? loopLengthBeats(block, beatsPerBar) : null
   const hasLoopSections = loopBeats != null && loopBeats > 0 && loopBeats < totalBeatsInBlock
   // Stable object: NotePreview is memoized and takes the palette as a prop.
-  const palette = useMemo(() => vividMidiBlockPalette(color), [color])
+  const palette = useMemo(() => graphiteMidiBlockPalette(color), [color])
   const active = isSelected || isEditing
 
-  // Solid track color in both states; the perimeter is painted above the
+  // Graphite body in both states; the perimeter is painted above the
   // loop sections so their opaque fills cannot hide the selection outline.
 
   useEffect(() => {
@@ -130,14 +130,25 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
         rowPitches={previewRowPitches}
         strictRows={strictPreviewRows}
       />
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 pointer-events-none rounded-[6px]"
-        style={{ border: `${active ? 2 : 1}px solid ${active ? palette.selectedOutline : palette.edge}` }}
-      />
+      {!hasLoopSections && <BlockOutline color={active ? palette.selectedOutline : palette.edge} selected={active} />}
     </div>
   )
 })
+
+/** Draw the rounded section perimeter without vertical seams between repeats.
+ *  Only internal straight sides are masked away; their curved top/bottom
+ *  corners remain, so the outline follows the divot instead of bridging it. */
+function BlockOutline({ color, selected, first = true, last = true }: { color: string; selected?: boolean; first?: boolean; last?: boolean }) {
+  const masks = ['linear-gradient(to bottom, #000 6px, transparent 6px, transparent calc(100% - 6px), #000 calc(100% - 6px))']
+  if (first) masks.push('linear-gradient(to right, #000 6px, transparent 6px)')
+  if (last) masks.push('linear-gradient(to left, #000 6px, transparent 6px)')
+  return <div
+    aria-hidden="true"
+    data-midi-outline=""
+    className="absolute inset-0 pointer-events-none rounded-[6px]"
+    style={{ border: `${selected ? 2 : 1}px solid ${color}`, maskImage: masks.join(', ') }}
+  />
+}
 
 // Preview divs per looped block stay bounded; a tiny pattern in a huge block
 // caps out instead of flooding the DOM.
@@ -235,7 +246,6 @@ const NotePreview = memo(function NotePreview({ notes, totalBeats, loopBeats, pa
               background: selected ? palette.selectedBody : palette.fill,
               // The shared perimeter is above every section; touching
               // corners retain the existing loop notches.
-
             }}
           >
             {!selected && <MattePulse color={palette.activeFill} />}
@@ -250,7 +260,7 @@ const NotePreview = memo(function NotePreview({ notes, totalBeats, loopBeats, pa
         // 8%–88% band keeps dashes inside the rounded border. Semantic tracks
         // follow their declared row order; plain piano rolls keep high pitch up.
         const topPct = 8 + pitchPosition * 80
-        // Notes stay dark in both states and deepen slightly on activity.
+        // Notes carry the track hue in both states and brighten on activity.
         const noteFill = selected
           ? (repeat > 0
               ? noteActivityMix(palette.selectedRepeatedNote, palette.activeSelectedRepeatedNote)
@@ -269,11 +279,24 @@ const NotePreview = memo(function NotePreview({ notes, totalBeats, loopBeats, pa
               top: `${topPct}%`,
               height: 2,
               background: noteFill,
-
             }}
           />
         )
       })}
+      {sections.map(({ startBeat, durationBeats }, index) => (
+        <div
+          key={`loop-outline:${startBeat}`}
+          className="absolute inset-y-0 pointer-events-none"
+          style={{ left: `${startBeat / totalBeats * 100}%`, width: `max(${durationBeats / totalBeats * 100}%, 1px)` }}
+        >
+          <BlockOutline
+            color={selected ? palette.selectedOutline : palette.edge}
+            selected={selected}
+            first={index === 0}
+            last={index === sections.length - 1}
+          />
+        </div>
+      ))}
     </>
   )
 })
