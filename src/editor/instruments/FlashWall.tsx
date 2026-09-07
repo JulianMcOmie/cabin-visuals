@@ -2,7 +2,7 @@ import { useContext, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import { Color, Mesh } from 'three'
 import { beatInBlock, useInstrumentFrame } from '../core/visual/instrumentFrame'
-import { getVisualCopy } from '../core/visual/VisualEngine'
+import { useVisualEngine } from '../core/visual/VisualEngineContext'
 import { InstrumentCopyContext } from '../core/visual/instrumentColor'
 import { FORCE_TRANSPARENT_KEY } from '../core/visual/animatedOpacity'
 import {
@@ -140,6 +140,7 @@ void main() {
 `
 
 function FlashWallVisual({ trackId }: { trackId: string }) {
+  const { getVisualCopy } = useVisualEngine()
   const { viewport } = useThree()
   const copyContext = useContext(InstrumentCopyContext)
   const meshRef = useRef<Mesh>(null)

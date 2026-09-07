@@ -1,5 +1,5 @@
 import { useMemo, useRef, useEffect, type ReactNode } from 'react'
-import { useFrame, useThree, createPortal } from '@react-three/fiber'
+import { useThree, createPortal } from '@react-three/fiber'
 import {
   Scene, Group, AmbientLight, DirectionalLight, PointLight, Matrix4, Mesh,
   ShaderMaterial, WebGLRenderTarget, OrthographicCamera, PlaneGeometry, Vector2, LinearFilter,
@@ -7,7 +7,7 @@ import {
 } from 'three'
 import { useTimeStore } from '../../store/TimeStore'
 import { getBeatOverride } from '../../core/visual/beatOverride'
-import { getObjectState, getVisualCopy } from '../../core/visual/VisualEngine'
+import { useVisualEngine, useVisualFrame as useFrame } from '../../core/visual/VisualEngineContext'
 import { FLAT_LIGHT_INTENSITY, PassLightPool, refreshPosterLightDir, sceneHasLightAnchors } from '../../core/visual/sceneLights'
 import { registerHoverTarget } from '../../core/visual/hoverTargets'
 import { applyMaterialOpacity } from '../../core/visual/animatedOpacity'
@@ -94,6 +94,7 @@ export function ShaderWrapper({
   maskSourceIds?: readonly string[]
   children: ReactNode
 }) {
+  const { getObjectState, getVisualCopy } = useVisualEngine()
   const { gl, camera, size, scene: parentScene } = useThree()
   const outMeshRef = useRef<Mesh>(null)
 

@@ -1,7 +1,6 @@
 import { createContext, useContext, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
 import { Color, Matrix4 } from 'three'
-import { getObjectState, getVisualCopies } from './VisualEngine'
+import { useVisualEngine, useVisualFrame as useFrame } from './VisualEngineContext'
 import { applyColorShiftToColor } from './colorShift'
 import { getBeatOverride } from './beatOverride'
 import { composePostMoverScale, evaluatePostMoverScale } from './postMoverScale'
@@ -57,6 +56,7 @@ export function useInstancedCopyFrame(
   trackId: string,
   cb: (frame: InstancedCopyFrame) => void,
 ): void {
+  const { getObjectState, getVisualCopies } = useVisualEngine()
   const frameRef = useRef<InstancedCopyFrame | null>(null)
   const scratchTint = useRef(new Color()).current
   const scaleInstances = useContext(InstancedScaleContext)

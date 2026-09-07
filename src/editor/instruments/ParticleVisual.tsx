@@ -1,11 +1,15 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useContext, useEffect, useMemo, useRef } from 'react'
 import { Color, DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, Mesh, PlaneGeometry } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { useInstancedCopyFrame } from '../core/visual/instancedFrame'
+import { VisualEngineContext } from '../core/visual/VisualEngineContext'
+import { useThree } from '@react-three/fiber'
 import { PARTICLE_COLOR, PARTICLE_GLOW } from './Particle'
 import { configureParticlePicking, createParticleMaterial } from './particleCore'
 
 export function ParticleVisual({ trackId }: { trackId: string }) {
+  const preview = useContext(VisualEngineContext)
+  const height = useThree(s => s.size.height)
   const mesh = useMemo(() => {
     const particle = new Mesh(new PlaneGeometry(2, 2), createParticleMaterial())
     particle.name = 'Particle'
@@ -18,6 +22,7 @@ export function ParticleVisual({ trackId }: { trackId: string }) {
     mesh.material.dispose()
   }, [mesh])
   useInstrumentFrame(trackId, state => {
+    mesh.material.uniforms.uMinRadiusNdc.value = preview ? 8 / height : 0
     mesh.material.uniforms.uColor.value.set(state.stringParams.color ?? PARTICLE_COLOR)
     mesh.material.uniforms.uGlow.value = state.params.glow ?? PARTICLE_GLOW
   })
@@ -44,6 +49,8 @@ function disposePool(pool: ReturnType<typeof createParticlePool>) {
 }
 
 export function ParticleInstanced({ trackId }: { trackId: string }) {
+  const preview = useContext(VisualEngineContext)
+  const height = useThree(s => s.size.height)
   const root = useRef<Group>(null)
   const pool = useRef<ReturnType<typeof createParticlePool> | null>(null)
   const matrix = useMemo(() => new Matrix4(), [])
@@ -72,6 +79,7 @@ export function ParticleInstanced({ trackId }: { trackId: string }) {
       root.current.add(pool.current.mesh)
     }
     const { mesh, colors } = pool.current
+    mesh.material.uniforms.uMinRadiusNdc.value = preview ? 8 / height : 0
     const baseColor = frame.state.stringParams.color ?? PARTICLE_COLOR
     mesh.material.uniforms.uGlow.value = frame.state.params.glow ?? PARTICLE_GLOW
     let live = 0

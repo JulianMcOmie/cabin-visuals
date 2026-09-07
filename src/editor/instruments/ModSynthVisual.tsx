@@ -6,7 +6,7 @@ import {
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { InstrumentCopyContext } from '../core/visual/instrumentColor'
 import { applyColorShiftToColor } from '../core/visual/colorShift'
-import { getVisualCopy } from '../core/visual/VisualEngine'
+import { useVisualEngine } from '../core/visual/VisualEngineContext'
 import { rotateHueOklabLinearRgb } from '../utils/oklch'
 import { MOD_SYNTH_DEFAULT_COLOR } from './ModSynth'
 import {
@@ -25,6 +25,7 @@ const MIN_SOUNDING = 1 / 32
 const _voice: SynthVoiceChannels = { size: 0, posX: 0, posY: 0, posZ: 0, alpha: 0, hue: 0, rotZ: 0 }
 
 export function ModSynthVisual({ trackId }: { trackId: string }) {
+  const { getVisualCopy } = useVisualEngine()
   const meshRef = useRef<InstancedMesh>(null)
   const copyContext = useContext(InstrumentCopyContext)
   const dummy = useMemo(() => new Object3D(), [])

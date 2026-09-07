@@ -1,4 +1,4 @@
-import { Fragment, Suspense, useEffect, useMemo, useRef } from 'react'
+import { useContext, Fragment, Suspense, useEffect, useMemo, useRef } from 'react'
 import type { Group } from 'three'
 import { getInstrument } from '../../instruments'
 import { InstrumentPending } from '../../instruments/lazyInstrument'
@@ -7,7 +7,8 @@ import { useProjectStore } from '../../store/ProjectStore'
 import { InstancedScaleContext } from '../../core/visual/instancedFrame'
 import { SceneIdContext } from '../../core/visual/sceneContext'
 import { registerHoverTarget } from '../../core/visual/hoverTargets'
-import { isTrackStaggered, type ObjectListEntry } from '../../core/visual/VisualEngine'
+import { VisualEngineContext, useVisualEngine } from '../../core/visual/VisualEngineContext'
+import type { ObjectListEntry } from '../../core/visual/VisualEngine'
 import { ObjectRenderer } from './ObjectRenderer'
 
 const NO_SCALE: readonly [] = []
@@ -53,9 +54,11 @@ export function InstancedObjectRenderer({
    *  fallback keys byte-identical to the ungrouped mounts. */
   keySuffix: string
 }) {
+  const { isTrackStaggered } = useVisualEngine()
+  const preview = useContext(VisualEngineContext)
   const def = getInstrument(instrumentId)
   const hasFallbackEffects = useProjectStore((s) => {
-    const tracks = s.scenes[sceneId]?.tracks
+    const tracks = (preview?.tracks ?? s.scenes[sceneId]?.tracks)
     const own = tracks?.[trackId]?.effects
     if (own?.some((p) => p.pluginId !== 'scale')) return true
     for (let cur = tracks?.[trackId]?.parentId; cur != null; cur = tracks?.[cur]?.parentId) {
@@ -66,21 +69,21 @@ export function InstancedObjectRenderer({
   })
   // The per-id slice keeps its reference across foreign edits, so this only
   // re-renders on this track's own effect edits.
-  const ownEffects = useProjectStore((s) => s.scenes[sceneId]?.tracks[trackId]?.effects)
+  const ownEffects = useProjectStore((s) => (preview?.tracks ?? s.scenes[sceneId]?.tracks)?.[trackId]?.effects)
   const scaleInstances = useMemo(
     () => ownEffects?.filter((p) => p.pluginId === 'scale') ?? NO_SCALE,
     [ownEffects],
   )
   const modeParams = useProjectStore((s) => def?.fullFrameParam
-    ? s.scenes[sceneId]?.tracks[trackId]?.params
+    ? (preview?.tracks ?? s.scenes[sceneId]?.tracks)?.[trackId]?.params
     : undefined)
   // Shift-hover root for the whole instanced pool (one mount = every copy).
   const hoverRootRef = useRef<Group>(null)
   useEffect(() => {
     const g = hoverRootRef.current
-    if (!g) return
+    if (!g || preview) return
     return registerHoverTarget({ sceneId, trackId, object: g, fullFrame: false })
-  }, [sceneId, trackId])
+  }, [sceneId, trackId, preview])
   if (!def) return null
   const Instanced = def.instancedComponent
   const masked = entries.some((o) => o.maskSourceIds.length > 0)
@@ -106,7 +109,7 @@ export function InstancedObjectRenderer({
     )
   }
   return (
-    <SceneIdContext.Provider value={sceneId}>
+    <SceneIdContext.Provider value={preview ? null : sceneId}>
       <InstancedScaleContext.Provider value={scaleInstances}>
         <group ref={hoverRootRef}>
           <Suspense fallback={<InstrumentPending />}>

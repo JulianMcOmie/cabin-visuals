@@ -38,6 +38,7 @@ try {
     }
   })
   await page.waitForFunction(() => document.querySelectorAll('[data-track-live-preview]').length === 40)
+  await page.waitForTimeout(500)
   await page.waitForFunction(() => window.previewPixels('preview-0').red > 20 && window.previewPixels('preview-1').blue > 20)
   const initial = await page.evaluate(() => [window.previewPixels('preview-0'), window.previewPixels('preview-1')])
   assert.equal(initial[0].blue, 0, 'red track does not contain blue neighbor')

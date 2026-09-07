@@ -1,8 +1,7 @@
 import { currentParticleBudget } from './liveParticleBudget'
 import { useContext, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
 import { Color } from 'three'
-import { getObjectState, getVisualCopy } from './VisualEngine'
+import { useVisualEngine, useVisualFrame as useFrame } from './VisualEngineContext'
 import { applyColorShiftToInstrumentParams, InstrumentCopyContext } from './instrumentColor'
 import { sampleAutomationLane } from './automation'
 import type { ObjectState } from './types'
@@ -65,6 +64,7 @@ function put(sig: FrameSignature, v: unknown) {
 }
 
 export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => void | false) {
+  const { getObjectState, getVisualCopy } = useVisualEngine()
   const copyContext = useContext(InstrumentCopyContext)
   // Signature buffer, reused across frames (write-and-compare, no allocation).
   const sig = useRef<FrameSignature>({ buf: [], i: 0, dirty: false }).current

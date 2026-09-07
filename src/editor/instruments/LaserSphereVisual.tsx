@@ -2,7 +2,7 @@ import { useContext, useRef } from 'react'
 import { createPortal, useThree } from '@react-three/fiber'
 import { Color, type Mesh, type PointLight, type ShaderMaterial } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
-import { getPeakVisualCopyOpacity, getVisualCopy } from '../core/visual/VisualEngine'
+import { useVisualEngine } from '../core/visual/VisualEngineContext'
 import { InstrumentCopyContext } from '../core/visual/instrumentColor'
 import { paramDefault } from './types'
 import { evaluateCoreAppearance } from './laserSphereCore'
@@ -24,6 +24,7 @@ const WHITE = new Color(1, 1, 1)
  * all halo generation. There are deliberately no glow shells or blurred cards.
  */
 export function LaserSphere({ trackId }: { trackId: string }) {
+  const { getPeakVisualCopyOpacity, getVisualCopy } = useVisualEngine()
   const meshRef = useRef<Mesh>(null)
   const lightRef = useRef<PointLight>(null)
   const baseColor = useRef(new Color())

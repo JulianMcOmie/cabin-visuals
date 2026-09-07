@@ -16,7 +16,9 @@ export function trackPreviewTargets(id: string, tracks: Record<string, Track>): 
   const track = tracks[id]
   if (isSceneTrackId(id)) {
     Object.keys(tracks).forEach(visit)
-  } else if (track?.instrumentId || track?.type === 'group' || track?.type === 'switcher') {
+  } else if (track?.instrumentId) {
+    result.add(id)
+  } else if (track?.type === 'group' || track?.type === 'switcher') {
     visit(id)
   } else if (track) {
     if (isSceneTrackId(track.parentId)) Object.keys(tracks).forEach(visit)
@@ -28,7 +30,18 @@ export function trackPreviewTargets(id: string, tracks: Record<string, Track>): 
           if (child === id) break
           visit(child)
         }
-      } else visit(track.parentId)
+      } else {
+        // A device nested in a splitter/mover still belongs to the containing
+        // instrument, not to a subtree with no renderable object of its own.
+        const seen = new Set<string>()
+        let current = parent
+        while (current && !current.instrumentId && current.type !== 'group' && !seen.has(current.id)) {
+          seen.add(current.id)
+          current = tracks[current.parentId ?? '']
+        }
+        if (current?.instrumentId) result.add(current.id)
+        else if (current) visit(current.id)
+      }
     }
     for (const { scope } of track.targets ?? []) {
       if (scope.kind === 'tag') {

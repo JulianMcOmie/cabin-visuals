@@ -57,10 +57,14 @@ export function createParticleMaterial(): ShaderMaterial {
       uColor: { value: new Color(PARTICLE_COLOR) },
       uGlow: { value: PARTICLE_GLOW },
       uOpacity: { value: 1 },
+      // Timeline thumbnails may keep a subpixel point legible. Zero preserves
+      // the exact scene/export size; placement, fade and color never change.
+      uMinRadiusNdc: { value: 0 },
     },
     vertexShader: `
       uniform vec3 uColor;
       uniform float uOpacity;
+      uniform float uMinRadiusNdc;
       varying vec2 vUv;
       varying vec4 vColor;
       #ifdef USE_INSTANCING
@@ -77,6 +81,7 @@ export function createParticleMaterial(): ShaderMaterial {
         #endif
         float diameter = max(length(world[0].xyz), max(length(world[1].xyz), length(world[2].xyz)));
         vec4 center = viewMatrix * world[3];
+        diameter = max(diameter, uMinRadiusNdc * abs(center.z) / projectionMatrix[1][1]);
         center.xy += position.xy * diameter;
         gl_Position = projectionMatrix * center;
       }

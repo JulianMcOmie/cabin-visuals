@@ -46,16 +46,19 @@ re-resolves one track, not the scene.
   canvases live INSIDE each sticky label, so native scrolling and row zoom align
   them without a position mirror. One viewport observer parks offscreen surfaces;
   one 96×54-per-row atlas uses the existing renderer at up to 30fps and one async
-  GPU readback. `TrackPreviewRoot` wraps the final object output (including shader
-  quads and instanced meshes), avoiding duplicate instruments/simulations. The
-  temporary layer 8 includes the real lights and restores all masks/renderer
-  state; it runs after the compositor at priority 101 and skips export pins.
-  Previews follow the actual beat, including paused edits/scrubs; global scene
-  effects/composition are not applied to these isolated object previews. Device
-  rows show their affected objects; groups show their members. Narrow labels
-  keep room for editing controls by hiding thumbnails (default width is 248).
-  `scripts/perf/track-live-previews.mjs` checks pixels, pause/playback/scrubbing,
-  renderer restoration, offscreen reveal, and per-frame scrolling alignment.
+  GPU readback. Each nearby row owns an isolated production evaluator and scene
+  for its instrument's inclusive document prefix (`trackPreviewStage`), so later
+  devices/automation cannot leak into earlier rows. `VisualEngineContext` scopes
+  all object/copy/document reads to that stage. Fixed cameras and the same playhead
+  keep framing and timing consistent. Up to 32 warm stages survive scroll reversals;
+  parked stages skip frame callbacks. Particle thumbnails use a minimum dot size
+  for legibility, with authored size preserved on the main scene/export. Prepare
+  runs at -10, atlas at 101 after the compositor; renderer state is restored and export pins skip the atlas entirely.
+  Project changes debounce 80ms; unchanged prefixes retain mounted instruments.
+  Global scene effects/composition are omitted. Narrow labels hide thumbnails
+  (default width 248). `scripts/perf/track-live-previews.mjs` checks pixels,
+  pause/playback/scrubbing, renderer restoration, reveal and native row alignment.
+  `trackPreviewStage.test.ts` verifies prefix ordering and evaluator isolation.
 
 - **MIDI activity is viewport-scoped** (`observeTimelineViewport.ts`): one shared
   IntersectionObserver per lane scroller enables registrations only near the

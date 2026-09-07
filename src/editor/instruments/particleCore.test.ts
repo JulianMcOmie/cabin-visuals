@@ -30,6 +30,7 @@ test('the material needs no lights, textures, shadow pass, or order-dependent co
   assert.equal(material.depthWrite, false)
   assert.equal(material.blending, AdditiveBlending)
   assert.equal(material.uniforms.uOpacity.value, 1)
+  assert.equal(material.uniforms.uMinRadiusNdc.value, 0, 'scene and export retain authored particle size')
   assert.ok(!Object.values(material.uniforms).some(u => u.value?.isTexture))
   material.dispose()
 })

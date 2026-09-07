@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useContext, useEffect, useMemo, useRef } from 'react'
 import { Mesh, MeshBasicMaterial, SRGBColorSpace, LinearFilter, CanvasTexture } from 'three'
 import { useThree } from '@react-three/fiber'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
-import { getObjectState } from '../core/visual/VisualEngine'
+import { VisualEngineContext, useVisualEngine } from '../core/visual/VisualEngineContext'
 import { activeVideoAt, padSourceTime, VIDEO_BASE_PITCH } from '../core/video/videoTime'
 import { VideoDecodeEngine, clipKey } from '../core/video/decodeEngine'
 import { registerFramePreparer } from '../core/export/framePreparers'
@@ -15,10 +15,12 @@ import { paramDefault } from './types'
 import { videoInstrument } from './Video'
 
 export function VideoComponent({ trackId }: { trackId: string }) {
+  const { getObjectState } = useVisualEngine()
+  const preview = useContext(VisualEngineContext)
   const meshRef = useRef<Mesh>(null)
   const invalidate = useThree((s) => s.invalidate)
   const viewport = useThree((s) => s.viewport)
-  const videoPads = useProjectStore((s) => s.tracks[trackId]?.videoPads)
+  const videoPads = useProjectStore((s) => (preview?.tracks ?? s.tracks)[trackId]?.videoPads)
 
   // Last (clip, source-time) asked for, so an async decode arrival while paused
   // can redraw it without the skip-gated frame callback re-running.
@@ -67,6 +69,7 @@ export function VideoComponent({ trackId }: { trackId: string }) {
 
   // Export: draw the frame-exact frame for each exported beat before it renders.
   useEffect(() => {
+    if (preview) return
     return registerFramePreparer(async (beat) => {
       const st = getObjectState(trackId)
       const pads = st?.videoPads
@@ -80,7 +83,7 @@ export function VideoComponent({ trackId }: { trackId: string }) {
       const aspect = await engine.drawExact(clipKey(pad.ref, pad.inPoint), sourceTime)
       if (aspect !== null) texture.needsUpdate = true
     })
-  }, [engine, texture, trackId])
+  }, [engine, texture, trackId, getObjectState, preview])
 
   useInstrumentFrame(trackId, (state) => {
     const mesh = meshRef.current

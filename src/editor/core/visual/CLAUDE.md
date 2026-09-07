@@ -4,6 +4,14 @@ The pipeline: **resolve** (document → graph, on edits) → **computeAtBeat** (
 
 ## VisualEngine.ts — module singleton, deliberately NOT a store
 
+`VisualEngineInstance.ts` owns the implementation inside `createVisualEngine()`.
+`VisualEngine.ts` preserves the main singleton API. Timeline stage previews create
+independent instances; instrument/render hooks read `useVisualEngine()` and register
+`useVisualFrame()` from `VisualEngineContext` so preview reads are isolated and
+parked stages skip per-frame work. Outside a provider these use the main singleton.
+Keep all mutable evaluator state inside the factory; never share scratch state
+between the main scene and stage instances.
+
 Per-frame state must never trigger React re-renders; renderers pull it from `useFrame` via `getObjectState(trackId)` / `getVisualCopy(trackId, index)`. The ONLY React-visible signal is the structural object list (`subscribeObjects`/`getObjectList`), republished on resolve — one `ObjectListEntry` per VisualCopy occurrence, so `VisualScene` reconciles mounts only when structure changes, never per frame.
 
 - One `ResolvedGraph` per scene; `setProject` reuses a scene's graph when its inputs are referentially unchanged (`graphInputs` map). Below that, `resolveProject` reuses **per-track** resolutions (WeakMap keyed on the object track's ref, validated against its subtree refs + tempo — see the cache block in resolve.ts): a one-note edit re-resolves one track, not the scene (~0.1ms vs ~3ms at 30 dense tracks, and the gap widens with project size). Cached entries are never emitted directly — each resolve emits a shallow copy with its own chain array and scratchBase, so global-mover appends and the solo pool stay per-resolve. `resolveReuse.test.ts` pins the invalidation rules; anything NEW a per-object resolver reads must land in `resolveDeps` or edits to it won't re-resolve. Dev builds trace each debounced resolve: `performance.getEntriesByName('cabin:setProject')`.

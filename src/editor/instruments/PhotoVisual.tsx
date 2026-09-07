@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useContext, useEffect, useMemo, useRef } from 'react'
 import { Mesh, ShaderMaterial, SRGBColorSpace, LinearFilter, TextureLoader, Vector2, type Texture } from 'three'
 import { useThree } from '@react-three/fiber'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
-import { getObjectState } from '../core/visual/VisualEngine'
+import { VisualEngineContext, useVisualEngine } from '../core/visual/VisualEngineContext'
 import { photoTransitionAt, PHOTO_BASE_PITCH } from '../core/photo/photoTime'
 import { getPhotoPlayableUrl } from '../core/photo/photoSource'
 import { registerFramePreparer } from '../core/export/framePreparers'
@@ -156,6 +156,8 @@ const FRAGMENT = /* glsl */ `
 `
 
 export function PhotoComponent({ trackId }: { trackId: string }) {
+  const { getObjectState } = useVisualEngine()
+  const preview = useContext(VisualEngineContext)
   const meshRef = useRef<Mesh>(null)
   const invalidate = useThree((s) => s.invalidate)
   const viewport = useThree((s) => s.viewport)
@@ -246,6 +248,7 @@ export function PhotoComponent({ trackId }: { trackId: string }) {
   // frame renders (load once, no per-frame work); the frame callback then
   // applies them synchronously.
   useEffect(() => {
+    if (preview) return
     return registerFramePreparer(async (beat) => {
       const st = getObjectState(trackId)
       const pads = st?.photoPads
@@ -257,7 +260,7 @@ export function PhotoComponent({ trackId }: { trackId: string }) {
       await loadPhotoTexture(pads[tr.toIndex].ref)
       if (tr.fromIndex !== null) await loadPhotoTexture(pads[tr.fromIndex].ref)
     })
-  }, [trackId])
+  }, [trackId, getObjectState, preview])
 
   useInstrumentFrame(trackId, (state) => {
     const mesh = meshRef.current

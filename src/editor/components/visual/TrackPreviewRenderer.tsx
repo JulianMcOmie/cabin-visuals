@@ -1,163 +1,218 @@
 'use client'
 
-import { useEffect, useMemo, useRef, type ReactNode } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
-import { Color, Group, SRGBColorSpace, Vector4, WebGLRenderTarget, type Object3D, type Scene } from 'three'
+import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { createPortal, useFrame, useThree } from '@react-three/fiber'
+import { AmbientLight, DirectionalLight, PerspectiveCamera, Scene, Vector4, Color, SRGBColorSpace, WebGLRenderTarget } from 'three'
 import { isExportPinned } from '../../core/export/frameDriver'
-import { rootSceneOf } from '../../core/visual/hoverTargets'
+import { createVisualEngine, type ObjectListEntry } from '../../core/visual/VisualEngine'
+import { VisualEngineContext } from '../../core/visual/VisualEngineContext'
+import type { ProjectSnapshot } from '../../core/visual/resolve'
+import { getInstrument } from '../../instruments'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useTimeStore } from '../../store/TimeStore'
-import { trackPreviewTargets } from '../timeline/trackPreviewTargets'
+import { trackPreviewStage } from '../timeline/trackPreviewStage'
 import {
-  PREVIEW_HEIGHT as H, PREVIEW_WIDTH as W, registerTrackPreview,
-  subscribeTrackPreviews, trackPreviewRoots, trackPreviewSurfaces,
+  PREVIEW_HEIGHT as H, PREVIEW_WIDTH as W, subscribeTrackPreviews,
+  trackPreviewSurfaces, getTrackPreviewSurfaces,
 } from '../timeline/trackPreviewRegistry'
+import { ObjectRenderer } from './ObjectRenderer'
+import { InstancedObjectRenderer } from './InstancedObjectRenderer'
 
-// Wrap the FINAL output, including ShaderWrapper's processed quad. Reusing
-// these meshes preserves video/photo textures, instancing, and object effects
-// without mounting another instrument or advancing the simulation again.
-export function TrackPreviewRoot({ sceneId, trackId, children }: { sceneId: string; trackId: string; children: ReactNode }) {
-  const ref = useRef<Group>(null)
-  useEffect(() => {
-    if (ref.current) return registerTrackPreview(trackPreviewRoots, { sceneId, trackId, object: ref.current })
-  }, [sceneId, trackId])
-  return <group ref={ref}>{children}</group>
+const EMPTY_SURFACES: ReturnType<typeof getTrackPreviewSurfaces> = []
+
+function makeStage(id: string, project: ProjectSnapshot, previous?: Stage): Stage {
+  const stage = trackPreviewStage(id, project)
+  const engine = previous?.context.engine ?? createVisualEngine()
+  engine.setProject(stage.snapshot)
+  const scene = previous?.scene ?? new Scene()
+  if (!previous) {
+    scene.add(new AmbientLight('#ffffff', 0.65))
+    const key = new DirectionalLight('#ffffff', 1.7)
+    key.position.set(3, 4, 5)
+    scene.add(key)
+    const fill = new DirectionalLight('#ffffff', 0.8)
+    fill.position.set(-3, -1, -4)
+    scene.add(fill)
+  }
+  const camera = previous?.camera ?? new PerspectiveCamera(55, W / H, 0.1, 1000)
+  camera.position.set(0, 0, 5)
+  camera.updateMatrixWorld()
+  return {
+    id, snapshot: stage.snapshot, scene, camera,
+    context: { engine, tracks: stage.snapshot.tracks, renderFrame: previous?.context.renderFrame ?? { current: false } },
+    objects: engine.getObjectList().filter(object => stage.targets.has(object.trackId)),
+  }
+}
+interface Stage {
+  id: string
+  snapshot: ProjectSnapshot
+  scene: Scene
+  camera: PerspectiveCamera
+  context: NonNullable<React.ContextType<typeof VisualEngineContext>>
+  objects: ObjectListEntry[]
 }
 
-const PREVIEW_LAYER = 8 // separate from the hover mask's layer 7
+function sameInputs(a: ProjectSnapshot, b: ProjectSnapshot) {
+  return a.bpm === b.bpm && a.beatsPerBar === b.beatsPerBar && a.totalBars === b.totalBars
+    && a.rootTrackIds.join('|') === b.rootTrackIds.join('|')
+    && Object.keys(a.tracks).length === Object.keys(b.tracks).length
+    && Object.keys(a.tracks).every(id => a.tracks[id] === b.tracks[id])
+}
 
-/** One tiny atlas on the EXISTING renderer, one asynchronous GPU readback.
- * Native row canvases retain their last frame while scrolling. No layout reads,
- * per-frame React work, extra WebGL contexts, or synchronous readPixels stalls. */
+function StageObjects({ stage, sceneId }: { stage: Stage; sceneId: string }) {
+  const groups = useMemo(() => {
+    const byTrack = new Map<string, ObjectListEntry[]>()
+    for (const object of stage.objects) {
+      const list = byTrack.get(object.trackId) ?? []
+      list.push(object)
+      byTrack.set(object.trackId, list)
+    }
+    return [...byTrack.values()]
+  }, [stage.objects])
+  return <>{groups.map(entries => {
+    const first = entries[0]
+    return getInstrument(first.instrumentId)?.instancedComponent
+      ? <InstancedObjectRenderer key={first.trackId} sceneId={sceneId} trackId={first.trackId} instrumentId={first.instrumentId} entries={entries} keySuffix=":preview" />
+      : entries.map(object => <ObjectRenderer key={`${object.trackId}:${object.visualCopyIndex}`} sceneId={sceneId} trackId={object.trackId} instrumentId={object.instrumentId} visualCopyIndex={object.visualCopyIndex} />)
+  })}</>
+}
+
+/** Stage-specific scenes share the editor's WebGL context. Each uses the exact
+ * production evaluator on an inclusive chain prefix, a fixed camera and the
+ * SAME playhead. The 2D destination stays in its row, so scroll never waits for
+ * a render or a coordinate mirror. */
 export function TrackPreviewRenderer() {
   const invalidate = useThree(s => s.invalidate)
+  const surfaces = useSyncExternalStore(subscribeTrackPreviews, getTrackPreviewSurfaces, () => EMPTY_SURFACES)
+  const [revision, setRevision] = useState(0)
+  const cache = useRef(new Map<string, Stage>())
+  useEffect(() => {
+    // Structural edits are batched off the pointermove path. A changed prefix
+    // rebuilds only its affected stages; foreign edits preserve scene mounts.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const stop = useProjectStore.subscribe(() => {
+      clearTimeout(timer)
+      timer = setTimeout(() => { setRevision(value => value + 1); invalidate() }, 80)
+    })
+    return () => { stop(); clearTimeout(timer) }
+  }, [invalidate])
+  const stages = useMemo(() => {
+    const p = useProjectStore.getState()
+    const snapshot = { tracks: p.tracks, rootTrackIds: p.rootTrackIds, bpm: p.bpm, beatsPerBar: p.beatsPerBar, totalBars: p.totalBars }
+    const active = new Set(surfaces.map(surface => surface.trackId))
+    for (const surface of surfaces) {
+      const previous = cache.current.get(surface.trackId)
+      const inputs = trackPreviewStage(surface.trackId, snapshot).snapshot
+      if (!previous || !sameInputs(previous.snapshot, inputs)) cache.current.set(surface.trackId, makeStage(surface.trackId, snapshot, previous))
+    }
+    // Retain a modest warm cache across scroll reversals, with inactive stages
+    // fully parked. Active stages are never evicted, however small the rows.
+    for (const id of cache.current.keys()) {
+      if (cache.current.size <= Math.max(32, active.size)) break
+      if (!active.has(id)) cache.current.delete(id)
+    }
+    return [...cache.current.values()]
+    // revision represents the debounced project snapshot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [surfaces, revision])
+  const sceneId = useProjectStore(s => s.activeSceneId)
   const runtime = useMemo(() => ({
-    target: new WebGLRenderTarget(W, H, { depthBuffer: true }),
-    busy: false, alive: true, lastFrame: -Infinity, revision: 0,
+    target: new WebGLRenderTarget(W, H), busy: false, alive: true,
+    lastFrame: -Infinity, pending: false, paint: false,
+    timer: undefined as ReturnType<typeof setTimeout> | undefined,
     viewport: new Vector4(), scissor: new Vector4(), clear: new Color(),
   }), [])
   useEffect(() => {
     runtime.alive = true
-    const unsubscribe = subscribeTrackPreviews(() => { runtime.revision++; invalidate() })
-    return () => {
-      runtime.alive = false
-      unsubscribe()
-      // A pending read owns its target until the fence resolves.
-      if (!runtime.busy) runtime.target.dispose()
-    }
-  }, [invalidate, runtime])
+    invalidate()
+    return () => { runtime.alive = false; clearTimeout(runtime.timer); if (!runtime.busy) runtime.target.dispose() }
+  }, [runtime, invalidate])
+  useEffect(() => { invalidate() }, [stages, invalidate])
 
-  useFrame(({ gl, camera, size }) => {
-    if (isExportPinned() || trackPreviewSurfaces.size === 0) return
-    if (runtime.busy) { runtime.revision++; return }
-    // The thumbnail cadence is independent of native scrolling. Paused edits
-    // and scrubs always get a fresh frame, even inside the playback interval.
-    // R3F resets its clock when switching demand/always. A monotonic budget
-    // clock avoids freezing thumbnails for seconds after pressing Play.
-    // Visual content still comes exclusively from the engine's current beat.
+  useFrame(() => {
+    for (const stage of stages) stage.context.renderFrame.current = false
+    runtime.paint = false
+    if (!surfaces.length || isExportPinned()) return
+    if (runtime.busy) { runtime.pending = true; return }
     const now = performance.now() / 1000
-    if (useTimeStore.getState().isPlaying && now - runtime.lastFrame < 1 / 30) return
+    const remaining = 1 / 30 - (now - runtime.lastFrame)
+    if (remaining > 0) {
+      // Pointer/scroll invalidations can arrive at display refresh even paused.
+      // Cap preview work too, then guarantee the final paused edit gets painted.
+      if (!runtime.timer) runtime.timer = setTimeout(() => {
+        runtime.timer = undefined
+        if (runtime.alive) invalidate()
+      }, remaining * 1000)
+      return
+    }
+    clearTimeout(runtime.timer)
+    runtime.timer = undefined
     runtime.lastFrame = now
-    const surfaces = [...trackPreviewSurfaces]
-    const project = useProjectStore.getState()
-    const sceneId = project.activeSceneId
-    const height = Math.min(surfaces.length, Math.floor(gl.capabilities.maxTextureSize / H)) * H
-    const count = height / H
-    const aspect = size.width / Math.max(1, size.height)
-    const tileWidth = Math.min(W, H * aspect)
-    const tileHeight = Math.min(H, W / aspect)
-    const revision = runtime.revision
+    runtime.paint = true
+    const beat = useTimeStore.getState().currentBeat
+    for (const surface of surfaces) {
+      const stage = cache.current.get(surface.trackId)
+      if (!stage) continue
+      stage.context.renderFrame.current = true
+      stage.context.engine.computeAtBeat(beat)
+    }
+  }, -10)
+
+  useFrame(({ gl }) => {
+    if (!runtime.paint || isExportPinned()) return
+    const count = Math.min(surfaces.length, Math.floor(gl.capabilities.maxTextureSize / H))
+    const height = count * H
     runtime.target.setSize(W, height)
     runtime.target.texture.colorSpace = SRGBColorSpace
     const previousTarget = gl.getRenderTarget()
-    const previousViewport = gl.getViewport(runtime.viewport)
-    const previousScissor = gl.getScissor(runtime.scissor)
-    const previousScissorTest = gl.getScissorTest()
-    const previousClearAlpha = gl.getClearAlpha()
-    gl.getClearColor(runtime.clear)
-    const autoClear = gl.autoClear
-    const cameraMask = camera.layers.mask
-    const shadowAutoUpdate = gl.shadowMap.autoUpdate
+    gl.getViewport(runtime.viewport); gl.getScissor(runtime.scissor); gl.getClearColor(runtime.clear)
+    const scissorTest = gl.getScissorTest(), alpha = gl.getClearAlpha(), autoClear = gl.autoClear
     try {
       gl.autoClear = false
-      gl.shadowMap.autoUpdate = false
       gl.setRenderTarget(runtime.target)
       gl.setScissorTest(true)
       gl.setClearColor('#101218', 1)
-      camera.layers.set(PREVIEW_LAYER)
-      const sceneRoots = [...trackPreviewRoots].filter(root => root.sceneId === sceneId)
       for (let i = 0; i < count; i++) {
-        const ids = trackPreviewTargets(surfaces[i].trackId, project.tracks)
-        const roots = sceneRoots.filter(root => ids.has(root.trackId))
-        const scenes = new Set<Scene>()
-        const masks = new Map<Object3D, number>()
-        const enable = (object: Object3D) => {
-          if (!masks.has(object)) masks.set(object, object.layers.mask)
-          object.layers.enable(PREVIEW_LAYER)
-        }
-        gl.setViewport(0, i * H, W, H)
-        gl.setScissor(0, i * H, W, H)
+        gl.setViewport(0, i * H, W, H); gl.setScissor(0, i * H, W, H)
         gl.clear(true, true, true)
-        // Keep the main camera's aspect, letterboxing instead of squashing
-        // the instrument when the visualizer is tall or unusually wide.
-        gl.setViewport((W - tileWidth) / 2, i * H + (H - tileHeight) / 2, tileWidth, tileHeight)
-        try {
-          for (const root of roots) {
-            root.object.traverse(enable)
-            const scene = rootSceneOf(root.object)
-            if (scene) scenes.add(scene)
-          }
-          for (const scene of scenes) {
-            // Keep the scene's real lighting, but isolate its object pixels.
-            scene.traverse(object => { if ('isLight' in object) enable(object) })
-            const background = scene.background
-            const autoUpdate = scene.matrixWorldAutoUpdate
-            scene.background = null
-            // The main pass just updated these same world matrices.
-            scene.matrixWorldAutoUpdate = false
-            try { gl.render(scene, camera) } finally {
-              scene.background = background
-              scene.matrixWorldAutoUpdate = autoUpdate
-            }
-            gl.clearDepth()
-          }
-        } finally {
-          for (const [object, mask] of masks) object.layers.mask = mask
-        }
+        const stage = cache.current.get(surfaces[i].trackId)
+        if (stage) gl.render(stage.scene, stage.camera)
       }
       const pixels = new Uint8Array(W * height * 4)
       runtime.busy = true
+      runtime.pending = false
       void gl.readRenderTargetPixelsAsync(runtime.target, 0, 0, W, height, pixels).then(() => {
         if (!runtime.alive || useProjectStore.getState().activeSceneId !== sceneId) return
         for (let i = 0; i < count; i++) {
           const surface = surfaces[i]
           if (!trackPreviewSurfaces.has(surface)) continue
-          const context = surface.canvas.getContext('2d')
-          if (!context) continue
-          const frame = context.createImageData(W, H)
+          const ctx = surface.canvas.getContext('2d')
+          if (!ctx) continue
+          const image = ctx.createImageData(W, H)
           for (let y = 0; y < H; y++) {
             const start = ((i + 1) * H - 1 - y) * W * 4
-            frame.data.set(pixels.subarray(start, start + W * 4), y * W * 4)
+            image.data.set(pixels.subarray(start, start + W * 4), y * W * 4)
           }
-          context.putImageData(frame, 0, 0)
+          ctx.putImageData(image, 0, 0)
         }
-      }).catch(() => {
-        // A lost context leaves the last good thumbnail in place.
-      }).finally(() => {
+      }).catch(() => {}).finally(() => {
         runtime.busy = false
         if (!runtime.alive) runtime.target.dispose()
-        else if (runtime.revision !== revision) invalidate()
+        else if (runtime.pending) invalidate()
       })
     } finally {
-      camera.layers.mask = cameraMask
       gl.autoClear = autoClear
-      gl.shadowMap.autoUpdate = shadowAutoUpdate
       gl.setRenderTarget(previousTarget)
-      gl.setViewport(previousViewport)
-      gl.setScissor(previousScissor)
-      gl.setScissorTest(previousScissorTest)
-      gl.setClearColor(runtime.clear, previousClearAlpha)
+      gl.setViewport(runtime.viewport); gl.setScissor(runtime.scissor)
+      gl.setScissorTest(scissorTest); gl.setClearColor(runtime.clear, alpha)
     }
-  }, 101) // after the scene compositor and all object shader passes
-  return null
+  }, 101)
+
+  return <>{stages.map(stage => <Fragment key={stage.scene.uuid}>{createPortal(
+    <VisualEngineContext.Provider value={stage.context}>
+      <StageObjects stage={stage} sceneId={sceneId} />
+    </VisualEngineContext.Provider>,
+    stage.scene,
+    { camera: stage.camera, size: { width: W, height: H, top: 0, left: 0 } },
+  )}</Fragment>)}</>
 }
