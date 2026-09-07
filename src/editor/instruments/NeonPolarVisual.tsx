@@ -1,11 +1,12 @@
 import { midiVelocity } from '../utils/midiVelocity'
 import { useRef, useEffect } from 'react'
-import { extend, useThree } from '@react-three/fiber'
-import { Group, Vector2, Color } from 'three'
+import { extend } from '@react-three/fiber'
+import { Group, Color } from 'three'
 import { Line2 } from 'three/examples/jsm/lines/Line2.js'
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
+import { frameLineResolution } from '../core/visual/framePixels'
 import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import { clamp } from '../utils/math'
 import { DEFAULT_CYCLES, DEFAULT_MAX_RADIUS, DEFAULT_MIN_RADIUS, LINE_WIDTH } from './NeonPolar'
@@ -135,7 +136,6 @@ function layerRadius(
 
 function makeLine(
   group: Group,
-  resolution: Vector2,
   lineWidth: number,
 ): CurveObjects {
   const positions = new Array((POINT_COUNT + 1) * 3).fill(0)
@@ -154,11 +154,11 @@ function makeLine(
     transparent: true,
     opacity: 1,
     depthWrite: false,
-    resolution,
     worldUnits: false,
   })
 
   const line = new Line2(geometry, material)
+  line.onBeforeRender = frameLineResolution()
   line.computeLineDistances()
   group.add(line)
 
@@ -212,17 +212,9 @@ function updateLayerCurve(
 export function NeonPolarVisual({ trackId }: { trackId: string }) {
   const groupRef = useRef<Group>(null)
   const layerLinesRef = useRef<CurveObjects[]>([])
-  const { size } = useThree()
-  const resolutionRef = useRef(new Vector2(size.width, size.height))
   const baseColor = useRef(new Color())
   const layerColor = useRef(new Color())
   const hsl = useRef({ h: 0, s: 0, l: 0 })
-
-  useEffect(() => {
-    resolutionRef.current.set(size.width, size.height)
-    for (const c of layerLinesRef.current)
-      c.material.resolution.set(size.width, size.height)
-  }, [size.width, size.height])
 
   useEffect(() => {
     const group = groupRef.current
@@ -230,7 +222,7 @@ export function NeonPolarVisual({ trackId }: { trackId: string }) {
 
     const lines: CurveObjects[] = []
     for (let i = 0; i < LAYER_COUNT; i++) {
-      lines.push(makeLine(group, resolutionRef.current, LINE_WIDTH))
+      lines.push(makeLine(group, LINE_WIDTH))
     }
     layerLinesRef.current = lines
 

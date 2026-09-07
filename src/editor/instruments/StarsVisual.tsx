@@ -4,6 +4,7 @@ import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
 import { FORCE_TRANSPARENT_KEY } from '../core/visual/animatedOpacity'
+import { framePixelScale } from '../core/visual/framePixels'
 import {
   createStarsUniforms, createStarsMotionState, updateStarsMotion, writeStarsPickPositions,
   STARS_VERTEX_SHADER, STARS_FRAGMENT_SHADER, type StarsUniforms, type StarsMotionState,
@@ -138,6 +139,10 @@ export function StarsVisual({ trackId }: { trackId: string }) {
 
     const pts = new THREE.Points(geom, mat)
     pts.name = 'Stars GPU'
+    mat.onBeforeRender = (renderer) => {
+      uniforms.uFramePixelScale.value = framePixelScale(renderer)
+      mat.uniformsNeedUpdate = true
+    }
     // Native Points.raycast reads CPU positions. Reconstruct them only when
     // the user picks a star; the separate geometry never enters the renderer.
     let pickPoints: THREE.Points | null = null

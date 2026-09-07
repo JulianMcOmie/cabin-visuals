@@ -1,6 +1,5 @@
 import { midiVelocity } from '../utils/midiVelocity'
 import { useEffect, useMemo, useRef } from 'react'
-import { useThree } from '@react-three/fiber'
 import {
   BufferGeometry,
   BufferAttribute,
@@ -12,6 +11,7 @@ import {
 } from 'three'
 import { ImprovedNoise } from 'three/examples/jsm/math/ImprovedNoise.js'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
+import { framePixelScale } from '../core/visual/framePixels'
 import { FORCE_TRANSPARENT_KEY } from '../core/visual/animatedOpacity'
 import { clamp } from '../utils/math'
 import { MAX_LENGTH, MAX_RADIAL } from './Wormhole'
@@ -166,7 +166,6 @@ function pulseStrength(pitch: number): number {
 
 export function WormholeVisual({ trackId }: { trackId: string }) {
   const rootRef = useRef<Group>(null)
-  const { size, viewport } = useThree()
 
   const geometryRef = useRef<BufferGeometry | null>(null)
   const tubesRef = useRef<Points[]>([])
@@ -197,6 +196,10 @@ export function WormholeVisual({ trackId }: { trackId: string }) {
   // occluding itself.
   useEffect(() => {
     material.userData[FORCE_TRANSPARENT_KEY] = true
+    material.onBeforeRender = (renderer) => {
+      material.uniforms.uScale.value = framePixelScale(renderer, 2)
+      material.uniformsNeedUpdate = true
+    }
   }, [material])
 
   useEffect(() => () => {
@@ -343,9 +346,6 @@ export function WormholeVisual({ trackId }: { trackId: string }) {
     // Dot size is the strongest pulse channel by a distance - every point in frame
     // swells at once, including the dense ones near the vanishing point.
     uniforms.uSize.value = (p.dotSize ?? 0.03) * Math.max(0.05, 1 + pulse * (p.pulseSize ?? 1.4))
-    // Mirrors three's own point-size attenuation, which is in device pixels - without
-    // it the dots would shrink in a high-res export relative to the editor preview.
-    uniforms.uScale.value = Math.max(1, size.height * viewport.dpr) * 0.5
     // A pulse pushes the view further out, so the far wall rushes into view and falls
     // back. Reads as the tube inhaling, and costs nothing but a uniform.
     //

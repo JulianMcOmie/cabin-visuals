@@ -1,10 +1,10 @@
 import { useContext, useEffect, useMemo, useRef } from 'react'
-import { useThree } from '@react-three/fiber'
-import { AdditiveBlending, Color, Group, Vector2 } from 'three'
+import { AdditiveBlending, Color, Group } from 'three'
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js'
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
+import { frameLineResolution } from '../core/visual/framePixels'
 import { FORCE_TRANSPARENT_KEY, setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import { getVisualCopy } from '../core/visual/VisualEngine'
 import { InstrumentCopyContext } from '../core/visual/instrumentColor'
@@ -31,21 +31,18 @@ export function Wireframe({ trackId }: { trackId: string }) {
   const groupRef = useRef<Group>(null)
   const copyContext = useContext(InstrumentCopyContext)
   const baseColor = useRef(new Color()).current
-  const size = useThree((three) => three.size)
-  const dpr = useThree((three) => three.viewport.dpr)
 
   // Geometry and materials are imperative (invisible to r3f auto-dispose):
   // the SHAPE/DETAIL params reach only the frame callback, which swaps the
   // shared geometry's positions when their cached key moves (Cube's pattern).
   const lines = useMemo(() => {
-    const resolution = new Vector2(1, 1)
     const geometry = new LineSegmentsGeometry()
     const coreMaterial = new LineMaterial({
-      color: 0xffffff, linewidth: 1.5, transparent: true, resolution, worldUnits: false,
+      color: 0xffffff, linewidth: 1.5, transparent: true, worldUnits: false,
     })
     coreMaterial.toneMapped = false
     const glowMaterial = new LineMaterial({
-      color: 0xffffff, linewidth: 4, transparent: true, depthWrite: false, resolution, worldUnits: false,
+      color: 0xffffff, linewidth: 4, transparent: true, depthWrite: false, worldUnits: false,
     })
     glowMaterial.blending = AdditiveBlending
     // Additive underlay must stay in the transparent queue even at full track
@@ -54,11 +51,13 @@ export function Wireframe({ trackId }: { trackId: string }) {
     glowMaterial.userData[FORCE_TRANSPARENT_KEY] = true
     const core = new LineSegments2(geometry, coreMaterial)
     const glow = new LineSegments2(geometry, glowMaterial)
+    core.onBeforeRender = frameLineResolution()
+    glow.onBeforeRender = frameLineResolution()
     // Positions are swapped imperatively; skip stale-bounds culling entirely.
     core.frustumCulled = false
     glow.frustumCulled = false
     glow.renderOrder = -1
-    return { geometry, coreMaterial, glowMaterial, core, glow, resolution }
+    return { geometry, coreMaterial, glowMaterial, core, glow }
   }, [])
 
   useEffect(() => {
@@ -71,10 +70,6 @@ export function Wireframe({ trackId }: { trackId: string }) {
       lines.glowMaterial.dispose()
     }
   }, [lines])
-
-  useEffect(() => {
-    lines.resolution.set(Math.max(1, size.width * dpr), Math.max(1, size.height * dpr))
-  }, [lines, size, dpr])
 
   const builtKey = useRef('')
 

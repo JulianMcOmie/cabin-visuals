@@ -2,6 +2,7 @@ import { midiVelocity } from '../utils/midiVelocity'
 import { useRef, useEffect, useMemo } from 'react'
 import { Group, Points, BufferGeometry, BufferAttribute, DynamicDrawUsage, ShaderMaterial, Color } from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
+import { framePixelScale } from '../core/visual/framePixels'
 import { MAX_PARTICLES, EFFECT_COUNT, DEFAULTS } from './DotField'
 
 // Golden angle for sunflower distribution
@@ -156,9 +157,8 @@ function generateField(count: number, radius: number): ParticleField {
   return { baseX, baseY, dist, angle, count, radius }
 }
 
-// --- Shaders (verbatim, uOpacity retained) ---
-
 const vertexShader = `
+  uniform float uFramePixelScale;
   attribute float aSize;
   attribute vec3 aColor;
   varying vec3 vColor;
@@ -166,7 +166,7 @@ const vertexShader = `
   void main() {
     vColor = aColor;
     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = aSize;
+    gl_PointSize = aSize * uFramePixelScale;
     gl_Position = projectionMatrix * mvPosition;
   }
 `
@@ -233,13 +233,17 @@ export function DotFieldVisual({ trackId }: { trackId: string }) {
     const mat = new ShaderMaterial({
       vertexShader,
       fragmentShader,
-      uniforms: { uOpacity: { value: 1.0 } },
+      uniforms: { uOpacity: { value: 1.0 }, uFramePixelScale: { value: 1 } },
       transparent: true,
       depthWrite: false,
       depthTest: false,
     })
 
     const pts = new Points(geom, mat)
+    mat.onBeforeRender = (renderer) => {
+      mat.uniforms.uFramePixelScale.value = framePixelScale(renderer)
+      mat.uniformsNeedUpdate = true
+    }
     pts.frustumCulled = false
     pts.renderOrder = 10
     root.add(pts)

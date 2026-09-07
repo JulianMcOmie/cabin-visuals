@@ -2,6 +2,7 @@ import { useRef, useEffect, useMemo } from 'react'
 import { useThree } from '@react-three/fiber'
 import { BufferGeometry, BufferAttribute, ShaderMaterial, Color, Vector2, AdditiveBlending } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
+import { FRAME_REFERENCE_HEIGHT } from '../core/visual/framePixels'
 
 // --- Geometry helpers (Tyler verbatim) ---
 
@@ -91,7 +92,6 @@ function getShapeVerts(mode: number, petals: number, r: number, d: number): Floa
 const _tmpColor = new Color()
 const MAX_VERTS = 80000
 
-// --- Screen-space thick-line shaders (Tyler verbatim) ---
 const vertShader = /* glsl */ `
 attribute vec3 aOther;
 attribute float aSide;
@@ -111,7 +111,7 @@ void main() {
   dir *= aspect;
   vec2 perp = normalize(vec2(-dir.y, dir.x));
   perp /= aspect;
-  float thickNDC = uLineWidth / uResolution.y;
+  float thickNDC = uLineWidth / ${FRAME_REFERENCE_HEIGHT.toFixed(1)};
   clipThis.xy += perp * aSide * thickNDC * clipThis.w;
   gl_Position = clipThis;
 }

@@ -153,9 +153,8 @@ export function ShaderWrapper({
 
   // Target size: the canvas' CSS size scaled by the preview-quality factor
   // (1 at Final and under an export pin). Floor, not round: the wrapper has
-  // always floored its targets, and the pass `resolution` uniforms stay the
-  // CSS size so pixel-measured effects (Pixelate, Glow) keep their look at
-  // every scale.
+  // always floored its targets. Pixelate and Glow use the `resolution` aspect
+  // with a fixed reference height, so their sizes survive canvas and quality changes.
   const targetScale = useRenderTargetScale()
   const targetW = Math.max(1, Math.floor(size.width * targetScale))
   const targetH = Math.max(1, Math.floor(size.height * targetScale))

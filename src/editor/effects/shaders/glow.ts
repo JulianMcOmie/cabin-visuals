@@ -1,4 +1,5 @@
 import type { VisualEffect } from '../types'
+import { FRAME_REFERENCE_HEIGHT } from '../../core/visual/framePixels'
 
 /** Screen-space bloom over the object's own render: bright-pass + one-pass
  *  24-tap golden-spiral blur, added back over the source. The halo spills past
@@ -22,8 +23,9 @@ export const glowPlugin: VisualEffect = {
     varying vec2 vUv;
     void main() {
       vec4 base = texture2D(tDiffuse, vUv);
-      // Blur radius in pixels; squared response packs control into small halos.
-      vec2 px = mix(6.0, 90.0, size * size) / resolution;
+      // Authored pixels use a fixed frame height; preview size cannot widen the halo.
+      vec2 frameResolution = resolution / resolution.y * ${FRAME_REFERENCE_HEIGHT.toFixed(1)};
+      vec2 px = mix(6.0, 90.0, size * size) / frameResolution;
       // Rotate the whole spiral by a per-pixel hash: the sparse tap rings
       // dissolve into stable noise instead of visible onion layers.
       float jitter = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;

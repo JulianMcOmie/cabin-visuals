@@ -10,6 +10,7 @@ import {
 } from 'three'
 import { seededRand } from '../core/visual/instrumentFrame'
 import { FORCE_TRANSPARENT_KEY } from '../core/visual/animatedOpacity'
+import { configureFramePointsMaterial } from '../core/visual/framePixels'
 import { fieldHash } from './particleFieldCore'
 
 // The particle-words mode of the Text Display instrument, adapted from a
@@ -182,6 +183,7 @@ export function createParticleCloud(): ParticleCloudHandles {
     toneMapped: false,
   })
   material.userData[FORCE_TRANSPARENT_KEY] = true
+  configureFramePointsMaterial(material)
   const points = new Points(geometry, material)
   points.frustumCulled = false
   return { points, positionAttr, colorAttr, lastColorKey: '', colorCount: 0 }

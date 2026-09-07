@@ -23,6 +23,7 @@ export function createStarsUniforms() {
     uTumble: { value: new Vector2(1, 0) },
     uTumbleAxis: { value: new Vector3(0, 1, 0) },
     uDotSize: { value: 2 },
+    uFramePixelScale: { value: 1 },
     uTint: { value: 220 / 360 },
     uStreakFactor: { value: 0 },
     uOpacity: { value: 1 },
@@ -139,13 +140,14 @@ varying vec3 vColor;
 varying float vAlpha;
 varying float vStreak;
 uniform float uStreakFactor;
+uniform float uFramePixelScale;
 ${STARS_TRANSFORM_GLSL}
 void main() {
   vec3 p = starPosition(position, aParallax);
   vColor = starColor(p);
   vAlpha = starAlpha(p);
   vStreak = uStreakFactor;
-  gl_PointSize = starSize(p) * (1.0 + uStreakFactor * 2.0);
+  gl_PointSize = starSize(p) * (1.0 + uStreakFactor * 2.0) * uFramePixelScale;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }
 `

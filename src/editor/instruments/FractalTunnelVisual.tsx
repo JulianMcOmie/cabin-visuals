@@ -1,10 +1,11 @@
 import { useRef, useEffect, useMemo } from 'react'
 import { useThree } from '@react-three/fiber'
-import { AdditiveBlending, Color, Group, Vector2, Vector3, type IUniform, type Mesh, type MeshBasicMaterial } from 'three'
+import { AdditiveBlending, Color, Group, Vector3, Vector4, type IUniform, type Mesh, type MeshBasicMaterial } from 'three'
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js'
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
+import { frameLineResolution } from '../core/visual/framePixels'
 import { FORCE_TRANSPARENT_KEY } from '../core/visual/animatedOpacity'
 
 interface Point3D {
@@ -135,12 +136,12 @@ function getEndpoints(branches: Branch[], maxGen: number): Point3D[] {
 // Pulse rings, injected into the line shader
 // ────────────────────────────────────────────
 
-// Each ring is (radius, halfBandWidth, opacity) in device pixels from frame centre.
+// Each ring is (radius, halfBandWidth, opacity) in the virtual frame's units.
 // Inside a band the fragment's hue rotates half a turn - the same "inverted colour"
 // the canvas version got by compositing a second, hue-shifted render.
 const RING_UNIFORM_DECL = `
 uniform vec3 uRings[${MAX_RINGS}];
-uniform vec2 uRingCenter;
+uniform vec4 uRingViewport;
 
 vec3 cabinHueRotate(vec3 color, float turns) {
   vec3 axis = normalize(vec3(1.0));
@@ -153,7 +154,9 @@ vec3 cabinHueRotate(vec3 color, float turns) {
 
 const RING_SNIPPET = `
 {
-  float ringD = distance(gl_FragCoord.xy, uRingCenter);
+  vec2 ringCoord = (gl_FragCoord.xy - uRingViewport.xy - uRingViewport.zw * 0.5)
+    * (${VIRTUAL_H.toFixed(1)} / uRingViewport.w);
+  float ringD = length(ringCoord);
   float ringMix = 0.0;
   for (int ri = 0; ri < ${MAX_RINGS}; ri++) {
     vec3 ring = uRings[ri];
@@ -168,7 +171,7 @@ const RING_SNIPPET = `
 
 interface RingUniforms {
   uRings: IUniform<Vector3[]>
-  uRingCenter: IUniform<Vector2>
+  uRingViewport: IUniform<Vector4>
 }
 
 /** One additive line pass: a batch of segments sharing a width. Buffers are
@@ -184,7 +187,7 @@ interface LinePass {
   capacity: number
 }
 
-function createPass(parent: Group, resolution: Vector2, rings: RingUniforms, renderOrder: number): LinePass {
+function createPass(parent: Group, rings: RingUniforms, renderOrder: number): LinePass {
   const geometry = new LineSegmentsGeometry()
   const material = new LineMaterial({
     color: 0xffffff,
@@ -192,7 +195,6 @@ function createPass(parent: Group, resolution: Vector2, rings: RingUniforms, ren
     vertexColors: true,
     transparent: true,
     depthWrite: false,
-    resolution,
     worldUnits: false,
   })
   material.blending = AdditiveBlending
@@ -201,7 +203,7 @@ function createPass(parent: Group, resolution: Vector2, rings: RingUniforms, ren
   material.userData[FORCE_TRANSPARENT_KEY] = true
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uRings = rings.uRings
-    shader.uniforms.uRingCenter = rings.uRingCenter
+    shader.uniforms.uRingViewport = rings.uRingViewport
     shader.fragmentShader = RING_UNIFORM_DECL + shader.fragmentShader.replace(
       '#include <tonemapping_fragment>',
       RING_SNIPPET + '\n#include <tonemapping_fragment>',
@@ -211,8 +213,13 @@ function createPass(parent: Group, resolution: Vector2, rings: RingUniforms, ren
   // identical to any other stock LineMaterial (same shader source, same
   // defines) and hand them a cached program compiled WITHOUT the ring
   // injection - or hand HopfFibration's lines a program that has it.
-  material.customProgramCacheKey = () => 'fractal-tunnel-rings-v1'
+  material.customProgramCacheKey = () => 'fractal-tunnel-rings-v2'
   const line = new LineSegments2(geometry, material)
+  const setResolution = frameLineResolution(VIRTUAL_H)
+  line.onBeforeRender = function (renderer) {
+    setResolution.call(this, renderer)
+    renderer.getCurrentViewport(rings.uRingViewport.value)
+  }
   line.frustumCulled = false // bounds change every frame; culling would just cost
   line.renderOrder = renderOrder
   line.visible = false
@@ -261,16 +268,15 @@ function commitPass(pass: LinePass, positions: number[], colors: number[], width
 }
 
 export function FractalTunnelVisual({ trackId }: { trackId: string }) {
-  const { viewport, size } = useThree()
+  const { viewport } = useThree()
   const groupRef = useRef<Group>(null)
   const bgRef = useRef<Mesh>(null)
   const passesRef = useRef<{ core: LinePass[]; glow: LinePass[]; tunnel: LinePass; tunnelGlow: LinePass; dots: LinePass } | null>(null)
   const scratchColor = useRef(new Color()).current
 
-  const resolution = useMemo(() => new Vector2(1, 1), [])
   const rings = useMemo<RingUniforms>(() => ({
     uRings: { value: Array.from({ length: MAX_RINGS }, () => new Vector3()) },
-    uRingCenter: { value: new Vector2() },
+    uRingViewport: { value: new Vector4(0, 0, VIRTUAL_H, VIRTUAL_H) },
   }), [])
 
   // Reused scratch buffers - one per pass - so a frame allocates nothing beyond
@@ -291,11 +297,11 @@ export function FractalTunnelVisual({ trackId }: { trackId: string }) {
     const group = groupRef.current
     if (!group) return
     // Glow passes first so the cores draw over them.
-    const glow = Array.from({ length: MAX_GENERATIONS }, (_, i) => createPass(group, resolution, rings, i))
-    const tunnelGlow = createPass(group, resolution, rings, MAX_GENERATIONS)
-    const tunnel = createPass(group, resolution, rings, MAX_GENERATIONS + 1)
-    const core = Array.from({ length: MAX_GENERATIONS }, (_, i) => createPass(group, resolution, rings, MAX_GENERATIONS + 2 + i))
-    const dots = createPass(group, resolution, rings, MAX_GENERATIONS * 2 + 3)
+    const glow = Array.from({ length: MAX_GENERATIONS }, (_, i) => createPass(group, rings, i))
+    const tunnelGlow = createPass(group, rings, MAX_GENERATIONS)
+    const tunnel = createPass(group, rings, MAX_GENERATIONS + 1)
+    const core = Array.from({ length: MAX_GENERATIONS }, (_, i) => createPass(group, rings, MAX_GENERATIONS + 2 + i))
+    const dots = createPass(group, rings, MAX_GENERATIONS * 2 + 3)
     passesRef.current = { core, glow, tunnel, tunnelGlow, dots }
     return () => {
       for (const pass of [...core, ...glow, tunnel, tunnelGlow, dots]) {
@@ -305,7 +311,7 @@ export function FractalTunnelVisual({ trackId }: { trackId: string }) {
       }
       passesRef.current = null
     }
-  }, [resolution, rings])
+  }, [rings])
 
   useInstrumentFrame(trackId, (state) => {
     const passes = passesRef.current
@@ -481,28 +487,22 @@ export function FractalTunnelVisual({ trackId }: { trackId: string }) {
       )
     }
 
-    // ---- Upload. Widths are authored against the 1024-tall virtual frame, so
-    //      they scale to whatever the framebuffer actually is.
-    const deviceH = Math.max(1, size.height * viewport.dpr)
-    resolution.set(Math.max(1, size.width * viewport.dpr), deviceH)
-    const pxScale = deviceH / VIRTUAL_H
-
+    // Widths and pulse rings share the same 1024-tall authored frame.
     for (let g = 0; g < MAX_GENERATIONS; g++) {
-      const width = lineWidth * Math.pow(0.7, g) * pxScale
+      const width = lineWidth * Math.pow(0.7, g)
       commitPass(passes.core[g], buffers.corePos[g], buffers.coreCol[g], width)
       // The glow pass stands in for shadowBlur: wider, dimmer, drawn underneath.
-      commitPass(passes.glow[g], buffers.glowPos[g], buffers.glowCol[g], width + (10 + g * 2) * pxScale)
+      commitPass(passes.glow[g], buffers.glowPos[g], buffers.glowCol[g], width + 10 + g * 2)
     }
-    commitPass(passes.tunnel, buffers.tunnelPos, buffers.tunnelCol, 1 * pxScale)
-    commitPass(passes.tunnelGlow, buffers.tunnelPos, buffers.tunnelGlowCol, 8 * pxScale)
-    const dotRadius = (2 + dotPulse * 1.5) * 2 * pxScale
-    commitPass(passes.dots, buffers.dotPos, buffers.dotCol, Math.max(1, dotRadius))
+    commitPass(passes.tunnel, buffers.tunnelPos, buffers.tunnelCol, 1)
+    commitPass(passes.tunnelGlow, buffers.tunnelPos, buffers.tunnelGlowCol, 8)
+    const dotRadius = (2 + dotPulse * 1.5) * 2
+    commitPass(passes.dots, buffers.dotPos, buffers.dotCol, dotRadius)
 
     // ---- Pulse rings: expanding annuli that rotate the hue of whatever they
     //      cross, replacing the original's second inverted render.
     const ringValues = rings.uRings.value
     for (const ring of ringValues) ring.set(0, 0, 0)
-    rings.uRingCenter.value.set(resolution.x / 2, resolution.y / 2)
     if (colorPulse) {
       let ringIndex = 0
       // Newest first, so the freshest rings win the fixed-size uniform slots.
@@ -511,8 +511,8 @@ export function FractalTunnelVisual({ trackId }: { trackId: string }) {
         const opacity = 1 - age / pulseFadeDuration
         if (opacity <= 0) continue
         ringValues[ringIndex++].set(
-          age * pulseSpeed * pxScale,
-          (pulseBandWidth * 0.5) * pxScale,
+          age * pulseSpeed,
+          pulseBandWidth * 0.5,
           opacity,
         )
       }

@@ -1,11 +1,11 @@
 import { midiVelocity } from '../utils/midiVelocity'
 import { useRef, useEffect } from 'react'
-import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { Line2 } from 'three/examples/jsm/lines/Line2.js'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
+import { frameLineResolution } from '../core/visual/framePixels'
 import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import type { ResolvedNote } from '../core/visual/types'
 
@@ -82,7 +82,6 @@ interface NeonFiber {
 
 function createNeonFiber(
   parent: THREE.Group,
-  resolution: THREE.Vector2,
   coreWidth: number,
   glowWidth: number,
   positions: number[],
@@ -96,11 +95,11 @@ function createNeonFiber(
       transparent: true,
       opacity,
       depthWrite: false,
-      resolution,
       worldUnits: false,
     })
     material.blending = THREE.AdditiveBlending
     const line = new Line2(geometry, material)
+    line.onBeforeRender = frameLineResolution()
     line.computeLineDistances()
     parent.add(line)
     return { line, geometry, material }
@@ -263,17 +262,6 @@ export function HopfFibrationVisual({ trackId }: { trackId: string }) {
   const fibersRef = useRef<NeonFiber[]>([])
   // Beat-sorted view of state.notes, cached per resolve (state.notes is static between resolves)
   const notesCache = useRef<{ src: ResolvedNote[]; sorted: ResolvedNote[] }>({ src: [], sorted: [] })
-  const { size } = useThree()
-  const resRef = useRef(new THREE.Vector2(size.width, size.height))
-
-  // Sync resolution on resize
-  useEffect(() => {
-    resRef.current.set(size.width, size.height)
-    for (const f of fibersRef.current) {
-      f.core.material.resolution.set(size.width, size.height)
-      f.glow.material.resolution.set(size.width, size.height)
-    }
-  }, [size.width, size.height])
 
   // Cleanup on unmount
   useEffect(() => () => {
@@ -322,7 +310,7 @@ export function HopfFibrationVisual({ trackId }: { trackId: string }) {
     const dummyPos = new Array((nPts + 1) * 3).fill(0)
 
     while (fibersRef.current.length < totalFibers) {
-      fibersRef.current.push(createNeonFiber(group, resRef.current, coreW, glowW, dummyPos))
+      fibersRef.current.push(createNeonFiber(group, coreW, glowW, dummyPos))
     }
     while (fibersRef.current.length > totalFibers) {
       disposeNeonFiber(group, fibersRef.current.pop()!)

@@ -1,4 +1,5 @@
 import type { VisualEffect } from '../types'
+import { FRAME_REFERENCE_HEIGHT } from '../../core/visual/framePixels'
 
 /** Quantize to a coarse pixel grid (retro). */
 export const pixelatePlugin: VisualEffect = {
@@ -14,7 +15,8 @@ export const pixelatePlugin: VisualEffect = {
     uniform float pixelSize;
     varying vec2 vUv;
     void main() {
-      vec2 d = vec2(pixelSize) / resolution;
+      vec2 frameResolution = resolution / resolution.y * ${FRAME_REFERENCE_HEIGHT.toFixed(1)};
+      vec2 d = vec2(pixelSize) / frameResolution;
       vec2 coord = d * floor(vUv / d) + d * 0.5;
       gl_FragColor = texture2D(tDiffuse, coord);
     }

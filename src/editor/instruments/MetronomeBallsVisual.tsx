@@ -7,6 +7,7 @@ import {
 } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
+import { configureFramePointsMaterial } from '../core/visual/framePixels'
 import {
   MAX_BALLS,
   PITCH_FG, PITCH_BG, PITCH_INVERT,
@@ -188,6 +189,7 @@ export function MetronomeBallsVisual({ trackId }: { trackId: string }) {
     bgLineMatRef.current = bgLineMat
     const bgDotGeo = buildDotGeometry(BG_BALLS)
     const bgDotMat = new PointsMaterial({ color: new Color(PALETTES.default.accent), size: 4, sizeAttenuation: false, depthWrite: false })
+    configureFramePointsMaterial(bgDotMat)
     const bgDots = new Points(bgDotGeo, bgDotMat)
     bgDotsRef.current = bgDots
     bgDotMatRef.current = bgDotMat
@@ -201,6 +203,7 @@ export function MetronomeBallsVisual({ trackId }: { trackId: string }) {
     fgLineMatRef.current = fgLineMat
     const fgDotGeo = buildDotGeometry(MAX_BALLS)
     const fgDotMat = new PointsMaterial({ color: new Color(PALETTES.default.fg), size: 5, sizeAttenuation: false, depthWrite: false })
+    configureFramePointsMaterial(fgDotMat)
     const fgDots = new Points(fgDotGeo, fgDotMat)
     fgDotsRef.current = fgDots
     fgDotMatRef.current = fgDotMat
