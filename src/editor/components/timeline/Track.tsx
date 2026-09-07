@@ -673,11 +673,8 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
             into the lane, so audio with startBar < 0 still renders on-lane
             (flush with the left edge when it defines the pickup). */}
         <div className="absolute inset-y-0" style={{ left: pickupPx, right: 0, opacity: ghostOpacity }}>
-        {/* A selected block's light spills onto its lane: a wide wash behind
-            the blocks (first child = painted under them), clipped to the row.
-            The cross-row reach comes from the block's own bloom shadows.
-            Audio blocks spill too - their width is derived (trimmed seconds at
-            the current tempo), mirroring AudioBlock's own layout math. */}
+        {/* Audio retains its selection wash; solid MIDI clips use only their
+            own perimeter. Audio widths follow trimmed seconds at this tempo. */}
         {(track.type === 'audio'
           ? (track.audioBlocks ?? []).map((block) => {
               if (!selectedBlockIds.has(block.id)) return null
@@ -685,14 +682,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
               const widthPx = Math.max(widthBars * barWidthPx, 4)
               return { id: block.id, centerPx: block.startBar * barWidthPx + widthPx / 2, widthPx }
             })
-          : track.blocks.map((block) =>
-              selectedBlockIds.has(block.id)
-                ? {
-                    id: block.id,
-                    centerPx: (block.startBar + block.durationBars / 2) * barWidthPx,
-                    widthPx: block.durationBars * barWidthPx,
-                  }
-                : null)
+          : []
         ).map((spill) =>
           spill && (
             <div

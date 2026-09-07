@@ -2,7 +2,7 @@ import { useUIStore } from '../../store/UIStore'
 import { loopLengthBeats, tileLoopNotes } from '../../core/visual/noteFlatten'
 import { LOOP_CURSOR } from '../../utils/dragCursor'
 import { BLOCK_EDGE_HIT, edgeHitPx } from '../../constants'
-import { midiBlockPalette, type MidiBlockPalette } from '../../utils/colors'
+import { vividMidiBlockPalette, type MidiBlockPalette } from '../../utils/colors'
 import { notePreviewPitchPositions } from '../../core/visual/notePreviewLayout'
 import { memo, useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Block as BlockType } from '../../types'
@@ -53,16 +53,11 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
   const loopBeats = block.loop ? loopLengthBeats(block, beatsPerBar) : null
   const hasLoopSections = loopBeats != null && loopBeats > 0 && loopBeats < totalBeatsInBlock
   // Stable object: NotePreview is memoized and takes the palette as a prop.
-  const palette = useMemo(() => midiBlockPalette(color), [color])
+  const palette = useMemo(() => vividMidiBlockPalette(color), [color])
   const active = isSelected || isEditing
 
-  // Resting: the neon-signage pane - an inset hue hairline plus a near-black
-  // separation ring against the lane. Selected: the supernova - the body IS
-  // the light, so the only "edge" is the burning rim inside its bloom stack.
-  const restingShadow = `inset 0 0 0 1px ${palette.edge}, 0 0 0 1px rgba(0,0,0,0.45)`
-  // The playing pulse is a flat wash of `activeFill` faded in over the pane -
-  // see MattePulse. A SELECTED block skips it: there is nothing lighter than a
-  // white-hot core to travel to, so its notes carry the pulse instead.
+  // Solid track color in both states; the perimeter is painted above the
+  // loop sections so their opaque fills cannot hide the selection outline.
 
   useEffect(() => {
     const element = blockRef.current
@@ -84,15 +79,7 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
       style={{
         left: `${left}px`,
         width: `${renderedWidth}px`,
-        // No borders in either state. A looped block keeps its fill on the
-        // flush rounded sections (their touching corners form the loop-divot
-        // notches) while the shadow work - resting hairlines or the selected
-        // bloom - lives on THIS outer element, one perimeter for the whole
-        // block. The bloom is pure light, so it needs no silhouette hugging;
-        // the resting inset hairline sits under the sections and survives only
-        // at the notches, which reads as intended.
         background: hasLoopSections ? 'transparent' : active ? palette.selectedBody : palette.fill,
-        boxShadow: active ? palette.selectedBloom : restingShadow,
         // Nothing on THIS element moves per frame any more - no filter, no
         // blend mode, no per-frame background. The pulse lives entirely in the
         // MattePulse overlay below, whose opacity the compositor can animate
@@ -142,6 +129,11 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
         selected={isSelected || isEditing}
         rowPitches={previewRowPitches}
         strictRows={strictPreviewRows}
+      />
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 pointer-events-none rounded-[6px]"
+        style={{ border: `${active ? 2 : 1}px solid ${active ? palette.selectedOutline : palette.edge}` }}
       />
     </div>
   )
@@ -241,12 +233,9 @@ const NotePreview = memo(function NotePreview({ notes, totalBeats, loopBeats, pa
               top: 0,
               bottom: 0,
               background: selected ? palette.selectedBody : palette.fill,
-              // No per-section ring: the perimeter shadows live on the outer
-              // block, so touching sections merge into one fill and the loop
-              // boundary reads only from the small corner notch their rounding
-              // leaves - never a hard dark dividing line. Each selected section
-              // gets its own star-anatomy gradient (per-section cores), which
-              // makes the loop repeats read as a chain of small suns.
+              // The shared perimeter is above every section; touching
+              // corners retain the existing loop notches.
+
             }}
           >
             {!selected && <MattePulse color={palette.activeFill} />}
@@ -261,12 +250,7 @@ const NotePreview = memo(function NotePreview({ notes, totalBeats, loopBeats, pa
         // 8%–88% band keeps dashes inside the rounded border. Semantic tracks
         // follow their declared row order; plain piano rolls keep high pitch up.
         const topPct = 8 + pitchPosition * 80
-        // Resting: lit tubing with a glow. Selected: the notes flip DARK -
-        // outshone by the ignited body - and the body's light wraps around
-        // each first-pass mark (repeats stay unwrapped so they read dimmer).
-        // The pulse walks that resting colour to its matte peak: toward white
-        // on the dark pane, DEEPER on the lit body (where lifting a note would
-        // dissolve it into the light it is supposed to read against).
+        // Notes stay dark in both states and deepen slightly on activity.
         const noteFill = selected
           ? (repeat > 0
               ? noteActivityMix(palette.selectedRepeatedNote, palette.activeSelectedRepeatedNote)
@@ -274,11 +258,6 @@ const NotePreview = memo(function NotePreview({ notes, totalBeats, loopBeats, pa
           : (repeat > 0
               ? noteActivityMix(palette.repeatedNote, palette.activeRepeatedNote)
               : noteActivityMix(palette.note, palette.activeNote))
-        const noteHalo = repeat > 0
-          ? undefined
-          : selected
-            ? `0 0 4px ${palette.selectedNoteWrap}`
-            : `0 0 6px ${palette.noteGlow}`
         return (
           <div
             key={`${note.id}:${repeat}`}
@@ -290,12 +269,7 @@ const NotePreview = memo(function NotePreview({ notes, totalBeats, loopBeats, pa
               top: `${topPct}%`,
               height: 2,
               background: noteFill,
-              boxShadow: noteHalo,
-              // The dash's resting halo stays (it is static - part of the neon
-              // voice, not the pulse). What is gone is the per-note brightness
-              // filter and the overlay span that rode it: one filtered element
-              // and one extra div PER NOTE PER FRAME, in the tens of thousands
-              // on a real project.
+
             }}
           />
         )

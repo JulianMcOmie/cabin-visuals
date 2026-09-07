@@ -97,6 +97,38 @@ export function colorToHsl(color: string): HslColor | null {
   return { hue, saturation, lightness }
 }
 
+/** Vivid solid timeline MIDI: the editor's track hue on an opaque, saturated
+ *  body (OKLCH 0.73 / 0.175), with dark ink and quieter loop repeats.
+ *  Selection keeps the fill; Block draws a crisp outline above loop sections.
+ *  Audio retains its existing palette below. */
+export function vividMidiBlockPalette(color: string): MidiBlockPalette {
+  const source = colorToOklch(color) ?? { l: 0.5, c: 0.08, h: 240 }
+  const c = (target: number) => source.c > 0.02 ? target : 0
+  const tone = (l: number, chroma: number) => oklchToHex(l, c(chroma), source.h)
+  const fill = tone(0.73, 0.175)
+  const note = tone(0.23, 0.035)
+  const repeat = tone(0.43, 0.055)
+  return {
+    fill,
+    edge: tone(0.80, 0.175),
+    note,
+    noteGlow: 'transparent',
+    repeatedNote: repeat,
+    selectedBody: fill,
+    selectedBloom: 'none',
+    selectedNote: note,
+    selectedNoteWrap: 'transparent',
+    selectedRepeatedNote: repeat,
+    activeFill: tone(0.78, 0.16),
+    activeNote: tone(0.16, 0.025),
+    activeRepeatedNote: tone(0.32, 0.04),
+    activeSelectedNote: tone(0.16, 0.025),
+    activeSelectedRepeatedNote: tone(0.32, 0.04),
+    outline: tone(0.80, 0.175),
+    selectedOutline: '#e2e6ee',
+  }
+}
+
 /** Timeline block colors derived from the track hue, mixed in OKLCH so every
  *  track's blocks sit at the same perceived depth regardless of hue.
  *
