@@ -244,3 +244,11 @@ breathing through each other with every depth on screen at once.
 user-resizable; a `w-[38%]` stage that looked right in a 300px sidebar became a wide
 empty field with a 34px object marooned in the middle of it the moment the panel was
 dragged out to 700px.
+
+`FormationSplitterUserInterface.tsx` supplies compact console-kit panels for
+Fractal, Wallpaper, Scatter and the appended Lissajous function. Its SVG preview
+uses each definition's real resolve with no notes and an asymmetric L motif:
+round particles alone cannot show reflection parity. Scatter binds the gated
+CLUSTERS knob optionally and shows it only in Clustered mode. Lissajous keeps
+legacy functions on their existing generic controls, while its preset buttons
+write the normal frequency/phase parameter bindings (no hidden preset state).

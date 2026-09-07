@@ -440,6 +440,15 @@ const G = {
       <path d="M8.4 11.8h5.4" strokeOpacity="0.5" />
     </>
   ),
+  wallpaper: (
+    <><path d="M2 2H6V6H2ZM10 2H14V6H10ZM2 10H6V14H2ZM10 10H14V14H10Z" /></>
+  ),
+  scatter: (
+    <><circle cx="3" cy="5" r="1" /><circle cx="10" cy="2" r="1" /><circle cx="8" cy="9" r="1" /><circle cx="14" cy="11" r="1" /><circle cx="3" cy="14" r="1" /></>
+  ),
+  fractal: (
+    <><path d="M8 14V8M8 8L4 4M8 8L12 4M4 4V1M4 4H1M12 4V1M12 4H15" /></>
+  ),
   grid: (
     <g strokeOpacity="0.95">
       <rect x="2.2" y="2.2" width="3.4" height="3.4" rx="0.5" />

@@ -14,6 +14,7 @@ export const PARAMETRIC_PATTERNS = [
   'Superformula',
   'Spherical Harmonic',
   'Phyllotaxis',
+  'Lissajous',
 ] as const
 
 export interface ParametricPatternSettings {
@@ -180,6 +181,19 @@ export function parametricPatternPosition(
       const ripple = 1 + 0.08 * Math.cos(frequencyA * angle) + 0.05 * Math.sin(frequencyB * angle)
       const r = radius * Math.pow(fraction, shape) * ripple
       point = new Vector3(r * Math.cos(angle), r * Math.sin(angle), 0)
+      break
+    }
+    case 6: { // Relative phase changes the weave, rather than sliding along it.
+      // Reduce the ratio so 2:4 samples the same single loop as 1:2 instead
+      // of spending half the copy budget retracing coincident positions.
+      let a = frequencyA, b = frequencyB
+      while (b !== 0) { const remainder = a % b; a = b; b = remainder }
+      const theta = u * TWO_PI
+      point = new Vector3(
+        radius * Math.sin(frequencyA / a * theta + phase),
+        radius * amount * Math.sin(frequencyB / a * theta),
+        0,
+      )
       break
     }
     default: { // Polar rose with Shape blending in a secondary harmonic.

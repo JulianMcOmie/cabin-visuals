@@ -35,6 +35,9 @@ import { waypointsMover } from './waypoints'
 import { physicsMover } from './physicsInterp'
 import { radialMotionMover } from './radialMotion'
 import { parametricPatternSplitter } from './parametricPattern'
+import { scatterSplitter } from './scatter'
+import { wallpaperSplitter } from './wallpaper'
+import { fractalSplitter } from './fractal'
 import { polyhedronSplitter } from './polyhedron'
 import { symmetrySplitter } from './symmetry'
 import { tunnelSplitter } from './tunnel'
@@ -897,6 +900,9 @@ export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   staggerSplitter,
   symmetrySplitter,
   gridSplitter,
+  fractalSplitter,
+  wallpaperSplitter,
+  scatterSplitter,
   polyhedronSplitter,
   parametricPatternSplitter,
   tunnelSplitter,

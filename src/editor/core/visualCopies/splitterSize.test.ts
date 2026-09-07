@@ -19,13 +19,16 @@ const BESPOKE_SIZE = new Set(['duplicateTrail', 'approach'])
 
 test('every layout splitter declares the one shared size param', () => {
   assert.deepEqual(SHARED.map((def) => def.id).sort(), [
+    'fractal',
     'grid',
     'line',
     'parametricPattern',
     'polyhedron',
     'radial',
+    'scatter',
     'symmetry',
     'tunnel',
+    'wallpaper',
   ])
 })
 

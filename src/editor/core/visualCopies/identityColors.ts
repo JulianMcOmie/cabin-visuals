@@ -231,3 +231,7 @@ export const CONSOLIDATED_MOVER_COLOR = '#ababab'
  * and a third grey would have nowhere left to sit.
  */
 export const BYPASS_COLOR = '#d9d9d9'
+
+export const FRACTAL_COLOR = '#c084fc'
+export const WALLPAPER_COLOR = '#fb923c'
+export const SCATTER_COLOR = '#53d6a0'

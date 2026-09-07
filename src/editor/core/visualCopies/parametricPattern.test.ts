@@ -29,7 +29,7 @@ function roundedPosition(pattern: number): [number, number, number] {
   return [p.x, p.y, p.z].map((value) => Number(value.toFixed(8))) as [number, number, number]
 }
 
-test('one registered splitter exposes all six selectable pattern functions', () => {
+test('one registered splitter exposes all seven selectable pattern functions', () => {
   const definition = getMoverOrSplitterDefinition('parametricPattern')
   assert.equal(definition?.kind, 'splitter')
   assert.equal(definition?.label, 'Parametric Pattern')
@@ -158,4 +158,25 @@ test('MIDI evaluation and generated transforms are scrub-deterministic', () => {
   at(0)
   at(100)
   assert.deepEqual(at(3.25), first)
+})
+
+
+test('Lissajous appends to the saved pattern indices and makes a closed figure eight', () => {
+  assert.deepEqual(PARAMETRIC_PATTERNS.slice(0,6),['Polar Rose','Spirograph','Torus Knot','Superformula','Spherical Harmonic','Phyllotaxis'])
+  assert.equal(PARAMETRIC_PATTERNS[6], 'Lissajous')
+  const s = settings({pattern:6,frequencyA:1,frequencyB:2,radius:2,amount:.5,phaseDegrees:0})
+  assert.ok(parametricPatternPosition(0,32,s).length()<1e-10)
+  assert.ok(parametricPatternPosition(16,32,s).length()<1e-10)
+  assert.ok(parametricPatternPosition(32,32,s).length()<1e-10)
+  assert.ok(Math.abs(parametricPatternPosition(8,32,s).x-2)<1e-10)
+  assert.ok(Math.abs(parametricPatternPosition(4,32,s).y-1)<1e-10)
+})
+test('Lissajous uses a reduced ratio and phase changes relative axis timing', () => {
+  const s = settings({pattern:6,frequencyA:1,frequencyB:2})
+  for(let i=0;i<32;i++) {
+    assert.deepEqual(parametricPatternPosition(i,32,s),parametricPatternPosition(i,32,{...s,frequencyA:2,frequencyB:4}))
+    const phased=parametricPatternPosition(i,32,{...s,phaseDegrees:45})
+    assert.equal(phased.y,parametricPatternPosition(i,32,s).y)
+  }
+  assert.notEqual(parametricPatternPosition(0,32,{...s,phaseDegrees:45}).x,0)
 })

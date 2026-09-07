@@ -630,3 +630,35 @@ staggered rows with sqrt(3)/2 row pitch, so SPACING measures all six nearest
 neighbors. It temporarily overrides row/column circular modes without rewriting
 their saved values; depth still stacks or circles. Bounds are centered including
 the stagger (single rows need no shift), and slot order/count lanes stay shared.
+
+## Additional formation splitters
+
+- `fractal.ts` — breadth-first recursive local frames, root included. Snowflake
+  branches around a full turn, then ANGLE twists the next generation; Branches
+  uses ANGLE as a fan. Each child inherits its parent's shrink, including its
+  translation distance. Depth 0 is the seed. Depth ≤4 and branches ≤5 bound
+  output at 781 copies per input without truncating a generation. MIDI latches
+  DEPTH through the shared count lane. SPREAD 0 produces nested motifs.
+- `wallpaper.ts` — square-lattice translations of p1/pm/p2/p4 representative
+  motifs (Repeat/Mirror/Half-turn/Quarter-turn). The motif offsets are fractions
+  of CELL spacing. Cell-major emission keeps each symmetry orbit contiguous.
+  Plane changes conjugate the entire operation, including reflections; mirror
+  matrices deliberately have negative determinant, just like Symmetry. Rows
+  and columns ≤12 bound output at 576. MIDI drives ROWS.
+- `scatter.ts` — saved-seed disk distributions: area-uniform, fixed seeded
+  clusters, and progressive best-candidate even spacing. All are stationary
+  and preserve existing slots as COUNT grows. The private integer PRNG starts
+  over per resolve, never per frame or input-copy index. Even checks only 24
+  candidates per slot, with count ≤256; no rejection loop can hang at dense
+  settings. MIDI drives COUNT. Impact Scatter remains the mover that animates
+  a formation; this splitter creates its initial positions.
+- `parametricPattern.ts` appends Lissajous at index 6; indices 0–5 stay fixed.
+  Frequency A:B is reduced by GCD to avoid redundant traversals. PHASE offsets
+  X relative to Y, so it changes the weave; AMOUNT is its height/width ratio.
+  SHAPE is unused in this mode and hidden by its panel. Special phase/ratio
+  combinations can legitimately retrace an open-looking arc; the Weave preset
+  uses 3:2 with zero phase for a visibly crossing loop.
+
+All four compose locally, preserve incoming appearance, and use the shared
+SIZE knob after their position calculation. FormationSplitterUserInterface.tsx
+previews actual matrices with asymmetric motifs so mirror parity stays legible.
