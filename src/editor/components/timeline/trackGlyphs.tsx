@@ -59,6 +59,12 @@ const G = {
       <circle cx="3.4" cy="12.4" r="0.6" fill="currentColor" stroke="none" />
     </>
   ),
+  particle: (
+    <>
+      <circle cx="8" cy="8" r="5" strokeOpacity="0.3" />
+      <circle cx="8" cy="8" r="2.2" fill="currentColor" stroke="none" />
+    </>
+  ),
   particleBurst: (
     <>
       <circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none" />

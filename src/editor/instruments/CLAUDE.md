@@ -46,6 +46,16 @@ a DEF file usually imports nothing but types and `lazyInstrument`, so importing
 a def in a test is fine again - it is the VIEW file that still closes the cycle;
 never import a `*Visual.tsx` from a test.)
 
+## Particle: a lightweight object for splitter arrangements
+
+`Particle` is the single standing particle in Objects; `ParticleBurst` lives in Extras.
+Its unlit quad is two triangles, with a procedural core/glow in one additive pass.
+The vertex shader billboards in world space, so size follows camera projection at
+every preview/export resolution without native point-size limits. Ordinary splitter
+copies share one `InstancedMesh` draw and packed color/opacity attributes. Picking
+alone reconstructs camera-facing quads on the CPU (`particleCore.ts`); never rotate
+the instance matrices in `onBeforeRender`, which runs after Three uploads them.
+
 ## GPU Stars: immutable seeds, bounded coordinates, explicit picking
 
 `StarsVisual.tsx` resolves note history once per frame; `starsGpu.ts` computes

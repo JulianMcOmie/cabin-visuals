@@ -209,6 +209,13 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       </g>
     </svg>
   )},
+  { id: 'particle', name: 'Particle', description: 'A single soft particle with adjustable color, size and glow. Build an arrangement with movers and splitters.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <circle cx="6" cy="6" r="5" fill="#7dd3fc" opacity="0.15" />
+      <circle cx="6" cy="6" r="3.2" fill="#7dd3fc" opacity="0.35" />
+      <circle cx="6" cy="6" r="1.8" fill="#7dd3fc" />
+    </svg>
+  )},
   { id: 'particleBurst', name: 'Particle Burst', description: 'Each note explodes particles outward - pitch picks the color.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <g fill="#f59e0b">
@@ -390,7 +397,7 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
 // at the bottom - still available, out of the first impression.
 // Circle and Triangle left the library outright - 3D Shape's geometry picker
 // covers them (the instruments stay registered for old projects).
-const CORE_OBJECT_IDS = new Set(['cube', 'laserLine', 'wireframe', 'particleBurst', 'overlapShape', 'light'])
+const CORE_OBJECT_IDS = new Set(['cube', 'laserLine', 'wireframe', 'particle', 'overlapShape', 'light'])
 const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.has(i.id))
 
 // The Instruments folder. These are object instruments like any other; what
