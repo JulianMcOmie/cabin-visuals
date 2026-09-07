@@ -28,6 +28,8 @@ import {
   PITCH_BASS_POP,
   PITCH_ZOOM_FLASH,
   clipSlotOffset,
+  lyricLayoutWordIndices,
+  resolveLyricLayout,
   laneIndexForPitch,
   resolveLyricWords,
   resolveStyleLanes,
@@ -860,7 +862,8 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const sizeAt = (b: number) => Math.min(viewport.width, viewport.height) * 0.6
       * (perWordSize ? paramAtBeat(state, 'fontSize', b) : fontSize)
     // Word i's size: the track size at beat b times its lane's multiplier.
-    const sizeForWord = (i: number, b: number) => sizeAt(b) * laneAt(i).size
+    const clipScaleForWord = (i: number) => resolveLyricLayout(lyric[i]?.layout ?? { kind: 'one' }).fontScale
+    const sizeForWord = (i: number, b: number) => sizeAt(b) * laneAt(i).size * clipScaleForWord(i)
 
     // --- Particle words ---
     // One frame of the cloud, sharing the text pipeline's font, color (rainbow /
@@ -881,6 +884,8 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       yOffset: number
       /** The word's lane color (authored; rainbow/invert still win above). */
       baseColor?: string
+      fromFontScale?: number
+      toFontScale?: number
     }) => {
       const anchor = particleAnchorRef.current
       if (!anchor) return
@@ -893,8 +898,8 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       const eased = word ? easeInOutQuad(Math.max(0, Math.min(1, word.progress))) : 1
       const from = word?.fromBeat ?? state.beat
       const to = word?.toBeat ?? state.beat
-      const scaleFrom = sizeAt(from) * 0.22
-      const scaleTo = sizeAt(to) * 0.22
+      const scaleFrom = sizeAt(from) * 0.22 * (word?.fromFontScale ?? 1)
+      const scaleTo = sizeAt(to) * 0.22 * (word?.toFontScale ?? 1)
       anchor.scale.setScalar(scaleFrom + (scaleTo - scaleFrom) * eased)
       const xFrom = placeX(from)
       const yFrom = placeY(from)
@@ -990,7 +995,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         const onsetBeat = onsets[onsetIndex].beat
         const anchorX = placeX(onsetBeat)
         const anchorY = placeY(onsetBeat) + yOffsetAt(onsetBeat) * viewport.height * heightAmount
-        const scale = sizeAt(onsetBeat) * 0.22
+        const scale = sizeAt(onsetBeat) * 0.22 * clipScaleForWord(onsetIndex)
         const key = `${word.text}|${fontAt(onsetIndex).css}|${K}|${anchorX.toFixed(2)}|${anchorY.toFixed(2)}|${scale.toFixed(3)}|${ambientKey}`
         let cached = fieldRecruitsRef.current.find((c) => c.key === key)
         if (!cached) {
@@ -1179,8 +1184,9 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const isNoteHeld = currentBeat < lastWordEndBeat
     const currentYOffset = yOffsetAt(currentBeat)
     // The clip owning the CURRENT word picks the arrangement below.
-    const currentLayout = lyric[wordIdx]?.layout ?? { kind: 'one' as const }
+    const currentLayout = resolveLyricLayout(lyric[wordIdx]?.layout ?? { kind: 'one' })
     const currentClipIndex = lyric[wordIdx]?.clipIndex ?? -1
+    const layoutIndices = lyricLayoutWordIndices(lyric, currentClipIndex, wordCount)
     const scatterMode = currentLayout.kind === 'scatter'
     const stackMode = currentLayout.kind === 'stack' || currentLayout.kind === 'row'
     const seatsMode = (currentLayout.kind === 'grid' || currentLayout.kind === 'circle') && currentClipIndex >= 0
@@ -1247,6 +1253,8 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           toBeat: nextNote.beat,
           yOffset: currentYOffset,
           baseColor: laneAt(curIdx + 1).color,
+          fromFontScale: clipScaleForWord(curIdx),
+          toFontScale: clipScaleForWord(curIdx + 1),
         })
       } else {
         // Holding the current word, fully formed.
@@ -1260,6 +1268,8 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           toBeat: curNote.beat,
           yOffset: currentYOffset,
           baseColor: laneAt(curIdx).color,
+          fromFontScale: clipScaleForWord(curIdx),
+          toFontScale: clipScaleForWord(curIdx),
         })
       }
       return
@@ -1292,25 +1302,25 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       const bassPopDecay = Math.max(0, 1 - bassPopAge / 0.25)
       const bassPopScale = 1 + 0.25 * bassPopDecay * bassPopDecay
 
-      const total = Math.max(1, lyric[wordIdx]?.totalSlots ?? 1)
+      const total = Math.max(1, lyric[wordIdx]?.totalLayoutSlots ?? 1)
       const cols = Math.max(1, Math.round(currentLayout.cols ?? 2))
       // Lattice unit → world units. Grid cells split the frame width; the
       // circle's radius fits the shorter axis. Screen-relative for the same
       // reason posX/posY are: it means the same thing at any aspect and
       // survives an export at another resolution.
-      const unitX = currentLayout.kind === 'grid'
+      const unitX = (currentLayout.kind === 'grid'
         ? viewport.width * 0.84 / cols
-        : viewport.width * 0.32
-      const unitY = currentLayout.kind === 'grid'
-        ? Math.min(viewport.height * 0.26, unitX * 0.6)
-        : viewport.height * 0.36
+        : viewport.width * 0.32) * currentLayout.width
+      const unitY = (currentLayout.kind === 'grid'
+        ? Math.min(viewport.height * 0.26, viewport.width * 0.84 / cols * 0.6)
+        : viewport.height * 0.36) * currentLayout.height
 
       if (releaseOpacity > 0) {
-        for (let i = 0; i < wordCount; i++) {
-          if (lyric[i]?.clipIndex !== currentClipIndex) continue
+        for (const i of layoutIndices) {
+          if (i >= wordCount) continue
           const entry = entryAt(i)
           if (!entry) continue
-          const seat = clipSlotOffset(currentLayout, lyric[i].slotIndex, total)
+          const seat = clipSlotOffset(currentLayout, lyric[i].layoutSlotIndex, total)
           if (!seat) continue
           const spr = acquirePooled(scatterPoolRef.current, groupRef.current)
           configureTextMaterial(spr.mat, invertInThisPass)
@@ -1321,10 +1331,10 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           const popScale = (1 + onsetBounce * 2 * (1 - onsetT)) * (newest ? bassPopScale : 1)
           // Long words shrink rather than run into the next seat - the same
           // trade the word canvas already makes when it widens.
-          const lengthFit = Math.min(1, 5 / Math.max(1, entry.text.length))
+          const lengthFit = Math.min(1, 5 / Math.max(1, entry.layoutText.length))
           const fontScale = perWordSize ? paramAtBeat(state, 'fontSize', wordBeat) : fontSize
           const scale = Math.min(viewport.width, viewport.height) * 0.11
-            * lengthFit * fontScale * laneAt(i).size * popScale
+            * lengthFit * fontScale * currentLayout.fontScale * laneAt(i).size * popScale
           const shakeOff = laneShakeAt(i)
             ? (seededRand(Math.floor(currentBeat * 30) * 3 + i * 77) - 0.5) * 0.015 * viewport.width
             : 0
@@ -1374,15 +1384,15 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       for (const spr of scatterPoolRef.current) { spr.active = false; spr.mesh.visible = false }
       if (releaseOpacity > 0) {
         const placedAnchors: [number, number][] = []
-        for (let i = phraseStart; i < wordCount; i++) {
-          if (lyric[i]?.clipIndex !== currentClipIndex) continue
+        for (const i of layoutIndices) {
+          if (i < phraseStart || i >= wordCount) continue
           const entry = entryAt(i)
           if (!entry) continue
           const spr = acquirePooled(scatterPoolRef.current, groupRef.current)
           configureTextMaterial(spr.mat, invertInThisPass)
           wearTexture(spr, wordTextureAt(false, i, entry))
 
-          const s = i * 131
+          const s = (i - (entry.syllableIndex ?? 0)) * 131
           const newest = i === wordCount - 1
 
           // Seeded anchor with collision retries: take the first candidate far
@@ -1421,8 +1431,8 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           const scale = sizeForWord(i, scatterBeat) * 0.55 * sizeJ * popScale
           spr.mesh.scale.set(scale * texAspect(spr.texture), scale, 1)
           spr.mesh.position.set(
-            nx * viewport.width * scatterSpread + placeX(scatterBeat),
-            ny * viewport.height * scatterSpread * 0.8 + placeY(scatterBeat),
+            nx * viewport.width * scatterSpread * currentLayout.width + placeX(scatterBeat),
+            ny * viewport.height * scatterSpread * 0.8 * currentLayout.height + placeY(scatterBeat),
             -0.0005 * (wordCount - i),
           )
           spr.mesh.rotation.set(0, 0, rot)
@@ -1480,15 +1490,14 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         const phraseBeat = allWordNotes[cardStart].beat
         // Cards run BIG - three or four words at most, so each word gets real
         // presence (the reference's singles span nearly half the frame).
-        const wordScale = sizeAt(phraseBeat) * 0.72 * zoomFlash
-        const spaceW = wordScale * 0.26
-        const maxLineW = viewport.width * 0.88 * zoomFlash
+        const wordScale = sizeAt(phraseBeat) * 0.72 * zoomFlash * currentLayout.fontScale
+        let spaceW = wordScale * 0.26 * currentLayout.wordSpacing
+        const maxLineW = viewport.width * 0.88 * zoomFlash * currentLayout.width
 
         // Sprites for EVERY card word; future words reserve their place but
         // stay invisible until sung.
         const sprites: { spr: FlightPooled; width: number; scaleMul: number; sung: boolean; newest: boolean }[] = []
-        for (let i = cardStart; i < cardEnd; i++) {
-          if (lyric[i]?.clipIndex !== currentClipIndex) continue
+        for (const i of layoutIndices) {
           const entry = entryAt(i)
           if (!entry) continue
           const spr = acquirePooled(scatterPoolRef.current, groupRef.current)
@@ -1513,6 +1522,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           for (let i = 0; i < sprites.length; i++) total += (i > 0 ? spaceW : 0) + sprites[i].width
           fitK = Math.min(1, maxLineW / Math.max(1e-6, total))
           for (const sp of sprites) sp.width *= fitK
+          spaceW *= fitK
         }
         // Greedy line wrap over the whole card (row mode never overflows).
         const lines: { start: number; end: number; width: number }[] = []
@@ -1520,7 +1530,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         let lineWidth = 0
         for (let i = 0; i < sprites.length; i++) {
           const candidate = lineWidth + (lineWidth > 0 ? spaceW : 0) + sprites[i].width
-          if (lineWidth > 0 && candidate > maxLineW) {
+          if (!singleLine && lineWidth > 0 && candidate > maxLineW) {
             lines.push({ start: lineStart, end: i, width: lineWidth })
             lineStart = i
             lineWidth = sprites[i].width
@@ -1532,13 +1542,14 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
 
         // Tight stack, like the reference's cards: lines sit close (cap-height
         // spacing), the whole card centered on the placement point.
-        const lineGap = wordScale * 0.6
+        const lineGap = wordScale * 0.6 * currentLayout.lineSpacing
         const cardX = placeX(phraseBeat)
         const cardY = currentYOffset * viewport.height * heightAmount + placeY(phraseBeat)
         for (let li = 0; li < lines.length; li++) {
           const line = lines[li]
           const y = cardY + ((lines.length - 1) / 2 - li) * lineGap
-          let x = cardX - line.width / 2
+          let x = cardX + (currentLayout.align === 'left' ? -maxLineW / 2
+            : currentLayout.align === 'right' ? maxLineW / 2 - line.width : -line.width / 2)
           for (let i = line.start; i < line.end; i++) {
             const { spr, width, scaleMul, sung, newest } = sprites[i]
             if (!sung) {

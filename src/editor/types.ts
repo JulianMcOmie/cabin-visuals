@@ -77,6 +77,17 @@ export type LyricLayoutKind = 'one' | 'row' | 'stack' | 'scatter' | 'grid' | 'ci
 
 export interface LyricClipLayout {
   kind: LyricLayoutKind
+  /** Pipe-separated pieces reveal cumulatively unless explicitly set to single. */
+  pipeMode?: 'build' | 'single'
+  /** Per-clip multipliers; absent values are 1. */
+  fontScale?: number
+  width?: number
+  height?: number
+  wordSpacing?: number
+  lineSpacing?: number
+  align?: 'left' | 'center' | 'right'
+  /** Circle start angle in degrees, clockwise from the top. */
+  rotation?: number
   /** Grid only: columns. Absent = 2. */
   cols?: number
 }

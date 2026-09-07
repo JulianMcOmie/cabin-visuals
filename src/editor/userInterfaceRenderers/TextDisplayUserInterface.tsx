@@ -6,7 +6,7 @@ import { track as trackEvent } from '../../analytics/analytics'
 import { ensureFont } from '../core/visual/fonts'
 import { isNumberParam } from '../instruments/types'
 import { useProjectStore } from '../store/ProjectStore'
-import { MAX_STYLE_LANES, laneIndexForPitch, resolveStyleLanes, styleLanePitch, trackLyricClips } from '../core/visual/lyricClips'
+import { MAX_STYLE_LANES, resolveLyricLayout, laneIndexForPitch, resolveStyleLanes, styleLanePitch, trackLyricClips } from '../core/visual/lyricClips'
 import type { LyricClipLayout, LyricLayoutKind, StyleLaneFx } from '../types'
 import { placeTranscription } from '../utils/lyricPlacement'
 import { firstAudioBlock, transcribeActiveSong, type TranscribePhase } from '../utils/transcribeSong'
@@ -418,7 +418,13 @@ export function LyricClipEditorCard({ trackId, clipId }: { trackId: string; clip
   )
   const updateLyricClip = useProjectStore((s) => s.updateLyricClip)
   if (!clip) return null
-  const setLayout = (layout: LyricClipLayout) => updateLyricClip(trackId, clip.id, { layout })
+  const layout = resolveLyricLayout(clip.layout ?? { kind: 'one' })
+  const setLayout = (patch: Partial<LyricClipLayout>) => updateLyricClip(trackId, clip.id, { layout: { ...clip.layout, ...patch } })
+  const flow = layout.kind === 'row' || layout.kind === 'stack'
+  const grouped = layout.kind !== 'one'
+  const slider = (key: 'fontScale' | 'width' | 'height' | 'wordSpacing' | 'lineSpacing' | 'cols' | 'rotation', label: string, min: number, max: number, step = 0.05) => (
+    <ParamSlider label={label} value={layout[key]} min={min} max={max} step={step} onChange={(value) => setLayout({ [key]: value })} />
+  )
   return (
     <div>
       <GrowingTextarea
@@ -432,7 +438,7 @@ export function LyricClipEditorCard({ trackId, clipId }: { trackId: string; clip
           return (
             <button
               key={cardDef.kind}
-              onClick={() => setLayout(cardDef.kind === 'grid' ? { kind: 'grid', cols: clip.layout?.cols ?? 2 } : { kind: cardDef.kind })}
+              onClick={() => setLayout({ kind: cardDef.kind })}
               aria-pressed={active}
               title={cardDef.label}
               className={`flex cursor-pointer flex-col items-center rounded border py-1 ${active
@@ -447,21 +453,39 @@ export function LyricClipEditorCard({ trackId, clipId }: { trackId: string; clip
           )
         })}
       </div>
-      {clip.layout?.kind === 'grid' && (
-        <div className="mt-1.5 flex items-center gap-1.5">
-          <span className="text-[9px] text-[var(--text-muted)]">Columns</span>
-          {[2, 3, 4].map((c) => (
-            <button
-              key={c}
-              onClick={() => setLayout({ kind: 'grid', cols: c })}
-              aria-pressed={(clip.layout?.cols ?? 2) === c}
-              className={`cursor-pointer rounded border px-2 py-0.5 text-[10px] ${(clip.layout?.cols ?? 2) === c
+      <div className="mt-3">
+        <SectionLabel>PIPE REVEAL</SectionLabel>
+        <div className="mb-1.5 grid grid-cols-2 gap-1" role="group" aria-label="Pipe reveal">
+          {([{ id: 'build', label: 'Build up' }, { id: 'single', label: 'One syllable' }] as const).map(({ id, label }) => (
+            <button key={id} aria-pressed={layout.pipeMode === id} onClick={() => setLayout({ pipeMode: id })}
+              className={`cursor-pointer rounded border px-1 py-1 text-[10px] ${layout.pipeMode === id
                 ? 'border-[var(--accent-muted)] bg-[var(--bg-elevated)] text-[var(--text)]'
-                : 'border-[var(--border)] bg-[var(--bg-app)] text-[var(--text-muted)]'}`}
-            >{c}</button>
+                : 'border-[var(--border)] bg-[var(--bg-app)] text-[var(--text-muted)]'}`}>{label}</button>
           ))}
         </div>
-      )}
+        <p className="mb-3 text-[10px] leading-relaxed text-[var(--text-muted)]">
+          {layout.pipeMode === 'build' ? 'hel|lo → hel → hello. Keeps every piece revealed so far.' : 'hel|lo → hel → lo. Shows only the current piece.'}
+          {' '}Use !we |belong |here! to split a whole phrase across notes.
+        </p>
+        <SectionLabel>LAYOUT</SectionLabel>
+        {slider('fontScale', 'Font scale', 0.1, 4)}
+        {grouped && slider('width', flow ? 'Line width' : 'Width', 0.1, 2)}
+        {grouped && !flow && slider('height', 'Height', 0.1, 2)}
+        {flow && slider('wordSpacing', 'Word spacing', 0, 4)}
+        {layout.kind === 'stack' && slider('lineSpacing', 'Line spacing', 0.25, 3)}
+        {layout.kind === 'grid' && slider('cols', 'Columns', 1, 12, 1)}
+        {layout.kind === 'circle' && slider('rotation', 'Start angle', -180, 180, 1)}
+        {flow && (
+          <div className="grid grid-cols-3 gap-1" role="group" aria-label="Text alignment">
+            {(['left', 'center', 'right'] as const).map((align) => (
+              <button key={align} aria-pressed={layout.align === align} onClick={() => setLayout({ align })}
+                className={`cursor-pointer rounded border py-1 text-[10px] capitalize ${layout.align === align
+                  ? 'border-[var(--accent-muted)] bg-[var(--bg-elevated)] text-[var(--text)]'
+                  : 'border-[var(--border)] bg-[var(--bg-app)] text-[var(--text-muted)]'}`}>{align}</button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
