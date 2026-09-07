@@ -425,6 +425,16 @@ function MoverTargets({ track, cropMode }: { track: Track; cropMode?: boolean })
 export function TrackEditor() {
   const [tab, setTab] = useState<Tab>('instrument')
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
+  const editingBlock = useUIStore((s) => s.editingBlock)
+  // Opening an automation roll brings its controls alongside the notes. React
+  // only to opening/switching blocks, so later manual inspector choices stick.
+  useEffect(() => {
+    if (!editingBlock) return
+    const editedTrack = useProjectStore.getState().tracks[editingBlock.trackId]
+    if (editedTrack?.type !== 'automation') return
+    useUIStore.getState().setSelectedTrackId(editedTrack.id)
+    setTab('instrument')
+  }, [editingBlock])
   // The inspector subscribes to the SELECTED track and its parent, never the
   // whole tracks record - a whole-record selector here re-renders every bespoke
   // settings panel (some carrying canvases) on every pointermove of a timeline

@@ -1478,6 +1478,20 @@ export default function EditorApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [libraryRequest])
 
+  // Automation notes and their instrument controls are edited together. Reveal
+  // a collapsed inspector on entry; manual pane changes afterward still stick.
+  const editingBlock = useUIStore((s) => s.editingBlock)
+  useEffect(() => {
+    if (!editingBlock) return
+    const track = useProjectStore.getState().tracks[editingBlock.trackId]
+    if (track?.type !== 'automation') return
+    if (sceneEditorPanelRef.current?.isCollapsed()) {
+      togglePanel(sceneEditorPanelRef, 'sceneEditor', 'scene-editor-panel', '30%')
+    }
+    // Like libraryRequest, this is an entry action, not a visibility lock.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingBlock])
+
   // The library's resize hit-testing is document-level, so a modal's overlay
   // div can't block it - disable the groups outright while a dialog is up.
   // The conflict dialog counts: it's blocking, and it rides on autosave state
