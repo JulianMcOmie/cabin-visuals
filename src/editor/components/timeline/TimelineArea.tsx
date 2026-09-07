@@ -109,6 +109,7 @@ export function TimelineArea() {
   const { selectedBlockIds, marqueeRect, handleBlockPointerDown, handleLanePointerDown } = useTrackGestures({
     laneRef,
     dragGuideRef: blockDragGuideRef,
+    moveSnapBeats: computeRulerGrid(pixelsPerBeat, beatsPerBar, displayBars).smallestBeats,
   })
 
   // Tracks render as a flattened tree (DFS order, indented by depth); collapsed
