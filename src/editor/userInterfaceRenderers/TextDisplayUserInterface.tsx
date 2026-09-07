@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ChevronRight, Mic, Plus, X } from 'lucide-react'
+import { Mic, Plus, X } from 'lucide-react'
 import { track as trackEvent } from '../../analytics/analytics'
 import { ensureFont } from '../core/visual/fonts'
 import { isNumberParam } from '../instruments/types'
@@ -14,14 +14,9 @@ import { ParamControl, ParamSlider, ParamToggle } from './ParameterControl'
 import { ColorWheelPopover, useColorPopoverDismiss } from './colorWheel'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 
-// Bespoke settings for the Text Display instrument. Since the clips redesign
-// the panel's subjects are the track's STYLE LANES (what each piano-roll row
-// makes a word look like - rendered font cards, swatches plus a free colour
-// wheel, size chips, no sliders) and its LYRIC CLIPS (the words + each clip's layout), then the
-// animation controls grouped the way you think about them (Motion / Echo /
-// Flight / Particles). Gated params (showIf) never reach this component -
-// each group renders whatever of its members are present, so headers stay
-// honest when a toggle is off.
+// Track settings cover typography, color and motion, followed by style lanes.
+// Phrase text and layouts are edited in the MIDI sidecar through the exported
+// LyricClipEditorCard. Gated params (showIf) may be absent from this panel.
 
 function findParam(parameters: readonly UserInterfaceParameter[], key: string) {
   return parameters.find((candidate) => candidate.definition.key === key)
@@ -98,7 +93,7 @@ function ColorWell({ bound, label, dimmed }: { bound: UserInterfaceParameter | u
   return (
     <label className={`flex cursor-pointer items-center gap-2 transition-opacity ${dimmed ? 'opacity-35' : ''}`}>
       <span
-        className="relative h-6 w-10 flex-shrink-0 overflow-hidden rounded border border-[var(--border-strong)]"
+        className={`relative h-6 ${label ? 'w-10' : 'w-6'} flex-shrink-0 overflow-hidden rounded border border-[var(--border-strong)]`}
         style={{ background: bound.value }}
       >
         <input
@@ -109,7 +104,7 @@ function ColorWell({ bound, label, dimmed }: { bound: UserInterfaceParameter | u
           className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
         />
       </span>
-      <span className="text-[10px] text-[var(--text-3)]">{label}</span>
+      {label && <span className="text-[10px] text-[var(--text-3)]">{label}</span>}
     </label>
   )
 }
@@ -402,10 +397,8 @@ function GrowingTextarea({ value, onChange, ariaLabel }: { value: string; onChan
   )
 }
 
-/** One clip's editor - words + its layout (the per-clip word formation:
- *  one / row / paragraph / scatter / grid / circle). Embedded per clip in the
- *  panel's list AND shown alone in the piano roll's sidecar when a clip is
- *  selected in the sections strip. */
+/** One clip's words and layout, shown in the piano roll's sidecar when a
+ *  clip is selected in the sections strip. */
 export function LyricClipEditorCard({ trackId, clipId }: { trackId: string; clipId: string }) {
   // Clips are derived from the track's clip NOTES, so subscribe to the track
   // slice (stable across foreign edits) and derive - a selector returning a
@@ -486,114 +479,6 @@ export function LyricClipEditorCard({ trackId, clipId }: { trackId: string; clip
           </div>
         )}
       </div>
-    </div>
-  )
-}
-
-function LyricClipsSection({ trackId }: { trackId: string }) {
-  const trackSlice = useProjectStore((s) => s.tracks[trackId])
-  const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
-  const clips = useMemo(
-    () => (trackSlice ? trackLyricClips(trackSlice.blocks, beatsPerBar) : undefined),
-    [trackSlice, beatsPerBar],
-  )
-  const addLyricClip = useProjectStore((s) => s.addLyricClip)
-  const removeLyricClip = useProjectStore((s) => s.removeLyricClip)
-  const sliceLyricsIntoClips = useProjectStore((s) => s.sliceLyricsIntoClips)
-  const [paste, setPaste] = useState('')
-  const ordered = [...(clips ?? [])].sort((a, b) => a.startBeat - b.startBeat)
-  // Clips are collapsed by default - a transcribed song is dozens of them,
-  // and a column of open editors buried every setting below. A collapsed
-  // row still shows the phrase, so the list reads as the lyric sheet.
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
-  const toggle = (id: string) => setExpanded((prev) => {
-    const next = new Set(prev)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
-    return next
-  })
-  const allOpen = ordered.length > 0 && ordered.every((c) => expanded.has(c.id))
-
-  return (
-    <div className="mt-1 border-t border-[var(--border-subtle)] pt-3">
-      <SectionLabel
-        right={(
-          <span className="flex items-center gap-1">
-            {ordered.length > 1 && (
-              <button
-                onClick={() => setExpanded(allOpen ? new Set() : new Set(ordered.map((c) => c.id)))}
-                className="h-5 cursor-pointer rounded border border-[var(--border)] px-1.5 text-[9px] text-[var(--text-muted)] hover:text-[var(--text)]"
-              >{allOpen ? 'Collapse all' : 'Expand all'}</button>
-            )}
-            <button
-              onClick={() => {
-                const last = ordered[ordered.length - 1]
-                addLyricClip(trackId, {
-                  startBeat: last ? last.startBeat + last.durationBeats : 0,
-                  durationBeats: beatsPerBar,
-                  words: [],
-                  layout: last?.layout ?? { kind: 'one' },
-                })
-              }}
-              title="Add a lyric clip"
-              className="flex h-5 w-5 cursor-pointer items-center justify-center rounded border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)]"
-            ><Plus size={11} /></button>
-          </span>
-        )}
-      >LYRIC CLIPS{ordered.length > 0 ? ` · ${ordered.length}` : ''}</SectionLabel>
-      {ordered.length > 0 && (
-        <div className="mb-2 overflow-hidden rounded border border-[var(--border)]">
-          {ordered.map((clip) => {
-            const isOpen = expanded.has(clip.id)
-            const bar = Math.floor(clip.startBeat / beatsPerBar) + 1
-            const phrase = clip.words.join(' ')
-            return (
-              <div key={clip.id} className="border-b border-[var(--border-subtle)] last:border-b-0">
-                <div
-                  role="button"
-                  tabIndex={0}
-                  aria-expanded={isOpen}
-                  onClick={() => toggle(clip.id)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(clip.id) } }}
-                  className={`group flex min-h-7 w-full cursor-pointer items-center gap-1.5 px-1.5 py-1 text-left ${isOpen ? 'bg-[var(--bg-elevated)]' : 'bg-[var(--bg-app)] hover:bg-[var(--bg-panel)]'}`}
-                >
-                  <ChevronRight
-                    size={11}
-                    className={`flex-shrink-0 text-[var(--text-muted)] transition-transform ${isOpen ? 'rotate-90' : ''}`}
-                  />
-                  <span className="w-7 flex-shrink-0 font-mono text-[9px] text-[var(--text-muted)]">b{bar}</span>
-                  <span
-                    className={`min-w-0 flex-1 text-[11px] leading-snug ${phrase ? 'text-[var(--text)]' : 'italic text-[var(--text-muted)]'} ${isOpen ? '' : 'truncate'}`}
-                    title={phrase || undefined}
-                  >{phrase || 'empty clip'}</span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); removeLyricClip(trackId, clip.id) }}
-                    title="Remove this clip"
-                    className="flex h-4 w-4 flex-shrink-0 cursor-pointer items-center justify-center rounded text-transparent group-hover:text-[var(--text-muted)] hover:!text-[#d68383]"
-                  ><X size={10} /></button>
-                </div>
-                {isOpen && (
-                  <div className="bg-[var(--bg-panel)] px-2 pb-2 pt-1">
-                    <LyricClipEditorCard trackId={trackId} clipId={clip.id} />
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-      {/* Paste a verse → one line becomes one clip, laid down the timeline. */}
-      <GrowingTextarea value={paste} onChange={setPaste} ariaLabel="Paste lyrics, one line per clip" />
-      <button
-        onClick={() => { if (paste.trim()) { sliceLyricsIntoClips(trackId, paste); setPaste('') } }}
-        disabled={!paste.trim()}
-        className={`mt-1 h-6 w-full rounded border text-[10px] font-medium ${paste.trim()
-          ? 'cursor-pointer border-[var(--accent-muted)] bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25'
-          : 'cursor-default border-[var(--border)] bg-[var(--bg-app)] text-[var(--text-muted)]'}`}
-      >↓ Slice into clips (one line each)</button>
-      <p className="mb-1 mt-1 text-[9px] leading-relaxed text-[var(--text-muted)]">
-        A note sings the next word of the clip under it · <span className="font-mono">syl|la|bles</span> · <span className="font-mono">!kept together!</span>
-      </p>
     </div>
   )
 }
@@ -704,18 +589,14 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
       if (preview.load) ensureFont(preview.load)
     }
   }, [])
-  // Word-by-word vs whole-lines display, for EVERY Text Display track. The
-  // active side is the instrument's own Advance By param; transcribed tracks
-  // additionally get their notes + sheet regrouped from the sung timing.
-  const hasTiming = useProjectStore((s) => !!s.tracks[targetId]?.lyricTiming?.length)
-  const storedGrouping = useProjectStore((s) => s.tracks[targetId]?.lyricGrouping)
-  const setLyricGrouping = useProjectStore((s) => s.setLyricGrouping)
-  const lyricGrouping: 'words' | 'lines' = storedGrouping ?? 'words'
   const colorMode = findParam(parameters, 'colorMode')
   const invertBehind = numberOf(colorMode) >= 0.5
 
+  // Include retired inspector controls here so the fallback cannot bring
+  // them back. Their stored values still support existing projects.
   const placed = new Set([
     'fontSize', 'sizeMode', 'strokeWidth', 'shadow', 'opacity',
+    'glow', 'glowContained', 'jitter',
     'colorMode', 'strokeColor', 'hue', 'rainbowEnabled', 'rainbowCycleLength',
     'posX', 'posY', 'posMode', 'scatterSpread',
     'onsetBounce', 'zoomFlash', 'sustain', 'releaseDuration',
@@ -729,65 +610,27 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
 
   return (
     <section data-testid="text-display-user-interface" className="mb-3 px-2">
-      {/* --- The looks each piano-roll row wears, then the words --- */}
-      <StyleLanesSection trackId={targetId} />
-      <LyricClipsSection trackId={targetId} />
-
-      {/* --- Lyrics: how the words hit the screen --- */}
-      <div className="mt-1 border-t border-[var(--border-subtle)] pt-3">
-        <SectionLabel>LYRICS</SectionLabel>
-        {/* The words can come from the song itself - no template required. */}
-        <TranscribeButton trackId={targetId} />
-        <div className="grid grid-cols-2 overflow-hidden rounded border border-[var(--border)]">
-          {([
-            { id: 'words', label: 'Word by word' },
-            { id: 'lines', label: 'Whole lines' },
-          ] as const).map(({ id, label }) => (
-            <button
-              key={id}
-              onClick={() => setLyricGrouping(targetId, id)}
-              aria-pressed={lyricGrouping === id}
-              className={`h-7 text-[11px] font-medium cursor-pointer ${
-                lyricGrouping === id
-                  ? 'bg-[var(--accent)]/15 text-[var(--accent)]'
-                  : 'bg-[var(--bg-app)] text-[var(--text-3)] hover:text-[var(--text)]'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <p className="mb-3 mt-1 text-[9px] leading-relaxed text-[var(--text-muted)]">
-          {lyricGrouping === 'lines'
-            ? hasTiming
-              ? 'One line per note, grouped from the sung timing. Edit line breaks freely.'
-              : 'Each line of the sheet shows whole - one note advance per line.'
-            : hasTiming
-              ? 'One word per note, timed to the singing.'
-              : 'One word per note advance.'}
-        </p>
-      </div>
+      <TranscribeButton trackId={targetId} />
 
       {/* --- Type: the glyph sliders (fonts live on the style lanes) --- */}
       <BoundSlider bound={findParam(parameters, 'fontSize')} />
       {(() => {
-        // Directly under the Size slider, for the same reason posMode sits under
-        // the placement sliders: it decides whether automating Size resizes every
-        // word live or latches each word at its onset.
         const mode = findParam(parameters, 'sizeMode')
         if (!mode || typeof mode.value !== 'number') return null
         return (
-          <ParamControl
-            param={mode.definition}
-            numValue={mode.value}
-            strValue={undefined}
-            onNum={mode.setValue}
-          />
+          <>
+            <ParamControl
+              param={mode.definition}
+              numValue={mode.value}
+              strValue={undefined}
+              onNum={mode.setValue}
+            />
+            <p className="mb-3 text-[10px] leading-relaxed text-[var(--text-muted)]">
+              When Font Size is animated, Live resizes all visible words. Per word keeps each word’s size from when its note starts.
+            </p>
+          </>
         )
       })()}
-      <BoundSlider bound={findParam(parameters, 'strokeWidth')} />
-      <BoundSlider bound={findParam(parameters, 'shadow')} />
-      <BoundSlider bound={findParam(parameters, 'opacity')} />
 
       {/* --- Color --- */}
       <div className="mt-1 border-t border-[var(--border-subtle)] pt-3">
@@ -811,37 +654,16 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
             })}
           </div>
         )}
-        <div className="mb-3 flex items-center gap-5" title={invertBehind ? 'Colors are ignored while inverting what is behind the text' : undefined}>
-          <ColorWell bound={findParam(parameters, 'strokeColor')} label="Stroke" dimmed={invertBehind} />
-        </div>
-        <BoundSlider bound={findParam(parameters, 'hue')} />
-        <BoundToggleRow bound={findParam(parameters, 'rainbowEnabled')} />
-        <BoundSlider bound={findParam(parameters, 'rainbowCycleLength')} />
       </div>
 
-      {/* --- Placement: where on the frame the words land. Right-click either
-              slider to automate it - that is how words get moved per line or
-              along a path, and the reason these are params not an effect. --- */}
-      <div className="border-t border-[var(--border-subtle)] pt-3">
-        <SectionLabel>PLACEMENT</SectionLabel>
-        <BoundSlider bound={findParam(parameters, 'posX')} />
-        <BoundSlider bound={findParam(parameters, 'posY')} />
-        {(() => {
-          // Belongs directly under the two sliders it modifies - it decides whether
-          // they move every word live or latch per word, and reading it at the
-          // bottom of the panel with the generic leftovers gives no hint of that.
-          const mode = findParam(parameters, 'posMode')
-          if (!mode || typeof mode.value !== 'number') return null
-          return (
-            <ParamControl
-              param={mode.definition}
-              numValue={mode.value}
-              strValue={undefined}
-              onNum={mode.setValue}
-            />
-          )
-        })()}
+      <div className="flex items-start gap-2" title={invertBehind ? 'Stroke color is ignored while inverting what is behind the text' : undefined}>
+        <div className="min-w-0 flex-1 pt-1">
+          <BoundSlider bound={findParam(parameters, 'strokeWidth')} />
+        </div>
+        <ColorWell bound={findParam(parameters, 'strokeColor')} label="" dimmed={invertBehind} />
       </div>
+      <BoundSlider bound={findParam(parameters, 'shadow')} />
+      <BoundSlider bound={findParam(parameters, 'opacity')} />
 
       {/* --- Motion --- */}
       <div className="border-t border-[var(--border-subtle)] pt-3">
@@ -851,71 +673,6 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
         <BoundToggleRow bound={findParam(parameters, 'sustain')} />
         <BoundSlider bound={findParam(parameters, 'releaseDuration')} />
         <BoundSlider bound={findParam(parameters, 'scatterSpread')} />
-      </div>
-
-      {/* --- Echo (delay taps) - children appear once taps >= 1 --- */}
-      <div className="border-t border-[var(--border-subtle)] pt-3">
-        <SectionLabel>ECHO</SectionLabel>
-        <BoundSlider bound={findParam(parameters, 'delayTaps')} />
-        <BoundSlider bound={findParam(parameters, 'delayTime')} />
-        <BoundSlider bound={findParam(parameters, 'delayScaleFalloff')} />
-        <BoundSlider bound={findParam(parameters, 'delayOpacityFalloff')} />
-        <BoundToggleRow bound={findParam(parameters, 'pingPongEnabled')} />
-        <BoundSlider bound={findParam(parameters, 'pingPongWidth')} />
-      </div>
-
-      {/* --- Flight - the toggle lives in the header, sliders appear with it --- */}
-      <div className="border-t border-[var(--border-subtle)] pt-3">
-        {(() => {
-          const flight = findParam(parameters, 'flightEnabled')
-          return (
-            <SectionLabel
-              right={flight && typeof flight.value === 'number'
-                ? <ParamToggle on={flight.value >= 0.5} onChange={(v) => flight.setValue(v ? 1 : 0)} label="Flight mode" />
-                : undefined}
-            >
-              FLIGHT
-            </SectionLabel>
-          )
-        })()}
-        <BoundSlider bound={findParam(parameters, 'flightSpeed')} />
-        <BoundSlider bound={findParam(parameters, 'flightMaxDepth')} />
-        <BoundSlider bound={findParam(parameters, 'flightDrift')} />
-        <BoundSlider bound={findParam(parameters, 'flightTumble')} />
-        <BoundSlider bound={findParam(parameters, 'flightSubdivRate')} />
-      </div>
-
-      {/* --- Particle words - words become a morphing particle cloud; the
-              sliders appear with the toggle (showIf) --- */}
-      <div className="border-t border-[var(--border-subtle)] pt-3">
-        {(() => {
-          const particle = findParam(parameters, 'particleEnabled')
-          return (
-            <SectionLabel
-              right={particle && typeof particle.value === 'number'
-                ? <ParamToggle on={particle.value >= 0.5} onChange={(v) => particle.setValue(v ? 1 : 0)} label="Particle words" />
-                : undefined}
-            >
-              PARTICLES
-            </SectionLabel>
-          )
-        })()}
-        {/* Field Mode sits directly under the particle toggle: it changes what
-            the particles ARE (an ambient screen the words condense out of), so
-            it reads before the shared sliders that tune either behavior. */}
-        <BoundToggleRow bound={findParam(parameters, 'particleField')} />
-        <BoundSlider bound={findParam(parameters, 'fieldDepth')} />
-        <BoundSlider bound={findParam(parameters, 'fieldDrift')} />
-        <BoundSlider bound={findParam(parameters, 'fieldDensity')} />
-        <BoundSlider bound={findParam(parameters, 'particleCount')} />
-        <BoundSlider bound={findParam(parameters, 'particleSize')} />
-        <BoundSlider bound={findParam(parameters, 'particleGlow')} />
-        <BoundToggleRow bound={findParam(parameters, 'particleOpaque')} />
-        <BoundSlider bound={findParam(parameters, 'particleMorphBeats')} />
-        <BoundToggleRow bound={findParam(parameters, 'particleFillGap')} />
-        <BoundSlider bound={findParam(parameters, 'particleStagger')} />
-        <BoundSlider bound={findParam(parameters, 'particleVariation')} />
-        <BoundSlider bound={findParam(parameters, 'particlePulse')} />
       </div>
 
       {/* Anything the layout does not know about still gets a control. */}
@@ -936,6 +693,9 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
           })}
         </div>
       )}
+      <div className="border-t border-[var(--border-subtle)] pt-3">
+        <StyleLanesSection trackId={targetId} />
+      </div>
     </section>
   )
 }
