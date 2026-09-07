@@ -21,6 +21,7 @@ import { resolveDeclaredMidiRows } from '../midi/resolveDeclaredRows'
 import type { InstrumentItem } from '../LeftSidebar'
 import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react'
 import type { Track as TrackType } from '../../types'
+import { TrackLivePreview } from './TrackLivePreview'
 import { TrackIcon, TRACK_ICON_WIDTH } from './TrackIcon'
 import { trackGlyph } from './trackGlyphs'
 import { TrackTransformPanel, beginTransformDrag, resetTransformValues, transformValue } from './TrackTransformPanel'
@@ -141,8 +142,9 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
   // column is too narrow for name + fader + buttons, so it never crowds the
   // M/S cluster out of alignment. The icon slot eats into that room, so it is
   // part of the sum - otherwise adding icons silently shrinks the name instead.
+  const showLivePreview = track.type !== 'audio' && labelWidth - depth * INDENT_PX >= 216
   const showFader = hasTransform
-    && labelWidth - (LABEL_BASE_PX + depth * INDENT_PX) >= 210 + TRACK_ICON_WIDTH
+    && labelWidth - (LABEL_BASE_PX + depth * INDENT_PX) >= 210 + TRACK_ICON_WIDTH + (showLivePreview ? 64 : 0)
 
   // Double-click the name → inline rename. Enter/blur commits, Esc cancels.
   const [renaming, setRenaming] = useState(false)
@@ -638,6 +640,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
             </button>
           )}
         </div>
+        {showLivePreview && <TrackLivePreview trackId={track.id} />}
         {panelAnchor && hasTransform && (
           <TrackTransformPanel trackId={track.id} anchor={panelAnchor} onClose={() => setPanelAnchor(null)} />
         )}

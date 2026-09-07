@@ -1,4 +1,4 @@
-export const TRACK_LABEL_WIDTH = 168
+export const TRACK_LABEL_WIDTH = 248
 
 /**
  * Half-width (px) of the ruler playhead triangle. The grid reserves a gutter of

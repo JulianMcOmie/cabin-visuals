@@ -42,6 +42,21 @@ re-resolves one track, not the scene.
 
 ## timeline/ — the arrangement view
 
+- **Inline live track previews** (`TrackLivePreview` + `visual/TrackPreviewRenderer`):
+  canvases live INSIDE each sticky label, so native scrolling and row zoom align
+  them without a position mirror. One viewport observer parks offscreen surfaces;
+  one 96×54-per-row atlas uses the existing renderer at up to 30fps and one async
+  GPU readback. `TrackPreviewRoot` wraps the final object output (including shader
+  quads and instanced meshes), avoiding duplicate instruments/simulations. The
+  temporary layer 8 includes the real lights and restores all masks/renderer
+  state; it runs after the compositor at priority 101 and skips export pins.
+  Previews follow the actual beat, including paused edits/scrubs; global scene
+  effects/composition are not applied to these isolated object previews. Device
+  rows show their affected objects; groups show their members. Narrow labels
+  keep room for editing controls by hiding thumbnails (default width is 248).
+  `scripts/perf/track-live-previews.mjs` checks pixels, pause/playback/scrubbing,
+  renderer restoration, offscreen reveal, and per-frame scrolling alignment.
+
 - **MIDI activity is viewport-scoped** (`observeTimelineViewport.ts`): one shared
   IntersectionObserver per lane scroller enables registrations only near the
   visible region (200px overscan). Note DOM stays mounted: repeated mount/unmount
