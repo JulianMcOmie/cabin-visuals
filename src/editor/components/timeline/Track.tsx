@@ -449,7 +449,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
             content box in this label (the name group, the control cluster)
             carries `relative` for the same reason. */}
         <span className="relative flex flex-shrink-0 items-center" style={{ opacity: ghostOpacity }}>
-          <TrackIcon glyph={trackGlyph(track, activeIsMain)} color={identityColor} muted={isDarkenedRow} />
+          <TrackIcon glyph={trackGlyph(track, activeIsMain)} color={identityColor} muted={isDarkenedRow} gradient={track.moverId === 'gradient' ? (track.inputValues?.flip ?? 0) >= 0.5 ? [track.stringParams?.colorB ?? '#ff4d88', track.stringParams?.colorA ?? '#4dd2ff'] : [track.stringParams?.colorA ?? '#4dd2ff', track.stringParams?.colorB ?? '#ff4d88'] : undefined} />
         </span>
         {/* Name + its collapse toggle, grouped so the chevron hugs the name text
             (the empty space sits to their right, not between them). */}

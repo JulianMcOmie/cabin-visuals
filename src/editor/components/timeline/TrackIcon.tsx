@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
+import { gradientStops } from '../../utils/oklch'
 import { trackChromeColor } from '../../utils/trackChromeColor'
 
 /**
@@ -27,9 +28,11 @@ interface TrackIconProps {
   color: string
   /** Sub-rows (automation / envelope / ability) sit quieter than their object. */
   muted?: boolean
+  gradient?: [string, string]
 }
 
-export function TrackIcon({ glyph, color, muted }: TrackIconProps) {
+export function TrackIcon({ glyph, color, muted, gradient }: TrackIconProps) {
+  const gradientId = useId()
   const tint = trackChromeColor(color)
   return (
     <span
@@ -46,13 +49,14 @@ export function TrackIcon({ glyph, color, muted }: TrackIconProps) {
         height="15"
         viewBox="0 0 16 16"
         fill="none"
-        stroke="currentColor"
+        stroke={gradient ? `url(#${gradientId})` : "currentColor"}
         strokeWidth="1.3"
         strokeLinecap="round"
         strokeLinejoin="round"
         aria-hidden="true"
         className="relative"
       >
+        {gradient && <defs><linearGradient id={gradientId}>{gradientStops(gradient[0], gradient[1], 9).map((color, i) => <stop key={i} offset={`${i * 12.5}%`} stopColor={color} />)}</linearGradient></defs>}
         {glyph}
       </svg>
     </span>

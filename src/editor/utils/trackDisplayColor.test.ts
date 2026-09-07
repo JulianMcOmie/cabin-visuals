@@ -159,3 +159,12 @@ test('neutral instrument and Colorizer icons stay neutral instead of taking the 
     }
   }
 })
+
+test('Gradient tint follows both endpoints and preserves a neutral palette', () => {
+  const lane=baseTrack({type:'mover',moverId:'gradient',stringParams:{colorA:'#ff0000',colorB:'#ff0000'}})
+  assert.equal(resolveTrackIdentityColor(lane),'#ff0000')
+  const changed={...lane,stringParams:{colorA:'#ff0000',colorB:'#00ff00'}}
+  assert.notEqual(resolveTrackIdentityColor(changed),resolveTrackIdentityColor(lane))
+  const neutral={...lane,stringParams:{colorA:'#ffffff',colorB:'#ffffff'}}
+  assert.equal(resolveTrackDisplayColor(neutral),'#ffffff')
+})

@@ -8,19 +8,17 @@
 // the strip shows is byte-for-byte what the stage samples, because both call
 // the same function.
 //
-// Below the ramp, the placement console: a segmented APPLY BY (position /
-// copy index) and the kit knobs for ANGLE / SPAN / OFFSET / AMOUNT. The
-// position knobs stay visible but dimmed in index mode - the layout holds
-// still, and the dimming says "currently without effect" (the shared
-// ColorWheelPill idiom) rather than hiding the controls.
+// Below the ramp: mapping mode, relevant geometry controls, and shared amount.
+// Line and curve paths have numeric XYZ editing plus a transient stage overlay.
 //
 // The accent is DERIVED: mid-ramp of the current blend, so the console lights
 // with the gradient itself (the same spirit as accent-follows-color-param).
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { gradientAccent } from '../utils/gradientAccent'
+import { GradientPathEditor } from './GradientPathEditor'
 import { ArrowLeftRight } from 'lucide-react'
 import {
-  GRADIENT_MODE_INDEX,
   gradientStops,
 } from '../core/visualCopies/gradientColorizer'
 import {
@@ -78,9 +76,15 @@ function StopSwatch({ bound, label, align }: {
   )
 }
 
-export const GradientColorizerUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
+export const GradientColorizerUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters, targetId }) => {
   const pool = bindPanel(parameters)
   const mode = pool.select('mode')
+  const near = pool.num('near')
+  const far = pool.num('far')
+  const mapping = pool.select('mapping')
+  const width = pool.num('width')
+  pool.string('path')
+  const path = parameters.find(p => p.definition.key === 'path')
   const amount = pool.num('amount')
   const angle = pool.num('angle')
   const span = pool.num('span')
@@ -101,13 +105,14 @@ export const GradientColorizerUserInterfaceRenderer: UserInterfaceRendererDefini
     return `linear-gradient(90deg, ${ordered.map((hex, i) => `${hex} ${(i / (ordered.length - 1)) * 100}%`).join(', ')})`
   }, [a, b, flipped])
   // The console lights with the blend itself: mid-ramp is the panel's accent.
-  const accent = useMemo(() => gradientStops(a, b, 3)[1], [a, b])
+  const accent = useMemo(() => gradientAccent(a, b), [a, b])
 
   if (!mode || !amount || !angle || !span || !offset || !flip || !colorA || !colorB) {
     return <ParameterList parameters={parameters} />
   }
 
-  const byPosition = mode.value !== GRADIENT_MODE_INDEX
+  const byPosition = mode.value === 0
+  const byPath = mode.value === 3 || mode.value === 4
 
   return (
     <Console accent={accent} testId="gradient-user-interface">
@@ -145,16 +150,23 @@ export const GradientColorizerUserInterfaceRenderer: UserInterfaceRendererDefini
       <div className="flex flex-col gap-2 px-3 pb-3 pt-1">
         {/* APPLY BY: which axis the ramp spreads along - the world, or the
             chain's copy order. */}
-        <Segmented b={mode} name="Apply by" />
+        <label className="flex items-center justify-between text-xs text-white/60">Color by
+          <select aria-label="Color by" className="rounded bg-zinc-900 px-2 py-1 text-white" value={mode.value} onChange={e => mode.set(Number(e.target.value))}>
+            {mode.def.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </label>
+        {mode.value === 2 && near && far && <ControlRow><Knob b={near} label="NEAR Z" /><Knob b={far} label="FAR Z" /></ControlRow>}
+        {byPath && mapping && <Segmented b={mapping} name="Mapping" />}
+        {byPath && mapping?.value === 1 && width && <Knob b={width} label="WIDTH" />}
+        {byPath && path && <GradientPathEditor targetId={targetId} bound={path} curved={mode.value === 4} colorA={flipped ? b : a} colorB={flipped ? a : b} />}
 
         <ControlRow className="justify-between gap-1 px-1">
-          {/* Dimmed, not hidden, in index mode: still editable, currently
-              without effect - and the panel doesn't reflow on a mode switch. */}
-          <div className={`flex items-end gap-1 transition-opacity ${byPosition ? '' : 'opacity-40'}`}>
+          {/* Position controls only affect the original planar mode. */}
+          {byPosition && <div className="flex items-end gap-1">
             <Knob b={angle} label="ANGLE" ariaLabel="Gradient angle" suffix="°" format={(v) => v.toFixed(0)} />
             <Knob b={span} label="SPAN" ariaLabel="Gradient span in world units" />
             <Knob b={offset} label="OFFSET" ariaLabel="Gradient center offset" />
-          </div>
+          </div>}
           <Knob b={amount} label="AMOUNT" ariaLabel="Gradient amount" large format={(v) => `${Math.round(v * 100)}%`} />
         </ControlRow>
 

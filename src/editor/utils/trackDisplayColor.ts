@@ -1,6 +1,7 @@
 import { getInstrument } from '../instruments'
 import type { ObjectInstrumentDef } from '../instruments/types'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
+import { gradientAccent } from './gradientAccent'
 import { colorToOklch } from './oklch'
 import { AUDIO_TRACK_COLOR } from './trackColors'
 import type { Track } from '../types'
@@ -66,6 +67,9 @@ function instrumentIdentity(track: Track): string | undefined {
 function moverIdentity(track: Track, preserveNeutral = false): string | undefined {
   if (track.type !== 'mover' && track.type !== 'splitter') return undefined
   const def = getMoverOrSplitterDefinition(track.moverId ?? track.splitterId)
+  if (def?.id === 'gradient') {
+    return gradientAccent(track.stringParams?.colorA, track.stringParams?.colorB)
+  }
   const identity = def?.identityColor
   if (!identity) return undefined
   if (typeof identity === 'string') return identity
