@@ -509,7 +509,7 @@ const LINE_MAX_COPIES = 32
 
 export const lineSplitter: MoverOrSplitterDefinition<LineSettings> = {
   id: 'line',
-  label: 'Line',
+  label: 'Duplicate',
   kind: 'splitter',
   identityColor: LINE_COLOR,
   params: [
