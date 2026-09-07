@@ -470,6 +470,10 @@ and therefore flattens the object to one colour, while this one adds turns to
   clobber a colour another entry owns, which is what makes it the safe device
   to automate. ROTATE is that target — measured in TURNS, so a 0→1 lane comes
   back exactly where it started; nothing is clamped, because a wheel has no ends.
+- **CONTINUOUS adds `beat × speed` turns** to ROTATE and SPREAD, with signed
+  SPEED in turns per beat (default 0.125 = one cycle every eight beats).
+  It defaults off for existing projects. Phase uses the copy's beat so pause,
+  scrub, time warps and export agree; no notes or automation are required.
 - **SPREAD is what keeps it a colorizer and not a global filter**: the shared
   MAP vocabulary (X/Y/Radial/Spherical/Depth/Copy index) scales each copy's turn,
   so a formation fans across the wheel. It defaults to **Copy index**, not the

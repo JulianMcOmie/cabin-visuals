@@ -63,6 +63,10 @@ export interface HueRotateSettings {
   /** Turns of hue every copy takes, 0..1. THE automation target: one full turn
    *  is the whole wheel, so a 0→1 lane loops seamlessly. */
   rotate: number
+  /** Keep turning with the playhead; off preserves existing projects. */
+  continuous: number
+  /** Signed turns per beat, added to ROTATE while continuous is on. */
+  speed: number
   /** Extra turns across the map - the difference between the copy at t=0 and
    *  the copy at t=1. Signed, and deliberately allowed past a full turn: a
    *  formation wrapping the wheel twice is a real look. */
@@ -83,6 +87,8 @@ export interface HueRotateSettings {
 
 const HUE_PARAMS: ParamDef[] = [
   { key: 'rotate', label: 'Rotate', min: 0, max: 1, step: 0.005, default: 0 },
+  { key: 'continuous', label: 'Continuous', type: 'boolean', default: 0 },
+  { key: 'speed', label: 'Speed (turns/beat)', min: -2, max: 2, step: 0.005, default: 0.125, showIf: 'continuous' },
   { key: 'spread', label: 'Spread', min: -2, max: 2, step: 0.005, default: 0.25 },
   {
     key: 'mode',
@@ -151,8 +157,10 @@ export function hueRotatePosition(
  *  Unwrapped on purpose - three's `setHSL` and the OKLCH rotation are both
  *  periodic, so wrapping here would only add a discontinuity for an automation
  *  lane to fall into. */
-export function hueRotateTurns(settings: HueRotateSettings, t: number): number {
-  return settings.rotate + settings.spread * t
+export function hueRotateTurns(settings: HueRotateSettings, t: number, beat = 0): number {
+  // Derive phase from the copy's beat so seeking, time warps and export agree.
+  const continuousTurn = settings.continuous >= 0.5 ? beat * settings.speed : 0
+  return settings.rotate + settings.spread * t + continuousTurn
 }
 
 export const hueRotateColorizer: MoverOrSplitterDefinition<HueRotateSettings> = {
@@ -164,15 +172,15 @@ export const hueRotateColorizer: MoverOrSplitterDefinition<HueRotateSettings> = 
   kind: 'colorizer',
   identityColor: HUE_ROTATE_COLOR,
   params: HUE_PARAMS,
-  // Passive, like the Gradient and the Riso: no notes. ROTATE is the automation
-  // target, and a burst/cycle lane on it is how this hits on the beat.
+  // No notes required: continuous rotation follows the beat, and ROTATE remains
+  // an additive phase offset that can also be automated.
   midiRows: () => [],
   strictMidiRows: true,
   resolve({ settings }) {
     const perceptual = settings.hueMode !== HUE_MODE_HSL
     const scratchPosition = new Vector3()
     return {
-      apply(visualCopy, { index, count, placementTransform }) {
+      apply(visualCopy, { beat, index, count, placementTransform }) {
         // World position, the same read as the other colorizers: the chained
         // transform's translation pushed through the track placement.
         scratchPosition.setFromMatrixPosition(visualCopy.transform)
@@ -190,7 +198,7 @@ export const hueRotateColorizer: MoverOrSplitterDefinition<HueRotateSettings> = 
             // palette colorizer turns the colour that palette just chose. At
             // ROTATE 0 with SPREAD 0 this adds exactly nothing - the passthrough
             // every colorizer owes an upstream tint costs no special case here.
-            hue: visualCopy.colorShift.hue + hueRotateTurns(settings, t),
+            hue: visualCopy.colorShift.hue + hueRotateTurns(settings, t, beat),
             saturation: visualCopy.colorShift.saturation + settings.saturation,
             lightness: visualCopy.colorShift.lightness + settings.lightness,
             // The circle the SUM turns on. Last writer wins, like the tint's
