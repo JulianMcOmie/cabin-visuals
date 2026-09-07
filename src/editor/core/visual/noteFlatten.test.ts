@@ -79,7 +79,7 @@ test('loop length is inferred from the note extent when unset', () => {
   assert.deepEqual(out.map((n) => n.beat), [0, 8])
 })
 
-test('notes past the loop window play once, unlooped', () => {
+test('notes past the loop window stay stored but do not sound', () => {
   const out = flattenBlocks([
     block({
       durationBars: 3, // beats 0..12
@@ -87,12 +87,12 @@ test('notes past the loop window play once, unlooped', () => {
       loopLengthBars: 1, // 4-beat pattern window
       notes: [
         note('a', 1, 0.5), // in-window: tiles at 1, 5, 9
-        note('b', 6, 0.5), // past the window: sounds at 6 only, no fold to 2
+        note('b', 6, 0.5), // past the window: excluded, no fold to 2
       ],
     }),
   ], 4)
 
-  assert.deepEqual(out.map((n) => n.beat), [1, 5, 6, 9])
+  assert.deepEqual(out.map((n) => n.beat), [1, 5, 9])
 })
 
 test('split-shifted phases fold modulo the loop length', () => {
@@ -163,4 +163,25 @@ test('pitch 61 is an ordinary note unless the blocks carry lyric clips', () => {
   assert.deepEqual(plain.map((n) => [n.beat, n.durationBeats]), [[3, 1]])
   const text = flattenBlocks(blocks, 4, undefined, true)
   assert.deepEqual(text.map((n) => [n.beat, n.durationBeats]), [[3, 4], [5, 1]])
+})
+
+
+test('loop notes crossing the source edge are clipped on every pass', () => {
+  const source = [note('tail', 3, 5), note('boundary', 4, 1), note('outside', 6, 1)]
+  const tiled = tileLoopNotes(source, 4, 11.5)
+  assert.deepEqual(tiled.map(t => [t.note.id, t.startBeat, t.durationBeats]), [
+    ['tail', 3, 1], ['tail', 7, 1], ['tail', 11, 0.5],
+  ])
+  assert.equal(source[0].durationBeats, 5, 'looping must not destroy the authored tail')
+  assert.equal(source.length, 3, 'hidden notes remain available after unlooping')
+})
+
+test('empty source windows loop silently and accept notes later', () => {
+  const b = block({ durationBars: 3, loop: true, loopLengthBars: 1 })
+  assert.deepEqual(flattenBlocks([b], 4), [])
+  b.notes = [note('outside', 5, 1)]
+  assert.deepEqual(flattenBlocks([b], 4), [])
+  b.notes.push(note('new', 1, 0.5))
+  assert.deepEqual(flattenBlocks([b], 4).map(n => n.beat), [1, 5, 9])
+  assert.deepEqual(tileLoopNotes([], 0.000001, 100000), [])
 })
