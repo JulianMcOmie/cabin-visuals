@@ -8,7 +8,7 @@ export const TRACK_LABEL_WIDTH = 168
 export const PLAYHEAD_TRIANGLE_HALF = 6
 
 /**
- * Edge grab zones (the loop band's, a block's resize/loop handles) are SCREEN
+ * Block edge grab zones (resize/loop handles) are SCREEN
  * space - CSS px, not content space - so a handle stays the same size under the
  * pointer at every zoom level; what zoom changes is how wide the THING it sits
  * on renders. Zoomed out that thing can get narrower than two handles plus a
@@ -20,9 +20,6 @@ const EDGE_HIT_MAX_SHARE = 0.4
 export function edgeHitPx(widthPx: number, hitPx: number): number {
   return Math.min(hitPx, widthPx * EDGE_HIT_MAX_SHARE)
 }
-
-/** Inset from each loop-band edge that remains outside the draggable middle. */
-export const LOOP_MOVE_EDGE_INSET = 10
 
 /** Grab zone on each edge of a timeline block: the left/right resize handles and
  *  the top-right loop handle. Size it through edgeHitPx so a narrow block (deep

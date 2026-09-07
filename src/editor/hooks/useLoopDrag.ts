@@ -3,7 +3,7 @@ import { useTimeStore } from '../store/TimeStore'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 
 // Under this much horizontal movement the press is a click, and a click on the
-// loop lane clears the region.
+// existing loop toggles it.
 const CLICK_THRESHOLD_PX = 3
 const MIN_RESIZED_LOOP_BEATS = 1
 
@@ -32,7 +32,7 @@ interface UseLoopDragOptions {
 /**
  * Loop-region gesture for a ruler's top half: drag spans the region between the
  * press anchor and the pointer (live-updated, min/max normalized), a plain
- * click clears it. Window-level listeners + the shared cursor lock, same shape
+ * click on the existing region toggles it. Window-level listeners + the shared cursor lock, same shape
  * as useScrub. The region lives in TimeStore (ephemeral transport state).
  */
 export function useLoopDrag({ computeBeat, maxBeat, onGuideChange }: UseLoopDragOptions) {
@@ -84,7 +84,11 @@ export function useLoopDrag({ computeBeat, maxBeat, onGuideChange }: UseLoopDrag
     e.stopPropagation()
     const anchor = computeRef.current(e.clientX)
     const origin = useTimeStore.getState().loopRegion
-    if (anchor == null || !origin) return
+    if (!origin?.enabled) {
+      startLoopDrag(e)
+      return
+    }
+    if (anchor == null) return
 
     const originX = e.clientX
     let dragging = false
@@ -116,12 +120,15 @@ export function useLoopDrag({ computeBeat, maxBeat, onGuideChange }: UseLoopDrag
     window.addEventListener('pointermove', onMove, { signal: controller.signal })
     window.addEventListener('pointerup', onUp, { signal: controller.signal })
     window.addEventListener('pointercancel', onCancel, { signal: controller.signal })
-  }, [])
+  }, [startLoopDrag])
 
   const startLoopResize = useCallback((e: ReactPointerEvent, edge: LoopResizeEdge) => {
     e.stopPropagation()
     const origin = useTimeStore.getState().loopRegion
-    if (!origin) return
+    if (!origin?.enabled) {
+      startLoopDrag(e)
+      return
+    }
 
     const originX = e.clientX
     let dragging = false
@@ -156,7 +163,7 @@ export function useLoopDrag({ computeBeat, maxBeat, onGuideChange }: UseLoopDrag
     window.addEventListener('pointermove', onMove, { signal: controller.signal })
     window.addEventListener('pointerup', onUp, { signal: controller.signal })
     window.addEventListener('pointercancel', onCancel, { signal: controller.signal })
-  }, [])
+  }, [startLoopDrag])
 
   return { startLoopDrag, startLoopMove, startLoopResize }
 }

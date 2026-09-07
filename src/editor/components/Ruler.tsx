@@ -1,13 +1,12 @@
 import { memo, useMemo, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react'
 import { useTimeStore } from '../store/TimeStore'
 import {
-  LOOP_MOVE_EDGE_INSET,
   LOOP_REGION_DISABLED_COLOR,
   LOOP_REGION_ENABLED_COLOR,
   PLAYHEAD_TRIANGLE_HALF,
-  edgeHitPx,
 } from '../constants'
 import { computeRulerGrid } from './rulerGrid'
+import { hitLoopRegion } from './loopHitTest'
 import type { LoopResizeEdge } from '../hooks/useLoopDrag'
 
 interface RulerProps {
@@ -207,12 +206,13 @@ export function Ruler({
 }: RulerProps) {
   const loopRegion = useTimeStore((s) => s.loopRegion)
   const barWidthPx = beatsPerBar * pixelsPerBeat
-  // The band's own width is content space (it shrinks as you zoom out), but its
-  // resize handles are screen space. Without the cap, a band narrower than two
-  // insets hands its whole width to the LAST handle painted (the end one), and
-  // the start edge + the move middle become ungrabbable at low zoom.
   const loopBandWidthPx = loopRegion ? (loopRegion.endBeat - loopRegion.startBeat) * pixelsPerBeat : 0
-  const loopEdgeInset = edgeHitPx(loopBandWidthPx, LOOP_MOVE_EDGE_INSET)
+  // Read the translated content bounds so scrolling and pickup space use the
+  // same client-pixel coordinates as the pointer. Zoom never scales the radius.
+  const loopHit = (clientX: number) => {
+    const rect = contentRef.current?.getBoundingClientRect()
+    return rect ? hitLoopRegion(clientX - rect.left - leadInPx, loopRegion, pixelsPerBeat) : 'create'
+  }
   const beatExtent = totalBeats ?? totalBars * beatsPerBar
 
   // Zoom-adaptive grid (Logic-style), shared with the playhead snap - see
@@ -241,17 +241,21 @@ export function Ruler({
         data-loop-lane=""
         className="relative flex-1 overflow-clip"
         onPointerDown={(e) => {
-          // Top half = the loop lane (drag defines a region, click clears it);
-          // bottom half = the scrub, unchanged.
           const rect = e.currentTarget.getBoundingClientRect()
-          if (e.clientY < rect.top + rect.height / 2) onLoopDragStart(e)
-          else onScrubStart(e)
+          if (e.clientY >= rect.top + rect.height / 2) {
+            onScrubStart(e)
+            return
+          }
+          const hit = loopHit(e.clientX)
+          if (hit === 'start' || hit === 'end') onLoopResizeStart(e, hit)
+          else if (hit === 'move') onLoopMoveStart(e)
+          else onLoopDragStart(e)
         }}
         onPointerMove={(e) => {
-          // The loop lane (top half) shows the normal cursor; only the scrub
-          // half advertises ew-resize.
           const rect = e.currentTarget.getBoundingClientRect()
-          e.currentTarget.style.cursor = e.clientY < rect.top + rect.height / 2 ? 'default' : 'ew-resize'
+          const hit = loopHit(e.clientX)
+          e.currentTarget.style.cursor = e.clientY >= rect.top + rect.height / 2
+            || hit === 'start' || hit === 'end' ? 'ew-resize' : hit === 'move' ? 'grab' : 'default'
         }}
       >
         <div ref={contentRef} className="absolute top-0 bottom-0" style={{ left: PLAYHEAD_TRIANGLE_HALF, width: contentWidthPx, willChange: 'transform' }}>
@@ -299,26 +303,7 @@ export function Ruler({
                 borderRight: `1px solid ${loopRegion.enabled ? loopEdge : 'rgba(155, 155, 155, 0.45)'}`,
                 zIndex: 5,
               }}
-            >
-              <div
-                data-loop-resize-handle="start"
-                className="absolute top-0 bottom-0 left-0 cursor-ew-resize pointer-events-auto"
-                style={{ width: loopEdgeInset }}
-                onPointerDown={(e) => onLoopResizeStart(e, 'start')}
-              />
-              <div
-                data-loop-move-handle=""
-                className="absolute top-0 bottom-0 cursor-grab pointer-events-auto"
-                style={{ left: loopEdgeInset, right: loopEdgeInset }}
-                onPointerDown={onLoopMoveStart}
-              />
-              <div
-                data-loop-resize-handle="end"
-                className="absolute top-0 bottom-0 right-0 cursor-ew-resize pointer-events-auto"
-                style={{ width: loopEdgeInset }}
-                onPointerDown={(e) => onLoopResizeStart(e, 'end')}
-              />
-            </div>
+            />
           )}
 
           <RulerTicks pixelsPerBeat={pixelsPerBeat} beatsPerBar={beatsPerBar} totalBars={totalBars} beatExtent={beatExtent} />
