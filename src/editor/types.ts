@@ -374,6 +374,8 @@ export interface Track {
    *  burst targets) is multiplied by this and clamped back to the param's range.
    *  1 = as written (default), 0 = the lane flattens to zero, up to
    *  AUTOMATION_AMOUNT_MAX for boosting a lane written low. */
+  /** New lanes store a target-specific default; absence preserves legacy override playback. */
+  automationCombine?: 'override' | 'sum' | 'multiply'
   automationAmount?: number
   color: string
   muted: boolean

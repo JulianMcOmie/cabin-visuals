@@ -1100,14 +1100,13 @@ function RangeConsole({ bounds, range, accent, onRange }: {
 }
 
 export function AutomationUserInterface({
-  targetLabel, targetKey, targetOptions, onTarget, color, mode, interpolation, tension, physics, onPhysics, noise, burst, cycle, force, amount, paramBounds, range, onMode, onInterpolation, onTension, onNoise, onBurst, onCycle, onForce, onAmount, onRange,
+  combine, onCombine, targetLabel, targetKey, targetOptions, onTarget, color, mode, interpolation, tension, physics, onPhysics, noise, burst, cycle, force, amount, paramBounds, range, onMode, onInterpolation, onTension, onNoise, onBurst, onCycle, onForce, onAmount, onRange,
 }: {
   /** What the lane drives - "Size", "Kaleidoscope · Segments". */
   targetLabel: string
   /** The lane's targetParam key (fx-namespaced for effect settings). */
   targetKey?: string
-  /** Every param this lane could drive instead; siblings' targets arrive
-   *  disabled. Empty/absent hides the picker row. */
+  /** Every param this lane could drive instead. Empty/absent hides the picker. */
   targetOptions?: { key: string; label: string; disabled: boolean }[]
   onTarget?: (key: string, label: string) => void
   /** The lane's display color; every accent in the panel derives from it. */
@@ -1124,6 +1123,8 @@ export function AutomationUserInterface({
   cycle: CycleConfig | undefined
   force: ForceConfig | undefined
   /** The lane's output gain (Track.automationAmount, defaulted to 1). */
+  combine?: 'override' | 'sum' | 'multiply'
+  onCombine?: (mode: 'override' | 'sum' | 'multiply') => void
   amount: number
   onMode: (mode: AutomationMode) => void
   onInterpolation: (mode: InterpolationMode) => void
@@ -1160,6 +1161,15 @@ export function AutomationUserInterface({
     // shade wash runs to the frame, and round the section itself to sit inside
     // the card's 10px border.
     <section data-testid="automation-user-interface" className="-m-3 rounded-[9px]" style={{ background: shade }}>
+      {onCombine && <label className="flex items-center justify-between gap-3 px-4 py-3 text-xs text-white/70">
+        Combine
+        <select aria-label="Automation combination mode" value={combine ?? 'override'}
+          onChange={(event) => onCombine(event.target.value as 'override' | 'sum' | 'multiply')}
+          className="rounded bg-black/30 px-2 py-1 text-white"
+          title="Top to bottom: Sum adds, Multiply scales, Override replaces the value so far.">
+          <option value="sum">Sum</option><option value="multiply">Multiply</option><option value="override">Override</option>
+        </select>
+      </label>}
       {mode === 'burst' && burst ? (
         (burst.shape ?? 'adsr') === 'bezier'
           ? <BezierBurstWindow burst={burst} accent={accent} onBurst={onBurst} />

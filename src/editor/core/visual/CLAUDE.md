@@ -174,7 +174,7 @@ Bounds for structural budgets are exact here — the table IS every value the la
 can emit, so `automationLaneValueBounds` just walks it.
 
 Automation lanes are RETARGETABLE from the panel (`setAutomationTarget`):
-same one-lane-per-param rule as creation, `automationRange` resets (its
+duplicate targets are allowed, `automationRange` resets (its
 min/max speak the old param's units), and the lane renames only when it still
 wore the auto-name.
 
@@ -351,3 +351,32 @@ reference port. Facts that cost time to establish:
 - `finalInvertMask.ts`, `animatedColor.ts`, `animatedOpacity.ts`, `fonts.ts` — final-pass invert, color/opacity tweening helpers, font loading.
 
 Tests are colocated; run via `npm run test:visual`.
+
+## Combining automation lanes
+
+`Track.automationCombine` is explicit on newly created lanes; absence means
+legacy `override`, including after save/load (tracks persist whole). The shared
+`sampleAutomationLane` returns the combined value: sum adds to the accumulated
+parameter, multiply treats the authored value as a literal factor, override replaces
+it. Empty/inactive lanes return NaN and are skipped. Bursts depart from 0 for sum,
+1 for multiply, and the accumulated value for override. Amount scales the lane
+output before combining; combined values are not clamped to the parameter range
+(existing consumers retain their opacity/count/size constraints).
+
+Overlay lanes fold in `childIds` order, top to bottom, starting at the stored knob.
+Mover structural bounds fold both endpoints in the same order, including negative
+factors. Spatial lanes at the same chain position, param and copy clock fold into
+one delta; crossing a mover/splitter keeps separate spatial stages, each relative
+to the panel pose. Override replaces the value within its stage, not transforms
+applied in other stages. Keep all samplers (including paramAtBeat) folding every
+lane, never returning the first match or reusing the original base for each lane.
+
+Creation defaults are centralized in `core/automationCombineDefaults.ts`, using
+stable parameter keys and numeric metadata passed by `automationTargetsForParent`
+through the add menu. Counts (integer metadata takes precedence), effect On/Off,
+timing and unknown absolute controls use Override. Dimensions/size/scale and
+level controls use Multiply unless their definition defaults to zero. Position,
+rotation, phase/hue and signed offsets use Sum. Effect namespaces are stripped
+before classification. Defaults apply only to creation: retargeting, duplication,
+loading and user mode choices retain the stored mode. New target families belong
+in this pure policy, never in a sampler or a saved-document fallback.

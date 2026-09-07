@@ -624,15 +624,7 @@ export function TrackEditor() {
                     const currentTarget = targets.find((option) => option.key === track.targetParam)
                     const targetLabel = currentTarget?.label ?? track.targetParam ?? 'value'
                     const laneBounds = currentTarget?.bounds ?? null
-                    // getState, not a subscription: the disabled flags are
-                    // cosmetic and refresh with this panel's own re-renders
-                    // (same accepted staleness as the guide's other getState reads).
-                    const siblingTracks = useProjectStore.getState().tracks
-                    const siblingTargets = new Set((parent?.childIds ?? [])
-                      .map((cid) => siblingTracks[cid])
-                      .filter((c) => !!c && c.id !== track.id && c.type === 'automation')
-                      .map((c) => c!.targetParam))
-                    const targetOptions = targets.map((o) => ({ ...o, disabled: siblingTargets.has(o.key) }))
+                    const targetOptions = targets.map((o) => ({ ...o, disabled: false }))
                     return (
                       <AutomationUserInterface
                         targetLabel={targetLabel}
@@ -655,6 +647,8 @@ export function TrackEditor() {
                         burst={track.burst}
                         cycle={track.cycle}
                         force={track.force}
+                        combine={track.automationCombine ?? 'override'}
+                        onCombine={(mode) => useProjectStore.getState().setAutomationCombine(track.id, mode)}
                         amount={track.automationAmount ?? 1}
                         onMode={(mode) => setAutomationMode(track.id, mode)}
                         onInterpolation={(mode) => setTrackInterpolation(track.id, mode)}
