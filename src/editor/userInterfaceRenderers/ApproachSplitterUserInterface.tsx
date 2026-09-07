@@ -21,12 +21,15 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
-import { Music, Waves, ZoomIn, ZoomOut } from 'lucide-react'
+import { Waves, ZoomIn, ZoomOut } from 'lucide-react'
 import { Color, InstancedMesh, Matrix4, Object3D } from 'three'
 import {
   APPROACH_CAMERA_Z,
   APPROACH_SPAWN_PITCH,
   approachCount,
+  approachFlightBeats,
+  approachAfterBeats,
+  isApproachNoteFlight,
   approachSplitter,
   type ApproachSettings,
 } from '../core/visualCopies/approach'
@@ -41,6 +44,7 @@ import {
   ParameterList,
   PreviewWindow,
   spillOf,
+  Segmented,
   useConsoleAccent,
   type SelectBinding,
   PreviewCanvas,
@@ -70,6 +74,7 @@ const MAX_PREVIEW_COPIES = MAX_PREVIEW_SLOTS * RING_POINTS
 
 /** Beats a single flight takes to cover the run at the current settings. */
 function runBeats(settings: ApproachSettings): number {
+  if (isApproachNoteFlight(settings)) return approachFlightBeats(settings) + approachAfterBeats(settings)
   const speed = Math.abs(settings.speed)
   return speed <= 1e-9 ? 8 : Math.max(0.25, settings.depth / speed)
 }
@@ -83,9 +88,12 @@ function runBeats(settings: ApproachSettings): number {
 const DEMO_BEAT_FRACTIONS = [0, 0.16, 0.27, 0.52, 0.68, 0.74]
 const DEMO_VELOCITIES = [1, 0.65, 0.85, 1, 0.5, 0.9]
 
-function demoNotes(loopBeats: number): ResolvedNote[] {
+function demoNotes(loopBeats: number, settings: ApproachSettings): ResolvedNote[] {
+  const flight = isApproachNoteFlight(settings)
+  const lead = flight ? approachFlightBeats(settings) : 0
+  const span = flight ? loopBeats - lead - approachAfterBeats(settings) : loopBeats
   return DEMO_BEAT_FRACTIONS.map((fraction, i) => ({
-    beat: fraction * loopBeats,
+    beat: lead + fraction * span,
     pitch: APPROACH_SPAWN_PITCH,
     durationBeats: 0.25,
     velocity: DEMO_VELOCITIES[i],
@@ -105,9 +113,9 @@ function ApproachField({ settings }: { settings: ApproachSettings }) {
     hot: new Color('#eaf7ff'),
   }).current
 
-  const noteMode = Math.round(settings.spawnMode) === 1
+  const noteMode = Math.round(settings.spawnMode) !== 0
   const loopBeats = runBeats(settings) * 1.35
-  const notes = useMemo(() => (noteMode ? demoNotes(loopBeats) : []), [noteMode, loopBeats])
+  const notes = useMemo(() => (noteMode ? demoNotes(loopBeats, settings) : []), [noteMode, loopBeats, settings])
   // resolve() closes over the settings and notes; apply() is then a cheap pure
   // sample per copy per frame.
   const resolved = useMemo(() => approachSplitter.resolve({ settings, notes }), [settings, notes])
@@ -140,7 +148,7 @@ function ApproachField({ settings }: { settings: ApproachSettings }) {
       for (let slot = 0; slot < MAX_PREVIEW_SLOTS; slot++) {
         const instance = slot * RING_POINTS + point
         const result = slot < current.count ? copies[slot] : undefined
-        if (!result) {
+        if (!result || result.opacity <= 0) {
           // Park unused instances at zero scale rather than resizing the buffer.
           dummy.matrix.makeScale(0, 0, 0)
           mesh.setMatrixAt(instance, dummy.matrix)
@@ -243,6 +251,15 @@ export const ApproachSplitterUserInterfaceRenderer: UserInterfaceRendererDefinit
   const size = b.num('size')
   const direction = b.select('direction')
   const spawnMode = b.select('spawnMode')
+  const arrival = b.select('arrival', { optional: true })
+  const lead = b.num('flightBeats', { optional: true })
+  const after = b.num('afterBeats', { optional: true })
+  const points = ['start', 'target'].map((point) => ({
+    label: point === 'start' ? 'START' : 'TARGET',
+    axes: ['X', 'Y', 'Z'].map((axis) => ({ axis, binding: b.num(`${point}${axis}`, { optional: true }) })),
+  }))
+  // Classic modes keep Near End in More; it has no role in a custom path.
+  if (Math.round(spawnMode?.value ?? 0) === 2) b.num('nearEnd', { optional: true })
 
   // Memoized on the VALUES, not the parameter objects, so the preview's
   // resolve() reruns only on a real change. Declared before the fallback return
@@ -260,17 +277,22 @@ export const ApproachSplitterUserInterfaceRenderer: UserInterfaceRendererDefinit
   if (!speed || !density || !depth || !size || !direction || !spawnMode) {
     return <ParameterList parameters={parameters} />
   }
+  const noteFlight = isApproachNoteFlight(settings)
 
   return (
     <Console accent={WARP} testId="approach-user-interface">
       <ApproachPreview settings={settings} />
       <div className="flex flex-col gap-2 pb-3 pt-3" style={{ background: spillOf(WARP) }}>
-        <ControlRow className="gap-3 px-4">
-          <Knob b={speed} label="SPEED" large />
+        <Segmented b={spawnMode} testId="approach-spawn" className="mx-4" options={[
+          { value: 0, label: 'Stream' }, { value: 1, label: 'Classic notes' }, { value: 2, label: 'Note flight' },
+        ]} />
+        {noteFlight && <Segmented b={arrival} testId="approach-arrival" className="mx-4" />}
+        <ControlRow className="flex-wrap gap-3 px-4">
+          <Knob b={noteFlight ? lead : speed} label={noteFlight ? 'LEAD' : 'SPEED'} large />
           <Knob b={density} label="DENSITY" />
-          <Knob b={depth} label="DISTANCE" />
+          <Knob b={noteFlight ? after : depth} label={noteFlight ? 'AFTER' : 'DISTANCE'} />
           <Knob b={size} label="SIZE" />
-          <div className="ml-auto flex items-end gap-2">
+          {!noteFlight && <div className="ml-auto flex items-end gap-2">
             <IconSegmented
               b={direction}
               label="DIR"
@@ -280,17 +302,23 @@ export const ApproachSplitterUserInterfaceRenderer: UserInterfaceRendererDefinit
                 1: { icon: ZoomOut, title: 'Away into the distance — copies shrink as they leave' },
               }}
             />
-            <IconSegmented
-              b={spawnMode}
-              label="SPAWN"
-              testId="approach-spawn"
-              icons={{
-                0: { icon: Waves, title: 'Stream — a steady flow, always something arriving' },
-                1: { icon: Music, title: 'On notes — one flight per note, velocity sets its size' },
-              }}
-            />
-          </div>
+          </div>}
         </ControlRow>
+        {noteFlight ? <>
+          <p className="px-4 text-[10px] text-white/50">
+            Launch {settings.flightBeats} beats early; reach the target on the note.
+            {' '}{Math.round(settings.arrival ?? 0) === 1 ? 'Hold' : 'Continue'} for {settings.afterBeats} beats, fading over the final quarter.
+          </p>
+          <details className="px-4" data-testid="approach-flight-positions">
+            <summary className="cursor-pointer text-[10px] text-white/60">Start &amp; target</summary>
+            <p className="py-2 text-[10px] text-white/40">Offsets from the incoming copy, along its axes. Negative Z starts behind the object.</p>
+            {points.map((point) => <div key={point.label} className="flex items-center gap-3 py-1">
+              <span className="w-12 text-[9px] text-white/50">{point.label}</span>
+              {point.axes.map(({ axis, binding }) => <Knob key={axis} b={binding} label={axis} bipolar />)}
+            </div>)}
+            <p className="pt-2 text-[10px] text-white/40">Density limits simultaneous flights. Extra notes are skipped while every copy is busy.</p>
+          </details>
+        </> : null}
         <More parameters={b.rest()} label="MORE" className="px-4" />
       </div>
     </Console>

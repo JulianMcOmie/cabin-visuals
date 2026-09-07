@@ -360,7 +360,27 @@ ZERO to its arrival size (an object flying at you, or receding away from you). B
 divide offsets by the placement scale to stay world-metric — see the war-story comment
 in `tunnel.ts` about a half-size instrument dragging the near end in front of the lens.
 
-Approach's NOTES mode carries a timing contract worth knowing before you touch it: a
+Approach's **Note flight** (`spawnMode: 2`) adds an explicit start/target XYZ path.
+Coordinates are offsets in the incoming copy's axes, compensated for placement
+scale; they are not absolute world positions. `flightBeats` is the lead BEFORE each
+onset, including notes in future blocks. Fly through (default `arrival: 0`) uses
+u³, extending that SAME polynomial past onset so velocity and acceleration never
+jump. Settle uses quintic smoothstep, reaching zero velocity/acceleration on the
+onset and holding there. `afterBeats` is the post-onset lifetime (independent of note
+duration), with a smooth fade over its final quarter. Size stays constant, leaving
+perspective to sell the whoosh. Both launch from rest with C2 continuity. The same
+allocator keeps a fixed Density pool, but this mode DROPS new launches when full
+rather than cutting off accepted flights; it never assumes a particular camera
+plane for release, since paths may point sideways. Automating path/timing controls
+re-resolves the current trajectory, like every other splitter; C2 describes each
+fixed configuration, not arbitrary discontinuous parameter automation.
+
+Stream (0) and classic Notes (1) retain their previous defaults and math, so an
+old save with absent keys is unchanged. The panel's Note flight controls replace
+Speed/Distance/Direction/Near End; its demo uses the real resolver and leaves room
+for pre-roll and the entire post-arrival lifetime before wrapping.
+
+Approach's classic NOTES mode carries a timing contract worth knowing before you touch it: a
 flight is centred on its note so the copy sits at the object's NORMAL placement
 (axial 0, `approachHomeProgress`) exactly ON the onset — it leads in from the distance
 BEFORE the note and carries on past the lens after. The note is the impact, not the
