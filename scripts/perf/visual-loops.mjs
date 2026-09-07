@@ -1,0 +1,58 @@
+import { chromium } from 'playwright'
+import assert from 'node:assert/strict'
+const browser = await chromium.launch({ headless: true, args: ['--enable-unsafe-swiftshader'] })
+try {
+  const page = await browser.newPage({ viewport: { width: 1500, height: 950 } })
+  page.setDefaultTimeout(60000)
+  const errors = []
+  page.on('pageerror', error => errors.push(String(error)))
+  await page.route(/supabase\.co\/(rest|auth|storage)/, route => route.abort())
+  await page.goto(`${process.env.BASE ?? 'http://localhost:3195'}/editor`, { waitUntil: 'domcontentloaded' })
+  await page.waitForFunction(() => !!window.__cabinStores)
+  await page.evaluate(() => {
+    const project = window.__cabinStores.project
+    const state = project.getState()
+    project.setState({ tracks: {}, rootTrackIds: [], scenes: { ...state.scenes, [state.activeSceneId]: { ...state.scenes[state.activeSceneId], isMain: false, tracks: {}, rootTrackIds: [] } } })
+    window.__cabinStores.ui.setState({ tracksLabelWidth: 280, tracksRowHeight: 44, canvasView: 'scene' })
+  })
+  await page.getByRole('button', { name: 'Loops', exact: true }).click()
+  const card = page.getByRole('button', { name: 'Add Twisted Tunnel loop', exact: true })
+  await card.waitFor()
+  await page.waitForTimeout(5000)
+  await page.screenshot({ path: '/tmp/visual-loops-before.png' })
+  assert.equal(await page.locator('[data-loop-preview]').count(), 1)
+  const before = await page.evaluate(() => ({ tracks: Object.keys(window.__cabinStores.project.getState().tracks).length, beat: window.__cabinStores.time.getState().currentBeat }))
+  assert.equal(before.tracks, 0, 'preview does not add tracks')
+  await card.dblclick()
+  await page.waitForTimeout(3000)
+  const added = await page.evaluate(() => {
+    const p = window.__cabinStores.project.getState()
+    return { tracks: Object.values(p.tracks), roots: p.rootTrackIds, beat: window.__cabinStores.time.getState().currentBeat }
+  })
+  assert.equal(added.tracks.length, 3)
+  assert.equal(added.roots.length, 1)
+  assert.equal(added.beat, before.beat, 'preview does not move transport')
+  assert.ok(added.tracks.every(track => track.blocks[0]?.loop && track.blocks[0]?.notes.length))
+  await page.screenshot({ path: '/tmp/visual-loops-added.png' })
+  await card.focus()
+  await page.keyboard.press('Enter')
+  assert.equal(await page.evaluate(() => window.__cabinStores.project.getState().rootTrackIds.length), 2)
+  // Drag onto an existing MIDI lane: add the full tree beside it.
+  const from = await card.boundingBox()
+  const to = await page.locator('[data-tracks-scroll]').boundingBox()
+  await page.mouse.move(from.x + from.width / 2, from.y + 40)
+  await page.mouse.down()
+  await page.mouse.move(to.x + 420, to.y + 20, { steps: 12 })
+  await page.mouse.up()
+  assert.equal(await page.evaluate(() => window.__cabinStores.project.getState().rootTrackIds.length), 3)
+  assert.equal(await page.evaluate(() => Object.keys(window.__cabinStores.project.getState().tracks).length), 9)
+  await page.mouse.move(from.x + from.width / 2, from.y + 40)
+  await page.mouse.down()
+  await page.mouse.move(to.x + 420, to.y + 20, { steps: 5 })
+  await page.evaluate(() => window.dispatchEvent(new PointerEvent('pointercancel')))
+  await page.mouse.up()
+  assert.equal(await page.evaluate(() => window.__cabinStores.project.getState().rootTrackIds.length), 3, 'cancelled drag adds nothing')
+  assert.equal(await page.evaluate(() => window.__cabinStores.ui.getState().libraryDragging), false)
+  assert.deepEqual(errors, [])
+  console.log('Visual loop preview, double-click, keyboard, lane drop and cancellation passed.')
+} finally { await browser.close() }

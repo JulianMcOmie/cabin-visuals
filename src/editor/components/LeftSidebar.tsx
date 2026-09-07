@@ -6,8 +6,8 @@ import dynamic from 'next/dynamic'
 import { useInstantNavigation } from '../../components/instantNavigation'
 import { ArrowLeftRight, Check, ChevronLeft, ChevronRight, Plus, Sparkles, Repeat } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
-import { useLoopBlockDrag } from './useLoopBlockDrag'
-import { LOOP_PATTERNS, type LoopPattern } from './loops'
+import { addVisualLoop, useLoopBlockDrag } from './useLoopBlockDrag'
+import { VISUAL_LOOPS } from './loops'
 import { useUIStore, type LibraryTabId } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
@@ -16,6 +16,7 @@ import { canPreview } from './instrumentPreviewStore'
 import { preloadInstrument } from '../instruments'
 // Cards paint with the sidebar shell; only the live hover canvas waits for R3F.
 import { InstrumentCardPreview } from './InstrumentCardPreview'
+const LoopPreview = memo(dynamic(() => import('./LoopPreview').then(m => m.LoopPreview), { ssr: false }))
 const InstrumentPreviewLayer = memo(dynamic(() => import('./InstrumentHoverPreview').then((m) => m.InstrumentPreviewLayer), { ssr: false }))
 import { TEMPLATES, LISTED_TEMPLATES, LYRIC_STYLES, isLyricTemplateId } from '../../templates'
 import { TemplatePreviewVideo } from '../../components/TemplatePreviewVideo'
@@ -759,47 +760,6 @@ const FolderBrowser = memo(function FolderBrowser({ folders, rootItems = [], onI
 
 type LibraryTab = LibraryTabId
 
-/** Hover popup for a loop row: the pattern as a mini piano roll - one lane
- *  per used row, notes as bars (velocity = brightness), beat gridlines. */
-function LoopPatternPopup({ pattern, left, top }: { pattern: LoopPattern; left: number; top: number }) {
-  const beats = pattern.bars * 4
-  const rowCount = Math.max(1, ...pattern.notes.map(([, , , row]) => (row ?? 0) + 1))
-  const height = Math.max(44, Math.min(96, rowCount * 22))
-  const clampedTop = Math.max(8, Math.min(top - 8, window.innerHeight - height - 40))
-  return (
-    <div
-      className="pointer-events-none fixed z-[90] w-[228px] rounded border border-[var(--border)] bg-[var(--bg-canvas)] p-2 shadow-xl shadow-black/60"
-      style={{ left, top: clampedTop }}
-    >
-      <div
-        className="relative w-full overflow-hidden rounded-[3px] bg-[#101013]"
-        style={{
-          height,
-          backgroundImage: `repeating-linear-gradient(to right, rgba(255,255,255,0.09) 0 1px, transparent 1px ${100 / beats}%)`,
-        }}
-      >
-        {pattern.notes.map(([b, dur, vel, row], i) => (
-          <div
-            key={i}
-            className="absolute rounded-[2px] bg-[var(--accent)]"
-            style={{
-              left: `${(b / beats) * 100}%`,
-              width: `max(3px, ${(dur / beats) * 100}%)`,
-              top: `${((row ?? 0) / rowCount) * 100 + 1.5}%`,
-              height: `${100 / rowCount - 8}%`,
-              opacity: 0.35 + ((vel ?? 100) / 127) * 0.65,
-            }}
-          />
-        ))}
-      </div>
-      <div className="mt-1.5 flex items-baseline justify-between">
-        <span className="font-mono text-[10px] text-[var(--text-3)]">{pattern.name}</span>
-        <span className="font-mono text-[9px] text-[var(--text-muted)]">{pattern.bars} bar{pattern.bars !== 1 ? 's' : ''}</span>
-      </div>
-    </div>
-  )
-}
-
 // The Templates tab: double-click switches the current project onto that
 // template (visual tracks replaced, audio + its detected BPM kept). One undo
 // step, but still a big swap - confirm first.
@@ -1006,7 +966,6 @@ export function LeftSidebar() {
   }, [libraryRequest])
   const { startLibraryDrag, ghostRef, ghostName } = useLibraryDrag()
   const { startLoopBlockDrag, ghostRef: loopGhostRef, ghostName: loopGhostName } = useLoopBlockDrag()
-  const [loopHover, setLoopHover] = useState<{ pattern: LoopPattern; left: number; top: number } | null>(null)
   // Over a valid drop slot → show a "+" on the ghost to signal "release to add".
   const droppable = useUIStore((s) => !!s.trackDrop && (s.trackDrop.line != null || s.trackDrop.intoId != null))
   // The swap-in-place target's current name, for the ghost's "Replace X" text.
@@ -1111,29 +1070,37 @@ export function LeftSidebar() {
           />
         )}
         {tab === 'loops' && (
-          <div className="pt-1">
-            <p className="px-3 pt-2 pb-1 text-[10px] leading-relaxed text-[var(--text-muted)]">
-              Drag a loop onto a track - it lands as a repeating MIDI block at that bar.
+          <div className="px-2 pt-3">
+            <p className="px-1 pb-3 text-[11px] leading-relaxed text-[var(--text-muted)]">
+              {activeIsMain ? 'Open a visual scene to add a loop.' : 'MIDI + instruments, ready to play. Drag into the timeline or double-click to add.'}
             </p>
-            {LOOP_PATTERNS.map((pattern) => (
-              <div
-                key={pattern.id}
-                onPointerDown={(e) => { setLoopHover(null); startLoopBlockDrag(e, pattern) }}
-                onMouseEnter={(e) => {
-                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                  setLoopHover({ pattern, left: rect.right + 8, top: rect.top })
+            {VISUAL_LOOPS.map(loop => (
+              <button
+                key={loop.id}
+                type="button"
+                disabled={activeIsMain}
+                aria-label={`Add ${loop.name} loop`}
+                onPointerDown={event => startLoopBlockDrag(event, loop)}
+                onDoubleClick={() => addVisualLoop(loop)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    if (!event.repeat) addVisualLoop(loop)
+                  }
                 }}
-                onMouseLeave={() => setLoopHover(null)}
-                title={pattern.description}
-                className="flex items-center gap-2.5 h-[26px] px-3 cursor-default hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] select-none"
+                title={`${loop.description} Double-click to add.`}
+                className="mb-2 block w-full touch-none select-none overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] text-left transition-colors hover:border-sky-300/40 focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50"
               >
-                <span className="flex-shrink-0 flex items-center justify-center w-3.5">
-                  <Repeat size={12} className="text-emerald-400" />
-                </span>
-                <span className="text-xs text-[var(--text-2)] truncate">{pattern.name}</span>
-              </div>
+                <LoopPreview loop={loop} />
+                <div className="px-3 py-2.5">
+                  <div className="flex items-center gap-2 text-xs font-medium text-[var(--text)]">
+                    <Repeat size={12} className="shrink-0 text-sky-300" />
+                    <span className="min-w-0 truncate">{loop.name}</span>
+                  </div>
+                  <p className="mt-1.5 text-[10px] leading-relaxed text-[var(--text-muted)]">{loop.instruments.join(' + ')}</p>
+                </div>
+              </button>
             ))}
-            {loopHover && <LoopPatternPopup pattern={loopHover.pattern} left={loopHover.left} top={loopHover.top} />}
           </div>
         )}
         {tab === 'templates' && <TemplatesTab />}
@@ -1163,7 +1130,7 @@ export function LeftSidebar() {
         </div>
       )}
 
-      {/* Ghost while dragging a loop pattern onto a track lane. */}
+      {/* Ghost while dragging a complete visual loop into the timeline. */}
       {loopGhostName && (
         <div
           ref={loopGhostRef}

@@ -1425,7 +1425,11 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
   },
 
   addTrackTree: (tree, atIndex) =>
-    set((s) => insertTrackTreeIntoState(s, tree, atIndex)),
+    set((s) => ({
+      ...insertTrackTreeIntoState(s, tree, atIndex),
+      totalBars: Math.min(MAX_TOTAL_BARS, Math.max(s.totalBars,
+        ...tree.flatMap(track => track.blocks.map(block => block.startBar + block.durationBars)))),
+    })),
 
   reorderRootTracks: (orderedIds) =>
     set({ rootTrackIds: orderedIds }),
