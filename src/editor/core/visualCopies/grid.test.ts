@@ -281,3 +281,40 @@ test('two circular dimensions nest into a torus that collapses to a sphere at ra
   }
 })
 
+
+test('hexagonal lattice has six equidistant neighbors in every plane', () => {
+  for (const plane of [0, 1, 2]) {
+    const points = resolveGrid({ layout: 1, rows: 5, columns: 5, spacing: 2, plane }).map(position)
+    const center = points[12]
+    const distances = points.map(p => Math.hypot(...p.map((v, i) => v - center[i])))
+    assert.equal(distances.filter(d => Math.abs(d - 2) < 1e-10).length, 6)
+    assert.equal(distances.filter(d => d > 1e-10 && d < 2 - 1e-10).length, 0)
+  }
+})
+
+test('hexagonal bounds stay centered for odd, even and single rows', () => {
+  for (const rows of [1, 2, 3, 4]) {
+    const points = resolveGrid({ layout: 1, rows }).map(position)
+    for (const axis of [0, 1, 2]) {
+      assert.ok(Math.abs(Math.min(...points.map(p => p[axis])) + Math.max(...points.map(p => p[axis]))) < 1e-10)
+    }
+  }
+})
+
+test('hexagonal mode preserves indexing, depth, size and saved circular settings', () => {
+  const base = { layout: 1, rows: 3, columns: 3, depth: 2 }
+  const copies = resolveGrid(base)
+  assert.equal(copies.length, 18)
+  assert.deepEqual(resolveGrid({ ...base, indexing: 1 }).map(position), copies.map(position).reverse())
+  assert.deepEqual(resolveGrid({ ...base, size: 2 }).map(position), copies.map(position))
+  assert.deepEqual(resolveGrid({ ...base, columnsMode: 1, rowsMode: 1 }).map(position), copies.map(position))
+  assert.deepEqual(resolveGrid({ layout: 0, columnsMode: 1 }).map(position), resolveGrid({ columnsMode: 1 }).map(position))
+  assert.equal(resolveGrid({ ...base, depthMode: 1, depthRadius: 3 }).length, 18)
+})
+
+test('hexagonal row count notes re-lay the lattice and zero spacing collapses it', () => {
+  const copies = resolveGrid({ layout: 1, rows: 1, columns: 3 }, [note(0, 38)], 1)
+  assert.equal(copies.length, 9)
+  assert.deepEqual(copies.map(position), resolveGrid({ layout: 1, rows: 3, columns: 3 }).map(position))
+  for (const copy of resolveGrid({ layout: 1, spacing: 0 })) assert.deepEqual(position(copy), [0, 0, 0])
+})

@@ -309,21 +309,22 @@ function ModeControl({ b, axis }: { b: SelectBinding; axis: string }) {
  *  lives HERE: the mover branch of TrackEditor passes showIf-gated params
  *  through unfiltered (only the instrument branch filters), so the binding is
  *  present in both modes and display is the panel's own decision. */
-function AxisStrip({ axis, role, mode, count, radius }: {
+function AxisStrip({ axis, role, mode, count, radius, hexagonal = false }: {
+  hexagonal?: boolean
   axis: string
   role: string
   mode: SelectBinding
   count: NumBinding
   radius: NumBinding | null
 }) {
-  const circular = mode.value === 1
+  const circular = !hexagonal && mode.value === 1
   return (
     <div className="flex flex-col items-center gap-1.5 rounded-md border border-white/[0.06] bg-black/25 px-1 pb-1.5 pt-1">
       <div className="flex items-baseline gap-1">
         <span className="text-[11px] font-bold" style={{ color: ACCENT }}>{axis}</span>
         <span className="text-[7px] font-semibold tracking-[0.14em] text-white/35">{role}</span>
       </div>
-      <ModeControl b={mode} axis={axis} />
+      {!hexagonal && <ModeControl b={mode} axis={axis} />}
       <Knob b={count} label="COUNT" accent={ACCENT} format={(v) => `${Math.round(v)}`} />
       {circular && radius && (
         <Knob b={radius} label="RADIUS" accent={ACCENT} />
@@ -391,6 +392,7 @@ const AXIS_LETTERS = ['X', 'Y', 'Z']
 const PLANE_AXES: [number, number][] = [[0, 1], [0, 2], [1, 2]]
 
 interface GridBindings {
+  layout: SelectBinding | null
   rows: NumBinding
   columns: NumBinding
   depth: NumBinding
@@ -410,16 +412,18 @@ interface GridBindings {
 /** Hooks live here, below the renderer's fallback branch. */
 function GridConsole({ bound }: { bound: GridBindings }) {
   const {
-    rows, columns, depth, spacing, size, columnsMode, rowsMode, depthMode,
+    layout, rows, columns, depth, spacing, size, columnsMode, rowsMode, depthMode,
     columnsRadius, rowsRadius, depthRadius, plane, indexing, rest,
   } = bound
 
+  const layoutValue = layout?.value ?? 0
   const sizeValue = size?.value
   const columnsRadiusValue = columnsRadius?.value
   const rowsRadiusValue = rowsRadius?.value
   const depthRadiusValue = depthRadius?.value
   const settings = useMemo(() => ({
     ...(mergeDefinitionSettings(gridSplitter, undefined) as unknown as GridSettings),
+    layout: layoutValue,
     rows: rows.value,
     columns: columns.value,
     depth: depth.value,
@@ -436,7 +440,7 @@ function GridConsole({ bound }: { bound: GridBindings }) {
   }), [
     rows.value, columns.value, depth.value, spacing.value, plane.value, indexing.value,
     columnsMode.value, rowsMode.value, depthMode.value,
-    sizeValue, columnsRadiusValue, rowsRadiusValue, depthRadiusValue,
+    layoutValue, sizeValue, columnsRadiusValue, rowsRadiusValue, depthRadiusValue,
   ])
 
   const [horizontalAxis, verticalAxis] = PLANE_AXES[plane.value] ?? PLANE_AXES[0]
@@ -450,9 +454,24 @@ function GridConsole({ bound }: { bound: GridBindings }) {
         className="pointer-events-none h-0"
         style={{ background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(ACCENT, 0.14)}, transparent)` }}
       />
+      {layout && (
+        <div className="px-2 pt-2">
+          <div role="radiogroup" aria-label="Layout" className="flex overflow-hidden rounded-md border border-white/[0.08]">
+            {layout.def.options.map((option) => (
+              <button key={option.value} role="radio" aria-checked={layout.value === option.value}
+                onClick={() => layout.set(option.value)}
+                title={option.value === 1 ? 'Staggered rows with six equally spaced neighbors' : 'Independent linear or circular axes'}
+                className="flex-1 py-1 text-[10px]"
+                style={{ color: layout.value === option.value ? ACCENT : 'rgba(255,255,255,0.45)', background: layout.value === option.value ? withAlpha(ACCENT, 0.16) : 'transparent' }}>
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-3 gap-1 px-2 pt-2">
-        <AxisStrip axis={AXIS_LETTERS[horizontalAxis]} role="COLS" mode={columnsMode} count={columns} radius={columnsRadius} />
-        <AxisStrip axis={AXIS_LETTERS[verticalAxis]} role="ROWS" mode={rowsMode} count={rows} radius={rowsRadius} />
+        <AxisStrip axis={AXIS_LETTERS[horizontalAxis]} role="COLS" hexagonal={layoutValue === 1} mode={columnsMode} count={columns} radius={columnsRadius} />
+        <AxisStrip axis={AXIS_LETTERS[verticalAxis]} role="ROWS" hexagonal={layoutValue === 1} mode={rowsMode} count={rows} radius={rowsRadius} />
         <AxisStrip axis={AXIS_LETTERS[normalAxis]} role="DEPTH" mode={depthMode} count={depth} radius={depthRadius} />
       </div>
       <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-1.5">
@@ -478,6 +497,7 @@ function GridConsole({ bound }: { bound: GridBindings }) {
 
 export const GridSplitterUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
   const pool = bindPanel(parameters)
+  const layout = pool.select('layout', { optional: true })
   const rows = pool.num('rows')
   const columns = pool.num('columns')
   const depth = pool.num('depth')
@@ -503,7 +523,7 @@ export const GridSplitterUserInterfaceRenderer: UserInterfaceRendererDefinition 
 
   return (
     <GridConsole bound={{
-      rows, columns, depth, spacing, size, columnsMode, rowsMode, depthMode,
+      layout, rows, columns, depth, spacing, size, columnsMode, rowsMode, depthMode,
       columnsRadius, rowsRadius, depthRadius, plane, indexing, rest: pool.rest(),
     }} />
   )

@@ -623,3 +623,10 @@ Overlap rules differ by axis, and both matter: notes on ONE row take the loudest
 `identityColor` on a definition (same contract as an instrument's) makes the chain entry WEAR that color in the UI — device row, timeline block, drag ghost. Chain entries otherwise inherit their instrument's color so a lane family reads as one voice; the Colorizer opts out via `{ param: 'color' }` because it HAS a color the user picked. Resolved in `utils/trackDisplayColor.ts`, and it still loses to the achromatic guard.
 
 Adding one: new file with a definition + entry in `library.ts` + (optional) bespoke settings UI in `userInterfaceRenderers/bespokeRegistries.ts` keyed by the definition id; the generic param list is the fallback. A splitter that LAYS COPIES OUT in space should also spread `SPLITTER_SIZE_PARAM` into its params and post-multiply `applySplitterSize` onto each slot — `splitterSize.test.ts` will name it if it hand-rolls a `size` of its own. A splitter with a COUNT knob should mark it `integer: true`, write its layout as a pure `resolveAt(settings)` and wire the shared count lane (`resolveCountLane` + `countLaneRows`) unless its notes already mean something else (Approach's flights, Tunnel's rushes).
+
+Grid's optional `layout` param selects the legacy independent axes (0, default)
+or a triangular lattice (1, labelled Hexagonal). Hexagonal uses half-spacing
+staggered rows with sqrt(3)/2 row pitch, so SPACING measures all six nearest
+neighbors. It temporarily overrides row/column circular modes without rewriting
+their saved values; depth still stacks or circles. Bounds are centered including
+the stagger (single rows need no shift), and slot order/count lanes stay shared.

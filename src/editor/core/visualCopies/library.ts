@@ -611,6 +611,8 @@ function resolveLineLayout(settings: LineSettings) {
 // span and no-op, so those saves degrade toward their knobs.
 
 export interface GridSettings {
+  /** 0 = independent axes (legacy), 1 = regular triangular / six-neighbor lattice. */
+  layout?: number
   rows: number
   columns: number
   /** Copy count along the plane normal - the grid's third dimension. */
@@ -683,6 +685,10 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
   kind: 'splitter',
   identityColor: GRID_COLOR,
   params: [
+    { key: 'layout', label: 'Layout', type: 'select', options: [
+      { value: 0, label: 'Rectangular' },
+      { value: 1, label: 'Hexagonal' },
+    ], default: 0 },
     { key: 'rows', label: 'Rows', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 3, integer: true },
     { key: 'columns', label: 'Columns', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 3, integer: true },
     { key: 'depth', label: 'Depth', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 1, integer: true },
@@ -768,13 +774,14 @@ function resolveGridLayout(settings: GridSettings) {
   const [horizontalAxis, verticalAxis] = GRID_PLANES[settings.plane] ?? GRID_PLANES[0]
   const normalAxis = (3 - horizontalAxis - verticalAxis) as 0 | 1 | 2
   const size = splitterSize(settings.size)
+  const hexagonal = settings.layout === 1
   // One record per dimension, in composition order. `unitOffset` keeps the
   // exact legacy centering (rows grow downward from the top, layer 0 is the
   // front) at spacing 1; the SPACING knob scales it in apply.
   const dimensions = [
     {
       count: columns,
-      circular: settings.columnsMode === 1,
+      circular: !hexagonal && settings.columnsMode === 1,
       radius: Math.max(0, settings.columnsRadius ?? 0),
       offsetAxis: horizontalAxis,
       rotationAxis: normalAxis,
@@ -782,7 +789,7 @@ function resolveGridLayout(settings: GridSettings) {
     },
     {
       count: rows,
-      circular: settings.rowsMode === 1,
+      circular: !hexagonal && settings.rowsMode === 1,
       radius: Math.max(0, settings.rowsRadius ?? 0),
       offsetAxis: verticalAxis,
       rotationAxis: horizontalAxis,
@@ -812,6 +819,13 @@ function resolveGridLayout(settings: GridSettings) {
     for (let d = 0; d < 3; d++) {
       const dim = dimensions[d]
       if (!dim.circular) unit.addScaledVector(GRID_AXIS_VECTORS[dim.offsetAxis], dim.unitOffset(indices[d]))
+    }
+    if (hexagonal) {
+      // Alternating half-steps and sqrt(3)/2 row pitch make equilateral
+      // triangles: SPACING is the distance to all six nearest neighbors.
+      // Center the bounds, including the stagger; a single row stays centered.
+      unit.setComponent(horizontalAxis, column - (columns - 1) / 2 + (row % 2) / 2 - (rows > 1 ? 0.25 : 0))
+      unit.setComponent(verticalAxis, ((rows - 1) / 2 - row) * Math.sqrt(3) / 2)
     }
     const tail = new Matrix4()
     for (let d = 0; d < 3; d++) {
