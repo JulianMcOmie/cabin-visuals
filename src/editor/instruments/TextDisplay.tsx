@@ -1,3 +1,4 @@
+import { previewParticleCount } from '../core/visual/liveParticleBudget'
 import { midiVelocity } from '../utils/midiVelocity'
 import { useContext, useRef, useEffect, useMemo, useState } from 'react'
 import { useThree } from '@react-three/fiber'
@@ -911,7 +912,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       // meaning what they meant.
       const prevShape = word?.prev ?? SPHERE_SHAPE
       const curShape = word?.cur ?? SPHERE_SHAPE
-      const count = p.particleCount ?? 6000
+      const count = previewParticleCount(Math.max(1, Math.min(MAX_PARTICLES, Math.round(p.particleCount ?? 6000))))
       const areaFrom = prevShape.fill * scaleFrom * scaleFrom
       const areaTo = curShape.fill * scaleTo * scaleTo
       const stackComp = Math.min(6, Math.max(0.15, (areaFrom + (areaTo - areaFrom) * eased) / count))
@@ -958,7 +959,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       anchor.scale.setScalar(1)
       anchor.position.set(0, 0, 0)
 
-      const count = Math.max(1, Math.min(MAX_PARTICLES, Math.round(p.particleCount ?? 6000)))
+      const count = previewParticleCount(Math.max(1, Math.min(MAX_PARTICLES, Math.round(p.particleCount ?? 6000))))
       const depth = p.fieldDepth ?? 1.2
       const drift = p.fieldDrift ?? 0.25
       const density = Math.round(p.fieldDensity ?? 4000)

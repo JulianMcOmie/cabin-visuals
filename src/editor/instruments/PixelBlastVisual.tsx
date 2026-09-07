@@ -1,3 +1,4 @@
+import { previewParticleCount } from '../core/visual/liveParticleBudget'
 import { midiVelocity } from '../utils/midiVelocity'
 import { useRef, useEffect } from 'react'
 import { Group, Mesh, BoxGeometry, MeshBasicMaterial, AdditiveBlending } from 'three'
@@ -51,7 +52,9 @@ export function PixelBlastVisual({ trackId }: { trackId: string }) {
 
     for (const pm of poolRef.current) { pm.active = false; pm.mesh.visible = false }
 
+    let remaining = previewParticleCount(Infinity)
     for (const n of state.notes) {
+      if (remaining <= 0) break
       if (n.beat > beat) continue
       const ageSec = (beat - n.beat) * secPerBeat
       if (ageSec >= life) continue
@@ -66,6 +69,7 @@ export function PixelBlastVisual({ trackId }: { trackId: string }) {
 
       // Core flash - one fat white square for the first instant.
       if (ageSec < 0.09 && flashScale > 0) {
+        remaining--
         const pooled = acquire(group)
         const fs = (0.5 + velN) * flashScale * px * 6
         pooled.mesh.position.set(Math.round(cx / px) * px, Math.round(cy / px) * px, cz)
@@ -75,7 +79,8 @@ export function PixelBlastVisual({ trackId }: { trackId: string }) {
         setAnimatedOpacity(pooled.mat, 1 - ageSec / 0.09)
       }
 
-      const count = Math.round(countP * (0.5 + velN))
+      const count = Math.min(remaining, Math.round(countP * (0.5 + velN)))
+      remaining -= count
       for (let i = 0; i < count; i++) {
         const s = n.beat * 13 + n.pitch * 7 + i * 11
         const ang = (Math.floor(seededRand(s) * 16) / 16) * Math.PI * 2

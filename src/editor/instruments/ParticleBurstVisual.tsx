@@ -1,3 +1,4 @@
+import { previewParticleCount } from '../core/visual/liveParticleBudget'
 import { useMemo, useRef, useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
 import {
@@ -262,7 +263,7 @@ export function ParticleBurstVisual({ trackId }: { trackId: string }) {
     const par = state.params
     const burstType = BURST_TYPES[Math.round(par.burstType ?? 0)] ?? 'sphere'
     const burstCurve = EASE_CURVES[Math.round(par.burstCurve ?? 0)] ?? 'log'
-    const count = Math.max(1, Math.min(Math.floor(par.count ?? 3000), MAX_PARTICLES))
+    const requestedCount = Math.max(1, Math.min(Math.floor(par.count ?? 3000), MAX_PARTICLES))
     const pointSize = par.pointSize ?? 0.035
     const burstRadius = par.burstRadius ?? 4
     const dissolveSpread = par.dissolveSpread ?? 5
@@ -289,6 +290,7 @@ export function ParticleBurstVisual({ trackId }: { trackId: string }) {
     const bursts = alive.slice(-MAX_ACTIVE_BURSTS)  // keep the newest, like Tyler's cap
 
     if (bursts.length === 0) { mesh.count = 0; return }
+    const count = Math.min(requestedCount, Math.floor(previewParticleCount(requestedCount * bursts.length) / bursts.length))
 
     // Camera basis for cone/jet/etc. modes and cylinder clipping (Tyler verbatim).
     const camDir = _tmpVec3A
@@ -307,7 +309,7 @@ export function ParticleBurstVisual({ trackId }: { trackId: string }) {
       if (alpha < 0.005) continue
 
       for (let i = 0; i < count; i++) {
-        const pt = particles[i]
+        const pt = particles[Math.floor(i * requestedCount / count)]
 
         let x: number, y: number, z: number
 

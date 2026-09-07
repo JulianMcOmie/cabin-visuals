@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect } from 'react'
 import { advance, useThree } from '@react-three/fiber'
+import { useUIStore } from '../../store/UIStore'
 import { useTimeStore } from '../../store/TimeStore'
 import { useProjectStore } from '../../store/ProjectStore'
 import { subscribeObjects } from '../../core/visual/VisualEngine'
@@ -51,12 +52,16 @@ export function RenderGovernor() {
   useEffect(() => {
     const unsubProject = useProjectStore.subscribe(() => invalidate())
     const unsubGraph = subscribeObjects(() => invalidate())
+    const unsubQuality = useUIStore.subscribe((s, prev) => {
+      if (s.previewQuality !== prev.previewQuality) invalidate()
+    })
     const unsubTime = useTimeStore.subscribe((s, prev) => {
       if (!s.isPlaying && (s.currentBeat !== prev.currentBeat || prev.isPlaying)) invalidate()
     })
     return () => {
       unsubProject()
       unsubGraph()
+      unsubQuality()
       unsubTime()
     }
   }, [invalidate])

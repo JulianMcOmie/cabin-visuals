@@ -1,3 +1,4 @@
+import { previewParticleCount } from '../core/visual/liveParticleBudget'
 import { midiVelocity } from '../utils/midiVelocity'
 import { useRef, useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
@@ -236,7 +237,7 @@ export function StarsVisual({ trackId }: { trackId: string }) {
 
     // Read settings
     const p = state.params
-    const starCount = Math.round(Math.min(MAX_STARS, p.starCount ?? DEFAULTS.starCount))
+    const starCount = previewParticleCount(Math.round(Math.min(MAX_STARS, p.starCount ?? DEFAULTS.starCount)))
     const dotSize = p.dotSize ?? DEFAULTS.dotSize
     const speed = p.speed ?? DEFAULTS.speed
     const spread = p.spread ?? DEFAULTS.spread

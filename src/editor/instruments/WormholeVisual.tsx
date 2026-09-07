@@ -1,3 +1,4 @@
+import { previewParticleCount } from '../core/visual/liveParticleBudget'
 import { midiVelocity } from '../utils/midiVelocity'
 import { useEffect, useMemo, useRef } from 'react'
 import {
@@ -214,8 +215,12 @@ export function WormholeVisual({ trackId }: { trackId: string }) {
     if (!root) return false
 
     const p = state.params
-    const radialSeg = Math.round(clamp(p.ringDetail ?? 128, 16, MAX_RADIAL))
-    const lengthSeg = Math.round(clamp(p.lengthDetail ?? 384, 64, MAX_LENGTH))
+    const requestedRadial = Math.round(clamp(p.ringDetail ?? 128, 16, MAX_RADIAL))
+    const requestedLength = Math.round(clamp(p.lengthDetail ?? 384, 64, MAX_LENGTH))
+    const requestedCount = (requestedRadial + 1) * (requestedLength + 1)
+    const scale = Math.sqrt(previewParticleCount(requestedCount * 2) / (requestedCount * 2))
+    const radialSeg = Math.max(3, Math.floor((requestedRadial + 1) * scale) - 1)
+    const lengthSeg = Math.max(1, Math.floor((requestedLength + 1) * scale) - 1)
     const noiseAmp = p.noiseAmount ?? 0.5
     const noiseFreq = p.noiseScale ?? 0.1
 

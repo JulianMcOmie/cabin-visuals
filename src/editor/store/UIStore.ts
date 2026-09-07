@@ -18,7 +18,7 @@ export const MIDI_ROW_HEIGHT_MAX = 56
 
 /**
  * Fast Preview levels, slowest-and-truest first. 'final' is the picture the
- * export renders; the others buy playback smoothness by rendering fewer pixels.
+ * export renders; the others buy playback smoothness by rendering fewer pixels and particles.
  * The ORDER of this array is the cycle order of the toolbar control.
  */
 export const PREVIEW_QUALITIES = ['final', 'auto', 'fast', 'fastest'] as const

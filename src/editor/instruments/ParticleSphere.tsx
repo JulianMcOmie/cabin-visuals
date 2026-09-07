@@ -1,3 +1,4 @@
+import { previewParticleCount } from '../core/visual/liveParticleBudget'
 import { midiVelocity } from '../utils/midiVelocity'
 import { useEffect, useMemo, useRef } from 'react'
 import {
@@ -206,12 +207,14 @@ export function ParticleSphere({ trackId }: { trackId: string }) {
     const dotScale = dotSize * (1 + state.energy * 0.4)
     scratch.scale.set(dotScale, dotScale, dotScale)
 
-    for (let i = 0; i < dirs.length; i++) {
-      scratch.pos.copy(dirs[i]).multiplyScalar(BASE_RADIUS)
+    const count = previewParticleCount(dirs.length)
+    for (let i = 0; i < count; i++) {
+      const direction = dirs[Math.floor(i * dirs.length / count)]
+      scratch.pos.copy(direction).multiplyScalar(BASE_RADIUS)
       for (const poke of pokes) {
         if (poke.repulsor === null) {
           // Center burst: straight along the dot's own radius, no falloff.
-          scratch.offset.copy(dirs[i]).multiplyScalar(poke.strength)
+          scratch.offset.copy(direction).multiplyScalar(poke.strength)
         } else {
           scratch.offset.copy(scratch.pos).sub(poke.repulsor)
           const distance = scratch.offset.length()
@@ -224,7 +227,7 @@ export function ParticleSphere({ trackId }: { trackId: string }) {
       scratch.matrix.compose(scratch.pos, IDENTITY_QUAT, scratch.scale)
       mesh.setMatrixAt(i, scratch.matrix)
     }
-    mesh.count = dirs.length
+    mesh.count = count
     mesh.instanceMatrix.needsUpdate = true
   })
 

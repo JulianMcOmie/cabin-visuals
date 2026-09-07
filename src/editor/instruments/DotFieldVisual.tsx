@@ -1,3 +1,4 @@
+import { previewParticleCount } from '../core/visual/liveParticleBudget'
 import { midiVelocity } from '../utils/midiVelocity'
 import { useRef, useEffect, useMemo } from 'react'
 import { Group, Points, BufferGeometry, BufferAttribute, DynamicDrawUsage, ShaderMaterial, Color } from 'three'
@@ -268,10 +269,10 @@ export function DotFieldVisual({ trackId }: { trackId: string }) {
 
     const p = state.params
 
-    const particleCount = Math.round(Math.min(
+    const particleCount = previewParticleCount(Math.round(Math.min(
       MAX_PARTICLES,
       p.particleCount ?? DEFAULTS.particleCount,
-    ))
+    )))
     const dotSize = p.dotSize ?? 6
     const speed = p.speed ?? DEFAULTS.speed
     const intensityP = p.intensity ?? DEFAULTS.intensity

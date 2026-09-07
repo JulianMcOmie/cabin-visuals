@@ -1,3 +1,4 @@
+import { currentParticleBudget } from './liveParticleBudget'
 import { useContext, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Color } from 'three'
@@ -94,6 +95,7 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
     const huePerceptual = colorShift.huePerceptual ?? false
     sig.i = 0
     sig.dirty = false
+    put(sig, currentParticleBudget())
     put(sig, state.beat)
     put(sig, state.secPerBeat)
     put(sig, state.beatsPerBar)
