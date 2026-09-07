@@ -781,6 +781,15 @@ function glyphFor(id: string | undefined): ReactNode | undefined {
   return G[key]
 }
 
+/** Shared device mark for the track row and its add-menu entry. */
+export function deviceGlyph(id: string | undefined): ReactNode {
+  const own = glyphFor(id)
+  if (own) return own
+  const def = getMoverOrSplitterDefinition(id)
+  const family = def?.parentGate ? 'parentGate' : def?.kind
+  return G[FAMILY[family ?? ''] ?? 'unknown']
+}
+
 /**
  * The mark a track wears, as the CHILDREN of a 16x16 `currentColor` svg
  * (TrackIcon draws the svg itself, so a look can size and weight it).
@@ -809,11 +818,7 @@ export function trackGlyph(track: Track, isCompositionTrack = false): ReactNode 
     case 'mover':
     case 'splitter': {
       const id = track.moverId ?? track.splitterId
-      const own = glyphFor(id)
-      if (own) return own
-      const def = getMoverOrSplitterDefinition(id)
-      const family = def?.parentGate ? 'parentGate' : def?.kind
-      return G[FAMILY[family ?? ''] ?? 'unknown']
+      return deviceGlyph(id)
     }
     default:
       // 3D Shape is the one instrument whose mark is not fixed: it follows the
