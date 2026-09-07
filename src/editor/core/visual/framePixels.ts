@@ -4,6 +4,16 @@ import type { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 
 export const FRAME_REFERENCE_HEIGHT = 1080
 
+/** Sample fine preview details before downscaling, and retain native Retina detail.
+ * Reduced quality modes keep their explicit pixel budgets; exports own their size. */
+export function previewSamplingScale(qualityScale: number, height: number, dpr: number, pinned: boolean): number {
+  if (pinned) return 1
+  if (qualityScale < 1) return qualityScale
+  const nativeScale = Math.min(2, Math.max(1, dpr))
+  const detailScale = Math.min(2, FRAME_REFERENCE_HEIGHT / Math.max(1, height))
+  return Math.max(nativeScale, detailScale)
+}
+
 const viewport = new Vector4()
 const canvasSize = new Vector2()
 

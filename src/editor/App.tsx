@@ -174,13 +174,8 @@ function Scene({
   // paused). RenderGovernor requests single frames when an input changes.
   const isPlaying = useTimeStore((s) => s.isPlaying)
   return (
-    // dpr 1 + no MSAA: every scene rasterizes into 1× (CSS-pixel) offscreen
-    // targets, and the ONLY thing drawn to the default framebuffer is the final
-    // fullscreen grade quad - so a 1.5× multisampled backbuffer just ran the
-    // heaviest fragment shader on 2.25× the pixels to bilinearly upscale a 1×
-    // image. This is also exactly what the export renders (ExportDriver pins
-    // dpr 1), so the preview now matches the file.
-    <Canvas className="visual-canvas-root" shadows="soft" frameloop={isPlaying ? 'always' : 'demand'} dpr={1} camera={{ position: [0, 0, 5], fov: 55 }} gl={{ antialias: false }}>
+    // Geometry is antialiased in the offscreen pipeline; the backbuffer only displays its final quad.
+    <Canvas className="visual-canvas-root" shadows="soft" frameloop={isPlaying ? 'always' : 'demand'} dpr={[1, 2]} camera={{ position: [0, 0, 5], fov: 55 }} gl={{ antialias: false }}>
       <color attach="background" args={['#09090b']} />
       <CanvasSourceBridge sourceRef={sourceCanvasRef} />
       <PreviewSceneSync sceneId={previewSceneId} />

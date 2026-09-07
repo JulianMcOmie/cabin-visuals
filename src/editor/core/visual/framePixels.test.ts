@@ -20,6 +20,7 @@ import {
   FRAME_REFERENCE_HEIGHT,
   frameLineResolution,
   framePixelScale,
+  previewSamplingScale,
 } from './framePixels'
 
 type RenderSize = { width: number; height: number; canvasHeight: number; pixelRatio: number }
@@ -146,4 +147,20 @@ test('orthographic points use frame pixels even when sizeAttenuation is enabled'
   const nextShader = compilePoints(material, renderer)
   assert.equal(shader.uniforms.uFramePointScale, nextShader.uniforms.uFramePointScale)
   assert.equal(material.size * 2 * shader.uniforms.uFramePointScale.value, 2)
+})
+
+test('preview sampling preserves fine details with bounded supersampling and native Retina resolution', () => {
+  for (const [height, dpr, expected] of [[270, 1, 2], [540, 1, 2], [720, 1, 1.5], [1080, 1, 1], [2160, 1, 1], [540, 2, 2], [1080, 2, 2], [1080, 3, 2]]) {
+    assert.equal(previewSamplingScale(1, height, dpr, false), expected)
+  }
+  assert.equal(previewSamplingScale(1, 0, 1, false), 2)
+})
+
+test('sampling keeps fast mode budgets and pins export to exact output dimensions', () => {
+  for (const height of [270, 1080, 2160]) for (const dpr of [1, 2]) {
+    for (const scale of [0.25, 0.5, 1]) {
+      assert.equal(previewSamplingScale(scale, height, dpr, true), 1)
+      if (scale < 1) assert.equal(previewSamplingScale(scale, height, dpr, false), scale)
+    }
+  }
 })
