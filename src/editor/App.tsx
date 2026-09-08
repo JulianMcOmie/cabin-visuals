@@ -182,7 +182,12 @@ function Scene({
   const isPlaying = useTimeStore((s) => s.isPlaying)
   return (
     // Geometry is antialiased in the offscreen pipeline; the backbuffer only displays its final quad.
-    <Canvas className="visual-canvas-root" shadows="soft" frameloop={isPlaying ? 'always' : 'demand'} dpr={[1, 2]} camera={{ position: [0, 0, 5], fov: 55 }} gl={{ antialias: false }}>
+    // preserveDrawingBuffer: PostHog's session replay captures this canvas on
+    // its own timer (a readback outside our render), which sees only a cleared
+    // buffer unless the frame is kept. The recorder forces the flag itself, but
+    // only on contexts created after it loads - and on a fresh /editor load
+    // this one exists first.
+    <Canvas className="visual-canvas-root" shadows="soft" frameloop={isPlaying ? 'always' : 'demand'} dpr={[1, 2]} camera={{ position: [0, 0, 5], fov: 55 }} gl={{ antialias: false, preserveDrawingBuffer: true }}>
       <color attach="background" args={['#09090b']} />
       <CanvasSourceBridge sourceRef={sourceCanvasRef} />
       <PreviewSceneSync sceneId={previewSceneId} />
