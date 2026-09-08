@@ -1,5 +1,7 @@
 'use client'
 
+import { numberEntry } from './knobValueParsing'
+
 // Bespoke settings for the Conveyor mover, following
 // docs/instrument-panel-design-guide.md (Laser Sphere is the reference, Impact
 // Scatter the nearest sibling): a full-bleed panel washed in the mover's
@@ -260,7 +262,7 @@ function FixedKnob({ b, label, format, large }: {
 }) {
   return (
     <div className="flex w-[58px] flex-col items-center whitespace-nowrap">
-      <Knob b={b} label={label} format={format} large={large} />
+      <Knob b={b} label={label} entry={numberEntry(format === perBeat ? '/beat' : format === asBeats || format === asFade ? 'beats' : '')} format={format} large={large} />
     </div>
   )
 }

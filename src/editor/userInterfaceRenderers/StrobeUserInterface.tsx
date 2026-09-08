@@ -1,5 +1,7 @@
 'use client'
 
+import { percentEntry } from './knobValueParsing'
+
 // Bespoke settings for Strobe, built from the console kit (./console):
 // full-bleed, no card chrome, washed with the accent's dark shade. A live
 // preview that actually flashes, the rate vocabulary, then STYLE / DEPTH /
@@ -294,8 +296,8 @@ export const StrobeUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ p
       <RateLegend selected={previewPitch} onSelect={setPreviewPitch} />
       <ControlRow spill className="justify-center gap-5 px-4 pb-2 pt-1.5">
         <StyleSelector b={style} />
-        <Knob b={depth} label="DEPTH" large format={asPercent} />
-        <Knob b={width} label="WIDTH" format={asPercent} />
+        <Knob b={depth} label="DEPTH" large entry={percentEntry} format={asPercent} />
+        <Knob b={width} label="WIDTH" entry={percentEntry} format={asPercent} />
       </ControlRow>
       <More parameters={b.rest()} />
     </Console>

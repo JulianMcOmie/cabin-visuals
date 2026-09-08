@@ -11,12 +11,10 @@
 // arc's tip, the beam's terminus. Interaction never brightens anything: the hand
 // changes the parameter, the parameter changes the light.
 
-import { useRef, type KeyboardEvent, type PointerEvent } from 'react'
+import { useKnobInteraction } from './useKnobInteraction'
+import { KnobValue } from './KnobValue'
+import { numberEntry, type KnobValueCodec } from './knobValueParsing'
 import { towardWhite } from './colorWheel'
-import { clamp } from '../utils/math'
-
-/** How much vertical travel covers the whole range, in pixels. */
-const DRAG_TRAVEL = 140
 
 /** The knob's default readout: integer-stepped params show no decimals, and a
  *  value too small for 2dp falls back to one significant digit rather than "0.00". */
@@ -28,7 +26,7 @@ export function formatKnobValue(value: number, step: number): string {
 
 export function LaserKnob({
   value, min, max, step, defaultValue, curve = 1, label, ariaLabel, accent,
-  large = false, bipolar = false, disabled = false, suffix, format, title, onChange,
+  large = false, bipolar = false, disabled = false, suffix, format, title, onChange, entry, detents, onExactChange, integer,
 }: {
   value: number
   min: number
@@ -62,15 +60,15 @@ export function LaserKnob({
   /** Appended to the readout (e.g. 'b' for beats). */
   suffix?: string
   format?: (value: number) => string
+  entry?: KnobValueCodec
+  integer?: boolean
+  detents?: readonly number[]
+  onExactChange?: (value: number) => void
   /** Overrides the default drag hint - what a disabled knob owes the user. */
   title?: string
   onChange: (value: number) => void
 }) {
-  const dragRef = useRef<{ y: number; norm: number } | null>(null)
-
-  const range = max - min
-  const norm = range === 0 ? 0 : clamp((value - min) / range, 0, 1)
-  const percent = Math.pow(norm, 1 / curve)
+  const { percent, handlers } = useKnobInteraction({ value, min, max, step, defaultValue, curve, disabled, detents, onChange })
   const angle = -135 + percent * 270
   // Where the lit span begins and ends, in degrees from the 225deg origin.
   const anchor = bipolar ? 0.5 : 0
@@ -78,47 +76,6 @@ export function LaserKnob({
   const litTo = Math.max(percent, anchor) * 270
   const litArc = (color: string) =>
     `conic-gradient(from 225deg, transparent 0deg ${litFrom}deg, ${color} ${litFrom}deg ${litTo}deg, transparent ${litTo}deg 360deg)`
-
-  const commitNorm = (t: number) => {
-    const raw = min + Math.pow(clamp(t, 0, 1), curve) * range
-    // Curved knobs round to 3 significant digits instead of the step grid: the
-    // low end is the whole reason the curve exists, and stepping would erase it.
-    const snapped = curve === 1
-      ? min + Math.round((raw - min) / step) * step
-      : raw === 0 ? 0 : Number(raw.toPrecision(3))
-    onChange(clamp(Number(snapped.toFixed(8)), min, max))
-  }
-
-  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (disabled) return
-    event.preventDefault()
-    // Capture can throw for exotic/synthetic pointers; the drag still works
-    // through the move/up handlers on the element itself.
-    try { event.currentTarget.setPointerCapture(event.pointerId) } catch {}
-    dragRef.current = { y: event.clientY, norm: percent }
-  }
-
-  const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current) return
-    commitNorm(dragRef.current.norm + (dragRef.current.y - event.clientY) / DRAG_TRAVEL)
-  }
-
-  const onPointerUp = (event: PointerEvent<HTMLDivElement>) => {
-    dragRef.current = null
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-  }
-
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (disabled) return
-    if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
-    event.preventDefault()
-    const direction = event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1
-    // Never nudge less than one step: on a coarse stepped knob (a detent
-    // selector spanning a handful of indices) 3% of the travel rounds back to
-    // the value it started from and the arrows read as dead.
-    const nudge = Math.max(0.03, range === 0 ? 0 : step / range)
-    commitNorm(percent + direction * nudge)
-  }
 
   return (
     <div className={`flex min-w-0 flex-col items-center ${disabled ? 'opacity-45' : ''}`}>
@@ -129,14 +86,10 @@ export function LaserKnob({
         aria-valuemin={min}
         aria-valuemax={max}
         aria-valuenow={value}
+        aria-valuetext={`${(format ?? ((v: number) => formatKnobValue(v, step)))(value)}${suffix ?? ''}`}
         aria-disabled={disabled || undefined}
         title={title ?? 'Drag vertically · double-click to reset'}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onDoubleClick={() => { if (!disabled) onChange(defaultValue) }}
-        onKeyDown={onKeyDown}
+        {...handlers}
         className={`relative ${large ? 'h-[52px] w-[52px]' : 'h-11 w-11'} ${disabled ? 'cursor-default' : 'cursor-ns-resize'} touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/50`}
       >
         {/* Emission is sold by exponential falloff: a wide soft accent bloom, a
@@ -180,9 +133,11 @@ export function LaserKnob({
       {label !== '' && (
         <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-white/40">{label}</span>
       )}
-      <span className="font-mono text-[9px] tabular-nums text-white/70">
+      <KnobValue value={value} min={min} max={max} label={ariaLabel ?? label} disabled={disabled} integer={integer}
+        codec={entry ?? numberEntry(suffix)} onChange={onExactChange ?? onChange}
+        className="font-mono text-[9px] tabular-nums text-white/70">
         {(format ?? ((v: number) => formatKnobValue(v, step)))(value)}{suffix}
-      </span>
+      </KnobValue>
     </div>
   )
 }

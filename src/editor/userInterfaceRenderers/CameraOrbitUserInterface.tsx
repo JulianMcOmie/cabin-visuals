@@ -1,6 +1,10 @@
 'use client'
 
-import { useRef, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useKnobInteraction } from './useKnobInteraction'
+import { KnobValue } from './KnobValue'
+import { numberEntry } from './knobValueParsing'
+
+import { useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { isNumberParam } from '../instruments/types'
 import { DEFAULT_ORBIT_AXIS, ORBIT_AXES } from '../instruments/cameraOrbitCore'
 import { ParamControl } from './ParameterControl'
@@ -286,15 +290,11 @@ function AxisPicker({ bound }: { bound: UserInterfaceParameter | undefined }) {
 
 /** One coordinate of the center, dragged vertically - the Camera panel's cell. */
 function AxisCell({ bound, axis }: { bound: UserInterfaceParameter | undefined; axis: string }) {
-  const dragRef = useRef<{ y: number; value: number } | null>(null)
   const value = numeric(bound)
+  const { handlers } = useKnobInteraction({ min: value?.min ?? 0, max: value?.max ?? 1,
+    value: value?.value ?? 0, step: value?.step ?? 0.01, defaultValue: value?.default ?? 0,
+    onChange: next => value?.setValue(next), travel: 160, keyStep: true })
   if (!value) return null
-  const range = value.max - value.min
-
-  const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    dragRef.current = null
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-  }
 
   return (
     <div
@@ -305,28 +305,12 @@ function AxisCell({ bound, axis }: { bound: UserInterfaceParameter | undefined; 
       aria-valuemax={value.max}
       aria-valuenow={value.value}
       title={`${value.label} · drag vertically · double-click to reset`}
-      onPointerDown={(event) => {
-        event.preventDefault()
-        event.currentTarget.setPointerCapture(event.pointerId)
-        dragRef.current = { y: event.clientY, value: value.value }
-      }}
-      onPointerMove={(event) => {
-        if (!dragRef.current) return
-        commit(value, dragRef.current.value + ((dragRef.current.y - event.clientY) / 160) * range)
-      }}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
-      onDoubleClick={() => value.setValue(value.default)}
-      onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-        if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
-        event.preventDefault()
-        const direction = event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1
-        commit(value, value.value + direction * value.step)
-      }}
+      {...handlers}
       className="flex min-w-0 cursor-ns-resize touch-none select-none flex-col items-center gap-0.5 rounded border border-[var(--border)] bg-[var(--bg-app)] py-1.5 outline-none hover:border-[var(--border-strong)] focus-visible:border-[var(--accent)]"
     >
       <span className="text-[8px] font-semibold tracking-[0.1em] text-[var(--text-muted)]">{axis}</span>
-      <span className="font-mono text-[11px] tabular-nums text-[var(--text-2)]">{value.value.toFixed(1)}</span>
+      <KnobValue draggable value={value.value} min={value.min} max={value.max} label={value.label}
+        codec={numberEntry()} onChange={value.setValue} className="font-mono text-[11px] tabular-nums text-[var(--text-2)]">{value.value.toFixed(1)}</KnobValue>
     </div>
   )
 }

@@ -1,5 +1,7 @@
 'use client'
 
+import { percentEntry } from './knobValueParsing'
+
 // Bespoke settings for the Visibility mover (definition id 'visibility'),
 // rebuilt to docs/instrument-panel-design-guide.md (Laser Sphere is the
 // reference): a live preview of a dummy object being gated by the REAL
@@ -387,13 +389,14 @@ function EnvelopeKnob({ parameter: bound, label, format, suffix }: {
       value={bound.value}
       min={definition.min}
       max={definition.max}
-      step={definition.step}
+      step={definition.step} integer={definition.integer}
       defaultValue={definition.default}
       curve={definition.curve ?? 1}
       label={label}
       ariaLabel={definition.label}
       accent={EMERALD}
       format={format}
+      entry={format === asPercent ? percentEntry : undefined}
       suffix={suffix}
       onChange={bound.setValue}
     />

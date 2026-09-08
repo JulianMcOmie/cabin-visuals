@@ -1,5 +1,7 @@
 'use client'
 
+import { percentEntry, turnsEntry } from './knobValueParsing'
+
 import { useEffect, useMemo, useRef } from 'react'
 import { Color } from 'three'
 import { applyColorShiftToColor } from '../core/visual/colorShift'
@@ -99,8 +101,8 @@ export const HueRotateUserInterfaceRenderer: UserInterfaceRendererDefinition = (
         options={[{ value: 0, label: 'Fixed' }, { value: 1, label: 'Continuous' }]} />
     </div>
     <ControlRow spill className="justify-around gap-2 px-3 pb-2 pt-2">
-      <Knob b={rotate} label="ROTATE" ariaLabel="Hue rotation" large format={turns} />
-      <Knob b={spread} label="SPREAD" ariaLabel="Hue spread" bipolar format={turns} />
+      <Knob b={rotate} label="ROTATE" ariaLabel="Hue rotation" large entry={turnsEntry} format={turns} />
+      <Knob b={spread} label="SPREAD" ariaLabel="Hue spread" bipolar entry={turnsEntry} format={turns} />
       <LaserKnob value={speed?.value ?? 0.125} min={-2} max={2} step={0.005} defaultValue={0.125}
         onChange={v => speed?.set(v)} label="RATE" ariaLabel="Hue rotation rate in turns per beat"
         accent={HUE_ROTATE_COLOR} bipolar disabled={!running || !speed} format={rate} suffix="/b" />
@@ -115,8 +117,8 @@ export const HueRotateUserInterfaceRenderer: UserInterfaceRendererDefinition = (
         </ControlRow>}
         <div><div className="mb-1 text-[9px] tracking-widest text-white/40">COLOR SPACE</div><Segmented b={circle} name="Hue color space" /></div>
         <ControlRow className="justify-around gap-2 pb-1">
-          <Knob b={saturation} label="SATURATION" bipolar format={v => `${Math.round(v * 100)}%`} />
-          <Knob b={lightness} label="LIGHTNESS" bipolar format={v => `${Math.round(v * 100)}%`} />
+          <Knob b={saturation} label="SATURATION" bipolar entry={percentEntry} format={v => `${Math.round(v * 100)}%`} />
+          <Knob b={lightness} label="LIGHTNESS" bipolar entry={percentEntry} format={v => `${Math.round(v * 100)}%`} />
         </ControlRow>
       </div>
     </details>

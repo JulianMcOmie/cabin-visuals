@@ -1,5 +1,9 @@
 'use client'
 
+import { useKnobInteraction } from './useKnobInteraction'
+import { KnobValue } from './KnobValue'
+import { numberEntry } from './knobValueParsing'
+
 import { useRef, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { isNumberParam } from '../instruments/types'
 import { ParamControl, ParamSlider } from './ParameterControl'
@@ -139,37 +143,13 @@ function AxisCell({ bound, axis, suffix = '' }: {
   axis: string
   suffix?: string
 }) {
-  const dragRef = useRef<{ y: number; value: number } | null>(null)
-  if (!bound) return null
-  const definition = bound.definition
-  if (!isNumberParam(definition) || typeof bound.value !== 'number') return null
+  const d = bound && isNumberParam(bound.definition) ? bound.definition : null
+  const { handlers } = useKnobInteraction({ min: d?.min ?? 0, max: d?.max ?? 1,
+    value: typeof bound?.value === 'number' ? bound.value : 0, step: d?.step ?? 0.01, defaultValue: d?.default ?? 0,
+    onChange: value => bound?.setValue(value), travel: 160, keyStep: true })
+  if (!bound || !d || typeof bound.value !== 'number') return null
+  const definition = d
   const value = bound.value
-  const range = definition.max - definition.min
-
-  const commit = (raw: number) => {
-    const snapped = definition.min + Math.round((raw - definition.min) / definition.step) * definition.step
-    bound.setValue(Math.max(definition.min, Math.min(definition.max, Number(snapped.toFixed(6)))))
-  }
-
-  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    event.currentTarget.setPointerCapture(event.pointerId)
-    dragRef.current = { y: event.clientY, value }
-  }
-  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current) return
-    commit(dragRef.current.value + ((dragRef.current.y - event.clientY) / 160) * range)
-  }
-  const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    dragRef.current = null
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-  }
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
-    event.preventDefault()
-    const direction = event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1
-    commit(value + direction * definition.step)
-  }
 
   return (
     <div
@@ -180,18 +160,14 @@ function AxisCell({ bound, axis, suffix = '' }: {
       aria-valuemax={definition.max}
       aria-valuenow={value}
       title={`${definition.label} · drag vertically · double-click to reset`}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
-      onDoubleClick={() => bound.setValue(definition.default)}
-      onKeyDown={onKeyDown}
+      {...handlers}
       className="flex min-w-0 cursor-ns-resize touch-none select-none flex-col items-center gap-0.5 rounded border border-[var(--border)] bg-[var(--bg-app)] py-1.5 outline-none hover:border-[var(--border-strong)] focus-visible:border-[var(--accent)]"
     >
       <span className="text-[8px] font-semibold tracking-[0.1em] text-[var(--text-muted)]">{axis}</span>
-      <span className="font-mono text-[11px] tabular-nums text-[var(--text-2)]">
+      <KnobValue draggable value={value} min={definition.min} max={definition.max} label={definition.label}
+        codec={numberEntry(suffix)} onChange={bound.setValue} className="font-mono text-[11px] tabular-nums text-[var(--text-2)]">
         {value.toFixed(1)}{suffix}
-      </span>
+      </KnobValue>
     </div>
   )
 }

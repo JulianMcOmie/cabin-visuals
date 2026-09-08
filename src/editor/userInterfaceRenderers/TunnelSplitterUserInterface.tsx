@@ -1,5 +1,7 @@
 'use client'
 
+import { periodEntry } from './knobValueParsing'
+
 // Bespoke settings for the Tunnel splitter, following
 // docs/instrument-panel-design-guide.md (Approach's panel is the nearest
 // sibling — both stream copies down the camera axis): a full-bleed panel washed
@@ -149,7 +151,7 @@ function BoundKnob({ bound, label, large = false, bipolar = false }: {
       value={bound.value}
       min={definition.min}
       max={definition.max}
-      step={definition.step}
+      step={definition.step} integer={definition.integer}
       defaultValue={definition.default}
       curve={definition.curve ?? 1}
       label={label}
@@ -162,8 +164,8 @@ function BoundKnob({ bound, label, large = false, bipolar = false }: {
   )
 }
 
-/** The SYNC rate knob: turns in DETENT INDICES so the musical divisions sit
- *  evenly on the arc, converted back to stored rings-per-beat on the way out. */
+/** The shared knob spaces the musical detents evenly while keeping stored
+ *  rings-per-beat values and beat-period entry at the public boundary. */
 function SyncRateKnob({ bound }: { bound: UserInterfaceParameter }) {
   const definition = bound.definition
   if (!isNumberParam(definition) || typeof bound.value !== 'number') return null
@@ -172,11 +174,13 @@ function SyncRateKnob({ bound }: { bound: UserInterfaceParameter }) {
   const onGrid = TUNNEL_SYNC_DETENTS[index] === value
   return (
     <LaserKnob
-      value={index}
-      min={0}
-      max={TUNNEL_SYNC_DETENTS.length - 1}
-      step={1}
-      defaultValue={tunnelSyncDetentIndex(definition.default)}
+      value={value}
+      min={definition.min}
+      max={definition.max}
+      step={definition.step} integer={definition.integer}
+      defaultValue={definition.default}
+      detents={TUNNEL_SYNC_DETENTS}
+      entry={periodEntry(1, onGrid)}
       label="RATE"
       ariaLabel="Sync rate, beats per ring"
       accent={CORRIDOR}
@@ -184,13 +188,8 @@ function SyncRateKnob({ bound }: { bound: UserInterfaceParameter }) {
       bipolar
       // An off-grid (automated) value keeps an honest numeric readout until
       // the knob is touched and snaps it to a division.
-      format={(knobIndex) => (onGrid
-        ? tunnelSyncDetentLabel(TUNNEL_SYNC_DETENTS[Math.round(knobIndex)] ?? 0)
-        : formatKnobValue(value, 0.05))}
-      onChange={(knobIndex) => {
-        const detent = TUNNEL_SYNC_DETENTS[clamp(Math.round(knobIndex), 0, TUNNEL_SYNC_DETENTS.length - 1)]
-        if (detent !== value) bound.setValue(detent)
-      }}
+      format={(rate) => onGrid ? tunnelSyncDetentLabel(rate) : formatKnobValue(rate, 0.05)}
+      onChange={bound.setValue}
     />
   )
 }

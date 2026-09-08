@@ -1,5 +1,7 @@
 'use client'
 
+import { percentEntry } from './knobValueParsing'
+
 // Bespoke settings for the Gradient colorizer, migrated to
 // docs/instrument-panel-design-guide.md on the console kit (./console),
 // borrowing Figma's gradient editor as the mental model: the hero is the RAMP
@@ -167,7 +169,7 @@ export const GradientColorizerUserInterfaceRenderer: UserInterfaceRendererDefini
             <Knob b={span} label="SPAN" ariaLabel="Gradient span in world units" />
             <Knob b={offset} label="OFFSET" ariaLabel="Gradient center offset" />
           </div>}
-          <Knob b={amount} label="AMOUNT" ariaLabel="Gradient amount" large format={(v) => `${Math.round(v * 100)}%`} />
+          <Knob b={amount} label="AMOUNT" ariaLabel="Gradient amount" large entry={percentEntry} format={(v) => `${Math.round(v * 100)}%`} />
         </ControlRow>
 
         <More parameters={pool.rest()} label="MORE" className="" />

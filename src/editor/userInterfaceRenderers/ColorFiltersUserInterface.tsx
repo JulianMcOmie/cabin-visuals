@@ -1,6 +1,8 @@
 'use client'
 
-import { useRef, type PointerEvent as ReactPointerEvent } from 'react'
+import { useKnobInteraction } from './useKnobInteraction'
+import { KnobValue } from './KnobValue'
+import { percentEntry } from './knobValueParsing'
 import { COLOR_FILTER_ROWS } from '../instruments/ColorFilters'
 import { isNumberParam } from '../instruments/types'
 import { ParamControl } from './ParameterControl'
@@ -31,32 +33,15 @@ const MODE_SWATCHES: Record<number, string> = {
 
 /** The one knob, writ large: a full-width drag bar with a percent readout. */
 function AmountBar({ bound }: { bound: UserInterfaceParameter | undefined }) {
-  const trackRef = useRef<HTMLDivElement>(null)
+  const d = bound && isNumberParam(bound.definition) ? bound.definition : null
+  const { handlers } = useKnobInteraction({ min: d?.min ?? 0, max: d?.max ?? 1,
+    value: typeof bound?.value === 'number' ? bound.value : 0, step: d?.step ?? 0.01, defaultValue: d?.default ?? 1,
+    onChange: value => bound?.setValue(value), gesture: 'track', keyStep: true })
   if (!bound) return null
   const definition = bound.definition
   if (!isNumberParam(definition) || typeof bound.value !== 'number') return null
   const value = bound.value
   const pct = ((value - definition.min) / (definition.max - definition.min)) * 100
-
-  const setFromClientX = (clientX: number) => {
-    const el = trackRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    const t = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-    const raw = definition.min + t * (definition.max - definition.min)
-    const snapped = Math.max(definition.min, Math.min(definition.max, Math.round(raw / definition.step) * definition.step))
-    bound.setValue(snapped)
-  }
-
-  const onPointerDown = (event: ReactPointerEvent) => {
-    event.preventDefault()
-    setFromClientX(event.clientX)
-    const controller = new AbortController()
-    window.addEventListener('pointermove', (ev) => setFromClientX(ev.clientX), { signal: controller.signal })
-    const onUp = () => controller.abort()
-    window.addEventListener('pointerup', onUp, { signal: controller.signal })
-    window.addEventListener('pointercancel', onUp, { signal: controller.signal })
-  }
 
   return (
     <div className="mb-3">
@@ -64,16 +49,17 @@ function AmountBar({ bound }: { bound: UserInterfaceParameter | undefined }) {
         <span className="text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">
           {definition.label.toUpperCase()}
         </span>
-        <span className="font-mono text-[10px] tabular-nums text-[var(--text-2)]">{Math.round(pct)}%</span>
+        <KnobValue value={value} min={definition.min} max={definition.max} label={definition.label} codec={percentEntry} onChange={bound.setValue}
+          className="font-mono text-[10px] tabular-nums text-[var(--text-2)]">{Math.round(pct)}%</KnobValue>
       </div>
       <div
-        ref={trackRef}
+        tabIndex={0}
         role="slider"
         aria-label={definition.label}
         aria-valuemin={definition.min}
         aria-valuemax={definition.max}
         aria-valuenow={value}
-        onPointerDown={onPointerDown}
+        {...handlers}
         className="relative h-[14px] cursor-pointer select-none overflow-hidden rounded border border-[var(--border)] bg-[var(--bg-app)]"
       >
         <div

@@ -1,5 +1,7 @@
 'use client'
 
+import { periodEntry } from './knobValueParsing'
+
 // Bespoke settings for the Radial Motion mover, following
 // docs/instrument-panel-design-guide.md (Laser Sphere is the reference,
 // Conveyor the nearest mover sibling): a full-bleed panel washed in the mover's
@@ -235,35 +237,30 @@ function GridKnob({ bound, rowLabel, depth, bipolar, stepped }: {
   }
   const ariaLabel = `${RADIAL_MOTION_DEPTH_LABELS[depth]} ${rowLabel.toLowerCase()}`
   if (stepped) {
-    // The knob turns in DETENT INDICES, not degrees: evenly spaced clicks on
-    // the arc, converted back to the stored °/beat rate on the way out. Zero
-    // is the middle index by construction, so the bipolar anchor lands on it.
+    // The shared knob maps these real degree/beat values to evenly spaced
+    // detent positions. Zero is the middle index, so the bipolar anchor
+    // lands on it; exact entry can still set a rate between the detents.
     const value = bound.value
     const index = radialMotionSpinDetentIndex(value)
     const onGrid = RADIAL_MOTION_SPIN_DETENTS[index] === value
     return (
       <div className="flex justify-center">
         <LaserKnob
-          value={index}
-          min={0}
-          max={RADIAL_MOTION_SPIN_DETENTS.length - 1}
-          step={1}
-          defaultValue={radialMotionSpinDetentIndex(definition.default)}
+          value={value}
+          min={definition.min}
+          max={definition.max}
+          step={definition.step} integer={definition.integer}
+          defaultValue={definition.default}
+          detents={RADIAL_MOTION_SPIN_DETENTS}
+          entry={periodEntry(360, onGrid, '°')}
           label=""
           ariaLabel={ariaLabel}
           accent={ORBIT}
           bipolar
           // An off-grid value from before quantization keeps an honest degree
           // readout until the knob is touched and snaps it to a division.
-          format={(knobIndex) => (onGrid
-            ? radialMotionSpinDetentLabel(RADIAL_MOTION_SPIN_DETENTS[Math.round(knobIndex)] ?? 0)
-            : `${value}°`)}
-          onChange={(knobIndex) => {
-            const detent = RADIAL_MOTION_SPIN_DETENTS[
-              clamp(Math.round(knobIndex), 0, RADIAL_MOTION_SPIN_DETENTS.length - 1)
-            ]
-            if (detent !== value) bound.setValue(detent)
-          }}
+          format={(rate) => onGrid ? radialMotionSpinDetentLabel(rate) : `${rate}°`}
+          onChange={bound.setValue}
         />
       </div>
     )
@@ -274,7 +271,7 @@ function GridKnob({ bound, rowLabel, depth, bipolar, stepped }: {
         value={bound.value}
         min={definition.min}
         max={definition.max}
-        step={definition.step}
+        step={definition.step} integer={definition.integer}
         defaultValue={definition.default}
         curve={definition.curve ?? 1}
         // Captions live on the rail and the column headers; the knob itself

@@ -183,8 +183,13 @@ control vocabulary per panel.
 - Flat face `#14171f`, hairline inner border, 270° accent arc starting at
   7 o'clock, white needle, shared glow halo (above).
 - Vertical drag, full range ≈ 140px of travel; pointer capture; double-click
-  resets to default; arrow keys nudge ~3% of travel; `role="slider"` with
+  on the face resets to default; arrow keys nudge ~3% of travel; `role="slider"` with
   aria value attributes; visible focus ring.
+- Double-click the numeric readout to type an exact value (Enter/F2 also opens
+  it from the keyboard). Enter or valid blur commits, Escape cancels, invalid
+  Enter shows an error and invalid blur discards. Entry keeps the displayed unit
+  through an explicit codec and bypasses drag snapping. Use `KnobValue` and
+  `useKnobInteraction` for bespoke skins; do not duplicate interaction code.
 - Honors the param's response `curve` exactly like `ParamSlider`: position maps
   through the curve, and curved params round to 3 significant digits instead of
   the step grid (the low end is why the curve exists).

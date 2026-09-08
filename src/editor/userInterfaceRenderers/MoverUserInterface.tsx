@@ -1,5 +1,7 @@
 'use client'
 
+import { percentEntry } from './knobValueParsing'
+
 // Bespoke settings for the unified Mover (definition id 'mover'), built from
 // the console kit (./console).
 //
@@ -366,7 +368,7 @@ export const MoverUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ pa
             <Knob b={axis('X')} label="X" format={translate ? undefined : degrees} />
             <Knob b={axis('Y')} label="Y" format={translate ? undefined : degrees} />
             <Knob b={axis('Z')} label="Z" format={translate ? undefined : degrees} />
-            <Knob b={axis('')} label="AMOUNT" large format={(v) => `${Math.round(v * 100)}%`} />
+            <Knob b={axis('')} label="AMOUNT" large entry={percentEntry} format={(v) => `${Math.round(v * 100)}%`} />
           </div>
         </div>
 

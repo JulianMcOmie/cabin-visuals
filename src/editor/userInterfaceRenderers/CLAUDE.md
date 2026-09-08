@@ -75,7 +75,44 @@ Its **Rows·Range console** says two things the param defs don't. MIN/MAX travel
 - **A grid panel busts the ~240px height budget and that is a real cost, not a rounding error.** 4 rows × 3 knobs plus a preview lands near 450px, and the inspector pane opens around 300px — half the console starts below the fold. It scrolls and the pane drags, but reach for a disclosure first; only go to a grid when the caller has explicitly asked for everything visible at once.
 - Its preview runs the mover's real `resolve()` with **NO NOTES**, which is the claim the mover makes (passive choreography, MIDI as accent). A preview that needs notes to move would be hiding the actual behaviour.
 - The preview frames by **HEIGHT, not width** — the subject is a disc in a short wide window, and fitting the width pushes the top and bottom off-frame. (Conveyor frames by width for the opposite reason: its subject is a line.) Same per-frame re-derivation from `gl.domElement.client*` as Conveyor, for the same reason.
-- **A stepped (detent) knob is a LaserKnob driven in INDEX units**, not a new control: its spin knobs walk `RADIAL_MOTION_SPIN_DETENTS` by binding `value`/`min`/`max`/`step` to `0…detents.length−1`/`1` and converting index⟷rate in the wrapper's `format`/`onChange` — evenly spaced clicks on the arc regardless of how non-uniform the underlying values are, and `bipolar` still works when the zero detent is the middle index. The keyboard nudge in laserKnob.tsx is `max(3%, one step)` for exactly this case; don't shrink it back.
+- **A stepped (detent) knob is a LaserKnob with `detents`**, not a new control: pass the real value/bounds and `RADIAL_MOTION_SPIN_DETENTS`; the shared interaction hook maps to index positions internally — evenly spaced clicks on the arc regardless of how non-uniform the underlying values are. `bipolar` still works when the zero detent is the middle index. The shared keyboard nudge is `max(3%, one detent)` so a coarse knob never reads as stuck. Keep unit conversion in the readout/entry codec, not the gesture handlers.
+
+**Knob behavior and exact values (2026-09-08).** `useKnobInteraction.ts` owns
+pointer capture/ownership/cancel, drag mapping, curves, detents, reset and keyboard
+nudges. `LaserKnob` and the distinct Shock, Rotate and Kaleidoscope skins use it;
+the camera numeric cells, Pixel Blast meters, Color Filters bar and Symmetry count
+use its gesture options too. Keep intentional geometry in the skin, not another
+copy of the gesture handlers. All ordinary bound knobs still go through the kit.
+
+`KnobValue.tsx` is the shared numeric readout/editor: double-click its **number**
+(or focus it and press Enter/F2) to type; double-click the **knob face** still resets.
+Enter and valid blur/Tab commit once, Escape cancels, invalid Enter retains the
+focused draft with an error, invalid blur discards it. Drafts don't write params;
+unchanged drafts don't round their existing values. Typed finite in-range values
+bypass the drag grid/curve rounding, so narrow settings stay precise. Count-only
+controls keep their existing integer setter; `integer` definitions reject fractional entry. Disabled knobs reject every input.
+
+A display formatter is NOT reversible. Pair transformed readouts with an `entry`
+codec from `knobValueParsing.ts` (also forwarded by kit Knob and PanelSpec): percent
+is /100, Hue Rotate degrees are /360, Line Growth is log2, musical beat periods are
+reciprocal rates, and Scene FX's note fractions use a quarter note per beat.
+Unscaled `suffix` works automatically. Codecs seed from full precision, not the
+rounded readout; decimal/exponent/fraction tokens must parse completely. Detent
+knobs now pass REAL values and their `detents` into LaserKnob, which alone maps
+positions to indices; exact entry can set off-grid values without silently snapping.
+Tunnel's off-grid number is rings/beat; Radial Motion's off-grid number is degrees/beat
+(the degree sign explicitly selects that unit). Those historical readouts remain. Scene FX keeps note fractions and shows the actual
+custom denominator for off-grid rates rather than the nearest detent.
+
+Nested draggable readouts must pass `draggable` to KnobValue: the shared hook captures
+the pointer on the readout button, so its double-click keeps targeting the number.
+Capturing on its parent retargets clicks to the parent and accidentally resets it.
+
+Verification: `knobValue.test.ts` covers parsing/conversions/ranges, drag math and an
+AST audit of every named knob/dial wrapper. `node scripts/test-knobs.mjs` runs real
+Chromium pointer, keyboard, entry and cancellation checks across the skins and kit;
+it omits only the unrelated GPU preview/frame hook so the fixture doesn't boot the
+whole rendering engine. Generic ParameterControl readouts use the same editor too.
 
 Building blocks — use these, don't hand-roll controls: **the console kit in `console/` first** (see above), then the plain-value primitives it wraps: `ParameterControl.tsx` exports `ParamControl` (dispatches on param type), `ParamSlider` (drag + curve + fine-step behavior), `ParamToggle`, `ParamStepper` (small integer counts as −/+ around a detent strip — segment/facet counts, where a smooth slider makes the exact value a hunt), `ParamHueSlider` (a radians hue param on a rainbow track); `colorWheel.tsx` is the shared color picker in TWO shapes — `ColorWheelPill` + `ColorWheelPopover` (a swatch that opens a floating HSV wheel: the default, and what the kit's bound `ColorPill` wraps) and **`ColorField`** (the same picker laid FLAT and always open — captioned header with live hex, hue rail, saturation/brightness field; plain values in/out, no bound kit wrapper yet). Reach for the field when the color IS the panel's subject and the popover would cover the very preview you are judging, or when two colors must be editable at once: stacking two `ColorField`s is how SceneSettingsPanel edits a gradient's stops with no selector between them. It costs ~85px per color against the pill's ~50px, so it is a deliberate trade, not the new default; `laserKnob.tsx` is the guide's console knob (`LaserKnob`, plain numbers in/out — the layer to bind when the value is NOT a `UserInterfaceParameter`: an ADSR field, a mover input; otherwise use the kit's bound `Knob`). Two options on it exist for grid panels: **`bipolar`** anchors the arc at 12 o'clock and grows it either way, which is mandatory for a signed rate (a half-lit ring for zero reads as half ON); and passing **`label=""`** drops the caption row entirely, for a panel that labels its rows and columns instead. The kit `Knob` also takes **`detents`** (uneven allowed stops driven in index units — Radial Motion's pattern, folded in). Respect `showIf` gating (already handled if you go through ParamControl). See `docs/instrument-panel-design-guide.md` for the visual language.
 

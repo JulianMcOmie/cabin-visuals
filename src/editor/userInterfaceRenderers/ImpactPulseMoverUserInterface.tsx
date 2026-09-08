@@ -1,5 +1,7 @@
 'use client'
 
+import { percentEntry } from './knobValueParsing'
+
 // Bespoke settings for the Impact Pulse mover (definition id 'impactPulse'),
 // built to docs/instrument-panel-design-guide.md.
 //
@@ -354,7 +356,7 @@ function PulseKnob({ parameter: bound, label, large, format, suffix }: {
       value={bound.value}
       min={definition.min}
       max={definition.max}
-      step={definition.step}
+      step={definition.step} integer={definition.integer}
       defaultValue={definition.default}
       curve={definition.curve ?? 1}
       label={label}
@@ -362,6 +364,7 @@ function PulseKnob({ parameter: bound, label, large, format, suffix }: {
       accent={STRIKE}
       large={large}
       format={format}
+      entry={format === asPercent ? percentEntry : undefined}
       suffix={suffix}
       onChange={bound.setValue}
     />

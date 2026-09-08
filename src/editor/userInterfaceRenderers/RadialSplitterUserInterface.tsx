@@ -1,5 +1,7 @@
 'use client'
 
+import { numberEntry } from './knobValueParsing'
+
 // Bespoke settings for the Radial splitter, built from the console kit
 // (./console) to docs/instrument-panel-design-guide.md (the Grid splitter's
 // panel is the nearest sibling - same subject, a LAYOUT):
@@ -359,9 +361,9 @@ function RadialConsole({ bound }: { bound: RadialBindings }) {
           it on, matching the definition (a stored growth is inert until then).
           Spiral makes this four knobs, so it WRAPS like the rings row below. */}
       <ControlRow className="flex-wrap justify-center gap-x-5 gap-y-2 px-4 pt-2">
-        <Knob b={sweep} label="SWEEP" format={(v) => `${Math.round(v)}°`} />
+        <Knob b={sweep} label="SWEEP" entry={numberEntry('°')} format={(v) => `${Math.round(v)}°`} />
         <Knob b={rise} label="RISE" bipolar />
-        <Knob b={tilt} label="TILT" bipolar format={(v) => `${Math.round(v)}°`} />
+        <Knob b={tilt} label="TILT" bipolar entry={numberEntry('°')} format={(v) => `${Math.round(v)}°`} />
         {spiral ? <Knob b={growth} label="GROWTH" /> : null}
       </ControlRow>
       {/* RINGS and, once there is more than one, the four independent per-ring
@@ -374,7 +376,7 @@ function RadialConsole({ bound }: { bound: RadialBindings }) {
         {stacked ? <Knob b={ringSpacing} label="SPACING" bipolar /> : null}
         {stacked ? <Knob b={ringSize} label="SCALE" /> : null}
         {stacked ? <Knob b={ringDepth} label="DEPTH" bipolar /> : null}
-        {stacked ? <Knob b={ringTwist} label="TWIST" bipolar format={(v) => `${Math.round(v)}°`} /> : null}
+        {stacked ? <Knob b={ringTwist} label="TWIST" bipolar entry={numberEntry('°')} format={(v) => `${Math.round(v)}°`} /> : null}
       </ControlRow>
       <div className="flex flex-wrap items-start justify-center gap-4 px-4 pb-3 pt-2.5">
         {shape ? <KindSegmented b={shape} caption="SHAPE" testId="radial-shape" /> : null}

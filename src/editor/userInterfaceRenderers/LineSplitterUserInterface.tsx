@@ -1,5 +1,7 @@
 'use client'
 
+import { growthEntry } from './knobValueParsing'
+
 // Bespoke settings for the Line splitter, following
 // docs/instrument-panel-design-guide.md. The Radial splitter's console is the
 // nearest sibling (same subject, a LAYOUT) and this panel keeps its shape:
@@ -228,6 +230,8 @@ function GrowthKnob({ b }: { b: NumBinding }) {
       accent={ACCENT}
       bipolar
       format={(v) => `×${Math.pow(2, v).toFixed(2)}`}
+      entry={growthEntry}
+      onExactChange={(v) => b.set(Math.pow(2, v))}
       onChange={(v) => b.set(Number(Math.pow(2, v).toFixed(2)))}
     />
   )

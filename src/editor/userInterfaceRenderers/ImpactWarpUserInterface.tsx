@@ -385,7 +385,7 @@ function ParamKnob({ bound, label, ariaLabel, large = false, suffix }: {
       value={bound.value}
       min={definition.min}
       max={definition.max}
-      step={definition.step}
+      step={definition.step} integer={definition.integer}
       defaultValue={definition.default}
       curve={definition.curve}
       label={label}

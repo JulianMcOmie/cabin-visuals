@@ -1,5 +1,8 @@
 'use client'
 
+import { useKnobInteraction } from './useKnobInteraction'
+import { KnobValue } from './KnobValue'
+
 // Bespoke settings for the Symmetry splitter, migrated to
 // docs/instrument-panel-design-guide.md on the console kit (./console). The
 // hero is the fold window: the
@@ -248,10 +251,11 @@ function FoldPad({ settings, tilt, spread, planeLabel, hoveredSlot, onHoverSlot 
 
 /** Mirror count: - / + stepper whose readout also drags vertically like a knob. */
 function MirrorsStepper({ b }: { b: NumBinding }) {
-  const dragRef = useRef<{ y: number; start: number } | null>(null)
   const { def } = b
   const mirrors = clamp(Math.round(b.value), def.min, def.max)
   const commit = (raw: number) => b.set(clamp(Math.round(raw), def.min, def.max))
+  const { handlers } = useKnobInteraction({ ...def, value: mirrors, defaultValue: def.default,
+    onChange: commit, travel: 9 * (def.max - def.min), keyStep: true })
   const buttonClass =
     'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-sm leading-none text-white/70 hover:border-white/25 hover:text-white active:scale-95 disabled:pointer-events-none disabled:opacity-35'
 
@@ -266,28 +270,11 @@ function MirrorsStepper({ b }: { b: NumBinding }) {
         aria-valuemax={def.max}
         aria-valuenow={mirrors}
         title="Drag vertically · double-click to reset"
-        onPointerDown={(event) => {
-          event.preventDefault()
-          event.currentTarget.setPointerCapture(event.pointerId)
-          dragRef.current = { y: event.clientY, start: mirrors }
-        }}
-        onPointerMove={(event) => {
-          const drag = dragRef.current
-          if (drag) commit(drag.start + (drag.y - event.clientY) / 9)
-        }}
-        onPointerUp={(event) => {
-          dragRef.current = null
-          if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-        }}
-        onDoubleClick={() => b.set(def.default)}
-        onKeyDown={(event) => {
-          if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
-          event.preventDefault()
-          commit(mirrors + (event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1))
-        }}
+        {...handlers}
         className="flex flex-1 cursor-ns-resize touch-none select-none items-baseline justify-center gap-1.5 rounded-md border border-white/10 bg-black/25 py-1.5 outline-none focus-visible:ring-1 focus-visible:ring-white/50"
       >
-        <span className="font-mono text-[16px] leading-none tabular-nums text-white/90">{mirrors}</span>
+        <KnobValue draggable integer value={mirrors} min={def.min} max={def.max} label={def.label} onChange={commit}
+          className="font-mono text-[16px] leading-none tabular-nums text-white/90">{mirrors}</KnobValue>
         <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">
           {mirrors === 1 ? 'MIRROR' : 'MIRRORS'}
         </span>

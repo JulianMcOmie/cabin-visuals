@@ -1,5 +1,7 @@
 'use client'
 
+import { noteRateEntry } from './knobValueParsing'
+
 // The seven Scene FX device consoles (effects/scene/*). They are one family and
 // share a chassis on purpose - a rack of them should read as one instrument
 // with seven voices, not seven unrelated dialogs - so everything common lives in
@@ -33,7 +35,7 @@ import { grainScenePlugin } from '../effects/scene/grain'
 import { crushScenePlugin } from '../effects/scene/crush'
 import { glitchScenePlugin } from '../effects/scene/glitch'
 import { mirrorScenePlugin } from '../effects/scene/mirror'
-import { SCENE_FX_RATE_DETENTS, formatSceneFxRate } from '../effects/scene/rate'
+import { SCENE_FX_RATE_DETENTS } from '../effects/scene/rate'
 import type { VisualEffect } from '../effects/types'
 import {
   Console,
@@ -432,7 +434,7 @@ const GrainPanel: UserInterfaceRendererDefinition = ({ parameters }) => {
       <ControlRow>
         <Knob b={amount} label="AMOUNT" large />
         <Knob b={size} label="SIZE" />
-        <Knob b={rate} label="RATE" detents={SCENE_FX_RATE_DETENTS} format={formatSceneFxRate} />
+        <Knob b={rate} label="RATE" detents={SCENE_FX_RATE_DETENTS} format={(value) => `1/${Number((4 * value).toPrecision(8))}`} entry={noteRateEntry} />
       </ControlRow>
     </SceneFxShell>
   )
@@ -474,7 +476,7 @@ const GlitchPanel: UserInterfaceRendererDefinition = ({ parameters }) => {
     <SceneFxShell plugin={glitchScenePlugin} parameters={parameters} rest={rest}>
       <ControlRow spill>
         <Knob b={amount} label="AMOUNT" large />
-        <Knob b={rate} label="RATE" detents={SCENE_FX_RATE_DETENTS} format={formatSceneFxRate} />
+        <Knob b={rate} label="RATE" detents={SCENE_FX_RATE_DETENTS} format={(value) => `1/${Number((4 * value).toPrecision(8))}`} entry={noteRateEntry} />
         <Knob b={slices} label="SLICES" />
       </ControlRow>
       <GutterRow label="DAMAGE">
