@@ -551,15 +551,21 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   // absolute beats), so the editor shows exactly what plays. '∅' marks an
   // orphan - a note with no clip word under it.
   const textTrack = !automation && !trigger && track?.type === 'base' && track.instrumentId === 'textDisplay' ? track : null
+  // The two word memos below key on the track's BLOCKS and style lanes, never
+  // the track object: a param knob tick re-mints the track while its notes are
+  // untouched, and keying on the track rebuilt every note's element (457 on a
+  // lyric track) per pointermove of any inspector drag.
+  const textBlocks = textTrack?.blocks
+  const textStyleLanes = textTrack?.styleLanes
   // Words resolve from the LIVE local note state for the edited block (drags
   // stream through `notes` before they commit), so a dragged note keeps its
   // word all the way through the gesture - alt-drag copies included, whose
   // fresh ids the store hasn't seen yet. Other blocks come from the store.
   const noteWords = useMemo(() => {
-    if (!textTrack) return undefined
-    const laneCount = resolveStyleLanes(textTrack.styleLanes).length
+    if (!textBlocks) return undefined
+    const laneCount = resolveStyleLanes(textStyleLanes).length
     const stream: { id: string; beat: number; pitch: number }[] = []
-    for (const b of textTrack.blocks) {
+    for (const b of textBlocks) {
       if (b.id === block.id) continue
       const blockStart = b.startBar * beatsPerBar
       for (const n of b.notes) {
@@ -575,7 +581,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
       }
     }
     stream.sort((a, b) => a.beat - b.beat)
-    const resolved = resolveLyricWords(stream, trackLyricClips(textTrack.blocks, beatsPerBar), laneCount)
+    const resolved = resolveLyricWords(stream, trackLyricClips(textBlocks, beatsPerBar), laneCount)
     const map: Record<string, string> = {}
     stream.forEach((n, i) => { map[n.id] = resolved[i].entry?.text ?? '∅' })
     // A CLIP note wears its whole phrase, through the very same note-label
@@ -585,7 +591,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
       if (isLyricClipNote(n)) map[n.id] = n.lyric?.words.join(' ') ?? ''
     }
     return map
-  }, [textTrack, beatsPerBar, notes, block.id, block.startBar])
+  }, [textBlocks, textStyleLanes, beatsPerBar, notes, block.id, block.startBar])
   // The roll's sidecar subject: a style lane (click a gutter row) or a lyric
   // clip (click it in the sections strip). One at a time - the sidecar shows
   // whichever was picked last; picking it again closes.
@@ -602,22 +608,22 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const setLyricClipWord = useProjectStore((s) => s.setLyricClipWord)
   const updateLyricClip = useProjectStore((s) => s.updateLyricClip)
   const onNoteWordEdit = useMemo(() => {
-    if (!textTrack) return undefined
+    if (!textBlocks) return undefined
     return (noteId: string, word: string) => {
       const trimmed = word.trim()
       if (!trimmed) return
       // A clip note IS the phrase, so retyping it rewrites its own words - no
       // slot binding to chase.
-      const clipNote = textTrack.blocks.flatMap((b) => b.notes).find((n) => n.id === noteId && isLyricClipNote(n))
+      const clipNote = textBlocks.flatMap((b) => b.notes).find((n) => n.id === noteId && isLyricClipNote(n))
       if (clipNote) {
         updateLyricClip(trackId, noteId, { words: trimmed.split(/\s+/).filter(Boolean) })
         return
       }
       // Re-run the binding to find WHICH clip slot this note owns, then write
       // the word back into the clip - the single visible home of the text.
-      const laneCount = resolveStyleLanes(textTrack.styleLanes).length
+      const laneCount = resolveStyleLanes(textStyleLanes).length
       const stream: { id: string; beat: number; pitch: number }[] = []
-      for (const b of textTrack.blocks) {
+      for (const b of textBlocks) {
         const blockStart = b.startBar * beatsPerBar
         for (const n of b.notes) {
           if (laneIndexForPitch(n.pitch, laneCount) >= 0) {
@@ -628,7 +634,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
       stream.sort((a, b) => a.beat - b.beat)
       const idx = stream.findIndex((n) => n.id === noteId)
       if (idx < 0) return
-      const clips = trackLyricClips(textTrack.blocks, beatsPerBar)
+      const clips = trackLyricClips(textBlocks, beatsPerBar)
       const resolved = resolveLyricWords(stream, clips, laneCount)
       const r = resolved[idx]
       const clip = clips[r.clipIndex]
@@ -641,7 +647,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
         : clip.words.length
       setLyricClipWord(trackId, clip.id, wordIndex, trimmed)
     }
-  }, [textTrack, beatsPerBar, setLyricClipWord, updateLyricClip, trackId])
+  }, [textBlocks, textStyleLanes, beatsPerBar, setLyricClipWord, updateLyricClip, trackId])
 
   // On open: scroll horizontally to just before the block starts, and vertically
   // to the block's first note (the earliest by time), or C4 if the block is empty.
