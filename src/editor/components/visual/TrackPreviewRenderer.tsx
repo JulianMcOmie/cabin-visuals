@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { Fragment, memo, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal, useFrame, useThree } from '@react-three/fiber'
 import { AmbientLight, DirectionalLight, PerspectiveCamera, Scene, Vector4, Color, SRGBColorSpace, WebGLRenderTarget } from 'three'
 import { isExportPinned } from '../../core/export/frameDriver'
@@ -59,7 +59,11 @@ function sameInputs(a: ProjectSnapshot, b: ProjectSnapshot) {
     && Object.keys(a.tracks).every(id => a.tracks[id] === b.tracks[id])
 }
 
-function StageObjects({ stage, sceneId }: { stage: Stage; sceneId: string }) {
+// Memoized on the stage's identity: `stages` is a fresh array per revision but
+// an untouched stage keeps its object, so the 80ms-debounced revision after
+// every edit re-renders only the stages whose inputs changed - not every
+// mounted preview's whole object tree (26ms of React per edit at 134 tracks).
+const StageObjects = memo(function StageObjects({ stage, sceneId }: { stage: Stage; sceneId: string }) {
   const groups = useMemo(() => {
     const byTrack = new Map<string, ObjectListEntry[]>()
     for (const object of stage.objects) {
@@ -75,7 +79,7 @@ function StageObjects({ stage, sceneId }: { stage: Stage; sceneId: string }) {
       ? <InstancedObjectRenderer key={first.trackId} sceneId={sceneId} trackId={first.trackId} instrumentId={first.instrumentId} entries={entries} keySuffix=":preview" />
       : entries.map(object => <ObjectRenderer key={`${object.trackId}:${object.visualCopyIndex}`} sceneId={sceneId} trackId={object.trackId} instrumentId={object.instrumentId} visualCopyIndex={object.visualCopyIndex} />)
   })}</>
-}
+})
 
 /** Stage-specific scenes share the editor's WebGL context. Each uses the exact
  * production evaluator on an inclusive chain prefix, a fixed camera and the
