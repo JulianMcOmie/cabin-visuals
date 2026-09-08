@@ -1005,14 +1005,35 @@ export function VisualScene() {
     [objects],
   )
 
-  const placementKey = useProjectStore((s) => objects.map((o) => {
-    const track = s.scenes[o.sceneId]?.tracks[o.trackId]
-    const onTop = isOnTopTrack(getInstrument(o.instrumentId), track?.params, track?.onTop)
-    const finalInvert = onTop
-      && o.instrumentId === 'textDisplay'
-      && (track?.params?.colorMode ?? 0) >= 0.5
-    return finalInvert ? 'I' : onTop ? 'F' : 'B'
-  }).join(''))
+  // Per TRACK on the store write, expanded per copy only when it changes: a
+  // copy's placement is its track's, the object list is one entry per copy
+  // (contiguous per track), and this selector runs on EVERY store write - a
+  // 58k-copy project rebuilt a 58k-char string per pointer move of a drag.
+  const trackPlacementKey = useProjectStore((s) => {
+    let out = ''
+    let prev: string | null = null
+    for (const o of objects) {
+      if (o.trackId === prev) continue
+      prev = o.trackId
+      const track = s.scenes[o.sceneId]?.tracks[o.trackId]
+      const onTop = isOnTopTrack(getInstrument(o.instrumentId), track?.params, track?.onTop)
+      const finalInvert = onTop
+        && o.instrumentId === 'textDisplay'
+        && (track?.params?.colorMode ?? 0) >= 0.5
+      out += finalInvert ? 'I' : onTop ? 'F' : 'B'
+    }
+    return out
+  })
+  const placementKey = useMemo(() => {
+    let out = ''
+    let prev: string | null = null
+    let t = -1
+    for (const o of objects) {
+      if (o.trackId !== prev) { prev = o.trackId; t++ }
+      out += trackPlacementKey[t]
+    }
+    return out
+  }, [objects, trackPlacementKey])
 
   // Which scenes actually have objects in the front / final-invert passes.
   // Most scenes have neither, and unconditionally rendering those passes cost
