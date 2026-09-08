@@ -1,6 +1,6 @@
 import { useContext, useRef } from 'react'
 import { createPortal, useThree } from '@react-three/fiber'
-import { Color, type Mesh, type PointLight, type ShaderMaterial } from 'three'
+import { Color, SphereGeometry, type Mesh, type PointLight, type ShaderMaterial } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { useVisualEngine } from '../core/visual/VisualEngineContext'
 import { InstrumentCopyContext } from '../core/visual/instrumentColor'
@@ -17,6 +17,13 @@ import {
 
 const DEFAULT_COLOR = DEFAULT_LASER_SPHERE_COLOR
 const WHITE = new Color(1, 1, 1)
+// ONE sphere for every copy of every Laser Sphere track. A declarative
+// <sphereGeometry> built a fresh 64×48 mesh (3k verts, its own GPU buffers) per
+// mounted COPY, which at a few thousand copies was the single largest piece of
+// the project-load stall. The geometry is immutable, so sharing is exact; a
+// prop-supplied geometry is outside r3f's auto-dispose, which is what keeps it
+// alive across remounts.
+const SPHERE_GEOMETRY = new SphereGeometry(0.9, 64, 48)
 
 /**
  * One sphere per copy, plus one real point light for the track. The material emits scene-linear HDR
@@ -100,8 +107,7 @@ export function LaserSphere({ trackId }: { trackId: string }) {
 
   return (
     <>
-      <mesh ref={meshRef}>
-        <sphereGeometry args={[0.9, 64, 48]} />
+      <mesh ref={meshRef} geometry={SPHERE_GEOMETRY}>
         <shaderMaterial
           key="laser-sphere-rim-v2"
           vertexShader={LASER_VERTEX_SHADER}

@@ -31,7 +31,6 @@ import { applyColorShiftToColor } from '../core/visual/colorShift'
 import type { VisualCopy } from '../core/visualCopies/types'
 import {
   OVERLAP_RAMP_GRADIENT,
-  OVERLAP_SHAPE_OPTIONS,
   OVERLAP_SHAPE_PASSES,
   overlapShapeDepthColors,
   overlapShapeIndex,
@@ -62,6 +61,17 @@ export function geometryFor(shape: number): ShapeGeometry {
   for (let i = 1; i < points.length; i++) outline.lineTo(points[i][0], points[i][1])
   outline.closePath()
   return new ShapeGeometry(outline)
+}
+
+// The per-copy path's geometries, ONE per shape for every copy of every
+// track: a ShapeGeometry is immutable, and a plain Mesh (unlike the instanced
+// meshes below, which attach their own instanceIndex attribute) can share it
+// freely. Building all six per mounted copy - and triangulating the 96-gon
+// circle each time - was a quarter of a copy-heavy project's load stall.
+// Built on first use and never disposed: the set is bounded by the shape menu.
+const sharedGeometries: (ShapeGeometry | undefined)[] = []
+function sharedGeometryFor(shape: number): ShapeGeometry {
+  return sharedGeometries[shape] ??= geometryFor(shape)
 }
 
 /** One material per pass, configured straight from the pure pass spec. The
@@ -148,12 +158,10 @@ export function OverlapShapeVisual({ trackId }: { trackId: string }) {
   const groupRef = useRef<Group>(null)
   const meshRefs = useRef<(Mesh | null)[]>([])
   const shapeRef = useRef(-1)
-  const geometries = useMemo(() => OVERLAP_SHAPE_OPTIONS.map((o) => geometryFor(o.value)), [])
   const materials = useMemo(() => OVERLAP_SHAPE_PASSES.map(materialFor), [])
   useEffect(() => () => {
-    for (const g of geometries) g.dispose()
     for (const m of materials) m.dispose()
-  }, [geometries, materials])
+  }, [materials])
 
   useInstrumentFrame(trackId, (state) => {
     const group = groupRef.current
@@ -165,7 +173,7 @@ export function OverlapShapeVisual({ trackId }: { trackId: string }) {
     if (shape !== shapeRef.current) {
       shapeRef.current = shape
       for (const mesh of meshRefs.current) {
-        if (mesh) mesh.geometry = geometries[shape]
+        if (mesh) mesh.geometry = sharedGeometryFor(shape)
       }
     }
 
