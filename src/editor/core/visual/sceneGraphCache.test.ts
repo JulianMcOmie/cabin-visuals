@@ -64,7 +64,7 @@ test('editing one scene re-resolves and re-publishes', () => {
 // cost on a copy-heavy project. Pools are keyed on the chain's entries now.
 test('a note edit keeps unchanged pools and does not republish an identical list', () => {
   const line = (copies: number): Track => ({
-    id: 'la', name: 'la', type: 'splitter', splitterId: 'line', parentId: 'a', inputValues: { copies },
+    id: 'la', name: 'la', type: 'splitter', instrumentId: '', splitterId: 'line', parentId: 'a', inputValues: { copies },
     color: '#fff', muted: false, solo: false, blocks: [], childIds: [],
   })
   const withSplitter = (a: Track, copies: number): Scene => ({
