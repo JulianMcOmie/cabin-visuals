@@ -64,10 +64,17 @@ top-to-bottom, seconds-clocked by default). Things worth knowing before touching
   (one or two across a tile) because that is what survives the downscale and what the
   reference shows at its real size. Judge changes against the reference at the
   RENDERED scale (a nearest-neighbour 8x crop), not against the strip.
-- **The plume is closed-form, not simulated** (`wispPose` in the core): a wisp is born
-  every 1/WISP_RATE s while the note sounds; its head follows a seeded drift + curl in
-  age, and each mote trails the head by its own lag (so a ribbon is the head's path),
-  scattering as it ages. Pause invariant holds by construction.
+- **The dust is closed-form, not simulated** (glassRollCore.ts: motePose / streakPose),
+  and it was matched against the video as a SEQUENCE, 0.1 s per frame, not a frame: on
+  the strike the tile becomes a white pillar; while held, motes are born inside its
+  footprint (a burst, then ~150/s) and are lifted faster the longer the pillar burns;
+  on release the pillar drops to ~10% in 0.1 s (two-stage gate) and leaves a low bushy
+  PUFF - motes hanging in 2-4 vertical STRANDS that drift and curl as one, in clumps
+  with dark gaps, over a soft violet haze at the base, plus one or two short vapor
+  streaks - that rises ~45 px/s, spreads and is gone ~1.5 s later. A continuous
+  ribbon stream (the first attempt) read as a hose; the reference is a puff per
+  press. Verify with the scratchpad press harness (single note at 0.1 s steps tiled
+  7x5 under the video's tiles, plus the rail/plume/dots profile) - never a lone frame.
 - Bloom runs through `canvasBloom.ts` (the reusable copy of Midi Roll's inline chain)
   with quieter wide octaves than Midi Roll - the room-filling ambience octave washed
   this whole frame navy. Keys are DARK unlit (ref ~rgb(40,45,65)) and flood blue in a

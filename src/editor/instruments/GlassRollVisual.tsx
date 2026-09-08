@@ -8,7 +8,7 @@ import { CanvasBloom } from './canvasBloom'
 import { GLASS_PALETTES, type GlassPalette } from './GlassRoll'
 import {
   keyLayout, keyCenterX, keyNoteWidth, fitRange, isBlackKey, whiteIndex,
-  wispPose, plumeEnvelope, rand01, type PlumeParams, type WispPose, type KeyLayout,
+  motePose, moteEnvelope, streakPose, rand01, type DustParams, type DustPose, type KeyLayout,
 } from './glassRollCore'
 
 // The R3F half of Glass Roll (def + params: GlassRoll.tsx; pure geometry and
@@ -28,14 +28,13 @@ const TEXTURE_HEIGHT = 1024
  *  so facets and leads downsample cleanly at every note width. */
 const STRIP_W = 128
 const STRIP_H = 2048
-/** Wisps born per second while a note sounds; particles per wisp scale with
- *  the Sparkle Amount knob. Emission stops after this many seconds of a held
- *  note - a bound on per-frame work, not a look. */
-const WISP_RATE = 10
+/** Dust emission, measured off the reference press: a burst of motes on the
+ *  strike, then a steady trickle while the note is held (per second, scaled
+ *  by Sparkle Amount). Emission stops after MAX_EMIT_SECONDS of a held note -
+ *  a bound on per-frame work, not a look. */
+const BURST_MOTES = 55
+const HELD_MOTE_RATE = 150
 const MAX_EMIT_SECONDS = 12
-/** Motes drawn per frame across every plume before the roll starts thinning
- *  them (deterministically, by seed) - a dense chord passage stays bounded. */
-const PLUME_BUDGET = 7000
 const SEARCH_EPS = 1e-6
 /** Bloom chain: the near octaves carry the strike's blaze, the wide ones
  *  are kept quiet so the night stays black away from the keys (Midi Roll's
@@ -377,33 +376,15 @@ function dotSprite(col: Rgb): HTMLCanvasElement {
   const c = s.getContext('2d')!
   const gr = c.createRadialGradient(16, 16, 0, 16, 16, 16)
   gr.addColorStop(0, rgba(col, 1))
-  gr.addColorStop(0.22, rgba(col, 1))
-  gr.addColorStop(0.38, rgba(col, 0.45))
-  gr.addColorStop(0.6, rgba(col, 0.1))
+  gr.addColorStop(0.16, rgba(col, 0.95))
+  gr.addColorStop(0.34, rgba(col, 0.4))
+  gr.addColorStop(0.6, rgba(col, 0.12))
   gr.addColorStop(1, rgba(col, 0))
   c.fillStyle = gr
   c.fillRect(0, 0, 32, 32)
   spriteCache.set(id, s)
   return s
 }
-/** A wide soft blob for the smoke haze around a wisp. */
-function hazeSprite(col: Rgb): HTMLCanvasElement {
-  const id = `haze|${col[0] | 0},${col[1] | 0},${col[2] | 0}`
-  let s = spriteCache.get(id)
-  if (s) return s
-  s = document.createElement('canvas')
-  s.width = s.height = 64
-  const c = s.getContext('2d')!
-  const gr = c.createRadialGradient(32, 32, 0, 32, 32, 32)
-  gr.addColorStop(0, rgba(col, 1))
-  gr.addColorStop(0.4, rgba(col, 0.45))
-  gr.addColorStop(1, rgba(col, 0))
-  c.fillStyle = gr
-  c.fillRect(0, 0, 64, 64)
-  spriteCache.set(id, s)
-  return s
-}
-
 // ── Note index (Midi Roll's bisection, same contract) ──────────────────────
 
 interface NoteIndex {
@@ -458,7 +439,7 @@ function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
 
 const WHITE: Rgb = [255, 255, 255]
 const KEY_BLUE: Rgb = [96, 140, 255]
-const HAZE_BLUE: Rgb = [70, 110, 255]
+const HAZE_BLUE: Rgb = [92, 98, 255]
 const PARTICLE_BLUE: Rgb = [154, 181, 255]
 
 export function GlassRollVisual({ trackId }: { trackId: string }) {
@@ -470,7 +451,7 @@ export function GlassRollVisual({ trackId }: { trackId: string }) {
   const bloomRef = useRef<CanvasBloom | null>(null)
   const visibleRef = useRef<number[]>([])
   const litRef = useRef(new Float32Array(128))
-  const poseRef = useRef<WispPose>({ x: 0, y: 0, t: 0 })
+  const poseRef = useRef<DustPose>({ x: 0, y: 0, t: 0 })
   // The Night backdrop (gradient + washes) is static per settings: painted
   // once into its own canvas and blitted, not rebuilt from gradients per frame.
   const backdropRef = useRef<{ key: string; canvas: HTMLCanvasElement } | null>(null)
@@ -551,6 +532,7 @@ export function GlassRollVisual({ trackId }: { trackId: string }) {
     const particleCurl = p.particleCurl ?? 1
     const particleSize = p.particleSize ?? 1
     const haze = p.haze ?? 1
+    const streaks = p.streaks ?? 1
     const particleRgb = parseHex(state.stringParams.particleColor || '#dfe8ff')
 
     const hitY = Math.round(hitLine * H)
@@ -656,7 +638,10 @@ export function GlassRollVisual({ trackId }: { trackId: string }) {
       if (onsetSec < 0) return 0
       const durSec = Math.max(0.02, note.durationBeats) * secPerBeat
       if (onsetSec < durSec) return attack > 0 ? Math.min(1, onsetSec / attack) : 1
-      return Math.exp(-3 * (onsetSec - durSec) / release)
+      // Release: the reference's pillar drops to ~10% within 0.1 s and the
+      // rest lingers as a slow ember (the Afterglow knob is that tail).
+      const rel = onsetSec - durSec
+      return 0.9 * Math.exp(-rel / 0.05) + 0.1 * Math.exp(-rel / release)
     }
     // A strike lights the keys AROUND it too (the reference floods ~8 keys):
     // per key, the strongest gate within reach, falling off with distance.
@@ -728,16 +713,13 @@ export function GlassRollVisual({ trackId }: { trackId: string }) {
     const dotPale = dotSprite(particleRgb)
     const dotWhite = dotSprite(WHITE)
     const dotBlue = dotSprite(PARTICLE_BLUE)
-    const hazeS = hazeSprite(HAZE_BLUE)
-    const plume: PlumeParams = {
-      rise: 140 * (H / 1024) * particleRise,
-      spread: 26 * (H / 1024) * particleSpread,
-      curl: 18 * (H / 1024) * particleCurl,
+    const dust: DustParams = {
+      rise: 100 * (H / 1024) * particleRise,
+      spread: 70 * (H / 1024) * particleSpread,
+      curl: 22 * (H / 1024) * particleCurl,
       life: particleLife,
     }
     const pose = poseRef.current
-    const perWisp = Math.round(90 * particles)
-    const wispDtSec = 1 / WISP_RATE
 
     for (const noteI of visible) {
       const note = state.notes[noteI]
@@ -771,7 +753,7 @@ export function GlassRollVisual({ trackId }: { trackId: string }) {
           const colW = kw * 4.2
           // An upright ellipse of light standing on the rail: soft on every
           // side (a gradient rect showed its vertical edges).
-          for (const [c, k] of [[ctx, 0.8], [ectx, 1]] as const) {
+          for (const [c, k] of [[ctx, 0.3], [ectx, 0.4]] as const) {
             c.save()
             c.translate(cx, hitY)
             c.scale(colW / 2, colH)
@@ -871,106 +853,145 @@ export function GlassRollVisual({ trackId }: { trackId: string }) {
         ectx.beginPath()
         ectx.rect(x - w, top - w * 0.5, w * 3, h + w)
         ectx.clip()
-        roundRectPath(ectx, x - w * 0.2, top - w * 0.15, w * 1.4, fullH + w * 0.3, radius * 1.3)
-        ectx.fillStyle = rgba(WHITE, 0.55 * g * hitWhite)
+        roundRectPath(ectx, x - w * 0.4, top - w * 0.15, w * 1.8, fullH + w * 0.3, radius * 1.5)
+        ectx.fillStyle = rgba(WHITE, 0.3 * g * hitWhite)
         ectx.fill()
         ectx.restore()
       }
       emitted = true
       if (g > 0.01) {
-        ectx.fillStyle = rgba(WHITE, 0.9 * g * hitWhite)
+        ectx.fillStyle = rgba(WHITE, 0.75 * g * hitWhite)
         ectx.beginPath()
-        ectx.ellipse(cx, hitY, Math.max(w * 1.5, W * 0.06), w * 0.32, 0, 0, Math.PI * 2)
+        ectx.ellipse(cx, hitY, Math.max(w * 1.5, W * 0.05), w * 0.28, 0, 0, Math.PI * 2)
         ectx.fill()
-        // Atmosphere: a broad soft wash of light around the strike, so the
-        // air above the key reads misty the way the reference frames do.
-        const ar = W * 0.085
-        const ag = ectx.createRadialGradient(cx, hitY - W * 0.02, 0, cx, hitY - W * 0.02, ar)
-        ag.addColorStop(0, rgba([214, 224, 255], 0.28 * g * hitWhite))
-        ag.addColorStop(1, rgba([214, 224, 255], 0))
-        ectx.fillStyle = ag
-        ectx.fillRect(cx - ar, hitY - whiteW - ar, ar * 2, ar * 2)
       }
     }
 
-    // ── Sparkle plume ──
-    if (particles > 0 && perWisp > 0) {
-      // Budget: estimate how many motes every plume would draw; past the cap
-      // keep a seeded fraction and lift their alpha so the density reads.
-      let demand = 0
-      const aliveCap = Math.ceil((plume.life * 1.25) / wispDtSec)
-      for (const noteI of visible) {
-        const note = state.notes[noteI]
-        const onsetSec = (beat - note.beat) * secPerBeat
-        if (onsetSec < 0) continue
-        const durSec = Math.max(0.02, note.durationBeats) * secPerBeat
-        const wispCount = Math.floor(Math.min(durSec, MAX_EMIT_SECONDS) / wispDtSec) + 1
-        demand += Math.min(wispCount, aliveCap) * perWisp
-      }
-      const keep = demand > PLUME_BUDGET ? PLUME_BUDGET / demand : 1
-      const keepGain = keep < 1 ? Math.min(1.5, 1 / Math.sqrt(keep)) : 1
+    // ── Sparkle dust ──
+    // Per note: a burst of motes on the strike plus a trickle while held.
+    // Each mote is a closed-form path (kick up, then a slow drift and
+    // wobble) born inside the pillar's footprint; while the pillar burns
+    // they hide in its white, and on release they are the puff it leaves
+    // behind. A few vapor streaks race up ahead of the puff.
+    if (particles > 0) {
+      const burstN = Math.round(BURST_MOTES * particles)
+      const rate = HELD_MOTE_RATE * particles
       for (const noteI of visible) {
         const note = state.notes[noteI]
         const onsetSec = (beat - note.beat) * secPerBeat
         if (onsetSec < 0) continue
         const durSec = Math.max(0.02, note.durationBeats) * secPerBeat
         const emitEnd = Math.min(durSec, MAX_EMIT_SECONDS)
+        if (onsetSec > emitEnd + dust.life * 1.3) continue
         const cx = keyCenterX(layout, note.pitch)
         const kw = keyNoteWidth(layout, note.pitch) * noteWidthK
         const noteSeed = note.beat * 11.7 + note.pitch * 5.3
-        const wispCount = Math.floor(emitEnd / wispDtSec) + 1
-        for (let j = 0; j < wispCount; j++) {
-          const birth = j * wispDtSec
-          const age = onsetSec - birth
-          if (age < 0) break
-          if (age > plume.life * 1.25) continue
-          const ws = noteSeed + j * 2.17
-          const origin = {
-            x: cx + (rand01(ws + 0.3) - 0.5) * kw * 0.6,
-            y: hitY - rand01(ws + 0.6) * kw * 0.4,
-          }
-          wispPose(ws, age, origin, plume, pose)
-          const env = plumeEnvelope(pose.t)
-          if (env <= 0) continue
-          // Smoke haze: a broad blue blob riding the ribbon's head.
-          if (haze > 0) {
-            const R = (18 + 34 * pose.t) * (H / 1024)
-            ectx.globalAlpha = 0.3 * env * haze
-            ectx.drawImage(hazeS, pose.x - R, pose.y - R, R * 2, R * 2)
-            ctx.globalAlpha = 0.05 * env * haze
-            ctx.drawImage(hazeS, pose.x - R, pose.y - R, R * 2, R * 2)
-          }
-          // Dust: each mote trails the head by its own lag, so a wisp is a
-          // ribbon along the head's path, scattering as it ages.
-          for (let k = 0; k < perWisp; k++) {
-            const ps = ws * 3.3 + k * 1.31
-            if (keep < 1 && rand01(ps + 2.2) > keep) continue
-            const lag = (k / perWisp) * 1.2 + rand01(ps + 0.1) * 0.25
-            const pAge = age - lag
-            if (pAge < 0) continue
-            wispPose(ws, pAge, origin, plume, pose)
-            const pt = pose.t
-            const pEnv = plumeEnvelope(pt)
-            if (pEnv <= 0) continue
-            const r1 = rand01(ps + 0.5)
-            const r2 = rand01(ps + 0.9)
-            const r3 = rand01(ps + 1.3)
-            const px = pose.x + (r1 - 0.5) * 2 * (4 + 14 * pt) * (H / 1024)
-            const py = pose.y + (r2 - 0.5) * 2 * (4 + 9 * pt) * (H / 1024)
-            const twinkle = 0.62 + 0.38 * Math.sin(pAge * 9 + r3 * 6.283)
-            const a = Math.min(1, pEnv * twinkle * 1.35 * keepGain)
-            const s = (0.8 + 1.4 * r3 * r3) * particleSize * (H / 1024)
-            const sprite = r1 < 0.5 ? dotPale : r1 < 0.9 ? dotWhite : dotBlue
-            ctx.globalAlpha = a
-            ctx.drawImage(sprite, px - s * 2, py - s * 2, s * 4, s * 4)
-            // Every other mote feeds the bloom (blur hides the gaps; halves
-            // the draw count of the plume, its dominant per-frame cost).
-            if ((k & 1) === 0) {
-              ectx.globalAlpha = a
-              ectx.drawImage(sprite, px - s * 2, py - s * 2, s * 4, s * 4)
-            }
+        // The puff's haze: a soft blue blob riding the cloud after release.
+        // STRANDS: the reference puff is wispy - dots hang in a few vertical
+        // ribbons standing on the rail, each drifting and curling as one,
+        // with a soft blue haze column behind it (the "blue flames"). Each
+        // mote belongs to one strand (the strand's own motePose is the
+        // shared path) and sits at its own height along it.
+        const total = burstN + Math.round(rate * emitEnd)
+        const strandAge = Math.min(onsetSec, emitEnd + dust.life)
+        const strandCount = 2 + Math.floor(rand01(noteSeed + 4.4) * 3)
+        for (let st = 0; st < strandCount; st++) {
+          const ss = noteSeed + st * 7.7
+          const tall = 0.6 + 0.8 * rand01(ss + 1.1)
+          const strandX = cx + ((st + 0.5) / strandCount - 0.5) * kw * 2.6 + (rand01(ss + 0.5) - 0.5) * kw * 0.8
+          const lifeS = dust.life * (0.8 + 0.4 * rand01(ss + 0.9))
+          // The strand is alive while motes still ride it: from its first
+          // mote's birth until the last one fades.
+          const envS0 = onsetSec < emitEnd ? 1 : Math.max(0, 1 - (onsetSec - emitEnd) / lifeS)
+          const envS = envS0 * envS0 * envS0
+          if (envS <= 0 || haze <= 0) continue
+          motePose(ss, strandAge, { x: strandX, y: hitY }, dust, pose, emitEnd)
+          // A soft glow standing on the rail under the strand, following its
+          // lean but not its climb - the reference haze lives at the base.
+          const colH = Math.max(kw, (hitY - pose.y) * 0.35 + kw * 1.9 * tall)
+          const colW = kw * (1.3 + 0.6 * rand01(ss + 1.3))
+          // Anchored at the strand root: the glow under a note is STEADY in
+          // the reference; only the dust drifts.
+          for (const [c, k] of [[ctx, 0.14], [ectx, 0.32]] as const) {
+            c.save()
+            c.translate(strandX, hitY)
+            c.scale(colW / 2, colH)
+            const cg = c.createRadialGradient(0, -0.35, 0, 0, -0.35, 0.75)
+            cg.addColorStop(0, rgba(HAZE_BLUE, k * envS * haze))
+            cg.addColorStop(1, rgba(HAZE_BLUE, 0))
+            c.fillStyle = cg
+            c.beginPath()
+            c.ellipse(0, -0.35, 1, 0.75, 0, 0, Math.PI * 2)
+            c.fill()
+            c.restore()
           }
           emitted = true
+        }
+        for (let k = 0; k < total; k++) {
+          const birth = k < burstN ? (k / burstN) * 0.08 : (k - burstN) / rate
+          const age = onsetSec - birth
+          if (age < 0) break
+          const strand = k % strandCount
+          const ss = noteSeed + strand * 7.7
+          const tall = 0.6 + 0.8 * rand01(ss + 1.1)
+          const ms = noteSeed + k * 1.618
+          const r = rand01(ms + 0.1)
+          const r2 = rand01(ms + 0.2)
+          const r3 = rand01(ms + 0.3)
+          const strandX = cx + ((strand + 0.5) / strandCount - 0.5) * kw * 2.6 + (rand01(ss + 0.5) - 0.5) * kw * 0.8
+          motePose(ss, age, { x: strandX, y: hitY }, dust, pose, emitEnd - birth)
+          // Own place on the ribbon: in one of three CLUMPS along it (dark
+          // gaps between, like the reference), hugging the spine.
+          const clump = Math.floor(r2 * 3)
+          const clumpY = (0.15 + 0.35 * clump + 0.2 * rand01(ss + 2.2 + clump)) * kw * 2.4 * tall
+          const px = pose.x + (r - 0.5) * kw * 0.7
+          const py = pose.y - clumpY - (rand01(ms + 0.4) - 0.5) * kw * 0.9 + kw * 0.25
+          const t = age / (dust.life * (0.7 + 0.6 * r3))
+          const env = moteEnvelope(t)
+          if (env <= 0) continue
+          const twinkle = 0.85 + 0.15 * Math.sin(age * 2.5 + r3 * 6.283)
+          const a = Math.min(1, env * twinkle)
+          const sz = (0.7 + 1.2 * r3 * r3) * particleSize * (H / 1024)
+          const sprite = r < 0.45 ? dotPale : r < 0.9 ? dotWhite : dotBlue
+          ctx.globalAlpha = a
+          ctx.drawImage(sprite, px - sz * 2.2, py - sz * 2.2, sz * 4.4, sz * 4.4)
+          ectx.globalAlpha = a * 0.9
+          ectx.drawImage(sprite, px - sz * 4, py - sz * 4, sz * 8, sz * 8)
+          emitted = true
+        }
+        // Vapor streaks: three on the strike, one every 0.35 s held.
+        if (streaks > 0) {
+          const STREAK_LIFE = 0.9
+          const births = rand01(noteSeed + 9.1) < 0.5 ? [emitEnd] : [emitEnd, emitEnd + 0.12]
+          for (let b = 0.25; b < emitEnd - 0.2; b += 0.4) births.push(b)
+          ctx.globalAlpha = 1
+          ectx.globalAlpha = 1
+          for (let j = 0; j < births.length; j++) {
+            const age = onsetSec - births[j]
+            if (age < 0) continue
+            if (age > STREAK_LIFE) continue
+            const ss = noteSeed * 1.7 + j * 3.1
+            const origin = { x: cx + (rand01(ss + 0.4) - 0.5) * kw * 1.5, y: hitY - kw * (0.4 + rand01(ss + 0.7)) }
+            const env = Math.min(1, age / 0.1) * (1 - age / STREAK_LIFE)
+            ctx.beginPath()
+            ectx.beginPath()
+            for (let i = 0; i <= 7; i++) {
+              const a2 = age - i * 0.04
+              if (a2 < 0) break
+              streakPose(ss, a2, origin, 150 * (H / 1024) * particleRise, pose)
+              if (i === 0) { ctx.moveTo(pose.x, pose.y); ectx.moveTo(pose.x, pose.y) }
+              else { ctx.lineTo(pose.x, pose.y); ectx.lineTo(pose.x, pose.y) }
+            }
+            ctx.lineCap = 'round'
+            ctx.strokeStyle = rgba([140, 150, 255], 0.45 * env * streaks)
+            ctx.lineWidth = 3 * (H / 1024)
+            ctx.stroke()
+            ectx.lineCap = 'round'
+            ectx.strokeStyle = rgba([120, 130, 255], 0.8 * env * streaks)
+            ectx.lineWidth = 6 * (H / 1024)
+            ectx.stroke()
+            emitted = true
+          }
         }
       }
       ctx.globalAlpha = 1

@@ -89,61 +89,80 @@ export function fitRange(minPitch: number, maxPitch: number): [number, number] {
   return whiteKeyRange(Math.max(0, lo), Math.min(127, hi))
 }
 
-// ── Sparkle plume kinematics ────────────────────────────────────────────────
+// ── Sparkle dust kinematics ─────────────────────────────────────────────────
 //
-// The reference plume is a fluid sim: dust rising off the struck key in
-// curling ribbons. Modeled as WISPS - a wisp is one ribbon, born at a fixed
-// interval while the note sounds, riding its own drift and curl - and the
-// dust is particles scattered around the wisp's spine, spreading as they
-// age. Positions are closed-form in age, so any frame is computable alone.
+// Measured off the reference press, 0.1 s per frame: on the strike the tile
+// becomes a white pillar and a few sparks shoot up off its head; while it is
+// held, dust gathers around the pillar; on release the pillar drops out in
+// ~0.1 s and leaves a PUFF - a loose cluster of glowing motes about a tile
+// and a half wide - that drifts up slowly (~45 px/s at 970p), spreads, and
+// fades over ~1.5 s, with a few thin blue vapor streaks racing up ahead of
+// it. So a note's dust is a set of MOTES (each a closed-form path in age)
+// plus a handful of STREAKS, not a continuous ribbon.
 
-export interface PlumeParams {
-  /** Rise speed, px per second. */
+export interface DustParams {
+  /** Initial upward speed scale, px per second. */
   rise: number
-  /** Lateral drift reach, px per second at full spread. */
+  /** Initial lateral speed reach, px per second. */
   spread: number
-  /** Curl amplitude, px. */
+  /** Wobble amplitude, px. */
   curl: number
-  /** Wisp lifetime, seconds (particles live a seeded fraction of it). */
+  /** Mote lifetime, seconds (each mote lives a seeded fraction of it). */
   life: number
 }
 
-export interface WispPose {
+export interface DustPose {
   x: number
   y: number
   /** 0..1 life fraction. */
   t: number
 }
 
-/** Where wisp `seed` sits `age` seconds after birth, from its origin. */
-export function wispPose(seed: number, age: number, origin: { x: number; y: number }, p: PlumeParams, out: WispPose): WispPose {
+/** Where mote `seed` sits `age` seconds after birth, from its origin: a
+ *  kick upward that decays into a slow drift, a lateral shove that decays
+ *  the same way, and a two-tone wobble that fades in. */
+export function motePose(seed: number, age: number, origin: { x: number; y: number }, p: DustParams, out: DustPose, held = 0): DustPose {
   const r0 = rand01(seed)
   const r1 = rand01(seed + 1.37)
   const r2 = rand01(seed + 2.71)
   const r3 = rand01(seed + 3.91)
-  const life = p.life * (0.75 + 0.5 * r3)
-  const t = age / life
-  // An initial kick (the strike throws the dust up) settling into a steady
-  // rise that eases slightly as the ribbon thins out.
-  const vy = p.rise * (0.8 + 0.45 * r0)
-  const kick = p.rise * 0.45 * (1 - Math.exp(-age / 0.3))
-  const y = origin.y - kick - vy * age * (1 - 0.18 * Math.min(1, t))
-  // Drift: a seeded constant lateral velocity, plus a curl that grows with
-  // age so ribbons start straight off the key and bend as they climb.
-  const vx = (r1 - 0.5) * 2 * p.spread
-  const curlAmp = p.curl * (0.5 + r2) * Math.min(1, age / 0.6)
-  const curlFreq = 1.6 + 2.2 * r2
-  const x = origin.x + vx * age + curlAmp * Math.sin(age * curlFreq + r0 * 6.283)
+  const life = p.life * (0.7 + 0.6 * r3)
+  const tau = 0.45
+  const decay = tau * (1 - Math.exp(-age / tau))
+  const vy0 = p.rise * (0.5 + 1.2 * r0)
+  const drift = p.rise * 0.35
+  // While the pillar under it still burns (`held` seconds after this
+  // mote's birth) the dust is carried up faster - a long note lifts its
+  // cloud high, a tap leaves a low puff.
+  const lift = p.rise * 0.6 * Math.min(age, Math.max(0, held))
+  const y = origin.y - vy0 * decay - drift * age - lift
+  const vx0 = (r1 - 0.5) * 2 * p.spread
+  // A SLOW lean, not a wobble: the reference dust curls over about a second;
+  // anything faster reads as jitter in the glow under the note.
+  const wob = Math.min(1, age / 0.6) * p.curl * (0.5 + r2)
+  const x = origin.x + vx0 * decay * 1.3 + wob * Math.sin(age * (0.7 + 0.6 * r2) + r0 * 6.283)
   out.x = x
   out.y = y
-  out.t = t
+  out.t = age / life
   return out
 }
 
-/** Alpha envelope for a life fraction: quick in, long tail out. */
-export function plumeEnvelope(t: number): number {
+/** Mote alpha over its life: on fast, held, then a long fade. */
+export function moteEnvelope(t: number): number {
   if (t <= 0 || t >= 1) return 0
-  const rise = Math.min(1, t / 0.08)
-  const fall = 1 - t
-  return rise * fall * fall
+  const on = Math.min(1, t / 0.05)
+  const off = t < 0.3 ? 1 : Math.pow(1 - (t - 0.3) / 0.7, 1.4)
+  return on * off
+}
+
+/** A vapor streak's head: a fast rise that decays hard, gently curving. */
+export function streakPose(seed: number, age: number, origin: { x: number; y: number }, rise: number, out: DustPose): DustPose {
+  const r0 = rand01(seed)
+  const r1 = rand01(seed + 1.37)
+  const tau = 0.5
+  const decay = tau * (1 - Math.exp(-age / tau))
+  out.y = origin.y - rise * (1.4 + 1.2 * r0) * decay
+  out.x = origin.x + (r1 - 0.5) * 30 * age + (r1 < 0.5 ? -1 : 1) * 45 * age * age
+  out.t = age / 0.8
+  return out
 }

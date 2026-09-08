@@ -142,20 +142,22 @@ const PARAMS: ParamDef[] = [
   { key: 'keyboardHeight', label: 'Keyboard Height', min: 0.05, max: 0.5, step: 0.01, default: 0.26, showIf: 'keyboard=2' },
   { key: 'keyLight', label: 'Key Light', min: 0, max: 2.5, step: 0.05, default: 1, showIf: 'keyboard' },
   // ── Strike ───────────────────────────────────────────────────────────
-  { key: 'hitWhite', label: 'Strike Whiteness', min: 0, max: 1, step: 0.05, default: 0.7 },
+  { key: 'hitWhite', label: 'Strike Whiteness', min: 0, max: 1, step: 0.05, default: 0.62 },
   { key: 'attack', label: 'Strike Attack (s)', min: 0, max: 0.3, step: 0.01, default: 0.04 },
-  { key: 'release', label: 'Afterglow (s)', min: 0.05, max: 2, step: 0.05, default: 0.35 },
+  { key: 'release', label: 'Afterglow (s)', min: 0.05, max: 3, step: 0.05, default: 0.8 },
   { key: 'glow', label: 'Glow', min: 0, max: 2.5, step: 0.05, default: 1 },
   { key: 'glowReach', label: 'Glow Reach', min: 0.3, max: 2.5, step: 0.05, default: 1 },
   // ── Sparkle plume ────────────────────────────────────────────────────
   { key: 'particles', label: 'Sparkle Amount', min: 0, max: 3, step: 0.05, default: 1 },
   { key: 'particleRise', label: 'Sparkle Rise', min: 0, max: 3, step: 0.05, default: 1 },
-  { key: 'particleLife', label: 'Sparkle Life (s)', min: 0.3, max: 6, step: 0.1, default: 1.8 },
+  { key: 'particleLife', label: 'Sparkle Life (s)', min: 0.3, max: 6, step: 0.1, default: 1.6 },
   { key: 'particleSpread', label: 'Sparkle Spread', min: 0, max: 3, step: 0.05, default: 1 },
   { key: 'particleCurl', label: 'Sparkle Curl', min: 0, max: 3, step: 0.05, default: 1 },
   { key: 'particleSize', label: 'Sparkle Size', min: 0.4, max: 3, step: 0.05, default: 1 },
   { key: 'particleColor', label: 'Sparkle Color', type: 'color', default: '#dfe8ff' },
   { key: 'haze', label: 'Blue Haze', min: 0, max: 2.5, step: 0.05, default: 1 },
+  // The thin blue vapor lines that race up ahead of the puff on a strike.
+  { key: 'streaks', label: 'Vapor Streaks', min: 0, max: 3, step: 0.05, default: 1 },
 ]
 
 export const glassRollInstrument: ObjectInstrumentDef = {
