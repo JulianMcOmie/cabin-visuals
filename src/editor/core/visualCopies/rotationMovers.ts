@@ -13,6 +13,7 @@ import {
   type BasisSettings,
 } from './motionBasis'
 import { midiVelocity } from '../../utils/midiVelocity'
+import { memoByBeat } from './beatMemo'
 import type { VisualCopy } from './types'
 
 // RETIRED from the registry (2026-08): the unified `mover` definition covers
@@ -114,10 +115,11 @@ export const rotateBurstMover: MoverOrSplitterDefinition<RotationBurstSettings> 
   midiRows: () => SIGNED_BASIS_ROWS,
   resolve({ settings, notes }) {
     const basis = resolveBasis(settings)
+    // Per beat, not per copy (beatMemo.ts); shared read-only across copies.
+    const rotationAt = memoByBeat((beat) => basisRotation(basis, evaluateRotationBurstAngles(notes, settings, beat)))
     return {
       apply(visualCopy, { beat }) {
-        const rotation = basisRotation(basis, evaluateRotationBurstAngles(notes, settings, beat))
-        return [nextCopy(visualCopy, visualCopy.transform.clone().multiply(rotation))]
+        return [nextCopy(visualCopy, visualCopy.transform.clone().multiply(rotationAt(beat)))]
       },
     }
   },
@@ -132,10 +134,12 @@ export const orbitBurstMover: MoverOrSplitterDefinition<RotationBurstSettings> =
   resolve({ settings, notes }) {
     const basis = resolveBasis(settings)
     const pivot: [number, number, number] = [settings.pivotX ?? 0, settings.pivotY ?? 0, settings.pivotZ ?? 0]
+    // Per beat, not per copy (beatMemo.ts). pivotedRotation returns a fresh
+    // matrix, so the per-copy multiply below never touches the shared one.
+    const rotationAt = memoByBeat((beat) => basisRotation(basis, evaluateRotationBurstAngles(notes, settings, beat)))
     return {
       apply(visualCopy, { beat }) {
-        const rotation = basisRotation(basis, evaluateRotationBurstAngles(notes, settings, beat))
-        const orbit = pivotedRotation(rotation, pivot)
+        const orbit = pivotedRotation(rotationAt(beat), pivot)
         return [nextCopy(visualCopy, orbit.multiply(visualCopy.transform.clone()))]
       },
     }
@@ -238,10 +242,11 @@ export const constantRotateMover: MoverOrSplitterDefinition<ConstantRotationSett
   midiRows: () => ROTATION_WITH_RETURN_ROWS,
   resolve({ settings, notes }) {
     const basis = resolveBasis(settings)
+    // Per beat, not per copy (beatMemo.ts); shared read-only across copies.
+    const rotationAt = memoByBeat((beat) => basisRotation(basis, evaluateConstantRotationAngles(notes, settings, beat)))
     return {
       apply(visualCopy, { beat }) {
-        const rotation = basisRotation(basis, evaluateConstantRotationAngles(notes, settings, beat))
-        return [nextCopy(visualCopy, visualCopy.transform.clone().multiply(rotation))]
+        return [nextCopy(visualCopy, visualCopy.transform.clone().multiply(rotationAt(beat)))]
       },
     }
   },
@@ -256,10 +261,12 @@ export const constantOrbitMover: MoverOrSplitterDefinition<ConstantRotationSetti
   resolve({ settings, notes }) {
     const basis = resolveBasis(settings)
     const pivot: [number, number, number] = [settings.pivotX ?? 0, settings.pivotY ?? 0, settings.pivotZ ?? 0]
+    // Per beat, not per copy (beatMemo.ts); pivotedRotation returns a fresh
+    // matrix, so the per-copy multiply never touches the shared one.
+    const rotationAt = memoByBeat((beat) => basisRotation(basis, evaluateConstantRotationAngles(notes, settings, beat)))
     return {
       apply(visualCopy, { beat }) {
-        const rotation = basisRotation(basis, evaluateConstantRotationAngles(notes, settings, beat))
-        const orbit = pivotedRotation(rotation, pivot)
+        const orbit = pivotedRotation(rotationAt(beat), pivot)
         return [nextCopy(visualCopy, orbit.multiply(visualCopy.transform.clone()))]
       },
     }

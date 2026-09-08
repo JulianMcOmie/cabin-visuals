@@ -48,6 +48,7 @@ import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { BURST_EASINGS } from './burstEasings'
 import { evaluateBurstOffset, type BurstSettings } from './burstOffset'
+import { memoByBeat } from './beatMemo'
 import {
   BASIS_PARAMS,
   RETURN_PITCH,
@@ -368,16 +369,24 @@ export const motionMover: MoverOrSplitterDefinition<MotionSettings> = {
     }
     const spinNotes = motionBlockNotes(notes, MOTION_BLOCKS.spin, true)
     const snapNotes = motionBlockNotes(notes, MOTION_BLOCKS.snap)
+    // The three note walks are per beat, not per copy (beatMemo.ts). Both
+    // results are shared read-only across a frame's copies: the offset is
+    // only read, the rotation only handed to pivotedRotation (pure).
+    const offsetAt = memoByBeat((beat) => {
+      const amounts = evaluateMotionTranslation(notes, settings, beat)
+      return new Vector3()
+        .addScaledVector(basis[0], amounts[0])
+        .addScaledVector(basis[1], amounts[1])
+        .addScaledVector(basis[2], amounts[2])
+    })
+    const rotationAt = memoByBeat((beat) =>
+      basisRotation(basis, evaluateConstantRotationAngles(spinNotes, spinSettings, beat))
+        .multiply(basisRotation(basis, evaluateSnapAngles(snapNotes, settings, beat))))
 
     return {
       apply(visualCopy, { beat }) {
-        const amounts = evaluateMotionTranslation(notes, settings, beat)
-        const offset = new Vector3()
-          .addScaledVector(basis[0], amounts[0])
-          .addScaledVector(basis[1], amounts[1])
-          .addScaledVector(basis[2], amounts[2])
-        const rotation = basisRotation(basis, evaluateConstantRotationAngles(spinNotes, spinSettings, beat))
-          .multiply(basisRotation(basis, evaluateSnapAngles(snapNotes, settings, beat)))
+        const offset = offsetAt(beat)
+        const rotation = rotationAt(beat)
 
         const moved = visualCopy.transform.clone()
           .multiply(new Matrix4().makeTranslation(offset.x, offset.y, offset.z))

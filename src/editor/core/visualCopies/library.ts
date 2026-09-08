@@ -27,6 +27,7 @@ import { bypassMover } from './bypass'
 import { consolidatedMover } from './consolidatedMover'
 import { BURST_EASINGS } from './burstEasings'
 import { BURST_DIRECTIONS, evaluateBurstOffset, type BurstSettings } from './burstOffset'
+import { memoByBeat } from './beatMemo'
 import { motionMover } from './motion'
 import { symmetricMotionMover } from './symmetricMotion'
 import { symmetricRotationMover } from './symmetricRotation'
@@ -96,9 +97,11 @@ export const burstMover: MoverOrSplitterDefinition<BurstSettings> = {
   ],
   midiRows: () => BURST_ROWS,
   resolve({ settings, notes }) {
+    // Per beat, not per copy (beatMemo.ts).
+    const offsetAt = memoByBeat((beat) => evaluateBurstOffset(notes, settings, beat))
     return {
       apply(visualCopy, { beat }) {
-        const [x, y, z] = evaluateBurstOffset(notes, settings, beat)
+        const [x, y, z] = offsetAt(beat)
         // LOCAL composition (previous * delta): the burst translates in the
         // reference frame established by the entries above it, so a splitter
         // above this mover re-frames each copy's directions (a Radial above a

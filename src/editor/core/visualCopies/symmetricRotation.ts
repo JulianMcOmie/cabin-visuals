@@ -67,6 +67,7 @@ import { evaluateOscillationAmounts } from './mover'
 import { evaluateConstantRotationAngles } from './rotationMovers'
 import { RETURN_PITCH, pivotedRotation } from './motionBasis'
 import { SYMMETRIC_ROTATION_COLOR } from './identityColors'
+import { memoByBeat } from './beatMemo'
 
 const DEG_TO_RAD = Math.PI / 180
 
@@ -365,12 +366,15 @@ export const symmetricRotationMover: MoverOrSplitterDefinition<SymmetricRotation
     const axis = resolveSymmetryAxis(settings)
     const center = new Vector3(settings.centerX ?? 0, settings.centerY ?? 0, settings.centerZ ?? 0)
     const onAxis = settings.anchor !== SYMMETRIC_ROTATION_ANCHOR_SELF
+    // The note walk is per beat, not per copy (beatMemo.ts); the per-copy
+    // part below is the falloff weight and the pivot, which read the tuple.
+    const channelsAt = memoByBeat((beat) => evaluateSymmetricRotationChannels(notes, settings, beat))
     return {
       // Declared so a splitter's child chain takes this delta as-is: it is
       // already anchored on the chain frame's fixed axes (see the header).
       composition: 'chainRoot',
       apply(visualCopy, { beat }) {
-        const channels = evaluateSymmetricRotationChannels(notes, settings, beat)
+        const channels = channelsAt(beat)
         const te = visualCopy.transform.elements
         const position = new Vector3(te[12], te[13], te[14])
         const offset = position.clone().sub(center)

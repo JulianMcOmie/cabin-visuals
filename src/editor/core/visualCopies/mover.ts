@@ -58,6 +58,7 @@ import {
 } from './motionBasis'
 import { midiVelocity } from '../../utils/midiVelocity'
 import { MOVER_COLOR } from './identityColors'
+import { memoByBeat } from './beatMemo'
 
 const DEG_TO_RAD = Math.PI / 180
 
@@ -305,13 +306,18 @@ export const moverDefinition: MoverOrSplitterDefinition<MoverSettings> = {
     const basis = resolveBasis(settings)
 
     if (settings.motion !== MOVER_MOTION_ROTATE && settings.motion !== MOVER_MOTION_ORBIT) {
+      // The note walk is per beat, not per copy (beatMemo.ts); the offset is
+      // shared read-only across the copies of a frame.
+      const offsetAt = memoByBeat((beat) => {
+        const amounts = evaluateMoverTranslation(notes, settings, beat)
+        return new Vector3()
+          .addScaledVector(basis[0], amounts[0])
+          .addScaledVector(basis[1], amounts[1])
+          .addScaledVector(basis[2], amounts[2])
+      })
       return {
         apply(visualCopy, { beat }) {
-          const amounts = evaluateMoverTranslation(notes, settings, beat)
-          const offset = new Vector3()
-            .addScaledVector(basis[0], amounts[0])
-            .addScaledVector(basis[1], amounts[1])
-            .addScaledVector(basis[2], amounts[2])
+          const offset = offsetAt(beat)
           return [nextCopy(
             visualCopy,
             visualCopy.transform.clone().multiply(new Matrix4().makeTranslation(offset.x, offset.y, offset.z)),
@@ -322,9 +328,12 @@ export const moverDefinition: MoverOrSplitterDefinition<MoverSettings> = {
 
     const orbit = settings.motion === MOVER_MOTION_ORBIT
     const pivot: [number, number, number] = [settings.pivotX ?? 0, settings.pivotY ?? 0, settings.pivotZ ?? 0]
+    // Per beat, not per copy (beatMemo.ts): shared read-only, only ever
+    // composed into fresh matrices below.
+    const rotationAt = memoByBeat((beat) => basisRotation(basis, evaluateMoverAngles(notes, settings, beat)))
     return {
       apply(visualCopy, { beat }) {
-        const rotation = basisRotation(basis, evaluateMoverAngles(notes, settings, beat))
+        const rotation = rotationAt(beat)
         if (!orbit) {
           return [nextCopy(visualCopy, visualCopy.transform.clone().multiply(rotation))]
         }
