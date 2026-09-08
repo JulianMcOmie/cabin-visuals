@@ -19,9 +19,8 @@
 // The preview runs the plugin's REAL GLSL (deformFieldGlsl) over a subdivided
 // cube, so the picture cannot drift from what the viewport renders - the same
 // call KaleidoSolid's panel makes. It is raw WebGL on the shared preview loop
-// (console/previewLoop.ts) rather than an r3f <Canvas> because a panel Canvas
-// stays black until the transport plays, and a deformation is precisely what
-// you dial in while parked.
+// (console/previewLoop.ts) rather than an r3f <Canvas> so the panel can run
+// the effect's own GLSL against one cube with no scene graph around it.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { DEFORM_ACCENT } from '../effects/deform/deform'

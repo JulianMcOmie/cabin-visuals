@@ -22,10 +22,10 @@
 // gradient previews here are pixel-honest - the renderer's backdrop shader
 // mixes the same stops in sRGB, exactly as CSS does.
 
-import { Canvas } from '@react-three/fiber'
 import { Grid, OrbitControls } from '@react-three/drei'
 import { useProjectStore } from '../store/ProjectStore'
 import { ColorField, withAlpha } from '../userInterfaceRenderers/colorWheel'
+import { PreviewCanvas } from '../userInterfaceRenderers/console'
 import { LaserKnob } from '../userInterfaceRenderers/laserKnob'
 import { defaultSceneGradient, sceneBackdropMode, type Scene, type SceneGradient, type SceneGradientKind } from '../types'
 
@@ -98,6 +98,11 @@ function StagePreview({ scene }: { scene: Scene }) {
       // pushes into it (see src/editor/CLAUDE.md). Note the r3f <Canvas>
       // wrapper INSIDE carries its own inline overflow:hidden, which this does
       // not reach - reachable only via a `style` prop on the Canvas.
+      //
+      // The stage is a still: PreviewCanvas (demand root, no frame loop) renders
+      // it on mount, on a backdrop change and while OrbitControls damp - an
+      // always-on loop here kept the whole editor's r3f loop running at display
+      // rate for as long as nothing was selected.
       className="relative h-[132px] cursor-grab overflow-clip border-b border-white/[0.06] active:cursor-grabbing"
       // The checkerboard is the "nothing behind this" of the compositor - it
       // only shows when the canvas actually clears to alpha. A gradient
@@ -108,7 +113,7 @@ function StagePreview({ scene }: { scene: Scene }) {
         backgroundSize: '16px 16px',
       } : mode === 'gradient' ? { background: cssGradient(gradient) } : { background: scene.backgroundColor }}
     >
-      <Canvas dpr={[1, 2]} camera={{ position: [0, 1.9, 5.6], fov: 38 }} gl={{ antialias: true, alpha: true }}>
+      <PreviewCanvas animate={false} dpr={[1, 2]} camera={{ position: [0, 1.9, 5.6], fov: 38 }} gl={{ antialias: true, alpha: true }}>
         {/* The room's walls ARE the setting being edited: attach the scene's
             real backdrop as clear color, or nothing at all when transparent
             or gradient - the div behind the canvas shows through, same as
@@ -136,7 +141,7 @@ function StagePreview({ scene }: { scene: Scene }) {
           minPolarAngle={0.15}
           maxPolarAngle={Math.PI * 0.55}
         />
-      </Canvas>
+      </PreviewCanvas>
       {/* No wordmark. The stage carried an etched "SCENE" as identity-in-the-
           surface; with the name already on the tab rail it was a caption over
           the picture, and the picture is the point. */}

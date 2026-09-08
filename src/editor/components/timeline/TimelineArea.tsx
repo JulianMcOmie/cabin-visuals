@@ -75,7 +75,7 @@ export function TimelineArea() {
   const displayBars = timelineDisplayBars(totalBars, barWidthPx, laneViewportWidthPx)
   const timelineWidthPx = displayBars * barWidthPx + pickupPx
 
-  // One RAF-driven playhead overlay spanning the ruler + track lanes, plus a
+  // One beat-driven playhead overlay spanning the ruler + track lanes, plus a
   // draggable scrub from the ruler. laneRef measures the lane region (excludes
   // the track-label column) so a clientX maps to a fraction of the timeline.
   const laneRef = useRef<HTMLDivElement>(null)
@@ -91,6 +91,43 @@ export function TimelineArea() {
   const projectLengthEdgeRef = useRef<HTMLDivElement>(null)
   const horizontalZoomRef = useRef({ pixelsPerBeat, scrollLeft: 0 })
 
+  // Runs on every beat write and after every render (usePlayhead); the scroll
+  // handler, the zoom effect and the size observer below call applyPlayhead
+  // for the moves that shift the viewport-space line without either.
+  const applyPlayhead = usePlayhead((beat) => {
+    updateMidiActivityAtBeat(beat, useTimeStore.getState().isPlaying)
+    // Snap to a pixel *center* (whole px + 0.5) so the 1px-wide lane line renders
+    // crisp on a single column while the triangle apex sits exactly on that
+    // column's center - otherwise the crisp line lands ~0.5px off the apex.
+    const beatX = Math.round(beat * pixelsPerBeat) + 0.5
+    const sc = scrollRef.current
+    // Clip the playhead overlay to the scroll container's client area (excludes the
+    // scrollbars) so the line never draws over them.
+    if (sc && clipRef.current) {
+      const lw = useUIStore.getState().tracksLabelWidth
+      const size = scClientSizeRef.current
+      const cw = size ? size.width : sc.clientWidth
+      const ch = size ? size.height : sc.clientHeight
+      const nextW = `${Math.max(0, cw - lw - PLAYHEAD_TRIANGLE_HALF)}px`
+      const nextH = `${ch}px`
+      // Style writes only when the value moved (a write per frame dirties layout).
+      if (clipRef.current.style.width !== nextW) clipRef.current.style.width = nextW
+      if (clipRef.current.style.height !== nextH) clipRef.current.style.height = nextH
+    }
+    // Ruler triangle is positioned in content space INSIDE the ruler's pickup-
+    // shifted wrapper (so beatX stays musical). The lane line lives in a
+    // viewport-space overlay, so offset by the pickup and the scroll itself.
+    if (playheadHeadRef.current) playheadHeadRef.current.style.transform = `translateX(${beatX}px)`
+    if (playheadRef.current) {
+      // The scroll handler mirrors scrollLeft into horizontalZoomRef; reading
+      // the DOM property here forced a synchronous layout EVERY FRAME while
+      // the note-glow sweep had just dirtied thousands of style vars - on a
+      // dense project that was ~40% of playback's main-thread time.
+      const sl = horizontalZoomRef.current.scrollLeft
+      playheadRef.current.style.transform = `translateX(${beatX + pickupPx - sl}px)`
+    }
+  })
+
   // Mirror the lane horizontal scroll onto the ruler via transform (no clamp, no
   // dependence on matching client widths → stays aligned to the far-right edge).
   const onTimelineScroll = (e: ReactScrollEvent<HTMLDivElement>) => {
@@ -104,6 +141,8 @@ export function TimelineArea() {
     // Persist continuously so the position survives unmount (the ref may already be
     // detached by the time an unmount cleanup would run).
     useUIStore.getState().setTracksScroll(e.currentTarget.scrollLeft, e.currentTarget.scrollTop)
+    // The lane line is a viewport-space overlay: a scroll moves it with no beat write.
+    applyPlayhead()
   }
 
   const { selectedBlockIds, marqueeRect, handleBlockPointerDown, handleLanePointerDown } = useTrackGestures({
@@ -277,7 +316,10 @@ export function TimelineArea() {
       projectLengthEdgeRef.current.style.transform = `translateX(${pickupPx + projectWidthPx - appliedScrollLeft}px)`
     }
     useUIStore.getState().setTracksScroll(appliedScrollLeft, sc.scrollTop)
-  }, [pixelsPerBeat, projectWidthPx, pickupPx, pickupBeats])
+    // usePlayhead's own per-render re-apply ran before this effect, against
+    // the pre-zoom scroll; land the line on the scroll just applied.
+    applyPlayhead()
+  }, [pixelsPerBeat, projectWidthPx, pickupPx, pickupBeats, applyPlayhead])
 
   // The project-end separator lives in viewport space so one continuous handle
   // spans the ruler and every lane, but follows the content during scrolling.
@@ -295,17 +337,19 @@ export function TimelineArea() {
     const sc = scrollRef.current
     if (!sc) return
     const measure = () => {
-      // Cached for the playhead RAF below, which used to read clientWidth /
+      // Cached for the playhead callback above, which used to read clientWidth /
       // clientHeight every frame - a forced layout whenever any style was
-      // dirty that frame.
+      // dirty that frame. The playhead's clip box is sized from this cache,
+      // so a resize re-applies it.
       scClientSizeRef.current = { width: sc.clientWidth, height: sc.clientHeight }
       setLaneViewportWidthPx(Math.max(0, sc.clientWidth - labelWidth - PLAYHEAD_TRIANGLE_HALF))
+      applyPlayhead()
     }
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(sc)
     return () => observer.disconnect()
-  }, [labelWidth])
+  }, [labelWidth, applyPlayhead])
 
   // Row-height changes otherwise lay out every note in the project. During
   // the gesture, park only far-offscreen block contents; restore their raster
@@ -342,40 +386,6 @@ export function TimelineArea() {
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
-
-  usePlayhead((beat) => {
-    updateMidiActivityAtBeat(beat, useTimeStore.getState().isPlaying)
-    // Snap to a pixel *center* (whole px + 0.5) so the 1px-wide lane line renders
-    // crisp on a single column while the triangle apex sits exactly on that
-    // column's center - otherwise the crisp line lands ~0.5px off the apex.
-    const beatX = Math.round(beat * pixelsPerBeat) + 0.5
-    const sc = scrollRef.current
-    // Clip the playhead overlay to the scroll container's client area (excludes the
-    // scrollbars) so the line never draws over them.
-    if (sc && clipRef.current) {
-      const lw = useUIStore.getState().tracksLabelWidth
-      const size = scClientSizeRef.current
-      const cw = size ? size.width : sc.clientWidth
-      const ch = size ? size.height : sc.clientHeight
-      const nextW = `${Math.max(0, cw - lw - PLAYHEAD_TRIANGLE_HALF)}px`
-      const nextH = `${ch}px`
-      // Style writes only when the value moved (a write per frame dirties layout).
-      if (clipRef.current.style.width !== nextW) clipRef.current.style.width = nextW
-      if (clipRef.current.style.height !== nextH) clipRef.current.style.height = nextH
-    }
-    // Ruler triangle is positioned in content space INSIDE the ruler's pickup-
-    // shifted wrapper (so beatX stays musical). The lane line lives in a
-    // viewport-space overlay, so offset by the pickup and the scroll itself.
-    if (playheadHeadRef.current) playheadHeadRef.current.style.transform = `translateX(${beatX}px)`
-    if (playheadRef.current) {
-      // The scroll handler mirrors scrollLeft into horizontalZoomRef; reading
-      // the DOM property here forced a synchronous layout EVERY FRAME while
-      // the note-glow sweep had just dirtied thousands of style vars - on a
-      // dense project that was ~40% of playback's main-thread time.
-      const sl = horizontalZoomRef.current.scrollLeft
-      playheadRef.current.style.transform = `translateX(${beatX + pickupPx - sl}px)`
-    }
-  })
 
   // useCallback: this is a prop of the memoized ruler corner and the empty-scene
   // list; it only reads live state, so it never needs to re-bind.
@@ -785,8 +795,8 @@ export function TimelineArea() {
 
         {/* Playhead line over the lane region only (clipped). The thin visible line
             plus a wider transparent grab handle to scrub anywhere along its height.
-            RAF offsets it by the scroll and sizes this clip box to the scroll
-            container's client area, so the line tracks horizontal scroll, hides
+            applyPlayhead offsets it by the scroll and sizes this clip box to the
+            scroll container's client area, so the line tracks horizontal scroll, hides
             under the label edge, and never draws over the scrollbars. */}
         <div ref={clipRef} className="absolute top-0 overflow-clip pointer-events-none" style={{ left: labelWidth + PLAYHEAD_TRIANGLE_HALF }}>
           <div ref={playheadRef} className="absolute top-0 bottom-0" style={{ left: 0, width: 0 }}>

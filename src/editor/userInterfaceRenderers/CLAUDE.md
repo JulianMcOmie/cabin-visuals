@@ -26,12 +26,22 @@ changes on every frame of an animation, and a bare Canvas gets both failure mode
 viewport had: three writes inline px on the canvas element per `setSize` through a
 ResizeObserver → React round-trip, so the element visibly STEPS inside its smoothly-moving
 window; and resizing a WebGL drawing buffer CLEARS it, so a preview that isn't looping
-(see the black-until-play note below) goes black or stale for the rest of the glide.
-`PreviewCanvas` fixes both — `.preview-canvas-smooth` (globals.css) hands the canvas
-geometry to CSS so layout can't lag, and its `ResizeSync` advances THAT root synchronously
-pre-paint on every size change. Same cure as `VisualPanel`'s in editor/App.tsx.
+goes black or stale for the rest of the glide. `PreviewCanvas` fixes both —
+`.preview-canvas-smooth` (globals.css) hands the canvas geometry to CSS so layout can't
+lag, and its `ResizeSync` advances THAT root synchronously pre-paint on every size change.
+Same cure as `VisualPanel`'s in editor/App.tsx.
 
-**A panel's live 3D preview may not animate until the transport PLAYS.** Observed 2026-07-29 on both Impact Scatter's and Conveyor's previews: the canvas is created and sized, but `useFrame` never fires while paused, so the window stays BLACK — hitting play starts it, pausing freezes the last frame. Likely because r3f's render loop is global and the main canvas runs `frameloop='demand'` (RenderGovernor), so once the loop stops nothing restarts it for a panel root that mounted later. It is app-wide, not a panel bug: **smoke-test previews with the transport running** before suspecting your own preview code.
+**`PreviewCanvas` is a demand root that books its own frames.** r3f runs ONE loop for every
+root on the page, and it spins at display rate for as long as any root is `frameloop='always'`
+(r3f's default) — so a bare `<Canvas>` in the inspector defeated the main viewport's demand
+mode and a paused editor rendered its 130px preview forever; the same mechanism produced the
+old "black until play" bug (a root mounted while the loop was parked never got the
+`invalidate()` that restarts it). `PreviewCanvas` therefore mounts `frameloop='demand'` and
+invalidates itself at ~30fps (the `usePreviewLoop` cadence) only while on screen and in a
+visible tab; its first invalidate wakes a fresh root, so previews render while paused. A
+preview whose picture is static (Scene settings' stage) passes `animate={false}` and renders
+only on prop changes and control input. A `useFrame` that reads `clock` keeps working — the
+clock runs in demand mode — it just samples at 30fps.
 
 `AutomationUserInterface.tsx` is the second panel built to the guide (after Laser Sphere): a live window onto the lane — the easing curve, the real seeded wobble, or a grabbable ADSR — over a segmented MODE control and a knob row. Its window is drawn with the engine's own samplers (`easeFraction`, `sampleNoiseLane`, `sampleLane`) so the picture can't drift from playback, and its emission comes from three stacked strokes of the same path rather than a blur filter (a stretched viewBox smears blurs anisotropically). Its AMOUNT fader is the panel's one sanctioned slider: a lane-level gain (mode-independent, so it sits below whichever mode console is up) with its lit fill growing from a 100% center detent — the horizontal-throw sibling of LaserKnob's `bipolar` rule that neutral must never read as half-on. The curve/noise windows scale with it, using the same math resolve.ts applies, so the plot stays the real signal.
 
@@ -100,10 +110,9 @@ palette was built around them - they just import them now.)
 
 **A panel whose subject is MOTION should use plain DOM transforms, not r3f.**
 `ImpactPulseMoverUserInterface` animates its subject with `element.style.transform` off
-one rAF loop rather than a `<Canvas>`, precisely because of the black-until-play note
-above: a size punch is exactly the thing you need to watch while the transport is
-parked. Reach for a canvas only when the preview genuinely needs shaders, lighting, or
-real geometry.
+one rAF loop rather than a `<Canvas>`: a size punch needs no lighting, and a DOM transform
+is the cheaper picture. Reach for a canvas only when the preview genuinely needs shaders,
+lighting, or real geometry.
 
 `MoverUserInterface.tsx` extends that pattern to full 3D: its window is a FIELD of
 nine seeds run through the definition's real `resolve()` on a looping demo phrase,
@@ -187,8 +196,7 @@ selected track loses it, or the panel renders a body with no tab lit.
 **A panel whose subject is a LAYOUT can preview with a plain 2D canvas.**
 `GridSplitterUserInterface` runs the splitter's real `resolve()` (no notes)
 and draws the copies as painter-sorted cube faces on a `<canvas>` with its own
-rAF - no r3f, because a panel `<Canvas>` stays black until the transport plays
-(see above) and a layout is exactly what you dial in while paused. It re-reads
+rAF - no r3f, because a few hundred flat quads need no GPU scene. It re-reads
 `clientWidth/Height` per frame instead of using a ResizeObserver (those starve
 in a hidden pane), and drops to a point cloud past a few hundred copies.
 

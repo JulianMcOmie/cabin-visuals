@@ -18,9 +18,8 @@
 // than as an invisible multiplier.
 //
 // Deliberately NOT a react-three-fiber preview: per the note in this
-// directory's CLAUDE.md, a panel canvas stays black until the transport plays,
-// and a size pulse is exactly the thing you need to see while parked. Plain
-// DOM transforms always animate.
+// directory's CLAUDE.md, a size pulse needs no lighting, and a DOM transform
+// is the cheaper picture.
 
 import { useRef, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'

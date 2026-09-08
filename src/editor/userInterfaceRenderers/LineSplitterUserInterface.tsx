@@ -7,8 +7,8 @@
 // 1. A live preview window: the splitter's REAL resolve() (no notes - the
 //    resting formation is the panel's claim; MIDI mutes copies out of it)
 //    applied to generic cubes, drawn with a plain 2D canvas - no r3f, because
-//    a panel <Canvas> stays black until the transport plays (see the renderers
-//    CLAUDE.md) and a layout is exactly the thing you dial in while paused.
+//    a few hundred painter-sorted quads need no GPU scene (see the renderers
+//    CLAUDE.md).
 //    Drag orbits it; until touched it turns on its own. No readouts or
 //    captions in the window: the knobs already say the numbers.
 // 2. Two console rows of three: what the run IS - COPIES / SPACING (primary) /
