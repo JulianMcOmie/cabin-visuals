@@ -1,7 +1,7 @@
 import { TrackPreviewRenderer } from './TrackPreviewRenderer'
 
 import { hasSceneGlow, setSceneGlowHalo, renderSceneWithGlow } from './glowScene'
-import { Fragment, useEffect, useMemo, useRef, useSyncExternalStore, type ReactElement } from 'react'
+import { Fragment, memo, useEffect, useMemo, useRef, useSyncExternalStore, type ReactElement } from 'react'
 import { createPortal, useFrame, useThree } from '@react-three/fiber'
 import {
   Mesh,
@@ -27,6 +27,7 @@ import {
   Vector4,
   AdditiveBlending,
   type Material,
+  type Object3D,
   type Texture,
 } from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
@@ -651,7 +652,10 @@ function postProcessTracksByScene(objects: readonly ObjectListEntry[], instrumen
  * come from preview or Scene Switcher, but multiple directors already append
  * simultaneous layers without a singular active-scene assumption.
  */
-export function VisualScene() {
+// memo: no props, so a re-render of the panel above (the aspect glide after a
+// project opens, the fullscreen control's hover state) no longer re-runs
+// mountObjects over every copy; only its own subscriptions re-render it.
+export const VisualScene = memo(function VisualScene() {
   const objects = useSyncExternalStore(subscribeObjects, getObjectList, getObjectList)
   const { gl, camera, size, invalidate } = useThree()
   // Fast Preview: every offscreen target shrinks by the level's factor and the
@@ -1130,24 +1134,35 @@ export function VisualScene() {
   }, [instrumentSetKey, mounted, invalidate])
   const precompilePass = (scene: ThreeScene) => {
     // Pass 1: every material as it is now.
-    const materials = gl.compile(scene, camera)
+    gl.compile(scene, camera)
     // Pass 2: the OTHER blend state. Fades flip `transparent` per frame
     // (applyMaterialOpacity), and three keys its program on the resulting
     // OPAQUE define, so a material's first fade compiled again mid-song.
     // Force-transparent materials never flip and are skipped.
-    const flipped: Material[] = []
-    for (const material of materials) {
-      if (material.userData[FORCE_TRANSPARENT_KEY] === true) continue
+    //
+    // ONE material per linked program stands in for all of them: programs are
+    // shared by cache key, so flipping every copy's material re-ran three's
+    // getParameters + cloneUniforms on each of them - a full second per
+    // precompile on an 1800-copy project - to link programs the first flip had
+    // already linked. gl.compile takes any Object3D as its subject (the scene
+    // argument only lends its lights), so each representative compiles through
+    // its own mesh instead of a second walk over every mesh in the scene.
+    const representatives = new Map<object, { object: Object3D; material: Material }>()
+    scene.traverse((object) => {
+      const materials = (object as Mesh).material as Material | Material[] | undefined
+      if (!materials) return
+      for (const material of Array.isArray(materials) ? materials : [materials]) {
+        if (material.userData[FORCE_TRANSPARENT_KEY] === true) continue
+        const program = (gl.properties.get(material) as { currentProgram?: object }).currentProgram
+        if (program && !representatives.has(program)) representatives.set(program, { object, material })
+      }
+    })
+    for (const { object, material } of representatives.values()) {
       material.transparent = !material.transparent
       material.needsUpdate = true
-      flipped.push(material)
-    }
-    if (flipped.length > 0) {
-      gl.compile(scene, camera)
-      for (const material of flipped) {
-        material.transparent = !material.transparent
-        material.needsUpdate = true
-      }
+      gl.compile(object, camera, scene)
+      material.transparent = !material.transparent
+      material.needsUpdate = true
     }
   }
 
@@ -1586,7 +1601,7 @@ export function VisualScene() {
       })}
     </>
   )
-}
+})
 
 /** Mount one pass's entries: instanced-capable tracks collapse their contiguous
  *  copy slice to ONE InstancedObjectRenderer (which may still render the
