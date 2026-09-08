@@ -13,7 +13,7 @@ import { SWITCHER_MODE_PARAM } from '../core/visualCopies/switcher'
 import type { Track } from '../types'
 import { isSceneTrackId } from '../core/sceneTrack'
 
-type LibraryItem = { id: string; name: string; kind: 'object' | 'modulator' | 'mover' | 'splitter' | 'colorizer' | 'director' | 'switcher' }
+type LibraryItem = { id: string; name: string; kind: 'object' | 'mover' | 'splitter' | 'colorizer' | 'director' | 'switcher' }
 
 function makeTrack(item: LibraryItem, parentId: string | null): Track {
   // Movers and splitters resolve through the MoverOrSplitter registry; ignore

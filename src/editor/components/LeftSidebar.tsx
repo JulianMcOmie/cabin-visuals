@@ -27,7 +27,7 @@ import { waitForSaved } from '../../persistence/autosave'
 import { LoadingScreen } from '../../components/LoadingScreen'
 
 /** What dragging an item creates. */
-export type LibraryKind = 'object' | 'modulator' | 'mover' | 'splitter' | 'colorizer' | 'director' | 'switcher'
+export type LibraryKind = 'object' | 'mover' | 'splitter' | 'colorizer' | 'director' | 'switcher'
 
 export interface InstrumentItem {
   id: string

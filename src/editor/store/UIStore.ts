@@ -69,7 +69,6 @@ interface UIState {
   // Multi-selection of tracks (ctrl/cmd-click), primarily for bulk delete.
   // setSelectedTrackId collapses it - any single-select resets the group.
   selectedTrackIds: Set<string>
-  setSelectedTrackIds: (ids: Set<string>) => void
 
   // Parent tracks collapsed in the timeline (their descendant rows are hidden). Pure
   // view state - collapsed tracks still resolve and render in the 3D scene.
@@ -195,7 +194,6 @@ interface UIState {
   // cursor - Track.tsx draws the would-be block there so the drag literally
   // turns into a MIDI block over a lane.
   loopDrag: { name: string; durationBars: number; target: { trackId: string; bar: number } | null } | null
-  setLoopDrag: (v: UIState['loopDrag']) => void
 
   // Live state of an audible audio-block drag (sync mode): while set, the
   // transport loops `loop` (overriding the user's loop region), the dragged
@@ -231,7 +229,6 @@ export const useUIStore = create<UIState>((set) => ({
     set({ selectedTrackId: id, selectedTrackIds: id ? new Set([id]) : new Set() }),
 
   selectedTrackIds: new Set(),
-  setSelectedTrackIds: (ids) => set({ selectedTrackIds: ids }),
 
   collapsedTrackIds: new Set(),
   setTrackCollapsed: (id, collapsed) =>
@@ -336,7 +333,6 @@ export const useUIStore = create<UIState>((set) => ({
   revealTrack: (trackId) => set({ trackReveal: { trackId, nonce: Date.now() } }),
 
   loopDrag: null,
-  setLoopDrag: (v) => set({ loopDrag: v }),
 
   audioSyncDrag: null,
   setAudioSyncDrag: (v) => set({ audioSyncDrag: v }),

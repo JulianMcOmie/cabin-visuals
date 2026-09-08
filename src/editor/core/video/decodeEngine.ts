@@ -1,6 +1,7 @@
-// The Video instrument's decode engine (proven in the /spike prototype, now the
-// real thing). NO <video> elements and NO element seeking - that approach could
-// not do instant, re-triggerable cuts. Instead: mediabunny decodes each source,
+// The Video instrument's decode engine (proven in the July 2026 mediabunny
+// beat-cut spike, since removed - see git history). NO <video> elements and NO
+// element seeking - that approach could not do instant, re-triggerable cuts.
+// Instead: mediabunny decodes each source,
 // every clip keeps a permanently-warm HEAD CACHE (its first ~0.4s at the source
 // resolution, as ImageBitmaps), and a rolling live buffer continues past it. A
 // note-triggered clip restart lands on a cached frame the very next display

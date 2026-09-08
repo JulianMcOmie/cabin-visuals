@@ -74,7 +74,7 @@ const ZOOM_POSITIONS = 240
  * timeline underneath is made of. Axis-aligned hairlines stay crisp at this
  * size where diagonal arrowheads cannot.
  *
- * Options were explored at /dev/timeline-zoom-lab.
+ * Options were explored at /dev/timeline-zoom-lab (removed 2026-09-08, see git history).
  */
 function BeatWidthGlyph() {
   return (
