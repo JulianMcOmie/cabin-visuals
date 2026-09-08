@@ -46,6 +46,12 @@ export function loadPostHog(): Promise<PostHog | null> {
       // full page loads.
       capture_pageview: 'history_change',
       capture_pageleave: true,
+      // A fresh load of /editor must not START the recorder: init reads the
+      // persisted remote config and kicks the recorder script off before
+      // syncSessionRecording's stop below can run, and the script's load
+      // callback then records regardless - a full rrweb snapshot of the
+      // timeline (~200 ms) plus canvas toDataURL on every big DOM change.
+      disable_session_recording: window.location.pathname.startsWith('/editor'),
     })
     // Session replay costs the EDITOR dearly: rrweb's mutation observer
     // watches thousands of per-frame style writes (note glows, playhead),
