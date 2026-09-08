@@ -394,7 +394,7 @@ export function OverlapShapeInstanced({ trackId }: { trackId: string }) {
   return (
     <>
       {rig.meshes.map((mesh, i) => (
-        <primitive key={OVERLAP_SHAPE_PASSES[i].name} object={mesh} />
+        <primitive key={`${OVERLAP_SHAPE_PASSES[i].name}${OVERLAP_SHAPE_PASSES[i].order ?? ''}`} object={mesh} />
       ))}
     </>
   )
