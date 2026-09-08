@@ -673,7 +673,9 @@ export function createVisualEngine() {
         }
         copies.length = structuralCount
       }
-      while (copies.length < structuralCount) copies.push(hiddenCopy(copies.length))
+      // Indexed stores straight from the pool rather than push + a call per
+      // slot: an idle Particle track pads tens of thousands of slots a frame.
+      for (let i = copies.length; i < structuralCount; i++) copies[i] = hiddenCopyPool[i] ?? hiddenCopy(i)
       visualCopiesByTrack.set(obj.trackId, copies)
       if (staggered) {
         computeCopyStates(

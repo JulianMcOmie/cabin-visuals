@@ -82,9 +82,14 @@ export function ParticleInstanced({ trackId }: { trackId: string }) {
     mesh.material.uniforms.uMinRadiusNdc.value = preview ? 8 / height : 0
     const baseColor = frame.state.stringParams.color ?? PARTICLE_COLOR
     mesh.material.uniforms.uGlow.value = frame.state.params.glow ?? PARTICLE_GLOW
+    // copyFade inlined: this loop runs over every slot of the pool (tens of
+    // thousands on a dense cloud), and a call per slot was its biggest cost.
+    // Same product, same blacked-out rule as InstancedCopyFrame.copyFade.
+    const { state, copies } = frame
+    const objectOpacity = state.blackedOut ? 0 : state.opacity
     let live = 0
     for (let i = 0; i < count; i++) {
-      const fade = Math.min(1, frame.copyFade(i))
+      const fade = Math.min(1, objectOpacity * (copies[i]?.opacity ?? 1))
       if (fade <= 0.001) continue
       frame.composeCopyMatrix(i, matrix)
       mesh.setMatrixAt(live, matrix)

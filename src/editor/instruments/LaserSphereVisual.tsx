@@ -24,6 +24,11 @@ const WHITE = new Color(1, 1, 1)
 // prop-supplied geometry is outside r3f's auto-dispose, which is what keeps it
 // alive across remounts.
 const SPHERE_GEOMETRY = new SphereGeometry(0.9, 64, 48)
+// Schema fallbacks read once: the frame callback runs per copy per frame, and
+// each paramDefault is a linear search of the def's param list.
+const GLOW_DEFAULT = paramDefault(laserSphereInstrument, 'glow')
+const WHITE_CORE_DEFAULT = paramDefault(laserSphereInstrument, 'whiteCore')
+const LIGHT_DEFAULT = paramDefault(laserSphereInstrument, 'light')
 
 /**
  * One sphere per copy, plus one real point light for the track. The material emits scene-linear HDR
@@ -35,6 +40,7 @@ export function LaserSphere({ trackId }: { trackId: string }) {
   const meshRef = useRef<Mesh>(null)
   const lightRef = useRef<PointLight>(null)
   const baseColor = useRef(new Color())
+  const baseHex = useRef('')
   const coreColor = useRef(new Color())
   const rimColor = useRef(new Color())
   const copyContext = useContext(InstrumentCopyContext)
@@ -62,12 +68,17 @@ export function LaserSphere({ trackId }: { trackId: string }) {
     const light = lightRef.current
     if (!mesh || (litCopy && !light)) return false
 
-    const glow = state.params.glow ?? paramDefault(laserSphereInstrument, 'glow')
-    const whiteCore = state.params.whiteCore ?? paramDefault(laserSphereInstrument, 'whiteCore')
-    const sceneLight = state.params.light ?? paramDefault(laserSphereInstrument, 'light')
+    const glow = state.params.glow ?? GLOW_DEFAULT
+    const whiteCore = state.params.whiteCore ?? WHITE_CORE_DEFAULT
+    const sceneLight = state.params.light ?? LIGHT_DEFAULT
     const flare = 1 + state.energy * 1.65
 
-    baseColor.current.set(state.stringParams.color || DEFAULT_COLOR)
+    // Color.set(string) parses CSS every call; the string only changes on an edit.
+    const hex = state.stringParams.color || DEFAULT_COLOR
+    if (hex !== baseHex.current) {
+      baseHex.current = hex
+      baseColor.current.set(hex)
+    }
     const core = evaluateCoreAppearance(whiteCore, glow, state.energy)
     coreColor.current.copy(baseColor.current)
       .lerp(WHITE, core.whiteMix)
@@ -107,7 +118,10 @@ export function LaserSphere({ trackId }: { trackId: string }) {
 
   return (
     <>
-      <mesh ref={meshRef} geometry={SPHERE_GEOMETRY}>
+      {/* matrixAutoUpdate off: the mesh sits at the copy group's origin for
+          its whole life, so its identity matrix never needs recomposing - and
+          three recomposes every auto-update node on every render pass. */}
+      <mesh ref={meshRef} geometry={SPHERE_GEOMETRY} matrixAutoUpdate={false}>
         <shaderMaterial
           key="laser-sphere-rim-v2"
           vertexShader={LASER_VERTEX_SHADER}
