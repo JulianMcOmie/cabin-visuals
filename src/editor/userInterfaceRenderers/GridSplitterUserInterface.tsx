@@ -8,8 +8,8 @@
 //
 // 1. A live preview window: the splitter's REAL resolve() (no notes) applied to
 //   a single generic cube, drawn with a plain 2D canvas - no r3f, because a
-//   panel <Canvas> stays black until the transport plays (see the renderers
-//   CLAUDE.md) and a layout is exactly the thing you dial in while paused.
+//   few hundred painter-sorted quads need no GPU scene (see the renderers
+//   CLAUDE.md).
 //   Drag orbits it; until touched it turns on its own. An index pulse sweeps
 //   the copies in slot order, so the four indexing modes read differently.
 // 2. Three vertical strips, one per dimension (columns / rows / depth), each

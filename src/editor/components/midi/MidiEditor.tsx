@@ -384,7 +384,7 @@ export function MidiEditor({
     }).filter(Boolean) as { label: string; top: number; height: number }[]
   }, [rangeLabels, rows, rowHeight])
 
-  // Playhead position via RAF (no React re-renders). The canvas is an absolute
+  // Playhead position off the beat (no React re-renders). The canvas is an absolute
   // timeline, so the playhead sits at the absolute currentBeat and is visible
   // anywhere within the timeline (not just over the block).
   usePlayhead((beat) => {

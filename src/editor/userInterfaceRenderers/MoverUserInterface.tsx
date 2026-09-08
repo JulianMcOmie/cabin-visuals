@@ -16,8 +16,8 @@
 // looping demo phrase in the mover's own vocabulary, so the picture cannot
 // drift from playback. Rendered with plain DOM matrix3d transforms off the
 // shared preview loop (console/previewLoop.ts), NOT an r3f canvas: per this
-// directory's CLAUDE.md a panel canvas stays black until the transport plays,
-// and choosing a motion is exactly the thing you do while parked.
+// directory's CLAUDE.md a motion needs no lighting, and a DOM transform is the
+// cheaper picture.
 
 import { useRef } from 'react'
 import { Matrix4 } from 'three'

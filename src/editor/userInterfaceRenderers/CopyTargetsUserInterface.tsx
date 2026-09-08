@@ -12,9 +12,8 @@
 // copy" on an even-width grid comes out as stripes rather than a checkerboard,
 // and the picture shows that before you would think to ask.
 //
-// A plain 2D canvas rather than r3f, for the reason the Grid panel documents: a
-// panel <Canvas> stays black until the transport plays, and a selection is
-// exactly what you dial in while paused.
+// A plain 2D canvas rather than r3f, for the reason the Grid panel documents:
+// flat painter-sorted faces need no GPU scene.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Track } from '../types'
