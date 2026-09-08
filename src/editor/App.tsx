@@ -1351,21 +1351,20 @@ function BottomArea() {
   if (editingBlock) lastBlockRef.current = editingBlock
   // The roll rises over the timeline (Material 3 emphasized-decelerate, the
   // sidebar glide's curve) and sinks away on dismiss (M3's accelerate exit).
-  // The timeline stays mounted UNDER the roll only while it animates: at rest
-  // the old single-surface swap is preserved, because TimelineArea's
-  // whole-tracks subscription must not re-render beneath the roll's
-  // per-pointermove note edits (render budget, components/CLAUDE.md).
-  const [rollSettled, setRollSettled] = useState(false)
-  useEffect(() => {
-    if (!editing) setRollSettled(false)
-  }, [editing])
+  // The timeline stays MOUNTED under the roll the whole time. It used to be
+  // unmounted once the roll settled, to keep TimelineArea's whole-tracks
+  // subscription from re-rendering beneath per-pointermove note edits - but the
+  // roll commits once per gesture (useNoteGestures), so that re-render is one
+  // memoized row per edit, while the remount on dismiss rebuilt every row, note
+  // preview and live-preview stage synchronously inside the Escape keydown:
+  // 250-450ms of style recalc + DOM creation on a 50-track project.
   return (
     // overflow-CLIP: the roll slides in from y:'100%', which under `hidden`
     // gives this box a pane-height of vertical scroll range for the length of
     // the animation - a wheel or focus mid-slide banks it and the timeline
     // sits shifted afterwards. See src/editor/CLAUDE.md.
     <div className="relative h-full overflow-clip">
-      {(!editing || !rollSettled) && <TimelineArea />}
+      <TimelineArea />
       <MotionConfig reducedMotion="user">
         <AnimatePresence>
           {/* z-[80]: the timeline's own chrome stacks up to z-[70] (loop
@@ -1378,9 +1377,6 @@ function BottomArea() {
               animate={{ y: 0 }}
               exit={{ y: '100%', transition: { duration: 0.25, ease: [0.3, 0, 0.8, 0.15] } }}
               transition={{ duration: 0.4, ease: [0.05, 0.7, 0.1, 1] }}
-              onAnimationComplete={(target) => {
-                if (typeof target === 'object' && target !== null && 'y' in target && target.y === 0) setRollSettled(true)
-              }}
             >
               <PianoRollPanel frozenRef={lastBlockRef.current} />
             </motion.div>
