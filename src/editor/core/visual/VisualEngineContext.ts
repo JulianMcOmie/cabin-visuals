@@ -51,10 +51,13 @@ function joinFrameHub(store: RootStore, priority: number, ref: RefObject<RenderC
   if (!hub) {
     const created: FrameHub = { members: new Set(), order: [], dirty: false, unsubscribe: () => {} }
     const tick: RefObject<RenderCallback> = {
-      current: (...args) => {
+      // Explicit parameters, not a rest spread: this runs once per member per
+      // frame, and a rest array per call was a measurable allocation at a few
+      // thousand copies.
+      current: (state, delta, frame) => {
         if (created.dirty) { created.order = [...created.members]; created.dirty = false }
         const order = created.order
-        for (let i = 0; i < order.length; i++) order[i].current?.(...args)
+        for (let i = 0; i < order.length; i++) order[i].current?.(state, delta, frame)
       },
     }
     created.unsubscribe = store.getState().internal.subscribe(tick, priority, store)
@@ -83,9 +86,9 @@ export function useVisualFrame(callback: RenderCallback, priority = 0) {
   latest.current = callback
   const gate = useRef(preview)
   gate.current = preview
-  const ref = useRef<RenderCallback>((...args) => {
+  const ref = useRef<RenderCallback>((state, delta, frame) => {
     const p = gate.current
-    if (!p || p.renderFrame.current) latest.current(...args)
+    if (!p || p.renderFrame.current) latest.current(state, delta, frame)
   })
   useLayoutEffect(() => joinFrameHub(store, priority, ref), [store, priority])
 }

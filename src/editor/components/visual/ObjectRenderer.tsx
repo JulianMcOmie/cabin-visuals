@@ -176,7 +176,13 @@ export const ObjectRenderer = memo(function ObjectRenderer({
     // "hidden" object would otherwise carve its invisible silhouette out of
     // anything drawn behind it (the visibility-mover ghost-wall artifact).
     g.visible = !!state && !state.blackedOut && fade > 0.001
-    if (state) applyMaterialOpacity(g, fade)
+    // A hidden copy costs nothing: no placement math here, and three's
+    // per-pass updateMatrixWorld skips its whole subtree (the walk does not
+    // check `visible`, only this flag - and a few thousand hidden copies were
+    // most of that walk). Re-enabled the frame it shows again, before render.
+    g.matrixWorldAutoUpdate = g.visible
+    if (!g.visible) return
+    applyMaterialOpacity(g, fade)
     if (isFullFrame) {
       // Camera-facing screen anchor (see core/visual/screenAnchor.ts): the
       // occurrence's VisualCopy transform applies inside screen space, so an
