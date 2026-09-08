@@ -12,7 +12,7 @@ Thin shell around `src/`. Pages are mostly small; the product lives in `src/edit
   - `stripe/checkout|portal|confirm|webhook` — billing (`src/utils/stripe.ts`, `src/billing/syncSubscription.ts`; webhook syncs subscription rows).
   - `transcribe` — proxy to ElevenLabs Scribe: signed URL of the uploaded song in (never bytes — Vercel body caps), word-level timestamps out (feeds `lyricTiming`). `align` — ElevenLabs Forced Alignment: known lyric text + audio → tight word onsets. Both need `ELEVENLABS_API_KEY` (503 with a user-visible message without it).
   - `add-email` — marketing capture to Airtable (owner notify via Resend in `src/notifications`).
-- `dev/` — internal playgrounds (`landing-lab` A/B/C prototypes, `instrument-previews` capture rig used by `scripts/generate-instrument-previews.mjs`). `spike/` — scratch. Neither is linked from the product.
+- `dev/` — internal playgrounds: `instrument-previews`, the capture rig used by `scripts/generate-instrument-previews.mjs` (production-guarded with `notFound()`). Not linked from the product. The design labs (`landing-lab`, `panel-header-lab`, `timeline-zoom-lab`) and the `spike/` beat-cut prototype were removed 2026-09-08 — git history keeps them.
 
 DB schema for Drizzle lives in `db/` (`drizzle.config.ts`, migrations in `db/migrations`); Supabase envs in `.env.local` (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, plus `DATABASE_URL` for migrations, Stripe keys for billing).
 

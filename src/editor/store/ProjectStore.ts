@@ -434,7 +434,6 @@ export interface ProjectState {
   setSceneTrackEnabled: (sceneId: string, enabled: boolean) => void
   duplicateScene: (sceneId: string) => string | null
   deleteScene: (sceneId: string) => void
-  reorderScenes: (sceneIds: string[]) => void
   addTrack: (track: Track, atIndex?: number) => void
   addBlock: (trackId: string, block: Block) => void
   addBlocks: (trackId: string, blocks: Block[]) => void
@@ -442,7 +441,6 @@ export interface ProjectState {
   updateBlockNotes: (trackId: string, blockId: string, notes: Note[]) => void
   updateBlock: (trackId: string, blockId: string, updates: Partial<Block>) => void
   moveBlock: (fromTrackId: string, blockId: string, toTrackId: string) => void
-  deleteBlock: (trackId: string, blockId: string) => void
   deleteBlocks: (blockIds: Set<string>) => void
   splitBlocksAtBeat: (blockIds: Set<string>, beat: number) => Set<string> | null
   joinBlocks: (blockIds: Set<string>) => Set<string> | null
@@ -452,7 +450,6 @@ export interface ProjectState {
   /** Returns the new copy's id (for selection), or null if the source vanished. */
   insertTrackCopy: (srcId: string, parentId: string | null, index?: number) => string | null
   addTrackTree: (tree: Track[], atIndex?: number) => void
-  reorderRootTracks: (orderedIds: string[]) => void
   /** Re-parent a track: parentId=null makes it a root. `index` positions it among
    *  its new siblings (root list or the parent's childIds). No-op on a cycle. */
   setTrackParent: (trackId: string, parentId: string | null, index?: number) => void
@@ -557,7 +554,6 @@ export interface ProjectState {
   setTrackCopyTargets: (trackId: string, copyTargets: Track['copyTargets']) => void
   setTrackTags: (trackId: string, tags: string[]) => void
   /** Draw this object on top of everything (depth-ignored overlay). */
-  setTrackOnTop: (trackId: string, onTop: boolean) => void
   /** Set an audio track's output volume (linear gain, clamped to [0, 1.5]).
    *  Unity is stored as absence, like automationAmount. A volume-only change
    *  is applied as a live gain by the audio engine WITHOUT re-arming players
@@ -602,9 +598,7 @@ export interface ProjectState {
    *  (one note per word) or whole lines at once (one note per grouped line). */
   setLyricGrouping: (trackId: string, grouping: 'words' | 'lines') => void
   // Lyric clips + style lanes (Text Display; core/visual/lyricClips.ts).
-  addLyricClip: (trackId: string, clip: Omit<LyricClip, 'id'>) => void
   updateLyricClip: (trackId: string, clipId: string, updates: Partial<Omit<LyricClip, 'id'>>) => void
-  removeLyricClip: (trackId: string, clipId: string) => void
   // (No duplicate action: alt-drag on a clip is the note gesture's own
   // duplicate, like every other note.)
   /** Rewrite ONE word in place (the note-editing path). Writes through to the
@@ -621,9 +615,7 @@ export interface ProjectState {
    *  over the template's). Every id is reminted, so re-applying can never
    *  collide. One set() = one undo step. */
   applyTemplate: (templateDoc: ProjectDocument) => void
-  addAudioBlock: (trackId: string, block: AudioBlock) => void
   updateAudioBlock: (trackId: string, blockId: string, updates: Partial<AudioBlock>) => void
-  deleteAudioBlock: (trackId: string, blockId: string) => void
   // Visual effects (plugins) on a track.
   addEffect: (trackId: string, pluginId: string) => void
   removeEffect: (trackId: string, instanceId: string) => void
@@ -1043,12 +1035,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     return { scenes, sceneOrder, activeSceneId, ...viewForScene(scenes, activeSceneId, s.audioTracks, s.audioRootTrackIds) }
   }),
 
-  reorderScenes: (sceneIds) => rawSet((s) => {
-    const main = s.sceneOrder.find((id) => s.scenes[id]?.isMain)
-    const valid = sceneIds.filter((id) => s.scenes[id] && !s.scenes[id].isMain)
-    return { sceneOrder: main ? [main, ...valid] : valid }
-  }),
-
   addTrack: (track, atIndex) =>
     set((s) => {
       // Hand-built tracks (console scripts, E2E) sometimes arrive without an id.
@@ -1178,18 +1164,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
             ...toTrack,
             blocks: [...toTrack.blocks, block],
           },
-        },
-      }
-    }),
-
-  deleteBlock: (trackId, blockId) =>
-    set((s) => {
-      const track = s.tracks[trackId]
-      if (!track) return s
-      return {
-        tracks: {
-          ...s.tracks,
-          [trackId]: { ...track, blocks: track.blocks.filter((b) => b.id !== blockId) },
         },
       }
     }),
@@ -1430,9 +1404,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       totalBars: Math.min(MAX_TOTAL_BARS, Math.max(s.totalBars,
         ...tree.flatMap(track => track.blocks.map(block => block.startBar + block.durationBars)))),
     })),
-
-  reorderRootTracks: (orderedIds) =>
-    set({ rootTrackIds: orderedIds }),
 
   setTrackParent: (trackId, parentId, index) =>
     set((s) => {
@@ -1854,16 +1825,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       }
     }),
 
-  addLyricClip: (trackId, clip) =>
-    set((s) => {
-      const t = s.tracks[trackId]
-      if (!t || t.instrumentId !== 'textDisplay') return s
-      const host = lyricHostBlock(t, clip.startBeat, s.beatsPerBar)
-      if (!host) return s
-      const note = lyricClipNote(clip, crypto.randomUUID(), host, s.beatsPerBar)
-      return writeTrackBlockNotes(s, trackId, host.id, [...host.notes, note])
-    }),
-
   updateLyricClip: (trackId, clipId, updates) =>
     set((s) => {
       const t = s.tracks[trackId]
@@ -1878,15 +1839,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       if (updates.words !== undefined) next.lyric!.words = [...updates.words]
       if (updates.layout !== undefined) next.lyric!.layout = { ...updates.layout }
       return writeTrackBlockNotes(s, trackId, block.id, block.notes.map((n) => (n.id === clipId ? next : n)))
-    }),
-
-  removeLyricClip: (trackId, clipId) =>
-    set((s) => {
-      const t = s.tracks[trackId]
-      const found = t && findLyricClipNote(t, clipId)
-      if (!t || !found) return s
-      const { block } = found
-      return writeTrackBlockNotes(s, trackId, block.id, block.notes.filter((n) => n.id !== clipId))
     }),
 
   setLyricClipWord: (trackId, clipId, wordIndex, word) =>
@@ -2165,13 +2117,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       const track = s.tracks[trackId]
       if (!track) return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, tags } } }
-    }),
-
-  setTrackOnTop: (trackId, onTop) =>
-    set((s) => {
-      const track = s.tracks[trackId]
-      if (!track) return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, onTop } } }
     }),
 
   setTrackVolume: (trackId, volume) =>
@@ -2781,18 +2726,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     })
   },
 
-  addAudioBlock: (trackId, block) =>
-    set((s) => {
-      const track = s.tracks[trackId]
-      if (track?.type !== 'audio') return s
-      return {
-        tracks: {
-          ...s.tracks,
-          [trackId]: { ...track, audioBlocks: [...(track.audioBlocks ?? []), block] },
-        },
-      }
-    }),
-
   updateAudioBlock: (trackId, blockId, updates) =>
     set((s) => {
       const track = s.tracks[trackId]
@@ -2816,18 +2749,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         || updates.startBar !== undefined
       if (!spanChanged) return { tracks }
       return { tracks: trimLoopsToSongEnd(tracks, songEndBars({ ...s, tracks })) }
-    }),
-
-  deleteAudioBlock: (trackId, blockId) =>
-    set((s) => {
-      const track = s.tracks[trackId]
-      if (!track?.audioBlocks) return s
-      return {
-        tracks: {
-          ...s.tracks,
-          [trackId]: { ...track, audioBlocks: track.audioBlocks.filter((b) => b.id !== blockId) },
-        },
-      }
     }),
 
   addEffect: (trackId, pluginId) =>

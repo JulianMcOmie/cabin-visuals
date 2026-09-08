@@ -56,10 +56,6 @@ const clampMirrors = (mirrors: number) =>
 
 const clampPlane = (plane: number) => (plane === 1 || plane === 2 ? plane : 0)
 
-/** Total copies for a mirror count - one reflection per line, plus the
- *  rotations that pair of adjacent lines generates. */
-export const symmetryCopyCount = (mirrors: number) => clampMirrors(mirrors) * 2
-
 /**
  * The slot transforms in slot order, in the object's own frame.
  *

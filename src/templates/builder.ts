@@ -31,21 +31,6 @@ export function pulse(
   return out
 }
 
-/** Cycle through `pitches` on a fixed grid - the classic arpeggio. */
-export function arp(
-  pitches: number[],
-  step: number,
-  total: number,
-  opts: { dur?: number; vel?: number } = {},
-): Note[] {
-  const out: Note[] = []
-  let i = 0
-  for (let b = 0; b < total; b += step, i++) {
-    out.push(n(b, pitches[i % pitches.length], opts.dur ?? step * 0.9, opts.vel ?? 96))
-  }
-  return out
-}
-
 /** Explicit rhythm rows: [startBeat, pitch, durationBeats?, velocity?]. */
 export function hits(rows: Array<[number, number, number?, number?]>): Note[] {
   return rows.map(([b, p, d, v]) => n(b, p, d ?? 0.5, v ?? 100))
