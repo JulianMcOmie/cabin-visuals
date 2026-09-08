@@ -8,7 +8,7 @@ import { composeMatrix, identitySV, localTransformToSV } from './stateVector'
 import { isIdentityTransform, readTrackTransform, trackOpacity } from '../transform'
 import { identityVisualCopy } from '../visualCopies/identityVisualCopy'
 import { chainEmitsCopyClocks, copyClockShift, resolveVisualCopies, structuralCopyCount, warpChainBeat, type CopyClocks } from '../visualCopies/resolveVisualCopies'
-import type { VisualCopy } from '../visualCopies/types'
+import type { MoverOrSplitter, VisualCopy } from '../visualCopies/types'
 import type { ResolvedGraph, ResolvedGroup, ObjectState, ResolvedNote } from './types'
 import { MIN_SOUNDING_BEATS, soundingNoteWindow } from './noteWindow'
 import type { ProjectState } from '../../store/ProjectStore'
@@ -113,6 +113,10 @@ export function createVisualEngine() {
   // computeAtBeat, so React never reconciles during playback.
   const visualCopiesByTrack = new Map<string, VisualCopy[]>()
   const visualCopyCounts = new Map<string, number>()
+  // The chain each track's count was probed from. The count is a function of
+  // the chain's entries alone, so a track whose chain still holds the same
+  // entries keeps its pool without re-probing (setProject).
+  const copyChainByTrack = new Map<string, readonly MoverOrSplitter[]>()
   const copyCountWarned = new Set<string>()
   // ── Per-copy object states (time emitters) ──────────────────────────────────
   // A chain carrying a Stagger gives each copy its OWN CLOCK, and "the copy at
@@ -158,19 +162,49 @@ export function createVisualEngine() {
   let objectList: ObjectListEntry[] = []
   const listeners = new Set<() => void>()
 
+  // Notifies only when an entry actually differs: VisualScene reads the list
+  // through useSyncExternalStore and keys every objects-derived memo on the
+  // array, so a fresh-but-identical list (a one-note edit changes no entry)
+  // would re-render the whole scene tree for nothing. Unchanged entries keep
+  // their objects; maskSourceIds is compared by value because every resolve
+  // mints a new array for it, and its consumers (ObjectRenderer's memo) already
+  // compare it that way.
   function publishList() {
-    objectList = [...graphs.entries()].flatMap(([sceneId, graph]) => graph.objects.flatMap((o) => {
+    const prev = objectList
+    const next: ObjectListEntry[] = []
+    let changed = false
+    for (const [sceneId, graph] of graphs) for (const o of graph.objects) {
       const count = Math.max(1, visualCopyCounts.get(o.trackId) ?? 1)
-      return Array.from({ length: count }, (_, visualCopyIndex) => ({
-        sceneId,
-        trackId: o.trackId,
-        instrumentId: o.instrumentId,
-        visualCopyIndex,
-        maskSourceIds: o.maskSourceIds,
-        masksTargets: o.masksTargets,
-      }))
-    }))
+      for (let visualCopyIndex = 0; visualCopyIndex < count; visualCopyIndex++) {
+        const was = prev[next.length]
+        if (was && was.sceneId === sceneId && was.trackId === o.trackId && was.instrumentId === o.instrumentId
+          && was.visualCopyIndex === visualCopyIndex && was.masksTargets === o.masksTargets
+          && sameEntries(was.maskSourceIds, o.maskSourceIds)) {
+          next.push(was)
+          continue
+        }
+        changed = true
+        next.push({
+          sceneId,
+          trackId: o.trackId,
+          instrumentId: o.instrumentId,
+          visualCopyIndex,
+          maskSourceIds: o.maskSourceIds,
+          masksTargets: o.masksTargets,
+        })
+      }
+    }
+    if (!changed && next.length === prev.length) return
+    objectList = next
     listeners.forEach((l) => l())
+  }
+
+  /** Element-wise identity: the "nothing changed" test for chains and id lists. */
+  function sameEntries(a: readonly unknown[] | undefined, b: readonly unknown[]): boolean {
+    if (a === b) return true
+    if (!a || a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+    return true
   }
 
   /** Re-derive the graph from the project (called debounced, off the edit path). */
@@ -255,6 +289,7 @@ export function createVisualEngine() {
     for (const id of inheritedOpacities.keys()) if (!live.has(id)) inheritedOpacities.delete(id)
     for (const id of visualCopiesByTrack.keys()) if (!live.has(id)) visualCopiesByTrack.delete(id)
     for (const id of visualCopyCounts.keys()) if (!live.has(id)) visualCopyCounts.delete(id)
+    for (const id of copyChainByTrack.keys()) if (!live.has(id)) copyChainByTrack.delete(id)
     copyCountWarned.clear()
     staggeredTracks = new Set()
     // Fix each track's STRUCTURAL copy count now. Counts are beat-independent by
@@ -263,13 +298,27 @@ export function createVisualEngine() {
     // reach - the pool is sized to everything the automation can ask for, and
     // frames where it asks for less are padded with hidden copies. The beat-0
     // values are real, so copies are readable before the first computeAtBeat.
+    //
+    // The probe is the expensive half of a structural edit (a matrix per copy
+    // per variant, tens of ms on a 50k-copy chain) and its only input is the
+    // chain, so it runs only where the chain's ENTRIES changed. A reused graph
+    // hands back the same objects; a re-resolved scene hands back a new chain
+    // array whose entries are the same closures for every subtree that did not
+    // change (resolve.ts's per-track and global-entry caches) - so an
+    // element-wise compare against the chain last probed is an exact "same
+    // count" test, and everything it passes keeps its pool. Entries the
+    // resolver re-stamps per resolve (clock routing below an emitter) simply
+    // fail the compare and re-probe, as every object did before.
     for (const graph of graphs.values()) for (const obj of graph.objects) {
-      const copies = resolveVisualCopies(obj.moverAndSplitterChain, 0)
-      const structuralCount = Math.max(copies.length, structuralCopyCount(obj.moverAndSplitterChain))
+      const chain = obj.moverAndSplitterChain
+      if (chainEmitsCopyClocks(chain)) staggeredTracks.add(obj.trackId)
+      if (sameEntries(copyChainByTrack.get(obj.trackId), chain)) continue
+      const copies = resolveVisualCopies(chain, 0)
+      const structuralCount = structuralCopyCount(chain, copies.length)
       while (copies.length < structuralCount) copies.push(hiddenCopy(copies.length))
       visualCopyCounts.set(obj.trackId, structuralCount)
       visualCopiesByTrack.set(obj.trackId, copies)
-      if (chainEmitsCopyClocks(obj.moverAndSplitterChain)) staggeredTracks.add(obj.trackId)
+      copyChainByTrack.set(obj.trackId, chain)
     }
     // Per-copy states exist exactly for the staggered set - a stale entry for a
     // track whose chain lost its emitter would keep serving frozen clocks.

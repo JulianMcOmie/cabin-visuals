@@ -238,9 +238,17 @@ export function resolveVisualCopies(
  * over the chain evaluated with each variant rank swapped in. Per-entry counts
  * multiply independently down the chain, so the all-max chain IS the maximum -
  * no cross-entry combinations are needed.
+ *
+ * A caller that has just evaluated the plain chain at beat 0 passes its count
+ * as `plainCount`, so the probe does not evaluate it a second time - that
+ * evaluation allocates a matrix per copy, and on a 50k-copy chain it is most
+ * of the cost of an edit.
  */
-export function structuralCopyCount(moverAndSplitterChain: MoverOrSplitter[]): number {
-  let count = resolveVisualCopies(moverAndSplitterChain, 0).length
+export function structuralCopyCount(
+  moverAndSplitterChain: MoverOrSplitter[],
+  plainCount: number = resolveVisualCopies(moverAndSplitterChain, 0).length,
+): number {
+  let count = plainCount
   const variantRanks = Math.max(
     0,
     ...moverAndSplitterChain.map((entry) => entry.structuralVariants?.length ?? 0),
