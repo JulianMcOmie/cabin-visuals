@@ -43,10 +43,13 @@ const ExportDialog = dynamic(() => import('./components/ExportDialog').then((m) 
 const SaveToCloudDialog = dynamic(() => import('./components/SaveToCloudDialog').then((m) => m.SaveToCloudDialog), { ssr: false })
 const PianoRollPanel = dynamic(() => import('./components/midi/PianoRollPanel').then((m) => m.PianoRollPanel), { ssr: false })
 const ConflictDialog = dynamic(() => import('./components/ConflictDialog').then((m) => m.ConflictDialog), { ssr: false })
+// Dev-only, and it drags previewCapture -> the export engine + muxer: a static
+// import put all of that in the production startup payload for a button that
+// never renders there.
+const PreviewCaptureButton = dynamic(() => import('./components/PreviewCaptureButton').then((m) => m.PreviewCaptureButton), { ssr: false })
 import { EditorSignupGate } from './components/EditorSignupGate'
 import { MediaFileDropLayer } from './components/MediaFileDropLayer'
 import { isExportSupported } from './core/export/support'
-import { PreviewCaptureButton } from './components/PreviewCaptureButton'
 import { TimelineArea } from './components/timeline/TimelineArea'
 import { SceneTabs } from './components/SceneTabs'
 import { usePlayback } from './hooks/usePlayback'
