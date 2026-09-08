@@ -380,6 +380,15 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <path d="M6 5.3 L7 6.3 L6 7.3 L5 6.3 Z" fill="#67e8f9" />
     </svg>
   )},
+  { id: 'glassRoll', name: 'Glass Roll', description: 'A falling piano roll in stained glass - leaded mosaic tiles drop onto a keyboard, burn white as they strike, and shed rising sparkle dust.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <rect x="2" y="0.8" width="3" height="6" rx="0.9" fill="#5b6cff" stroke="#c6ccd8" strokeWidth="0.6" />
+      <rect x="7" y="2.5" width="3" height="4.3" rx="0.9" fill="#b48cf8" stroke="#c6ccd8" strokeWidth="0.6" />
+      <path d="M2.4 3.2 L4.6 1.6 M7.4 5 L9.6 3.2" stroke="#e8ecff" strokeWidth="0.5" />
+      <rect x="0.5" y="8" width="11" height="3.5" fill="#0b0e16" />
+      <rect x="0.8" y="8.3" width="1.8" height="3" fill="#aab8d0" /><rect x="3" y="8.3" width="1.8" height="3" fill="#8fb0ff" /><rect x="5.2" y="8.3" width="1.8" height="3" fill="#aab8d0" /><rect x="7.4" y="8.3" width="1.8" height="3" fill="#aab8d0" /><rect x="9.6" y="8.3" width="1.8" height="3" fill="#aab8d0" />
+    </svg>
+  )},
   { id: 'starfield', name: 'Starfield', description: 'A full-frame field of drifting dots - Midi Roll’s old backdrop as its own layer, with density, drift and twinkle knobs.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <circle cx="2.6" cy="3" r="1" fill="#e2e8f0" />

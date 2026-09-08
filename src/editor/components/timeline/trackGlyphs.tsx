@@ -239,6 +239,15 @@ const G = {
       <path d="M8 6.4 9.6 8 8 9.6 6.4 8Z" fill="currentColor" stroke="none" />
     </>
   ),
+  // Two falling slabs over a key rail - the rail is what keeps it apart
+  // from Midi Roll's horizontal bars at 15px.
+  glassRoll: (
+    <>
+      <rect x="3" y="1.6" width="3.4" height="7" rx="1.1" fill="currentColor" stroke="none" fillOpacity="0.9" />
+      <rect x="9.2" y="3.6" width="3.4" height="5" rx="1.1" fill="currentColor" stroke="none" fillOpacity="0.6" />
+      <path d="M1.6 11.2h12.8M4.8 11.2v3M8 11.2v3M11.2 11.2v3" strokeWidth="1.4" />
+    </>
+  ),
   // A scatter of varied dots - no ring, no row, so it can't be mistaken for
   // Particle Burst's radial spray or the roll's bars at 15px.
   starfield: (

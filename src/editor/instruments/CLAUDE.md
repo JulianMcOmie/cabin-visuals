@@ -46,6 +46,37 @@ a DEF file usually imports nothing but types and `lazyInstrument`, so importing
 a def in a test is fine again - it is the VIEW file that still closes the cycle;
 never import a `*Visual.tsx` from a test.)
 
+## Glass Roll: a falling roll matched to a reference video
+
+`GlassRoll.tsx` + `GlassRollVisual.tsx` + `glassRollCore.ts` reproduce a Rousseau-style
+piano video frame by frame (reference capture `damnotes.mp4`, 2026-09-06): stained-glass
+tiles falling onto a keyboard rail, a white blaze + blue key light on the strike, and a
+plume of sparkle dust rising in ribbons. Sibling of Midi Roll (same canvas-texture +
+bloom plane), NOT a play style of it - it has its own layout (real key positions,
+top-to-bottom, seconds-clocked by default). Things worth knowing before touching it:
+
+- **The glass is a pre-rendered MOSAIC STRIP** (128x2048, built once per palette/seed/
+  detail/tint/lead/flowers, LRU of 6): a rose-window tessellation - petals radiating
+  from hubs are CELLS of the key map alongside a Voronoi base cut by long diagonals -
+  shaded per pane, mottled, leaded by edge detection, speckled with white dot clusters,
+  then softened. Every tile is a seeded slice of it. It renders ~4x larger than a tile,
+  so **detail finer than ~6px in the strip vanishes**: facets are deliberately huge
+  (one or two across a tile) because that is what survives the downscale and what the
+  reference shows at its real size. Judge changes against the reference at the
+  RENDERED scale (a nearest-neighbour 8x crop), not against the strip.
+- **The plume is closed-form, not simulated** (`wispPose` in the core): a wisp is born
+  every 1/WISP_RATE s while the note sounds; its head follows a seeded drift + curl in
+  age, and each mote trails the head by its own lag (so a ribbon is the head's path),
+  scattering as it ages. Pause invariant holds by construction.
+- Bloom runs through `canvasBloom.ts` (the reusable copy of Midi Roll's inline chain)
+  with quieter wide octaves than Midi Roll - the room-filling ambience octave washed
+  this whole frame navy. Keys are DARK unlit (ref ~rgb(40,45,65)) and flood blue in a
+  frame-relative neighbourhood of a strike (`W * 0.05` reach, not key units - a fitted
+  17-key layout lit its whole keyboard from one note).
+- Pixel targets that were measured, not guessed: fall ~2.5 s top-to-rail, dust rises
+  ~120 px/s at 970p, white-key tile ~0.86 of the key pitch and black ~0.64 of a white,
+  tile luminance median ~90-130 with saturation ~0.35.
+
 ## Particle: a lightweight object for splitter arrangements
 
 `Particle` is the single standing particle in Objects; `ParticleBurst` lives in Extras.

@@ -46,6 +46,7 @@ import { overlapSolidInstrument } from './OverlapSolid'
 import { cropMaskInstrument } from './Crop'
 import { midiRollInstrument } from './MidiRoll'
 import { starfieldInstrument } from './Starfield'
+import { glassRollInstrument } from './GlassRoll'
 import { wireframeInstrument } from './Wireframe'
 import { modSynthInstrument } from './ModSynth'
 import { lightInstrument } from './Light'
@@ -100,6 +101,7 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [cropMaskInstrument.id]: cropMaskInstrument,
   [midiRollInstrument.id]: midiRollInstrument,
   [starfieldInstrument.id]: starfieldInstrument,
+  [glassRollInstrument.id]: glassRollInstrument,
   [wireframeInstrument.id]: wireframeInstrument,
 }
 
