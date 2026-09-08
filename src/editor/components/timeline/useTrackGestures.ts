@@ -285,16 +285,13 @@ export function useTrackGestures({ laneRef, dragGuideRef, moveSnapBeats }: UseTr
       if (d.type === 'moving') {
         const stepBars = moveSnapBeatsRef.current / store.beatsPerBar
         for (const [blockId, o] of d.origins) {
-          // Plain MIDI regions may enter the dark zone and grow the project.
-          // Looped regions retain their existing project-edge clamp.
-          const movementLimitBars = o.loop ? d.totalBars : MAX_TOTAL_BARS
-          const maxStart = Math.max(0, movementLimitBars - o.durationBars)
+          // All MIDI regions can enter the dark zone, including their loop
+          // repeats. Grow the project in this same frame to contain the move.
+          const maxStart = Math.max(0, MAX_TOTAL_BARS - o.durationBars)
           const snappedStartBar = Math.round((o.startBar + deltaBars) / stepBars) * stepBars
           const newStartBar = Math.max(0, Math.min(maxStart, snappedStartBar))
           if (blockId === d.guideBlockId) guideStartBar = newStartBar
-          if (!o.loop) {
-            requiredProjectEndBar = Math.max(requiredProjectEndBar, newStartBar + o.durationBars)
-          }
+          requiredProjectEndBar = Math.max(requiredProjectEndBar, newStartBar + o.durationBars)
 
           // Vertical: move to the row at origin index + rowDelta (clamped), mapped to
           // its owning track - so nested/child rows and ability-lane rows are crossed
@@ -366,7 +363,7 @@ export function useTrackGestures({ laneRef, dragGuideRef, moveSnapBeats }: UseTr
           store.updateBlock(o.trackId, blockId, o.loop ? { ...updates, loopLengthBars: o.patternBars } : updates)
         }
       }
-      // Grow by whole bars to contain the furthest plain MIDI edge reached.
+      // Grow by whole bars to contain the furthest eligible MIDI edge reached.
       // Never shrink here: once the boundary advances during a gesture, moving
       // the region back leaves the newly established project length in place.
       if (requiredProjectEndBar > store.totalBars + PROJECT_END_EPSILON_BARS) {
@@ -464,13 +461,13 @@ export function useTrackGestures({ laneRef, dragGuideRef, moveSnapBeats }: UseTr
     e.stopPropagation()
     edgeCacheRef.current = null // fresh measurement per gesture
 
-    // Shift toggles selection without starting a drag. preventDefault keeps the
+    // Shift or Cmd/Ctrl toggles selection without starting a drag. preventDefault keeps the
     // shift-click from extending the browser's DOM text selection across the app.
     // Read the selection LIVE rather than closing over it: closing over the
     // Set made this callback (a prop of every Block) change identity on every
     // selection write - a marquee sweep re-rendered every block per pixel.
     const selectedBlockIds = useUIStore.getState().selectedBlockIds
-    if (e.shiftKey) {
+    if (e.shiftKey || e.metaKey || e.ctrlKey) {
       e.preventDefault()
       const next = new Set(selectedBlockIds)
       if (next.has(blockId)) next.delete(blockId)

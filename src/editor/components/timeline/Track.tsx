@@ -10,7 +10,6 @@ import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { BRACKET_CORNER_RADIUS_PX, INDENT_PX, LABEL_BASE_PX, rowIndentPx } from './trackDrop'
 import type { RowGuide } from './trackTree'
 import { resolveTrackDisplayColor, resolveTrackIdentityColor } from '../../utils/trackDisplayColor'
-import { midiSelectionSpill } from '../../utils/colors'
 import { trackChromeColor } from '../../utils/trackChromeColor'
 import { selectTrack, selectTrackRange, shouldSuppressTrackSelect, toggleTrackInSelection } from '../../utils/selection'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
@@ -99,9 +98,6 @@ interface TrackProps {
  *  plus one refinement for the selection Set. */
 export const Track = memo(function Track({ track, barWidthPx, pickupPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, depth = 0, guides, dividerInset, descendantRows = 0, liftOffset, dimmed, dropInto, replacePreview, onCopyDragStart, onNestDragStart, onLabelContextMenu }: TrackProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
-  // Audio lanes only need this for the selection spill's geometry (an audio
-  // block's width is derived from its trimmed seconds at the current tempo).
-  const bpm = useProjectStore((s) => s.bpm)
   const isPlaying = useTimeStore((s) => s.isPlaying)
 
   // A boolean, not the id: selecting some OTHER row must not re-render this one.
@@ -373,15 +369,22 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
             <span
               className="absolute left-0 top-full bg-inherit"
               style={{
-                // The first child surface has a rounded top-left cutout. The
-                // parent's strip always underpaints that radius - selected or
-                // not - so the fill meets the curved divider without leaving
-                // a bare notch.
-                width: childBracketLeft - regionLeft + BRACKET_CORNER_RADIUS_PX,
+                width: childBracketLeft - regionLeft,
                 // Relative to this row, so the bracket follows grid sizing.
                 height: `${descendantRows * 100}%`,
               }}
-            />
+            >
+              {/* Underpaint only the first child's rounded corner; extending
+                  the entire strip would spill past the highlighted stem. */}
+              <span
+                className="absolute left-full top-0 bg-inherit"
+                style={{
+                  width: BRACKET_CORNER_RADIUS_PX,
+                  height: BRACKET_CORNER_RADIUS_PX,
+                  maskImage: `radial-gradient(circle at bottom right, transparent ${BRACKET_CORNER_RADIUS_PX}px, black ${BRACKET_CORNER_RADIUS_PX}px)`,
+                }}
+              />
+            </span>
           )}
         </div>
         {/* The nest-into outline's bent half, drawn over the children's own chrome
@@ -679,25 +682,6 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
             into the lane, so audio with startBar < 0 still renders on-lane
             (flush with the left edge when it defines the pickup). */}
         <div className="absolute inset-y-0" style={{ left: pickupPx, right: 0, opacity: ghostOpacity }}>
-        {/* Audio retains its selection wash; solid MIDI clips use only their
-            own perimeter. Audio widths follow trimmed seconds at this tempo. */}
-        {(track.type === 'audio'
-          ? (track.audioBlocks ?? []).map((block) => {
-              if (!selectedBlockIds.has(block.id)) return null
-              const widthBars = ((block.trimEnd - block.trimStart) * bpm) / 60 / beatsPerBar
-              const widthPx = Math.max(widthBars * barWidthPx, 4)
-              return { id: block.id, centerPx: block.startBar * barWidthPx + widthPx / 2, widthPx }
-            })
-          : []
-        ).map((spill) =>
-          spill && (
-            <div
-              key={`spill:${spill.id}`}
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0"
-              style={{ background: midiSelectionSpill(blockColor, spill.centerPx, spill.widthPx) }}
-            />
-          ))}
         {track.type === 'audio'
           ? (track.audioBlocks ?? []).map((block) => (
               <AudioBlock
@@ -746,8 +730,9 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
       {replacePreview && (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-30"
+          className={`pointer-events-none absolute inset-y-0 right-0 z-30 ${isFirstChild ? 'rounded-tl-md' : ''}`}
           style={{
+            left: regionLeft,
             background: `color-mix(in srgb, ${replacePreview.color} 13%, transparent)`,
             boxShadow: `inset 0 0 0 1px ${replacePreview.color}`,
           }}

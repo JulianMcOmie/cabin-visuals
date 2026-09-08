@@ -144,3 +144,13 @@ test('non-spatial lanes stay overlays wherever they sit', () => {
   assert.deepEqual(obj.automations.map((a) => a.param).sort(), ['size', 'tfOpacity'])
   assert.equal(obj.moverAndSplitterChain.length, 1)
 })
+
+test('duplicate spatial lanes in one chain slot combine in child order', () => {
+  const first = { ...rotLane('a', 'tfRotY', [{ pitch: 72, startBeat: 0 }]), automationCombine: 'sum' as const }
+  const last = { ...rotLane('b', 'tfRotY', [{ pitch: 60, startBeat: 0 }]), automationCombine: 'override' as const }
+  const obj = resolveObj([first, last, gridChild('split', 2, 2)])
+  assert.equal(obj.automations.length, 0)
+  assert.deepEqual(xBasis(resolveVisualCopies(obj.moverAndSplitterChain, 0)), [[1, 0, 0], [1, 0, 0]])
+  const reversed = resolveObj([last, first, gridChild('split', 2, 2)])
+  assert.deepEqual(xBasis(resolveVisualCopies(reversed.moverAndSplitterChain, 0)), [[0, 0, -1], [0, 0, -1]])
+})

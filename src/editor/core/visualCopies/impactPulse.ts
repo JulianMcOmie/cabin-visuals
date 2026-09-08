@@ -194,6 +194,7 @@ export function impactPulseScale(
 export const impactPulseMover: MoverOrSplitterDefinition<ImpactPulseSettings> = {
   id: 'impactPulse',
   label: 'Impact Pulse',
+  extras: true,
   kind: 'mover',
   params: IMPACT_PULSE_PARAMS,
   identityColor: IMPACT_PULSE_COLOR,

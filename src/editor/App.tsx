@@ -1,6 +1,9 @@
 'use client'
 
 import { GradientStageEditor } from './components/visual/GradientStageEditor'
+
+import { getFrameDriver } from './core/export/frameDriver'
+
 import dynamic from 'next/dynamic'
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import { InstantLink as Link } from '../components/instantNavigation'
@@ -75,7 +78,7 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   // copies (transform + opacity) without reaching into an R3F scene graph.
   // getSceneBackdrop rides along because a scene colorizer's whole effect is a
   // clear colour - there is no object state to read it off (core/sceneTrack.ts).
-  ;(window as unknown as Record<string, unknown>).__cabinVisual = { getVisualCopies, getVisualCopyCount, getMountedRenderScenes, getCompositionLayers, getObjectState, getSceneBackdrop }
+  ;(window as unknown as Record<string, unknown>).__cabinVisual = { getFrameDriver, getVisualCopies, getVisualCopyCount, getMountedRenderScenes, getCompositionLayers, getObjectState, getSceneBackdrop }
   // Load a saved document into the in-memory editor (perf probes replay real
   // projects through this; runs the same upgrade path a cloud open does).
   ;(window as unknown as Record<string, unknown>).__cabinHydrate = async (doc: unknown, name?: string) => {

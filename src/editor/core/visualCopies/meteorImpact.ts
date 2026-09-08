@@ -304,6 +304,7 @@ function holdPhase(beat: number, start: number, end: number, attack: number, rel
 export const meteorImpactMover: MoverOrSplitterDefinition<MeteorImpactSettings> = {
   id: 'meteorImpact',
   label: 'Meteor Impact',
+  extras: true,
   kind: 'mover',
   identityColor: METEOR_IMPACT_COLOR,
   params: [

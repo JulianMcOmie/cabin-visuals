@@ -77,6 +77,17 @@ export type LyricLayoutKind = 'one' | 'row' | 'stack' | 'scatter' | 'grid' | 'ci
 
 export interface LyricClipLayout {
   kind: LyricLayoutKind
+  /** Pipe-separated pieces reveal cumulatively unless explicitly set to single. */
+  pipeMode?: 'build' | 'single'
+  /** Per-clip multipliers; absent values are 1. */
+  fontScale?: number
+  width?: number
+  height?: number
+  wordSpacing?: number
+  lineSpacing?: number
+  align?: 'left' | 'center' | 'right'
+  /** Circle start angle in degrees, clockwise from the top. */
+  rotation?: number
   /** Grid only: columns. Absent = 2. */
   cols?: number
 }
@@ -374,6 +385,8 @@ export interface Track {
    *  burst targets) is multiplied by this and clamped back to the param's range.
    *  1 = as written (default), 0 = the lane flattens to zero, up to
    *  AUTOMATION_AMOUNT_MAX for boosting a lane written low. */
+  /** New lanes store a target-specific default; absence preserves legacy override playback. */
+  automationCombine?: 'override' | 'sum' | 'multiply'
   automationAmount?: number
   color: string
   muted: boolean

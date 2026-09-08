@@ -19,3 +19,7 @@ Projects persist as one JSONB blob per row (`projects.data` = `ProjectDocument`)
 - Documents are versioned; NEVER mutate an upgrade step that shipped. Old blobs must always walk the chain.
 - Bytes never enter the document or the stores — refs only.
 - Nothing in the edit path may depend on persistence (autosave observes; it is never awaited by edits).
+
+Schema v21 rewrites legacy Glow settings (`amount`/`size` → `strength`/`radius`)
+and remaps matching automation targets/ranges. The new blur aesthetic is
+intentional; instance IDs, enabled flags and unrelated tracks are preserved.

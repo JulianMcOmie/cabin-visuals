@@ -200,13 +200,12 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
  * so this is still a function of (beat, document) and scrub == playback.
  */
 export function paramAtBeat(state: ObjectState, param: string, beat: number): number {
-  const base = state.baseParams[param] ?? state.params[param] ?? 0
+  let base = state.baseParams[param] ?? state.params[param] ?? 0
   for (const auto of state.automations) {
     if (auto.param !== param) continue
     const v = sampleAutomationLane(auto, beat, base)
-    // NaN = the lane is inert at this beat; fall back to the base value.
-    if (!Number.isNaN(v)) return v
-    break
+    // NaN = inert; keep the value accumulated by earlier lanes.
+    if (!Number.isNaN(v)) base = v
   }
   return base
 }

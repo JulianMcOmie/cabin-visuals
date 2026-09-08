@@ -128,6 +128,7 @@ export function evaluateForceFieldTwist(
 export const forceFieldPushMover: MoverOrSplitterDefinition<ForceFieldPushSettings> = {
   id: 'forceFieldPush',
   label: 'Force Field Pulse',
+  extras: true,
   kind: 'mover',
   identityColor: FORCE_FIELD_PUSH_COLOR,
   params: [

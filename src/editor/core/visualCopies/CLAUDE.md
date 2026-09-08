@@ -50,7 +50,8 @@ One instrument track produces ONE opaque visual output; an ordered chain of move
     palette default) is therefore left unclaimed in `identityColors.ts`. A param that
     resolves near-achromatic falls through to the lane's own cycle colour.
 - `bypass.ts` — the `parentGate` device: notes switch the device it is nested under OFF (or, flipped, on). Not a chain entry — see its own section below.
-- **Demoting a superseded definition is `legacy: true` on the def, not an id list in a picker** (All Movers, Motion). Both pickers read the flag and treat it differently on purpose: the LIBRARY files it into its shelf's Extras folder (`LEGACY_MOVER_IDS` in `LeftSidebar.tsx`, derived from the registry), while the track context menu's "Add mover / colorizer / splitter track" lists drop it entirely — a right-click menu is one flat list per kind, with no Extras drawer to hide a back-catalog entry in, so it would sit right beside the definition that replaced it. Never delete the definition: saved projects still resolve its id.
+- **Moving a supported device to Extras without deprecating it** uses `extras: true` on its definition. Impact, Rumble, and Motion file it under their own Extras subfolder; track add menus omit it. It stays registered, selectable from Extras, and fully supported. Use `legacy` only for superseded definitions.
+- **Demoting a superseded definition is `legacy: true` on the def, not an id list in a picker** (All Movers, Motion). Both pickers read the flag and treat it differently on purpose: the LIBRARY files it into its shelf's Extras folder (`EXTRAS_MOVER_IDS` in `LeftSidebar.tsx`, derived from the registry), while the track context menu's "Add mover / colorizer / splitter track" lists drop it entirely — a right-click menu is one flat list per kind, with no Extras drawer to hide a back-catalog entry in, so it would sit right beside the definition that replaced it. Never delete the definition: saved projects still resolve its id.
 - `resolveVisualCopies.ts` — evaluates a track's chain into `VisualCopy[]`; `identityVisualCopy.ts` — the 1-copy default.
 - `copyTargets.ts` — **which of the incoming copies a chain row acts on** (the
   inspector's Targets tab). The whole vocabulary is a slice count plus which slices
@@ -359,7 +360,47 @@ ZERO to its arrival size (an object flying at you, or receding away from you). B
 divide offsets by the placement scale to stay world-metric — see the war-story comment
 in `tunnel.ts` about a half-size instrument dragging the near end in front of the lens.
 
-Approach's NOTES mode carries a timing contract worth knowing before you touch it: a
+Approach's **Note flight** (`spawnMode: 2`) adds an explicit start/target XYZ path.
+Coordinates are offsets in the incoming copy's axes, compensated for placement
+scale; they are not absolute world positions. `flightBeats` is the lead BEFORE each
+onset, including notes in future blocks. Fly through (default `arrival: 0`) uses
+u³, extending that SAME polynomial past onset so velocity and acceleration never
+jump. Settle uses quintic smoothstep, reaching zero velocity/acceleration on the
+onset and holding there. `afterBeats` is the post-onset lifetime (independent of note
+duration), with a smooth fade over its final quarter. Size stays constant, leaving
+perspective to sell the whoosh. Both launch from rest with C2 continuity.
+
+`bend` adds a quadratic Bezier arc, expressed as `start + delta*s + 4*s*(1-s)*B`,
+where B is perpendicular to the start→target line and has length Bend. Bend
+direction rotates B around travel (0 = projected local X, 90 = perpendicular up;
+a near-X path falls back to projected Z). It is a SPATIAL curve, composed with
+the existing time progress, not a different timing ease. Continue the SAME
+polynomial after the target: clamping B there or switching straight to a tangent
+discards curvature and breaks acceleration continuity. Zero Bend defaults old
+paths to exactly straight. Coincident endpoints use a finite +Z bend frame.
+
+Note flight now honors **every note**, regardless of pitch, duration or velocity;
+velocity no longer scales its copies. First-fit allocation reuses idle slots and
+GROWS the structural pool to the peak overlap computed from the entire MIDI part
+at resolve time. It never steals/skips notes. Density remains only a minimum
+pool reservation for compatibility with automated Spawn/Density, and is hidden
+in this mode. More overlap costs more mounted copies; do not silently restore a
+cap. Timing automation's max/min structural probes cover this monotonic peak.
+It never assumes a particular camera plane for release, since paths may point
+sideways. Automating path/timing controls
+re-resolves the current trajectory, like every other splitter; C2 describes each
+fixed configuration, not arbitrary discontinuous parameter automation.
+
+Stream (0) and classic Notes (1) retain their previous defaults and math, so an
+old save with absent keys is unchanged. The panel's Note flight controls replace
+Speed/Distance/Direction/Near End/Density with Travel time, Bend, Bend direction,
+After arrival, Start and Target. Its demo uses one gem per note (the legacy ring
+would falsely teach group spawning), draws the actual spatial arc from a fixed
+angled camera (looking down the depth axis collapses the arc to a straight screen
+line), and leaves room for pre-roll and the entire post-arrival lifetime before
+wrapping. The stage camera is unaffected.
+
+Approach's classic NOTES mode carries a timing contract worth knowing before you touch it: a
 flight is centred on its note so the copy sits at the object's NORMAL placement
 (axial 0, `approachHomeProgress`) exactly ON the onset — it leads in from the distance
 BEFORE the note and carries on past the lens after. The note is the impact, not the

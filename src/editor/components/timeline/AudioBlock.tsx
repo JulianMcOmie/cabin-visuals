@@ -7,7 +7,7 @@ import { selectNewBlock } from '../../utils/selection'
 import { retryAudioTrackUpload } from '../../utils/loadAudioTrack'
 import { getPlaybackEngine } from '../../core/playback'
 import { getPeaks, BASE_PEAK_BUCKETS } from '../../core/audio/waveform'
-import { midiBlockPalette } from '../../utils/colors'
+import { vividMidiBlockPalette } from '../../utils/colors'
 import { AudioTrackOscilloscope } from './AudioTrackOscilloscope'
 import { beginAudioSyncDrag, moveAudioSyncDrag, endAudioSyncDrag } from './audioSyncDrag'
 import type { AudioBlock as AudioBlockType } from '../../types'
@@ -18,7 +18,7 @@ interface AudioBlockProps {
   barWidthPx: number
   beatsPerBar: number
   color: string
-  /** Replace the static waveform with the live track oscilloscope. */
+  /** Overlay the live trace while preserving the song waveform. */
   showOscilloscope?: boolean
 }
 
@@ -45,10 +45,11 @@ export const AudioBlock = memo(function AudioBlock({ block, trackId, barWidthPx,
   const upload = useAudioStore((s) => s.uploads[block.clipRef])
   const isSelected = useUIStore((s) => s.selectedBlockIds.has(block.id))
   const isSyncSource = useUIStore((s) => s.audioSyncDrag?.blockId === block.id)
-  // The same voice MIDI blocks wear, keyed on the audio sapphire: resting =
-  // dark pane + lit waveform, selected = the star-anatomy body with the
-  // waveform flipped dark (outshone). Stable object, feeds the draw effect.
-  const palette = useMemo(() => midiBlockPalette(color), [color])
+  const palette = useMemo(() => vividMidiBlockPalette(color), [color])
+  // Keep the song envelope readable beneath the darker live trace. Sync
+  // dragging restores the stronger ink for aligning transients by eye.
+  const showLiveTrace = showOscilloscope && !isSyncSource
+  const waveformColor = showLiveTrace ? palette.repeatedNote : palette.note
 
   const clipSec = Math.max(0, block.trimEnd - block.trimStart)
   // A zero-length block is a clip whose local decode hasn't landed yet (the
@@ -91,9 +92,7 @@ export const AudioBlock = memo(function AudioBlock({ block, trackId, barWidthPx,
       const ctx = c.getContext('2d')
       if (!ctx) return
       ctx.clearRect(0, 0, c.width, c.height)
-      // The waveform is the audio block's "notes": lit tubing on the resting
-      // pane, flipped dark when the selected body ignites and outshines it.
-      ctx.fillStyle = isSelected ? palette.selectedNote : palette.note
+      ctx.fillStyle = waveformColor
       const mid = c.height / 2
       const startFrac = clip.duration > 0 ? block.trimStart / clip.duration : 0
       const endFrac = clip.duration > 0 ? block.trimEnd / clip.duration : 1
@@ -120,7 +119,7 @@ export const AudioBlock = memo(function AudioBlock({ block, trackId, barWidthPx,
       frame = requestAnimationFrame(() => draw(entry))
     }).catch((err) => console.warn('Waveform draw failed', err))
     return () => { cancelled = true; cancelAnimationFrame(frame) }
-  }, [block.clipRef, block.trimStart, block.trimEnd, clip, clipSec, width, color, pending, isSyncSource, isSelected, palette])
+  }, [block.clipRef, block.trimStart, block.trimEnd, clip, clipSec, width, pending, isSyncSource, waveformColor])
 
   // ── Drag gestures: move (body), trim (edges) - free positioning, no snap ──
   // Right edge → trimEnd only. Left edge → trimStart AND startBar together, so
@@ -266,11 +265,6 @@ export const AudioBlock = memo(function AudioBlock({ block, trackId, barWidthPx,
     dragRef.current = null
   }
 
-  // The sync drag is the one moment the STATIC waveform matters most: the live
-  // oscilloscope (playback view) stands down so transients hold still under the
-  // pointer while the loop keeps sounding.
-  const showStaticWaveform = !showOscilloscope || isSyncSource
-
   return (
     <div
       data-audio-block-id={block.id}
@@ -279,50 +273,42 @@ export const AudioBlock = memo(function AudioBlock({ block, trackId, barWidthPx,
       style={{
         left: `${left}px`,
         width: `${width}px`,
-        // Same states as the MIDI Block, no borders: the resting pane's inset
-        // hairline, or the ignited star-anatomy body whose bloom IS the edge.
-        // The sync drag rides the selected state (pointerdown selects), so the
-        // lit body doubles as the "aligning by eye" surface.
-        background: isSelected ? palette.selectedBody : palette.fill,
-        boxShadow: isSelected
-          ? palette.selectedBloom
-          : `inset 0 0 0 1px ${palette.edge}, 0 0 0 1px rgba(0,0,0,0.45)`,
+        background: palette.fill,
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 w-full h-full pointer-events-none"
-        // The glow the MIDI notes get from box-shadow, as a GPU filter on the
-        // whole waveform layer: resting tubing glows; on the lit body the
-        // body's light wraps the dark waveform instead.
-        style={{
-          opacity: showStaticWaveform ? 1 : 0,
-          filter: isSelected
-            ? `drop-shadow(0 0 3px ${palette.selectedNoteWrap})`
-            : `drop-shadow(0 0 4px ${palette.noteGlow})`,
-        }}
-      />
-      {showOscilloscope && !isSyncSource && <AudioTrackOscilloscope trackId={trackId} />}
+      <div className="absolute inset-x-0 bottom-0 top-[14px] pointer-events-none">
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 w-full h-full"
+        />
+        {showLiveTrace && <AudioTrackOscilloscope trackId={trackId} color={palette.activeNote} />}
+      </div>
       <span
-        className="absolute top-0.5 left-1.5 text-[10px] font-medium pointer-events-none truncate max-w-full pr-2"
-        style={isSelected
-          ? { color: palette.selectedNote }
-          : { color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 2px rgba(0, 0, 0, 0.8)' }}
+        className="absolute inset-x-0 top-0 h-[14px] px-1.5 text-[11px] leading-[14px] font-semibold pointer-events-none truncate"
+        style={{
+          color: palette.note,
+          backgroundColor: isSelected ? palette.selectedOutline : 'transparent',
+        }}
       >
         {clip?.fileName}
       </span>
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 pointer-events-none rounded-[6px]"
+        style={{ border: `1px solid ${isSelected ? palette.selectedOutline : palette.edge}` }}
+      />
       {pending && (
-        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-white animate-pulse pointer-events-none">
+        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium animate-pulse pointer-events-none" style={{ color: palette.note }}>
           loading…
         </span>
       )}
       {upload?.status === 'saving' && (
         <>
-          <span className="absolute bottom-0.5 right-1.5 font-mono text-[9px] font-medium text-white pointer-events-none">
+          <span className="absolute bottom-0.5 right-1.5 font-mono text-[9px] font-medium pointer-events-none" style={{ color: palette.note }}>
             ↑{Math.round(upload.progress * 100)}%
           </span>
           <div

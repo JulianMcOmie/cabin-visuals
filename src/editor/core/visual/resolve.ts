@@ -124,7 +124,7 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     // Burst mode: the notes become ADSR bursts aimed at their own pitch-value,
     // travelling from whatever value sits underneath (hence `base`).
     if (child.physics) {
-      out.push({ param, sourceTrackId: child.id, mode: 'linear', keyframes: [],
+      out.push({ param, sourceTrackId: child.id, combine: child.automationCombine, mode: 'linear', keyframes: [],
         physics: child.physics,
         physicsCurve: buildPhysicsCurve(extractKeyframes(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount, child.automationRange), child.physics,
           (automationOutputBounds(child.automationRange, pdef.min, pdef.max, 1).max - automationOutputBounds(child.automationRange, pdef.min, pdef.max, 1).min) * amount),
@@ -135,7 +135,7 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     if (child.burst) {
       out.push({
         param,
-        sourceTrackId: child.id,
+        sourceTrackId: child.id, combine: child.automationCombine,
         mode: 'linear',
         keyframes: [],
         burst: child.burst,
@@ -152,7 +152,7 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     if (child.noise) {
       out.push({
         param,
-        sourceTrackId: child.id,
+        sourceTrackId: child.id, combine: child.automationCombine,
         mode: 'linear',
         keyframes: [],
         noise: scaledNoise(child.noise, child.automationRange, pdef.min, pdef.max, amount, bounds),
@@ -167,7 +167,7 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     if (child.cycle) {
       out.push({
         param,
-        sourceTrackId: child.id,
+        sourceTrackId: child.id, combine: child.automationCombine,
         mode: 'linear',
         keyframes: [],
         cycle: child.cycle,
@@ -183,7 +183,7 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     if (child.force) {
       out.push({
         param,
-        sourceTrackId: child.id,
+        sourceTrackId: child.id, combine: child.automationCombine,
         mode: 'linear',
         keyframes: [],
         force: child.force,
@@ -202,7 +202,7 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     // keyframes; every other easing stays inside them and ignores the bounds.
     out.push({
       param,
-      sourceTrackId: child.id,
+      sourceTrackId: child.id, combine: child.automationCombine,
       mode: child.interpolation ?? 'linear',
       keyframes: extractKeyframes(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount, child.automationRange),
       splineTension: child.splineTension,
@@ -247,7 +247,7 @@ function sampleAutomationLanes(
   for (const lane of lanes) {
     // Only numeric params get lanes, so a string-valued setting can never be the
     // base here - fall back to the param's default if one somehow collides.
-    const underneath = settings[lane.param]
+    const underneath = values[lane.param] ?? settings[lane.param]
     const v = sampleAutomationLane(lane, beat, typeof underneath === 'number' ? underneath : lane.base ?? 0)
     if (!Number.isNaN(v)) values[lane.param] = v
   }
@@ -300,7 +300,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
     // pitch-value. The 0/1 'enabled' pseudo-param has no range to travel through,
     // so it stays a keyframe lane whatever the track says.
     if (child.physics && target.key !== 'enabled') {
-      out.push({ instanceId: target.instanceId, key: target.key, clockSkipEmitters,
+      out.push({ instanceId: target.instanceId, combine: child.automationCombine, key: target.key, clockSkipEmitters,
         mode: 'linear', keyframes: [], physics: child.physics,
         physicsCurve: buildPhysicsCurve(extractKeyframes(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount, child.automationRange), child.physics,
           (automationOutputBounds(child.automationRange, min, max, 1).max - automationOutputBounds(child.automationRange, min, max, 1).min) * amount),
@@ -310,7 +310,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
     }
     if (child.burst && target.key !== 'enabled') {
       out.push({
-        instanceId: target.instanceId,
+        instanceId: target.instanceId, combine: child.automationCombine,
         key: target.key,
         clockSkipEmitters,
         mode: 'linear',
@@ -327,7 +327,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
     // keyframe lane for the same reason (a 0/1 switch has no span to cycle).
     if (child.cycle && target.key !== 'enabled') {
       out.push({
-        instanceId: target.instanceId,
+        instanceId: target.instanceId, combine: child.automationCombine,
         key: target.key,
         clockSkipEmitters,
         mode: 'linear',
@@ -344,7 +344,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
     // does; 'enabled' stays keyframes (a 0/1 switch is not a body to push).
     if (child.force && target.key !== 'enabled') {
       out.push({
-        instanceId: target.instanceId,
+        instanceId: target.instanceId, combine: child.automationCombine,
         key: target.key,
         clockSkipEmitters,
         mode: 'linear',
@@ -365,7 +365,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
     // Bounds ride along for the spline's overshoot clamp - see the object-lane
     // branch above. The `enabled` pseudo-param's 0/1 bounds are its own.
     out.push({
-      instanceId: target.instanceId,
+      instanceId: target.instanceId, combine: child.automationCombine,
       key: target.key,
       clockSkipEmitters,
       mode: child.interpolation ?? 'linear',
@@ -373,6 +373,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
       splineTension: child.splineTension,
       min: bounds.min,
       max: bounds.max,
+      base,
     })
   }
   return out
@@ -711,9 +712,11 @@ function resolveOwnMoverOrSplitter(track: Track, p: ProjectSnapshot): MoverOrSpl
   const minOverlay: Record<string, number> = {}
   for (const lane of automation) {
     const underneath = settings[lane.param]
-    const bounds = automationLaneValueBounds(lane, typeof underneath === 'number' ? underneath : lane.base ?? 0)
-    maxOverlay[lane.param] = bounds.max
-    minOverlay[lane.param] = bounds.min
+    const base = typeof underneath === 'number' ? underneath : lane.base ?? 0
+    const low = automationLaneValueBounds(lane, minOverlay[lane.param] ?? base)
+    const high = automationLaneValueBounds(lane, maxOverlay[lane.param] ?? base)
+    maxOverlay[lane.param] = Math.max(low.max, high.max)
+    minOverlay[lane.param] = Math.min(low.min, high.min)
   }
   // A definition that itself rides a COUNT lane (visualCopies/countLane.ts)
   // returns entries carrying their OWN [max, min] variants bracketing the
@@ -793,13 +796,23 @@ function weaveSplitterTfLanes(track: Track, chain: MoverOrSplitter[], p: Project
   const anySolo = chainChildren.some((c) => c.solo)
   const woven: MoverOrSplitter[] = []
   let chainIndex = 0
+  const laneGroups = new Map<string, ResolvedAutomation[]>()
   for (const cid of track.childIds ?? []) {
     const child = p.tracks[cid]
     if (!child) continue
     const lane = laneBySource.get(cid)
     if (lane) {
       const base = track.params?.[lane.param] ?? transformDefault(lane.param)
-      woven.push(tfAutomationChainEntry(lane, base))
+      const key = `${chainIndex}:${lane.param}:${lane.clockSkipEmitters ?? ''}`
+      const existing = laneGroups.get(key)
+      if (existing) existing.push(lane)
+      else {
+        const group = [lane]
+        laneGroups.set(key, group)
+        const entry = tfAutomationChainEntry(group, base)
+        entry.clockSkipEmitters = lane.clockSkipEmitters
+        woven.push(entry)
+      }
     } else if (!child.muted && (!anySolo || child.solo)) {
       // A switcher child occupies SEVERAL slots of `chain` (its spliced span),
       // so the walk advances by its entry count, not by one.
@@ -875,6 +888,7 @@ function weaveTfAutomationLanes(
   const overlay: ResolvedAutomation[] = []
   // Keyed by how many chain entries precede the delta in the woven chain.
   const deltasByPosition = new Map<number, MoverOrSplitter[]>()
+  const laneGroups = new Map<string, ResolvedAutomation[]>()
   for (const lane of lanes) {
     const g = lane.sourceTrackId !== undefined ? gapByChildId.get(lane.sourceTrackId) : undefined
     if (g === undefined || g >= n || !SPATIAL_TF_PARAMS.has(lane.param)) {
@@ -882,7 +896,12 @@ function weaveTfAutomationLanes(
       continue
     }
     const base = track.params?.[lane.param] ?? transformDefault(lane.param)
-    const entry = tfAutomationChainEntry(lane, base)
+    const groupKey = `${g}:${lane.param}:${lane.clockSkipEmitters ?? ''}`
+    const existing = laneGroups.get(groupKey)
+    if (existing) { existing.push(lane); continue }
+    const group = [lane]
+    laneGroups.set(groupKey, group)
+    const entry = tfAutomationChainEntry(group, base)
     // The MIRROR moves this entry across the chain, so its clock must be routed
     // by the lane's own CHILD position, not by where the entry lands: a pattern
     // lane (above the emitter) mirrors below it and must still ride the copy

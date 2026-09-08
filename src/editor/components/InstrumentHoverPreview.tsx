@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { CanvasTexture, Group, Matrix4, Mesh, MeshStandardMaterial, Color, SRGBColorSpace } from 'three'
@@ -26,7 +26,6 @@ import type { ObjectState, ResolvedNote, ResolvedObject } from '../core/visual/t
 import type { LyricClip } from '../types'
 import { get2DPreview, Preview2D } from './InstrumentPreview2D'
 import { getCurrentPreview, subscribePreview } from './instrumentPreviewStore'
-import { useInstrumentClipUrl } from '../../components/instrumentClipUrl'
 import type { InstrumentItem } from './LeftSidebar'
 
 /**
@@ -267,6 +266,10 @@ const PREVIEW_PARAM_ANIMATORS: Record<string, (params: Record<string, number>, b
 // its two words on two different lanes (TITLE then PLAIN, the height-styles
 // story in one glance).
 const PREVIEW_NOTES: Record<string, ResolvedNote[]> = {
+  radialBloom: [3, 6, 9, 12].map((copies, i) => ({
+    beat: i * 4, blockStartBeat: 0, blockEndBeat: 16,
+    pitch: 35 + copies, velocity: 100, durationBeats: 3,
+  })),
   textDisplay: [60, 58].map((pitch) => ({
     beat: 0,
     blockStartBeat: 0,
@@ -1216,140 +1219,6 @@ export function InstrumentPreviewLayer() {
         <LaserPreviewBloom instrumentId={projectData?.object.instrumentId ?? preview?.item.id} />
       </Canvas>
       {preview && draw2d && <Preview2D key={preview.item.id} draw={draw2d} />}
-    </div>
-  )
-}
-
-// Expanding a section mounts a whole column of clip cards at once; letting
-// every <video> fetch + spin up a decoder simultaneously stalls the main
-// thread. This tiny gate staggers the INITIAL loads: a card may mount its
-// video only while a slot is free, and passes the slot on when its first
-// frame is ready (loadeddata) or it errors. Already-loaded videos keep
-// playing - slots only meter the expensive startup.
-const MAX_CONCURRENT_CLIP_LOADS = 3
-let activeClipLoads = 0
-const clipLoadQueue: Array<() => void> = []
-
-function releaseClipLoadSlot() {
-  activeClipLoads--
-  clipLoadQueue.shift()?.()
-}
-
-/** `ready` turns true once this card may mount its <video>; call `done()` when
- *  the video has loaded (or failed) to hand the slot to the next card. */
-function useClipLoadSlot(wanted: boolean): { ready: boolean; done: () => void } {
-  const [ready, setReady] = useState(false)
-  const doneRef = useRef<() => void>(() => {})
-  useEffect(() => {
-    if (!wanted) return
-    let alive = true
-    let granted = false
-    let finished = false
-    const grant = () => {
-      // Slot arrived after unmount/scroll-out: pass it straight on.
-      if (!alive) { releaseClipLoadSlot(); return }
-      granted = true
-      setReady(true)
-    }
-    if (activeClipLoads < MAX_CONCURRENT_CLIP_LOADS) {
-      activeClipLoads++
-      grant()
-    } else {
-      clipLoadQueue.push(() => { activeClipLoads++; grant() })
-    }
-    doneRef.current = () => {
-      if (granted && !finished) { finished = true; releaseClipLoadSlot() }
-    }
-    return () => {
-      alive = false
-      if (granted && !finished) { finished = true; releaseClipLoadSlot() }
-      setReady(false)
-    }
-  }, [wanted])
-  return { ready, done: () => doneRef.current() }
-}
-
-/** The library card's preview. Clip-first: 3D previews play their captured 8s
- * loop from the instrument-previews bucket (one <video>, no per-frame GPU cost,
- * and the bloom pass baked in - see InstrumentPreviewCapture). Ids without a
- * clip (or a failed load) show a quiet NAMEPLATE - never a live render: a
- * column of WebGL Views is exactly the card lag the clip pipeline removed, so
- * a new instrument's card stays blank-with-name until
- * `npm run previews:instruments` captures it. 2D instrument vignettes keep
- * their lightweight ordinary canvases; the hover POPUP stays live. */
-export function InstrumentCardPreview({ item }: { item: InstrumentItem }) {
-  const hostRef = useRef<HTMLDivElement>(null)
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const [nearViewport, setNearViewport] = useState(false)
-  // Once a card has been near the viewport its <video> STAYS mounted for the
-  // life of the card, merely paused while scrolled away. Unmounting on every
-  // scroll-out (the previous behaviour) re-fetched the clip and spun up a fresh
-  // decoder on every scroll-back, which is exactly the "loads for a moment,
-  // then judders" the library used to have while browsing.
-  const [everNear, setEverNear] = useState(false)
-  const [clipFailed, setClipFailed] = useState(false)
-  const draw2d = get2DPreview(item.id)
-  // undefined = manifest still resolving; hold the card empty instead of
-  // mounting a live View that the arriving clip would immediately replace.
-  const clipUrl = useInstrumentClipUrl(item.id)
-  const clip = draw2d ? null : clipUrl
-  const wantClip = everNear && !draw2d && !!clip && !clipFailed
-  const clipSlot = useClipLoadSlot(wantClip)
-
-  useEffect(() => {
-    const host = hostRef.current
-    if (!host) return
-    if (typeof IntersectionObserver === 'undefined') {
-      setNearViewport(true)
-      setEverNear(true)
-      return
-    }
-    // Observe against the library's own scroll box: with no `root` the margin
-    // expands the VIEWPORT rect, but intersection is still clipped by the
-    // pane, so cards used to mount exactly at the pane edge with no lookahead.
-    // A generous margin starts a clip loading a screen before it arrives.
-    const root = host.closest<HTMLElement>('[data-library-scroll]')
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setNearViewport(entry.isIntersecting)
-        if (entry.isIntersecting) setEverNear(true)
-      },
-      { root, rootMargin: '400px 0px' },
-    )
-    observer.observe(host)
-    return () => observer.disconnect()
-  }, [])
-
-  // Pause offscreen, resume when back - the element itself is kept.
-  useEffect(() => {
-    const video = videoRef.current
-    if (!video) return
-    if (nearViewport) void video.play().catch(() => {})
-    else video.pause()
-  }, [nearViewport, clipSlot.ready])
-
-  return (
-    <div ref={hostRef} className="absolute inset-0">
-      {nearViewport && draw2d && <Preview2D draw={draw2d} />}
-      {wantClip && clipSlot.ready && (
-        <video
-          ref={videoRef}
-          src={clip!}
-          autoPlay
-          loop
-          muted
-          playsInline
-          preload="auto"
-          onLoadedData={clipSlot.done}
-          onError={() => { clipSlot.done(); setClipFailed(true) }}
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-      )}
-      {nearViewport && !draw2d && (clip === null || clipFailed) && (
-        <span className="absolute inset-0 flex items-center justify-center px-2 text-center text-xs font-medium text-[var(--text-muted)] select-none">
-          {item.name}
-        </span>
-      )}
     </div>
   )
 }

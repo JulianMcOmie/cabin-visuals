@@ -261,3 +261,8 @@ The canvas uses the actual colorizer resolve and shared color-shift function,
 on the visibility-gated preview loop at a labelled demo 120 BPM. Its clock is
 illustrative, independent of transport. Speed is an optional binding because
 of `showIf`; future unclaimed parameters remain reachable through More.
+
+Glow's console (`GlowEffectUserInterface.tsx`) keeps Strength/Radius/Spread in
+one row; source/color/core/stretch live in the disclosure. Presets write the
+same bound settings as knobs (all editable). Effect settings are numeric, so
+its tint uses hue/saturation/blend rather than an unsupported string color.

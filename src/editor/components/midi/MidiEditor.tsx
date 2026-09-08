@@ -1,5 +1,8 @@
 'use client'
 
+import { MultiBlockHeaders, MultiBlockLayer } from './MultiBlockLayer'
+import type { MidiBlockView } from './multiBlock'
+
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type UIEvent as ReactScrollEvent } from 'react'
 import { useUIStore } from '../../store/UIStore'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
@@ -33,6 +36,8 @@ export interface MidiEditorProps {
    *  loop dashes, marquee) is voiced from it. */
   trackColor: string
   block: Block
+  blockViews?: MidiBlockView[]
+  scrollPosition?: React.MutableRefObject<{ left: number; top: number } | null>
   onNotesChange: (notes: Note[]) => void
   /** Persist a gesture's result to the store as one undo step. */
   onCommit: (notes: Note[]) => void
@@ -89,6 +94,8 @@ export function MidiEditor({
   trackId,
   trackColor,
   block,
+  blockViews = [],
+  scrollPosition,
   noteWords,
   onNoteWordEdit,
   onLaneRowClick,
@@ -119,6 +126,7 @@ export function MidiEditor({
   const playheadRef = useRef<HTMLDivElement>(null)
   const rulerPlayheadRef = useRef<HTMLDivElement>(null)
   const rulerContentRef = useRef<HTMLDivElement>(null)
+  const blockHeadersRef = useRef<HTMLDivElement>(null)
   const prevZoomRef = useRef({ rowHeight, pixelsPerBeat, scrollLeft: 0 })
   // The label gutter's width - drag its right edge to resize (same gesture as
   // the tracks label column).
@@ -130,10 +138,23 @@ export function MidiEditor({
   // ruler; horizontal sits under the grid).
   const onScrollSync = (e: ReactScrollEvent<HTMLDivElement>) => {
     prevZoomRef.current.scrollLeft = e.currentTarget.scrollLeft
+    if (scrollPosition) scrollPosition.current = { left: e.currentTarget.scrollLeft, top: e.currentTarget.scrollTop }
+    if (blockHeadersRef.current) blockHeadersRef.current.style.transform = `translateX(${-e.currentTarget.scrollLeft}px)`
     if (rulerContentRef.current) {
       rulerContentRef.current.style.transform = `translateX(${-e.currentTarget.scrollLeft}px)`
     }
   }
+
+  // Switching the active clip resets note gestures, but keeps the shared view.
+  useLayoutEffect(() => {
+    const position = scrollPosition?.current
+    const container = containerRef.current
+    if (!position || !container) return
+    container.scrollLeft = position.left
+    container.scrollTop = position.top
+    if (rulerContentRef.current) rulerContentRef.current.style.transform = `translateX(${-position.left}px)`
+    if (blockHeadersRef.current) blockHeadersRef.current.style.transform = `translateX(${-position.left}px)`
+  }, [scrollPosition])
 
   // One ruler mapping for every transport gesture. Keeping playhead scrubbing,
   // loop creation, loop movement, and edge resizing on this exact function
@@ -562,7 +583,7 @@ export function MidiEditor({
       >
         {/* Block clip header: drag the body to move the block, the edges to resize.
             Sits in the bottom half below the triangle (zIndex 10 < 21). */}
-        <div
+        {blockViews.length <= 1 && <div
           style={{
             position: 'absolute',
             top: '50%',
@@ -586,8 +607,11 @@ export function MidiEditor({
             if (ph != null && Math.abs(e.clientX - ph) <= 10) { e.currentTarget.style.cursor = 'ew-resize'; return }
             handleHeaderPointerMove(e)
           }}
-        />
+        />}
       </Ruler>
+      {blockViews.length > 1 && <MultiBlockHeaders blocks={blockViews} activeId={block.id} labelWidth={labelWidth}
+        contentWidth={canvasWidth - labelWidth} pixelsPerBeat={pixelsPerBeat} beatsPerBar={beatsPerBar} contentRef={blockHeadersRef}
+        onActivePointerDown={handleHeaderPointerDown} onActivePointerMove={handleHeaderPointerMove} />}
 
       <div
         ref={containerRef}
@@ -741,6 +765,8 @@ export function MidiEditor({
               to track across the labels and time grid without adding visual weight. */}
           <RowStripes count={rows.length} rowHeight={rowHeight} />
 
+          {blockViews.length > 1 && <MultiBlockLayer blocks={blockViews} activeId={block.id} rows={rows} beatsPerBar={beatsPerBar} pixelsPerBeat={pixelsPerBeat} />}
+
           {/* Midi block region: tint + edge lines. Painted ABOVE the row
               stripes so the track hue reads cleanly instead of being greyed
               by the stripe overlay (notes and ghosts still sit on top). */}
@@ -755,7 +781,7 @@ export function MidiEditor({
             }}
           />
           <div
-            data-midi-block-region=""
+            data-midi-block-region={block.id}
             style={{
               position: 'absolute',
               borderLeft: `1px solid ${chrome.regionEdge}`,

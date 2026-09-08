@@ -80,6 +80,8 @@ export interface MoverOrSplitterDefinition<Settings> {
    * competes with the definition that replaced it.
    */
   legacy?: boolean
+  /** Library Extras only and omitted from add menus; still supported, not deprecated. */
+  extras?: boolean
   /**
    * This definition is a TIME EMITTER: its resolved entries may emit the
    * per-copy clock channel (`MoverOrSplitter.emitsCopyClocks`). Declared on the

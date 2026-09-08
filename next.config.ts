@@ -6,6 +6,12 @@ const nextConfig: NextConfig = {
   // sets NEXT_DIST_DIR to its own directory to stay isolated.
   distDir: process.env.NEXT_DIST_DIR || '.next',
   transpilePackages: ['tone'],
+  async headers() {
+    return [{
+      source: '/instrument-previews/:path*',
+      headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
+    }]
+  },
   // Reverse proxy for PostHog: the browser sends events to our own domain
   // (/ingest/*), which Vercel forwards server-side. First-party requests
   // survive the ad blockers that drop anything aimed at *.posthog.com -

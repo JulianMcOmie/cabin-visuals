@@ -60,6 +60,8 @@ export interface VisualEffect {
   applyTransform?: (group: Group, settings: Record<string, number>, time: number) => void
   /** Shader plugins: a GLSL fragment shader (screen-space; samples `tDiffuse`, sees
    *  `time`/`resolution` + a uniform per param). Applied as an FBO post-process pass. */
+  /** Multipass renderer contract; the device may emit a separate HDR light layer. */
+  multipass?: 'glow'
   fragmentShader?: string
   vertexShader?: string
   /** Material plugins: GLSL injected into the TARGET's own materials by

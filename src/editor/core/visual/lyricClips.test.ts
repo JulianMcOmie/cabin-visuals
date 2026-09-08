@@ -7,6 +7,8 @@ import {
   defaultStyleLanes,
   resolveStyleLanes,
   parseTextEntries,
+  resolveLyricLayout,
+  lyricLayoutWordIndices,
   resolveLyricWords,
   clipSlotOffset,
   sortedClips,
@@ -57,7 +59,7 @@ test('resolveStyleLanes defaults absent, clamps stored', () => {
 test('parseTextEntries keeps the classic grammar', () => {
   assert.deepEqual(parseTextEntries('WHO YOU').map((e) => e.text), ['WHO', 'YOU'])
   assert.deepEqual(parseTextEntries('!ONE PHRASE! NEXT').map((e) => e.text), ['ONE PHRASE', 'NEXT'])
-  const syl = parseTextEntries('FOO|LIN')
+  const syl = parseTextEntries('FOO|LIN', 'single')
   assert.deepEqual(syl.map((e) => e.text), ['FOO', 'LIN'])
   assert.equal(syl[0].layoutText, 'FOOLIN')
   assert.equal(syl[1].syllableStart, 3)
@@ -118,7 +120,7 @@ test('syllable words cost one note per syllable within their clip', () => {
     [{ beat: 0, pitch: 58 }, { beat: 0.5, pitch: 58 }, { beat: 1, pitch: 58 }],
     [clip('a', 0, 4, ['|FOO|LIN|', 'NEXT'])], 5,
   )
-  assert.deepEqual(res.map((r) => r.entry?.text), ['FOO', 'LIN', 'NEXT'])
+  assert.deepEqual(res.map((r) => r.entry?.text), ['FOO', 'FOOLIN', 'NEXT'])
   assert.equal(res[0].totalSlots, 3)
 })
 
@@ -198,4 +200,70 @@ test('words bind to clips derived from notes exactly as before', () => {
     clips, 5,
   )
   assert.deepEqual(res.map((r) => r.entry?.text ?? null), ['ONE', 'TWO', 'THREE', null])
+})
+
+
+test('pipe reveal defaults to cumulative prefixes in a stable full-word layout', () => {
+  for (const text of ['be|long|ing', '|be|long|ing|', 'be||long|ing']) {
+    const entries = parseTextEntries(text)
+    assert.deepEqual(entries.map(e => e.text), ['be', 'belong', 'belonging'])
+    assert.deepEqual(entries.map(e => e.layoutText), ['belonging', 'belonging', 'belonging'])
+    assert.deepEqual(entries.map(e => e.syllableStart), [0, 0, 0])
+    assert.deepEqual(entries.map(e => e.syllableIndex), [0, 1, 2])
+    const single = parseTextEntries(text, 'single')
+    assert.deepEqual(single.map(e => e.text), ['be', 'long', 'ing'])
+    assert.deepEqual(single.map(e => e.syllableStart), [0, 2, 6])
+    assert.notEqual(single[1].cacheKey, entries[1].cacheKey)
+  }
+})
+
+test('grouped phrases can build across pipes while unsplit phrase grammar survives', () => {
+  assert.deepEqual(parseTextEntries('!we |belong |here! NEXT').map(e => e.text), ['we ', 'we belong ', 'we belong here', 'NEXT'])
+  assert.deepEqual(parseTextEntries('!we |belong |here!', 'single').map(e => e.text), ['we ', 'belong ', 'here'])
+  assert.deepEqual(parseTextEntries('|two words| !another phrase! ||').map(e => e.text), ['two words', 'another phrase'])
+})
+
+test('groupings replace syllables in one reserved seat and retain completed words', () => {
+  const notes = Array.from({ length: 5 }, (_, beat) => ({ beat, pitch: 58 }))
+  const clips = [clip('a', 0, 4, ['be|long|ing', 'HERE'], { kind: 'stack' }), clip('b', 4, 4, ['NEW'])]
+  const words = resolveLyricWords(notes, clips, 5)
+  assert.deepEqual(words.map(w => w.slotIndex), [0, 1, 2, 3, 0]) // editor indices unchanged
+  assert.deepEqual(lyricLayoutWordIndices(words, 0, 0), [0, 3])
+  assert.deepEqual(lyricLayoutWordIndices(words, 0, 1), [0, 3])
+  assert.deepEqual(lyricLayoutWordIndices(words, 0, 2), [1, 3])
+  assert.deepEqual(lyricLayoutWordIndices(words, 0, 4), [2, 3])
+  assert.deepEqual(lyricLayoutWordIndices(words, 1, 5), [4])
+  // A backward scrub restores the exact earlier prefix and position.
+  assert.deepEqual(lyricLayoutWordIndices(words, 0, 2), [1, 3])
+  const singles = resolveLyricWords(notes, [{ ...clips[0], layout: { kind: 'circle', pipeMode: 'single' } }], 5)
+  assert.equal(singles[1].entry?.text, 'long')
+  assert.deepEqual(lyricLayoutWordIndices(singles, 0, 2), [1, 3])
+})
+
+test('layout defaults preserve dimensions, and adjustable circle start rotates seats', () => {
+  const layout = resolveLyricLayout({ kind: 'stack' })
+  assert.equal(layout.fontScale, 1)
+  assert.equal(layout.width, 1)
+  assert.equal(layout.height, 1)
+  assert.equal(layout.wordSpacing, 1)
+  assert.equal(layout.lineSpacing, 1)
+  assert.equal(layout.align, 'center')
+  assert.equal(layout.pipeMode, 'build')
+  const right = clipSlotOffset({ kind: 'circle', rotation: 90 }, 0, 4)!
+  assert.ok(Math.abs(right.x - 1) < 1e-9 && Math.abs(right.y) < 1e-9)
+  const bounded = resolveLyricLayout({ kind: 'grid', cols: 100, width: NaN, height: -1, fontScale: Infinity })
+  assert.equal(bounded.cols, 12)
+  assert.equal(bounded.width, 1)
+  assert.equal(bounded.height, 0.1)
+  assert.equal(bounded.fontScale, 1)
+})
+
+
+test('grid and circle reserve unbound words without allocating extra syllable seats', () => {
+  const words = resolveLyricWords([{ beat: 0, pitch: 58 }, { beat: 1, pitch: 58 }],
+    [clip('a', 0, 4, ['be|long|ing', 'HERE', 'WITH', 'YOU'], { kind: 'circle' })], 5)
+  assert.deepEqual(words.map(w => w.layoutSlotIndex), [0, 0])
+  assert.equal(words[0].totalLayoutSlots, 4)
+  assert.equal(words[0].totalSlots, 6)
+  assert.deepEqual(lyricLayoutWordIndices(words, 0, 2), [1])
 })

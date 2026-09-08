@@ -55,7 +55,7 @@ import { overlapShapeInstrument } from './OverlapShape'
 // outright, so a plain parity track pays nothing per copy for the counted
 // fills hanging beside it.
 
-function geometryFor(shape: number): ShapeGeometry {
+export function geometryFor(shape: number): ShapeGeometry {
   const points = overlapShapePoints(shape)
   const outline = new Shape()
   outline.moveTo(points[0][0], points[0][1])
@@ -69,7 +69,7 @@ function geometryFor(shape: number): ShapeGeometry {
  *  None of them declare FORCE_TRANSPARENT: at full opacity all seven live in
  *  the OPAQUE render list (renderOrder is honored there), and a track fade
  *  flips them transparent together, so the pass order survives either way. */
-function materialFor(pass: OverlapShapePass): Material {
+export function materialFor(pass: OverlapShapePass): Material {
   // The depth-clear pass is the one that cannot be a stock material: writing
   // FAR depth (rather than the mesh's own plane) takes gl_FragDepth. Depth
   // test must stay ENABLED (a disabled test also disables depth writes in GL)

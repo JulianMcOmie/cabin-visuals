@@ -5,6 +5,7 @@ import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 // Capability checks only. core/directors is React-free; the store must NEVER
 // import instruments/index (components import stores - instant cycle).
 import { compositionDef, isCompositionTrack } from '../core/directors'
+import { defaultAutomationCombine, type AutomationCombine } from '../core/automationCombineDefaults'
 import { TRANSFORM_PARAM_DEFS } from '../core/transform'
 import { seedSceneBindings } from '../core/directors/sceneBindings'
 import { seedSwitcherBindings } from '../core/switcherBindings'
@@ -502,8 +503,10 @@ export interface ProjectState {
    *  time. No-op if one already automates that param. Callers pass `integer` from
    *  the target param's def (the store can't read instrument defs - see the import
    *  note at the top): a count param's lane starts on the whole-number row grid
-   *  with stepped interpolation instead of the fractional spline. */
-  addAutomationTrack: (parentId: string, paramKey: string, paramLabel: string, opts?: { integer?: boolean }) => void
+   *  with stepped interpolation instead of the fractional spline. `combine`
+   *  carries the target metadata's creation policy from the menu; direct callers
+   *  fall back to the same policy using the key and available integer flag. */
+  addAutomationTrack: (parentId: string, paramKey: string, paramLabel: string, opts?: { integer?: boolean; combine?: AutomationCombine }) => void
   /** Add an `ability` child track under `parentId` for one of the parent instrument's
    *  abilities (opt-in). No-op if that ability already has a track. */
   addAbilityTrack: (parentId: string, abilityKey: string, abilityLabel: string) => void
@@ -530,9 +533,9 @@ export interface ProjectState {
   /** Put an automation lane in one of its four modes, in ONE action (so it is one
    *  undo step). Re-entering a mode starts from that mode's defaults. */
   setAutomationMode: (trackId: string, mode: AutomationMode) => void
+  setAutomationCombine: (trackId: string, mode: NonNullable<Track['automationCombine']>) => void
   /** Retarget an automation lane onto another of its parent's params (same
-   *  addressing as addAutomationTrack, fx: keys included). No-ops if a sibling
-   *  lane already drives that param. `rename` carries the new label onto the
+   *  addressing as addAutomationTrack, fx: keys included). `rename` carries the new label onto the
    *  lane's name (the caller passes true when the old name was the auto-name,
    *  so a user's custom name survives). `integer` mirrors addAutomationTrack's:
    *  a count target starts the reset range on the whole-number grid. */
@@ -1422,7 +1425,11 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
   },
 
   addTrackTree: (tree, atIndex) =>
-    set((s) => insertTrackTreeIntoState(s, tree, atIndex)),
+    set((s) => ({
+      ...insertTrackTreeIntoState(s, tree, atIndex),
+      totalBars: Math.min(MAX_TOTAL_BARS, Math.max(s.totalBars,
+        ...tree.flatMap(track => track.blocks.map(block => block.startBar + block.durationBars)))),
+    })),
 
   reorderRootTracks: (orderedIds) =>
     set({ rootTrackIds: orderedIds }),
@@ -1809,12 +1816,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     set((s) => {
       const parent = s.tracks[parentId]
       if (!parent) return s
-      // One automation lane per param - don't stack duplicates.
-      const exists = parent.childIds.some((cid) => {
-        const c = s.tracks[cid]
-        return c?.type === 'automation' && c.targetParam === paramKey
-      })
-      if (exists) return s
       const id = crypto.randomUUID()
       const track: Track = {
         id,
@@ -1822,6 +1823,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         type: 'automation',
         instrumentId: '',
         targetParam: paramKey,
+        automationCombine: opts?.combine ?? defaultAutomationCombine(paramKey, opts),
         // A new lane rides the spline: one C2 curve through every keyframe is
         // what a drawn phrase almost always wants, and the per-segment easings
         // stay one click away. Written EXPLICITLY rather than by moving the
@@ -2076,18 +2078,16 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       return { tracks: { ...s.tracks, [trackId]: next } }
     }),
 
+  setAutomationCombine: (trackId, mode) => set((s) => {
+    const track = s.tracks[trackId]
+    if (!track || track.type !== 'automation' || !['sum', 'multiply', 'override'].includes(mode)) return s
+    return { tracks: { ...s.tracks, [trackId]: { ...track, automationCombine: mode } } }
+  }),
+
   setAutomationTarget: (trackId, paramKey, paramLabel, rename, opts) =>
     set((s) => {
       const track = s.tracks[trackId]
       if (!track || track.type !== 'automation' || track.targetParam === paramKey) return s
-      // Same one-lane-per-param rule as addAutomationTrack: retargeting onto a
-      // param a sibling lane already drives would stack duplicates.
-      const parent = track.parentId ? s.tracks[track.parentId] : undefined
-      const taken = (parent?.childIds ?? []).some((cid) => {
-        const c = s.tracks[cid]
-        return !!c && c.id !== trackId && c.type === 'automation' && c.targetParam === paramKey
-      })
-      if (taken) return s
       // The row-spread config speaks the OLD param's value units; a stale
       // sub-range on a new param is nonsense, so it resets to the full span -
       // which for a COUNT target (the def's `integer` flag) is the
@@ -2110,14 +2110,8 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       if (!track || track.type !== 'automation') return s
       const parent = track.parentId ? s.tracks[track.parentId] : undefined
       if (!parent) return s
-      // Same one-lane-per-param rule as setAutomationTarget: a target a sibling
-      // lane already drives counts as unavailable here.
-      const taken = new Set((parent.childIds ?? [])
-        .map((cid) => s.tracks[cid])
-        .filter((c) => !!c && c.id !== trackId && c.type === 'automation')
-        .map((c) => c!.targetParam))
       const usable = (key: string | undefined) =>
-        !!key && !taken.has(key) && available.some((o) => o.key === key)
+        !!key && available.some((o) => o.key === key)
       const retarget = (option: { key: string; label: string; integer?: boolean }, previous: string | undefined): { tracks: Record<string, Track> } => {
         // Range resets like setAutomationTarget's: it speaks the old param's
         // units, and a COUNT target's full span is the whole-number grid.
@@ -2138,7 +2132,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         return retarget(option, undefined)
       }
       if (usable(track.targetParam)) return s
-      const fallback = available.find((o) => !taken.has(o.key))
+      const fallback = available[0]
       if (!fallback || fallback.key === track.targetParam) return s
       return retarget(fallback, track.previousTargetParam ?? track.targetParam)
     }),

@@ -1048,6 +1048,7 @@ export function automationMode(track: Pick<Track, 'noise' | 'burst' | 'cycle' | 
  * plain `keyframes`.
  */
 export interface AutomationLane {
+  combine?: Track['automationCombine']
   mode: InterpolationMode
   keyframes: AutomationKeyframe[]
   physics?: PhysicsConfig
@@ -1081,6 +1082,16 @@ export interface AutomationLane {
  * there. `base` is what a burst travels away from; the other modes ignore it.
  */
 export function sampleAutomationLane(lane: AutomationLane, beat: number, base: number): number {
+  // Additive bursts depart from zero, multiplicative bursts from one. Override
+  // bursts retain their historical departure from the accumulated parameter.
+  const neutral = lane.combine === 'sum' ? 0 : lane.combine === 'multiply' ? 1 : base
+  const value = sampleRawAutomationLane(lane, beat, neutral)
+  if (!Number.isFinite(value)) return NaN
+  const result = lane.combine === 'sum' ? base + value : lane.combine === 'multiply' ? base * value : value
+  return Number.isFinite(result) ? result : NaN
+}
+
+function sampleRawAutomationLane(lane: AutomationLane, beat: number, base: number): number {
   if (lane.physics) return lane.physicsCurve ? samplePhysicsLane(lane.physicsCurve, beat) : NaN
   if (lane.burst) {
     if (!lane.bursts?.length) return NaN
@@ -1089,7 +1100,9 @@ export function sampleAutomationLane(lane: AutomationLane, beat: number, base: n
     // law. A no-op for the classic ADSR (travel ≤ 1 stays between base and
     // target, both already in range).
     if (Number.isNaN(value) || lane.min === undefined || lane.max === undefined) return value
-    return Math.max(lane.min, Math.min(lane.max, value))
+    const min = lane.combine === 'sum' || lane.combine === 'multiply' ? Math.min(base, lane.min) : lane.min
+    const max = lane.combine === 'sum' || lane.combine === 'multiply' ? Math.max(base, lane.max) : lane.max
+    return Math.max(min, Math.min(max, value))
   }
   if (lane.noise) {
     return lane.gates?.length
@@ -1127,7 +1140,15 @@ export function sampleAutomationLane(lane: AutomationLane, beat: number, base: n
  * [0,1], a burst travels from `base` toward its targets by a 0..1 fraction, and
  * noise clamps to the param range around its centers.
  */
-export function automationLaneValueBounds(
+export function automationLaneValueBounds(lane: AutomationLane, base: number): { min: number; max: number } {
+  const neutral = lane.combine === 'sum' ? 0 : lane.combine === 'multiply' ? 1 : base
+  const bounds = rawAutomationLaneValueBounds(lane, neutral)
+  if (lane.combine === 'sum') return { min: base + bounds.min, max: base + bounds.max }
+  if (lane.combine === 'multiply') return { min: Math.min(base * bounds.min, base * bounds.max), max: Math.max(base * bounds.min, base * bounds.max) }
+  return bounds
+}
+
+function rawAutomationLaneValueBounds(
   lane: AutomationLane,
   base: number,
 ): { min: number; max: number } {

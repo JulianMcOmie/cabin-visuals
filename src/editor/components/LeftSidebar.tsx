@@ -6,22 +6,17 @@ import dynamic from 'next/dynamic'
 import { useInstantNavigation } from '../../components/instantNavigation'
 import { ArrowLeftRight, Check, ChevronLeft, ChevronRight, Plus, Sparkles, Repeat } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
-import { useLoopBlockDrag } from './useLoopBlockDrag'
-import { LOOP_PATTERNS, type LoopPattern } from './loops'
+import { addVisualLoop, useLoopBlockDrag } from './useLoopBlockDrag'
+import { VISUAL_LOOPS } from './loops'
 import { useUIStore, type LibraryTabId } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
 import { listCompositionInstruments } from '../core/directors'
 import { canPreview } from './instrumentPreviewStore'
 import { preloadInstrument } from '../instruments'
-// The two preview components pull their own r3f Canvas + Bloom stack; they
-// load after first paint so the shell doesn't wait on them. Both are memo'd
-// AROUND the dynamic wrapper: the sidebar re-renders on tab clicks and on the
-// droppable/ghost flips of a drag, and without the memo each of those walked
-// the r3f preview canvas (the layer) and every visible card's loadable shell.
-// The layer takes no props and a card's `item` is a module constant, so the
-// memo bails them all out.
-const InstrumentCardPreview = memo(dynamic(() => import('./InstrumentHoverPreview').then((m) => m.InstrumentCardPreview), { ssr: false }))
+// Cards paint with the sidebar shell; only the live hover canvas waits for R3F.
+import { InstrumentCardPreview } from './InstrumentCardPreview'
+const LoopPreview = memo(dynamic(() => import('./LoopPreview').then(m => m.LoopPreview), { ssr: false }))
 const InstrumentPreviewLayer = memo(dynamic(() => import('./InstrumentHoverPreview').then((m) => m.InstrumentPreviewLayer), { ssr: false }))
 import { TEMPLATES, LISTED_TEMPLATES, LYRIC_STYLES, isLyricTemplateId } from '../../templates'
 import { TemplatePreviewVideo } from '../../components/TemplatePreviewVideo'
@@ -259,13 +254,11 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <path d="M7.4 1 H10.4 L8.6 11 H5.6 Z" fill="#fbbf24" fillOpacity="0.35" />
     </svg>
   )},
-  { id: 'waterDrop', name: 'Water Drop', description: 'Each note drops ink into water - pitch picks the height it spreads at.', icon: (
+  { id: 'radialBloom', name: 'Radial Bloom', description: 'Overlap shapes bloom into a radial gradient. MIDI chooses 1–12 copies; hold a note to sustain, release to fade.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
-      <circle cx="6" cy="6.5" r="2.4" fill="#2f8fff" fillOpacity="0.85" />
-      <circle cx="2.4" cy="4.4" r="1.1" fill="#2f8fff" fillOpacity="0.5" />
-      <circle cx="9.4" cy="8.4" r="1.2" fill="#2f8fff" fillOpacity="0.5" />
-      <circle cx="9" cy="3.2" r="0.8" fill="#bff3ff" fillOpacity="0.8" />
-      <circle cx="3.2" cy="9.4" r="0.7" fill="#bff3ff" fillOpacity="0.7" />
+      <circle cx="4" cy="4" r="3" fill="#ff5470" />
+      <circle cx="8" cy="4" r="3" fill="#2dd4bf" fillOpacity="0.85" />
+      <circle cx="6" cy="8" r="3" fill="#a855f7" fillOpacity="0.9" />
     </svg>
   )},
   { id: 'fractalTunnel', name: 'Fractal Tunnel', description: 'A fractal-flower tunnel - notes shift its hue and fire pulse rings.', icon: (
@@ -410,10 +403,9 @@ const CORE_OBJECT_IDS = new Set(['cube', 'laserLine', 'wireframe', 'particle', '
 const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.has(i.id))
 
 // The Instruments folder. These are object instruments like any other; what
-// they share is that a note is a PERFORMANCE on them - each one spawns its own
-// short-lived event rather than posing a standing shape - so they belong
-// together rather than scattered through Objects and Extras.
-const INSTRUMENT_FOLDER_IDS = new Set(['modSynth', 'waterDrop', 'flashWall'])
+// they share is that MIDI plays their hits, sustains, and releases, so they
+// belong together rather than scattered through Objects and Extras.
+const INSTRUMENT_FOLDER_IDS = new Set(['radialBloom', 'modSynth', 'flashWall'])
 const INSTRUMENT_FOLDER_ITEMS = ALL_OBJECT_INSTRUMENTS.filter((i) => INSTRUMENT_FOLDER_IDS.has(i.id))
 
 // The in-scene Crop masks the whole scene while its rows are held - the
@@ -587,11 +579,11 @@ const UTILITY_IDS = ['video', 'photo', 'textDisplay', 'oscilloscope', 'switcher'
 const COLOR_IDS = [...COLORIZER_INSTRUMENTS.map((i) => i.id), 'colorFilters']
 
 const IMPACT_IDS = [...IMPULSE_IDS, ...RUMBLE_IDS]
-// The back catalog, declared on the definitions themselves (`legacy`) rather
+// The back catalog, declared on the definitions themselves (`legacy` or `extras`) rather
 // than listed here: the same flag is what keeps them out of the track context
 // menu's add-a-device lists, which have no Extras drawer to demote them into.
-const LEGACY_MOVER_IDS = new Set(
-  listMoverOrSplitterDefinitions().filter((d) => d.legacy).map((d) => d.id),
+const EXTRAS_MOVER_IDS = new Set(
+  listMoverOrSplitterDefinitions().filter((d) => d.legacy || d.extras).map((d) => d.id),
 )
 // Everything else that moves lives under Motion - the compound movers at its
 // top level, the single-behavior ones in its Extras subfolder.
@@ -601,15 +593,31 @@ const MOTION_ITEMS = MOVER_INSTRUMENTS.filter((m) => !IMPACT_IDS.includes(m.id) 
 // exactly what they held before the folder pass - demoted, never deleted -
 // but they now sit INSIDE the folder they belong to rather than at the root.
 const SCENE_FOLDERS: LibraryFolder[] = [
+  { id: 'instruments', title: 'Instruments', description: 'Played rather than posed: MIDI shapes each hit, sustain, and release.', items: INSTRUMENT_FOLDER_ITEMS },
+  { id: 'objects', title: 'Objects', description: 'Object instruments are visual objects that render in the 3D scene - for example, cubes or spheres.', items: OBJECT_INSTRUMENTS },
   // The strikes sit at Impact's root (an Impulse subfolder used to hold them
   // and was Impact's only content - one extra click for nothing).
   {
     id: 'impact',
     title: 'Impact',
     description: 'One sharp hit per note - camera punches and shockwaves that strike, then decay.',
-    items: pick(IMPULSE_IDS),
+    items: pick(IMPULSE_IDS).filter((i) => !EXTRAS_MOVER_IDS.has(i.id)),
+    subfolders: [{
+      id: 'impact-extras', title: 'Extras',
+      description: 'Additional impact movers, all fully supported.',
+      items: pick(IMPULSE_IDS).filter((i) => EXTRAS_MOVER_IDS.has(i.id)),
+    }],
   },
-  { id: 'rumble', title: 'Rumble', description: 'Continuous shaking, warping or masking while the note is held.', items: [...pick(RUMBLE_IDS), ...CROP_OBJECT_ITEMS] },
+  {
+    id: 'rumble', title: 'Rumble',
+    description: 'Continuous shaking, warping or masking while the note is held.',
+    items: [...pick(RUMBLE_IDS).filter((i) => !EXTRAS_MOVER_IDS.has(i.id)), ...CROP_OBJECT_ITEMS],
+    subfolders: [{
+      id: 'rumble-extras', title: 'Extras',
+      description: 'Additional sustained movers, all fully supported.',
+      items: pick(RUMBLE_IDS).filter((i) => EXTRAS_MOVER_IDS.has(i.id)),
+    }],
+  },
   { id: 'splitters', title: 'Splitters', description: 'Splitters render their objects several times, giving each copy its own reference frame - movers BELOW a splitter move every copy along its own axes.', items: SPLITTER_INSTRUMENTS },
   {
     id: 'motion',
@@ -617,18 +625,16 @@ const SCENE_FOLDERS: LibraryFolder[] = [
     description: 'Movers move, spin, scale, or fade objects - add them under tracks (or drag them onto tracks) and drive them with notes.',
     // The legacy compound movers (All Movers, Motion) are demoted - never
     // deleted - into the Extras shelf; the unified Mover supersedes them.
-    items: MOTION_ITEMS.filter((m) => !LEGACY_MOVER_IDS.has(m.id)),
+    items: MOTION_ITEMS.filter((m) => !EXTRAS_MOVER_IDS.has(m.id)),
     subfolders: [
       {
         id: 'motion-extras',
         title: 'Extras',
         description: 'The legacy compound movers - all fully working, superseded by Mover.',
-        items: MOTION_ITEMS.filter((m) => LEGACY_MOVER_IDS.has(m.id)),
+        items: MOTION_ITEMS.filter((m) => EXTRAS_MOVER_IDS.has(m.id)),
       },
     ],
   },
-  { id: 'objects', title: 'Objects', description: 'Object instruments are visual objects that render in the 3D scene - for example, cubes or spheres.', items: OBJECT_INSTRUMENTS },
-  { id: 'instruments', title: 'Instruments', description: 'Played rather than posed: every note spawns its own short-lived event instead of changing a standing shape.', items: INSTRUMENT_FOLDER_ITEMS },
   { id: 'color', title: 'Color', description: 'Recoloring: the Colorizer flashes its objects toward a picked color; Color Filters remap the whole scene.', items: pick(COLOR_IDS) },
   { id: 'utility', title: 'Utility', description: 'Full-frame media and readouts - video clips, photos, word display, the audio waveform - plus the Switcher rack.', items: pick(UTILITY_IDS) },
   { id: 'extras', title: 'Extras', description: 'The back catalog: older object instruments, all still fully working - just outside the curated folders above.', items: EXTRA_INSTRUMENTS },
@@ -759,47 +765,6 @@ const FolderBrowser = memo(function FolderBrowser({ folders, rootItems = [], onI
 })
 
 type LibraryTab = LibraryTabId
-
-/** Hover popup for a loop row: the pattern as a mini piano roll - one lane
- *  per used row, notes as bars (velocity = brightness), beat gridlines. */
-function LoopPatternPopup({ pattern, left, top }: { pattern: LoopPattern; left: number; top: number }) {
-  const beats = pattern.bars * 4
-  const rowCount = Math.max(1, ...pattern.notes.map(([, , , row]) => (row ?? 0) + 1))
-  const height = Math.max(44, Math.min(96, rowCount * 22))
-  const clampedTop = Math.max(8, Math.min(top - 8, window.innerHeight - height - 40))
-  return (
-    <div
-      className="pointer-events-none fixed z-[90] w-[228px] rounded border border-[var(--border)] bg-[var(--bg-canvas)] p-2 shadow-xl shadow-black/60"
-      style={{ left, top: clampedTop }}
-    >
-      <div
-        className="relative w-full overflow-hidden rounded-[3px] bg-[#101013]"
-        style={{
-          height,
-          backgroundImage: `repeating-linear-gradient(to right, rgba(255,255,255,0.09) 0 1px, transparent 1px ${100 / beats}%)`,
-        }}
-      >
-        {pattern.notes.map(([b, dur, vel, row], i) => (
-          <div
-            key={i}
-            className="absolute rounded-[2px] bg-[var(--accent)]"
-            style={{
-              left: `${(b / beats) * 100}%`,
-              width: `max(3px, ${(dur / beats) * 100}%)`,
-              top: `${((row ?? 0) / rowCount) * 100 + 1.5}%`,
-              height: `${100 / rowCount - 8}%`,
-              opacity: 0.35 + ((vel ?? 100) / 127) * 0.65,
-            }}
-          />
-        ))}
-      </div>
-      <div className="mt-1.5 flex items-baseline justify-between">
-        <span className="font-mono text-[10px] text-[var(--text-3)]">{pattern.name}</span>
-        <span className="font-mono text-[9px] text-[var(--text-muted)]">{pattern.bars} bar{pattern.bars !== 1 ? 's' : ''}</span>
-      </div>
-    </div>
-  )
-}
 
 // The Templates tab: double-click switches the current project onto that
 // template (visual tracks replaced, audio + its detected BPM kept). One undo
@@ -1007,7 +972,6 @@ export function LeftSidebar() {
   }, [libraryRequest])
   const { startLibraryDrag, ghostRef, ghostName } = useLibraryDrag()
   const { startLoopBlockDrag, ghostRef: loopGhostRef, ghostName: loopGhostName } = useLoopBlockDrag()
-  const [loopHover, setLoopHover] = useState<{ pattern: LoopPattern; left: number; top: number } | null>(null)
   // Over a valid drop slot → show a "+" on the ghost to signal "release to add".
   const droppable = useUIStore((s) => !!s.trackDrop && (s.trackDrop.line != null || s.trackDrop.intoId != null))
   // The swap-in-place target's current name, for the ghost's "Replace X" text.
@@ -1112,29 +1076,37 @@ export function LeftSidebar() {
           />
         )}
         {tab === 'loops' && (
-          <div className="pt-1">
-            <p className="px-3 pt-2 pb-1 text-[10px] leading-relaxed text-[var(--text-muted)]">
-              Drag a loop onto a track - it lands as a repeating MIDI block at that bar.
+          <div className="px-2 pt-3">
+            <p className="px-1 pb-3 text-[11px] leading-relaxed text-[var(--text-muted)]">
+              {activeIsMain ? 'Open a visual scene to add a loop.' : 'MIDI + instruments, ready to play. Drag into the timeline or double-click to add.'}
             </p>
-            {LOOP_PATTERNS.map((pattern) => (
-              <div
-                key={pattern.id}
-                onPointerDown={(e) => { setLoopHover(null); startLoopBlockDrag(e, pattern) }}
-                onMouseEnter={(e) => {
-                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                  setLoopHover({ pattern, left: rect.right + 8, top: rect.top })
+            {VISUAL_LOOPS.map(loop => (
+              <button
+                key={loop.id}
+                type="button"
+                disabled={activeIsMain}
+                aria-label={`Add ${loop.name} loop`}
+                onPointerDown={event => startLoopBlockDrag(event, loop)}
+                onDoubleClick={() => addVisualLoop(loop)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    if (!event.repeat) addVisualLoop(loop)
+                  }
                 }}
-                onMouseLeave={() => setLoopHover(null)}
-                title={pattern.description}
-                className="flex items-center gap-2.5 h-[26px] px-3 cursor-default hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] select-none"
+                title={`${loop.description} Double-click to add.`}
+                className="mb-2 block w-full touch-none select-none overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] text-left transition-colors hover:border-sky-300/40 focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50"
               >
-                <span className="flex-shrink-0 flex items-center justify-center w-3.5">
-                  <Repeat size={12} className="text-emerald-400" />
-                </span>
-                <span className="text-xs text-[var(--text-2)] truncate">{pattern.name}</span>
-              </div>
+                <LoopPreview loop={loop} />
+                <div className="px-3 py-2.5">
+                  <div className="flex items-center gap-2 text-xs font-medium text-[var(--text)]">
+                    <Repeat size={12} className="shrink-0 text-sky-300" />
+                    <span className="min-w-0 truncate">{loop.name}</span>
+                  </div>
+                  <p className="mt-1.5 text-[10px] leading-relaxed text-[var(--text-muted)]">{loop.instruments.join(' + ')}</p>
+                </div>
+              </button>
             ))}
-            {loopHover && <LoopPatternPopup pattern={loopHover.pattern} left={loopHover.left} top={loopHover.top} />}
           </div>
         )}
         {tab === 'templates' && <TemplatesTab />}
@@ -1164,7 +1136,7 @@ export function LeftSidebar() {
         </div>
       )}
 
-      {/* Ghost while dragging a loop pattern onto a track lane. */}
+      {/* Ghost while dragging a complete visual loop into the timeline. */}
       {loopGhostName && (
         <div
           ref={loopGhostRef}

@@ -804,3 +804,32 @@ test('force: extraction maps pitch to value, normalizes velocity, and sorts by b
   // mode's values - one gain, applied at the same choke point.
   close(extractForceNotes(pitchBlock(84), 4, 0, 10, undefined, 0.5)[0].value, 5)
 })
+
+test('combination folds in order with neutral empty lanes and legacy override', () => {
+  const lane = (value: number, combine?: AutomationLane['combine']): AutomationLane => ({ mode: 'linear', keyframes: [{ beat: 0, value }], combine })
+  const fold = (lanes: AutomationLane[]) => lanes.reduce((base, l) => {
+    const v = sampleAutomationLane(l, 0, base)
+    return Number.isNaN(v) ? base : v
+  }, 2)
+  assert.equal(fold([lane(3, 'sum'), lane(4, 'multiply')]), 20)
+  assert.equal(fold([lane(4, 'multiply'), lane(3, 'sum')]), 11)
+  assert.equal(fold([lane(3, 'sum'), lane(4, 'override')]), 4)
+  assert.equal(fold([lane(3), lane(4)]), 4)
+  for (const combine of ['sum', 'multiply', 'override'] as const) {
+    assert.ok(Number.isNaN(sampleAutomationLane({ mode: 'linear', keyframes: [], combine }, 0, 7)))
+  }
+  assert.equal(fold([lane(0, 'multiply')]), 0)
+  assert.equal(fold([lane(-3, 'multiply')]), -6)
+  assert.deepEqual(automationLaneValueBounds(lane(-3, 'multiply'), 2), { min: -6, max: -6 })
+  assert.deepEqual(automationLaneValueBounds(lane(3, 'sum'), 2), { min: 5, max: 5 })
+})
+
+test('combining bursts depart from additive zero or multiplicative one', () => {
+  const lane: AutomationLane = { mode: 'linear', keyframes: [], burst: BURST, bursts: [burst(0, 4, 3)] }
+  close(sampleAutomationLane({ ...lane, combine: 'sum' }, 0.5, 10), 11.5)
+  close(sampleAutomationLane({ ...lane, combine: 'multiply' }, 0.5, 10), 20)
+  close(sampleAutomationLane({ ...lane, combine: 'override' }, 0.5, 10), 6.5)
+  for (const combine of ['sum', 'multiply', 'override'] as const) {
+    assert.ok(Number.isNaN(sampleAutomationLane({ ...lane, combine }, 20, 10)))
+  }
+})

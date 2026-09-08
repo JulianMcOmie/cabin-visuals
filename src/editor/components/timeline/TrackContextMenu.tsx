@@ -24,7 +24,7 @@ interface TrackContextMenuProps {
 /**
  * Right-click menu on a track's label, rendered through the shared NestedMenu shell.
  * Submenus scoped to the track's instrument: ability lanes, movers, automatable params,
- * and effect-instance params. Items already present are checked + disabled.
+ * and effect-instance params. Existing automation targets stay addable; abilities remain unique.
  */
 export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuProps) {
   const track = useProjectStore((s) => s.tracks[trackId])
@@ -72,12 +72,10 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const isSwitcher = track.type === 'switcher'
   const isDevice = track.type === 'mover' || track.type === 'splitter'
   const isSceneTrack = isSceneTrackId(track.id)
-  // `legacy` definitions (the library's Extras shelf: All Movers, Motion) are
-  // left out entirely. The library can demote them into a collapsed folder;
-  // this menu is one flat list per kind, so a superseded entry would sit right
-  // beside the definition that replaced it.
+  // Supported Extras-only devices and superseded legacy devices stay in the
+  // library's Extras folders, but never clutter this flat add-device menu.
   const newDefs = (def || moverDef || isGroup || isSwitcher ? listMoverOrSplitterDefinitions() : [])
-    .filter((d) => !d.legacy)
+    .filter((d) => !d.legacy && !d.extras)
   // A `parentGate` definition (Bypass) acts on the DEVICE it is nested under, so
   // it is only offered on a mover/splitter track - never on an object or a
   // group, where it would have nothing to gate - and never in the mover list,
@@ -112,7 +110,7 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       label: 'Add automation track',
       items: params.map((p) => {
         const added = automatedParams.has(p.key)
-        return { id: p.key, label: p.label, icon: <Activity size={16} strokeWidth={1.5} />, disabled: added, checked: added }
+        return { id: p.key, label: p.label, icon: <Activity size={16} strokeWidth={1.5} />, checked: added }
       }),
     },
     {
@@ -154,7 +152,7 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       label: 'Automate effect',
       items: fxItems.map((item) => {
         const added = automatedParams.has(item.key)
-        return { id: item.key, label: item.label, icon: <SlidersHorizontal size={16} strokeWidth={1.5} />, disabled: added, checked: added }
+        return { id: item.key, label: item.label, icon: <SlidersHorizontal size={16} strokeWidth={1.5} />, checked: added }
       }),
     },
     {
@@ -206,10 +204,10 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       const p = params.find((pp) => pp.key === itemId)
       // Count params (`integer` on the def) start their lane on the
       // whole-number grid with stepped interpolation.
-      if (p) addAutomationTrack(trackId, p.key, p.label, { integer: p.integer })
+      if (p) addAutomationTrack(trackId, p.key, p.label, { integer: p.integer, combine: p.combine })
     } else if (groupKey === 'effect') {
       const item = fxItems.find((f) => f.key === itemId)
-      if (item) addAutomationTrack(trackId, item.key, item.label, { integer: item.integer })
+      if (item) addAutomationTrack(trackId, item.key, item.label, { integer: item.integer, combine: item.combine })
     } else if (groupKey === 'move-scene') {
       moveTrackToScene(trackId, itemId)
       useUIStore.getState().setSelectedTrackId(null)
