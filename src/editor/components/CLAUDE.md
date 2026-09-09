@@ -209,6 +209,10 @@ A tracker grammar over the roll: a cursor with a size, modes (ground → `Tab` �
   then a dilated edge is drawn additively after the final grade and invert overlay. Gated
   on `isExportPinned()` so it never reaches an export or a thumbnail capture. Hover state
   is written only when the hovered track CHANGES (UIStore.canvasHover), never per move.
+  The reverse gesture uses `timeline/useTrackSceneHover.ts`: Shift-hover anywhere
+  on an instrument row outlines that track in the active scene through the same
+  state and glow pass. Shift can be pressed after entering the row; release,
+  pointer leave/cancel, blur, scene change and unmount clear the row's hover.
 - `ObjectRenderer.tsx` — one OCCURRENCE of one object: placement group → post-mover scale → its VisualCopy transform; `MaterialWrapper`/`TransformWrapper`/`ShaderWrapper` apply the effect chain inside (material innermost, closest to the meshes). Never resolves copy logic itself.
 - `MaterialWrapper.tsx` — `material` effects: patches the target's own materials via `onBeforeCompile` so a generated surface travels WITH the mesh, and restores them on unmount/disable. See `effects/CLAUDE.md` for the contract and its limits.
 - **`placementKey` in VisualScene IS the pass partition**, not a cache key: it builds one character per object (`'B'` base / `'F'` front / `'I'` final-invert) and the three `createPortal` blocks at the bottom filter on it. Both it and ObjectRenderer's full-frame branch resolve through `instruments/types.ts`'s `isFullFrameTrack` / `isOnTopTrack` — change one and you must change the other, or an object mounts in a pass its renderer isn't expecting.

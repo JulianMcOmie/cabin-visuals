@@ -52,8 +52,9 @@ export function RenderGovernor() {
   useEffect(() => {
     const unsubProject = useProjectStore.subscribe(() => invalidate())
     const unsubGraph = subscribeObjects(() => invalidate())
-    const unsubQuality = useUIStore.subscribe((s, prev) => {
-      if (s.previewQuality !== prev.previewQuality) invalidate()
+    const unsubUI = useUIStore.subscribe((s, prev) => {
+      // Timeline hover also needs a frame while the scene is paused.
+      if (s.previewQuality !== prev.previewQuality || s.canvasHover !== prev.canvasHover) invalidate()
     })
     const unsubTime = useTimeStore.subscribe((s, prev) => {
       if (!s.isPlaying && (s.currentBeat !== prev.currentBeat || prev.isPlaying)) invalidate()
@@ -61,7 +62,7 @@ export function RenderGovernor() {
     return () => {
       unsubProject()
       unsubGraph()
-      unsubQuality()
+      unsubUI()
       unsubTime()
     }
   }, [invalidate])

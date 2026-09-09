@@ -27,6 +27,7 @@ import { TrackTransformPanel, beginTransformDrag, resetTransformValues, transfor
 import { TrackTagsPanel } from './TrackTagsPanel'
 import { TF_OPACITY } from '../../core/transform'
 import { isSceneTrackId } from '../../core/sceneTrack'
+import { useTrackSceneHover } from './useTrackSceneHover'
 
 // The strip fader is the track's "volume": opacity 0..1, snapping at 0/50/100%.
 const OPACITY_FADER_SPEC = { min: 0, max: 1, step: 0.01, snaps: [0, 0.5, 1], snapThreshold: 0.03 }
@@ -118,6 +119,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
   // and crop-in-a-scene keeps its fader this way).
   const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
   const isObjectTrack = track.type === 'base' && !!track.instrumentId && !activeIsMain
+  const sceneHoverRef = useTrackSceneHover(track.id, isObjectTrack)
   // The scene instrument (core/sceneTrack.ts) materializes as a group track, so
   // it takes the group chrome - the transform strip especially, since its tf*
   // moves the whole scene - but not the parts that would write a field it has
@@ -291,6 +293,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
 
   return (
     <div
+      ref={sceneHoverRef}
       style={{
         transform: inCopyDrag ? `translateY(${liftOffset}px)` : undefined,
         transition: inCopyDrag ? 'transform 0.15s ease' : undefined,
