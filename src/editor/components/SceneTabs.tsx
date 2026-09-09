@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Copy, Trash2 } from 'lucide-react'
 import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
@@ -155,6 +155,11 @@ export function SceneTabs() {
   const scenes = useMemo(() => useProjectStore.getState().scenes, [scenesKey])
   const sceneOrder = useProjectStore((s) => s.sceneOrder)
   const activeSceneId = useProjectStore((s) => s.activeSceneId)
+  const tabsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    // New scenes and selection changes must stay reachable in a crowded rail.
+    tabsRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [activeSceneId])
   const setActiveScene = useProjectStore((s) => s.setActiveScene)
   const addScene = useProjectStore((s) => s.addScene)
   const renameScene = useProjectStore((s) => s.renameScene)
@@ -189,58 +194,59 @@ export function SceneTabs() {
     // Slightly translucent (the /85) so the workspace's ambient light passes
     // through the seam between visualizer and timeline instead of stopping at
     // an opaque bar - the strip sits exactly on that boundary.
-    <div className="flex h-[64px] flex-shrink-0 items-center gap-8 overflow-x-auto no-scrollbar border-t border-[rgba(255,255,255,0.06)] bg-[var(--bg-app)]/85 px-6 select-none" role="tablist" aria-label="Scenes">
-      {sceneOrder.map((id, index) => {
-        const scene = scenes[id]
-        if (!scene) return null
-        const active = id === activeSceneId
-        return (
-          <button
-            key={id}
-            role="tab"
-            aria-selected={active}
-            onClick={() => select(id)}
-            onDoubleClick={() => {
-              if (scene.isMain) return
-              const name = window.prompt('Scene name', scene.name)
-              if (name) renameScene(id, name)
-            }}
-            onContextMenu={(e) => {
-              e.preventDefault()
-              // Main can't be duplicated or deleted, so it has no menu.
-              if (!scene.isMain) setMenu({ x: e.clientX, y: e.clientY, id })
-            }}
-            title={scene.isMain ? 'The final composition - composes the other scenes into the exported frame' : 'Double-click to rename · Right-click for options'}
-            className={`group flex flex-shrink-0 items-baseline gap-2.5 border-b-2 pb-1 cursor-pointer ${
-              active ? 'border-[var(--accent)]' : 'border-transparent'
-            }`}
-          >
-            <span className={`font-mono text-[10.5px] leading-none ${active ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>
-              {String(index + 1).padStart(2, '0')}
-            </span>
-            <span
-              className={`max-w-44 truncate text-[22px] italic leading-none [font-family:var(--font-display)] ${
+    <div className="flex h-[34px] [@media(pointer:coarse)]:h-[52px] flex-shrink-0 items-center gap-3 border-t border-[rgba(255,255,255,0.06)] bg-[var(--bg-app)]/85 px-3 select-none">
+      <div
+        ref={tabsRef}
+        className="flex h-full min-w-0 flex-1 items-center gap-1 overflow-x-auto no-scrollbar"
+        role="tablist"
+        aria-label="Scenes"
+        onKeyDown={(e) => {
+          // Let focused scene buttons activate instead of triggering transport.
+          if (e.key === 'Enter' || e.key === ' ') e.stopPropagation()
+        }}
+      >
+        {sceneOrder.map((id) => {
+          const scene = scenes[id]
+          if (!scene) return null
+          const active = id === activeSceneId
+          return (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={active}
+              onClick={() => select(id)}
+              onDoubleClick={() => {
+                if (scene.isMain) return
+                const name = window.prompt('Scene name', scene.name)
+                if (name) renameScene(id, name)
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                // Main can't be duplicated or deleted, so it has no menu.
+                if (!scene.isMain) setMenu({ x: e.clientX, y: e.clientY, id })
+              }}
+              title={scene.isMain ? 'The final composition - composes the other scenes into the exported frame' : `${scene.name} · Double-click to rename · Right-click for options`}
+              className={`flex h-[26px] [@media(pointer:coarse)]:h-11 flex-shrink-0 items-center rounded-[5px] border px-3 font-sans text-[13px] leading-none cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#c1c4ca] ${
                 active
-                  ? 'text-[var(--accent)]'
-                  : 'text-[rgba(233,237,244,0.32)] group-hover:text-[var(--accent-hover)]'
+                  ? 'border-[#3e4148] bg-[#1b1d22] text-[#c1c4ca]'
+                  : 'border-transparent text-[#858991] hover:bg-white/[0.03] hover:text-[#b0b4bc]'
               }`}
             >
-              {scene.name}
-            </span>
-          </button>
-        )
-      })}
-      <button
-        onClick={create}
-        title="Add scene"
-        className="flex-shrink-0 pb-1 text-[17px] italic leading-none [font-family:var(--font-display)] text-[var(--text-muted)] hover:text-[var(--accent)] cursor-pointer"
-      >
-        + new scene
-      </button>
-      <div className="ml-auto flex min-w-0 items-center gap-1">
-        {/* Which scene the canvas shows is the eye on the tabs now, not a second
-            row of scene names here. Aspect and timeline sizing stay. */}
-
+              <span className="max-w-44 truncate">
+                {scene.name}
+              </span>
+            </button>
+          )
+        })}
+        <button
+          onClick={create}
+          title="Add scene"
+          className="h-[26px] [@media(pointer:coarse)]:h-11 flex-shrink-0 rounded-[5px] border border-transparent px-3 font-sans text-[13px] leading-none text-[#858991] hover:bg-white/[0.03] hover:text-[#b0b4bc] cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#c1c4ca]"
+        >
+          + new scene
+        </button>
+      </div>
+      <div className="ml-auto flex flex-shrink-0 items-center gap-1">
         {/* Timeline zoom lives here so it never covers track content. The two
             sliders share one pill: they are one control ("how big is the
             timeline"), not two unrelated settings. */}
