@@ -41,6 +41,9 @@ export interface NumberParamDef extends ParamBase {
    *  through. A creation default only: the lane's range and interpolation
    *  stay user-editable, and the slider already steps via `step`. */
   integer?: boolean
+  /** Names for discrete numeric values in automation rows (e.g. characters).
+   * The numeric values remain the saved representation and engine input. */
+  valueLabels?: Readonly<Record<number, string>>
 }
 export interface SelectParamDef extends ParamBase {
   type: 'select'

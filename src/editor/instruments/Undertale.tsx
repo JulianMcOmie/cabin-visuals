@@ -11,7 +11,8 @@ export const undertaleInstrument: ObjectInstrumentDef = {
   identityColor: '#f0474c',
   userInterfaceRenderer: 'parameters',
   params: [
-    { key: 'character', label: 'Character', type: 'select', options: UNDERTALE_CHARACTERS.map((label, value) => ({label, value})), default: 0 },
+    { key: 'character', label: 'Character', min: 0, max: UNDERTALE_CHARACTERS.length - 1, step: 1, integer: true,
+      valueLabels: Object.fromEntries(UNDERTALE_CHARACTERS.map((label, value) => [value, label])), default: 0 },
     { key: 'size', label: 'Size', min: 0.1, max: 4, step: 0.01, default: 1 },
     { key: 'thickness', label: 'Thickness', min: 0.02, max: 0.8, step: 0.01, default: 0.16 },
     { key: 'turn', label: 'Turn', min: -180, max: 180, step: 1, default: -12 },

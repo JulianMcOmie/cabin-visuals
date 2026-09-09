@@ -238,6 +238,7 @@ export function generateValueRows(
   trackColor: string,
   formatValue?: (value: number) => string,
   range?: AutomationRange,
+  valueLabels?: Readonly<Record<number, string>>,
 ): MidiRow[] {
   const valueAt = (pitch: number) => pitchToValueRanged(range, pitch, paramMin, paramMax)
   const pitchSpan = automationRowCount(range, paramMin, paramMax) - 1
@@ -247,7 +248,7 @@ export function generateValueRows(
   const rowStep = range?.integer
     ? automationIntegerGrid(bounds.min, bounds.max).step
     : Math.abs(valueAt(topPitch) - valueAt(AUTOMATION_PITCH_MIN)) / Math.max(1, VALUE_ROW_STEPS)
-  const fmt = formatValue ?? ((v: number) => formatValueCompact(v, rowStep))
+  const fmt = (value: number) => valueLabels?.[value] ?? formatValue?.(value) ?? formatValueCompact(value, rowStep)
   const rows: MidiRow[] = []
   const known = new Set<number>()
 
@@ -260,9 +261,13 @@ export function generateValueRows(
     if (known.has(pitch)) continue // guard: a narrow span could round two samples together
     known.add(pitch)
     const t = pitchSpan > 0 ? (pitch - AUTOMATION_PITCH_MIN) / pitchSpan : 0
-    let label = fmt(valueAt(pitch))
-    if (k === steps) label += ' · max'
-    if (k === 0) label += ' · min'
+    const value = valueAt(pitch)
+    let label = fmt(value)
+    // Named choices have identities, not magnitudes: "Sans", not "Sans · min".
+    if (valueLabels?.[value] === undefined) {
+      if (k === steps) label += ' · max'
+      if (k === 0) label += ' · min'
+    }
     // Lightness encodes the value (dim = min, bright = max) so magnitude
     // reads at a glance while the lane keeps its track's hue.
     rows.push({ pitch, label, color: midiValueColor(trackColor, t) })

@@ -111,6 +111,7 @@ interface AutomationInfo {
   paramMin: number
   paramMax: number
   kind: 'value' | 'toggle'
+  valueLabels?: Readonly<Record<number, string>>
 }
 
 /** Trigger-lane editor context: rows are interchangeable slots (pitch is ignored
@@ -280,7 +281,7 @@ export function PianoRollPanel({ frozenRef }: { frozenRef?: EditingBlockRef | nu
         automation = { paramLabel: `${plugin?.name ?? 'Effect'} · On/Off`, paramMin: 0, paramMax: 1, kind: 'toggle' }
       } else {
         const pd = plugin?.params.find((p) => p.key === fx.key)
-        if (pd && isNumberParam(pd)) automation = { paramLabel: `${plugin?.name} · ${pd.label}`, paramMin: pd.min, paramMax: pd.max, kind: 'value' }
+        if (pd && isNumberParam(pd)) automation = { paramLabel: `${plugin?.name} · ${pd.label}`, paramMin: pd.min, paramMax: pd.max, kind: 'value', valueLabels: pd.valueLabels }
         else if (pd?.type === 'boolean') automation = { paramLabel: `${plugin?.name} · ${pd.label} · On/Off`, paramMin: 0, paramMax: 1, kind: 'toggle' }
       }
     } else {
@@ -312,7 +313,7 @@ export function PianoRollPanel({ frozenRef }: { frozenRef?: EditingBlockRef | nu
               ? compositionAutomatableParams(compositionDef(parent.instrumentId))
               : undefined
       const pdef = parentParams?.find((p) => p.key === track.targetParam)
-      if (pdef && isNumberParam(pdef)) automation = { paramLabel: pdef.label, paramMin: pdef.min, paramMax: pdef.max, kind: 'value' }
+      if (pdef && isNumberParam(pdef)) automation = { paramLabel: pdef.label, paramMin: pdef.min, paramMax: pdef.max, kind: 'value', valueLabels: pdef.valueLabels }
       else if (pdef?.type === 'boolean') automation = { paramLabel: `${pdef.label} · On/Off`, paramMin: 0, paramMax: 1, kind: 'toggle' }
     }
   }
@@ -478,12 +479,13 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const automationMin = automation?.paramMin
   const automationMax = automation?.paramMax
   const automationRange = track?.automationRange
+  const automationValueLabels = automation?.valueLabels
   const triggerRowLabel = trigger?.rowLabel
   const computedRows = useMemo(() => {
     const resolvedRows = automationKind !== undefined
       ? automationKind === 'toggle'
         ? generateToggleRows(notePitches, trackColor)
-        : generateValueRows(automationMin!, automationMax!, notePitches, trackColor, undefined, automationRange)
+        : generateValueRows(automationMin!, automationMax!, notePitches, trackColor, undefined, automationRange, automationValueLabels)
       : triggerRowLabel !== undefined
         ? generateTriggerRows(triggerRowLabel, midiNoteBaseColor(noteColor ?? trackColor), notePitches)
         : videoPadLabels
@@ -519,7 +521,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
       resolvedRows.unshift({ pitch: PITCH_LYRIC_CLIP, label: 'Lyric clips', color: trackColor })
     }
     return { rows: resolvedRows, rowsAreEmpty }
-  }, [automationKind, automationMin, automationMax, automationRange, triggerRowLabel, videoPadLabels, photoPadLabels, defRows, declaredStrict, isTextRoll, noteColor, trackColor, notePitches])
+  }, [automationKind, automationMin, automationMax, automationRange, automationValueLabels, triggerRowLabel, videoPadLabels, photoPadLabels, defRows, declaredStrict, isTextRoll, noteColor, trackColor, notePitches])
   // A note moving onto a pitch no other note holds changes the fingerprint,
   // but on a declared vocabulary (where that pitch is already a row) the
   // generated rows come back equal - so hand out the PREVIOUS array whenever
