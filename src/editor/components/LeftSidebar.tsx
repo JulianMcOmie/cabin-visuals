@@ -418,7 +418,7 @@ const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.
 // The Instruments folder. These are object instruments like any other; what
 // they share is that MIDI plays their hits, sustains, and releases, so they
 // belong together rather than scattered through Objects and Extras.
-const INSTRUMENT_FOLDER_IDS = new Set(['radialBloom', 'modSynth', 'flashWall'])
+const INSTRUMENT_FOLDER_IDS = new Set(['radialBloom', 'modSynth', 'flashWall', 'glassRoll'])
 const INSTRUMENT_FOLDER_ITEMS = ALL_OBJECT_INSTRUMENTS.filter((i) => INSTRUMENT_FOLDER_IDS.has(i.id))
 
 // The in-scene Crop masks the whole scene while its rows are held - the
