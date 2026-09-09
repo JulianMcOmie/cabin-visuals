@@ -4,8 +4,8 @@
 // extracted from Laser Sphere so every bespoke panel shares one wheel: a round
 // swatch pill with label + hex readout, opening a continuous HSV wheel popover
 // (hue around the ring, saturation toward the white center, brightness bar
-// beneath) - never the native browser picker. Opens upward (`bottom-full`) so
-// the host panel never scrolls; closes on outside click or Escape.
+// beneath) - never the native browser picker. Floats in the browser top layer,
+// above the icon when it fits and below otherwise; closes on outside click or Escape.
 //
 // `ColorField` is the same picker with nothing floating: a captioned hue rail
 // over a saturation/brightness field, always open, laid flat in the panel. Use
@@ -13,7 +13,7 @@
 // preview you are judging (the scene backdrop); keep the pill+wheel where color
 // is one control among many and vertical space is scarce.
 
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type RefObject } from 'react'
 import { clamp } from '../utils/math'
 
 // ── Color math (HSV ↔ hex) ──────────────────────────────────────────────────
@@ -97,18 +97,91 @@ const HUE_RAIL = 'linear-gradient(90deg,#f00,#ff0 17%,#0f0 33%,#0ff 50%,#00f 67%
 const WHEEL_SIZE = 132
 const WHEEL_RADIUS = WHEEL_SIZE / 2
 
-/** The floating wheel surface alone - hosts that anchor it themselves (pills,
- *  segmented controls) render it inside a `relative` wrapper while managing
- *  their own open state / outside-click close. */
-export function ColorWheelPopover({ value, onChange, align = 'right', edge = 'top', testId }: {
+/** Keep top-layer color controls anchored and inside the viewport. */
+export function useColorPopoverPosition(
+  popupRef: RefObject<HTMLDivElement | null>,
+  anchorRef: RefObject<HTMLButtonElement | null>,
+  open: boolean,
+  align: 'left' | 'right' = 'right',
+) {
+  useLayoutEffect(() => {
+    if (!open) return
+    const popup = popupRef.current
+    const anchor = anchorRef.current
+    if (!popup || !anchor) return
+    const position = () => {
+      const gap = 8
+      const rect = anchor.getBoundingClientRect()
+      const viewport = window.visualViewport
+      const left = viewport?.offsetLeft ?? 0
+      const top = viewport?.offsetTop ?? 0
+      const right = left + (viewport?.width ?? window.innerWidth)
+      const bottom = top + (viewport?.height ?? window.innerHeight)
+      popup.style.maxWidth = `${Math.max(1, right - left - gap * 2)}px`
+      const above = Math.max(0, rect.top - top - gap * 2)
+      const below = Math.max(0, bottom - rect.bottom - gap * 2)
+      const naturalHeight = popup.scrollHeight + popup.offsetHeight - popup.clientHeight
+      // If neither side fits, use the larger side and allow scrolling.
+      const opensAbove = naturalHeight <= above || (naturalHeight > below && above > below)
+      popup.style.maxHeight = `${Math.max(1, opensAbove ? above : below)}px`
+      const { width, height } = popup.getBoundingClientRect()
+      const x = align === 'right' ? rect.right - width : rect.left
+      const y = opensAbove ? rect.top - height - gap : rect.bottom + gap
+      popup.style.left = `${Math.max(left + gap, Math.min(x, right - width - gap))}px`
+      popup.style.top = `${Math.max(top + gap, Math.min(y, bottom - height - gap))}px`
+    }
+    position()
+    const observer = new ResizeObserver(position)
+    observer.observe(anchor)
+    observer.observe(popup)
+    window.addEventListener('resize', position)
+    window.addEventListener('scroll', position, true)
+    window.visualViewport?.addEventListener('resize', position)
+    window.visualViewport?.addEventListener('scroll', position)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', position)
+      window.removeEventListener('scroll', position, true)
+      window.visualViewport?.removeEventListener('resize', position)
+      window.visualViewport?.removeEventListener('scroll', position)
+    }
+  }, [open, align, anchorRef, popupRef])
+}
+
+/** A top-layer surface that retains DOM ancestry for outside-click handling. */
+export function ColorWheelPopover({ value, onChange, anchorRef, align = 'right', testId }: {
   value: string
   onChange: (hex: string) => void
+  anchorRef: RefObject<HTMLButtonElement | null>
   /** Which edge of the anchor the popover hugs. */
   align?: 'left' | 'right'
-  /** Which side of the anchor it opens on: 'top' (default) floats above,
-   *  'bottom' drops below - for anchors sitting near their panel's top. */
-  edge?: 'top' | 'bottom'
   testId?: string
+}) {
+  const popupRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const popup = popupRef.current
+    popup?.showPopover()
+    return () => { popup?.hidePopover() }
+  }, [])
+  useColorPopoverPosition(popupRef, anchorRef, true, align)
+
+  return (
+    <div
+      ref={popupRef}
+      popover="manual"
+      data-testid={testId}
+      className="fixed m-0 w-max overflow-auto rounded-md border border-white/10 bg-[#0d1017] p-3 text-white shadow-[0_8px_24px_rgba(0,0,0,.5)]"
+      style={{ inset: 'auto' }}
+    >
+      <ColorWheelPicker value={value} onChange={onChange} />
+    </div>
+  )
+}
+
+/** Shared wheel contents for hosts that supply their own floating surface. */
+export function ColorWheelPicker({ value, onChange }: {
+  value: string
+  onChange: (hex: string) => void
 }) {
   const wheelRef = useRef<HTMLDivElement>(null)
   const barRef = useRef<HTMLDivElement>(null)
@@ -144,10 +217,7 @@ export function ColorWheelPopover({ value, onChange, align = 'right', edge = 'to
   const fullColor = hsvToHex(hsv.h, hsv.s, 1)
 
   return (
-    <div
-      data-testid={testId}
-      className={`absolute z-50 rounded-md border border-white/10 bg-[#0d1017] p-3 shadow-[0_8px_24px_rgba(0,0,0,.5)] ${edge === 'bottom' ? 'top-full mt-2' : 'bottom-full mb-2'} ${align === 'right' ? 'right-0' : 'left-0'}`}
-    >
+    <div style={{ width: WHEEL_SIZE }}>
       <div
         ref={wheelRef}
         {...dragHandlers(wheelFromPointer)}
@@ -226,10 +296,12 @@ export function ColorWheelPill({ value, onChange, label, ariaLabel, title, halo,
 }) {
   const [open, setOpen] = useState(false)
   const hostRef = useColorPopoverDismiss(open, () => setOpen(false))
+  const anchorRef = useRef<HTMLButtonElement>(null)
 
   return (
     <div ref={hostRef} className="relative flex min-w-0 flex-col items-center">
       <button
+        ref={anchorRef}
         data-testid={pillTestId}
         aria-label={ariaLabel}
         aria-expanded={open}
@@ -241,7 +313,7 @@ export function ColorWheelPill({ value, onChange, label, ariaLabel, title, halo,
       <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-white/40">{label}</span>
       <span className="font-mono text-[9px] uppercase text-white/70">{value}</span>
 
-      {open && <ColorWheelPopover value={value} onChange={onChange} align={align} testId={wheelTestId} />}
+      {open && <ColorWheelPopover anchorRef={anchorRef} value={value} onChange={onChange} align={align} testId={wheelTestId} />}
     </div>
   )
 }

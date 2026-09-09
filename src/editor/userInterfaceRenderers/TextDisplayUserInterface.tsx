@@ -125,24 +125,17 @@ const LANE_FX: StyleLaneFx[] = ['shake', 'rainbow', 'outline']
  * white ring the presets wear - so the row always shows one lit chip and the
  * lit one is always the colour in force.
  *
- * The wheel opens DOWNWARD (`edge="bottom"`): the thing you judge a lane colour
- * against is the live name preview at the TOP of this card, and the default
- * upward popover would cover it.
- *
- * It sits FIRST in the row, not last, and that is a clipping constraint rather
- * than a taste call. Both hosts clip - the roll's sidecar is `w-[236px]
- * overflow-y-auto`, and a box that scrolls on one axis scrolls on both - and
- * the row WRAPS, so a trailing chip has no predictable x to open from: hugging
- * either edge puts the 158px popover outside one host or the other. Pinned to
- * the row's start with `align="left"` it always opens inward.
+ * The shared top-layer wheel chooses its side from the available viewport space.
  */
 function LaneColorSwatch({ value, onChange }: { value: string; onChange: (hex: string) => void }) {
   const [open, setOpen] = useState(false)
   const hostRef = useColorPopoverDismiss(open, () => setOpen(false))
+  const anchorRef = useRef<HTMLButtonElement>(null)
   const custom = !LANE_COLOR_SWATCHES.includes(value.toLowerCase())
   return (
     <div ref={hostRef} className="relative">
       <button
+        ref={anchorRef}
         data-testid="lane-color-custom"
         onClick={() => setOpen((o) => !o)}
         aria-label="Custom lane color"
@@ -160,10 +153,10 @@ function LaneColorSwatch({ value, onChange }: { value: string; onChange: (hex: s
       </button>
       {open && (
         <ColorWheelPopover
+          anchorRef={anchorRef}
           value={value}
           onChange={onChange}
           align="left"
-          edge="bottom"
           testId="lane-color-wheel"
         />
       )}

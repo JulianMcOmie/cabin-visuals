@@ -89,6 +89,7 @@ function drawShapePreview(
  *  standard editor (the shared wheel + brightness popover). */
 function HueRing({ value, onChange }: { value: string; onChange: (hex: string) => void }) {
   const hostRef = useRef<HTMLDivElement>(null)
+  const anchorRef = useRef<HTMLButtonElement>(null)
   const ringRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
   const hsv = hexToHsv(value)
@@ -151,6 +152,7 @@ function HueRing({ value, onChange }: { value: string; onChange: (hex: string) =
       </div>
       <button
         type="button"
+        ref={anchorRef}
         aria-label="Open color editor"
         aria-expanded={open}
         title={`Color ${value}`}
@@ -160,7 +162,7 @@ function HueRing({ value, onChange }: { value: string; onChange: (hex: string) =
       />
       <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-white/40">COLOR</span>
       <span className="font-mono text-[9px] uppercase text-white/70">{value}</span>
-      {open && <ColorWheelPopover value={value} onChange={onChange} align="right" edge="bottom" />}
+      {open && <ColorWheelPopover anchorRef={anchorRef} value={value} onChange={onChange} align="right" />}
     </div>
   )
 }

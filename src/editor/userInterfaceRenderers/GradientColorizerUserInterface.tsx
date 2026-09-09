@@ -44,6 +44,7 @@ function StopSwatch({ bound, label, align }: {
   align: 'left' | 'right'
 }) {
   const hostRef = useRef<HTMLDivElement>(null)
+  const anchorRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
@@ -61,6 +62,7 @@ function StopSwatch({ bound, label, align }: {
   return (
     <div ref={hostRef} className="relative">
       <button
+        ref={anchorRef}
         data-testid={`gradient-stop-${label.toLowerCase()}`}
         aria-label={`Gradient color ${label}`}
         aria-expanded={open}
@@ -69,9 +71,7 @@ function StopSwatch({ bound, label, align }: {
         className="h-5 w-5 cursor-pointer rounded-full border-2 border-white/85 shadow-[0_1px_4px_rgba(0,0,0,.6)] active:scale-95"
         style={{ background: bound.value }}
       />
-      {/* Below the swatch: the stops sit at the very top of the panel, so an
-          upward popover would be clipped against the inspector's edge. */}
-      {open && <ColorWheelPopover value={bound.value} onChange={bound.set} align={align} edge="bottom" testId={`gradient-wheel-${label.toLowerCase()}`} />}
+      {open && <ColorWheelPopover anchorRef={anchorRef} value={bound.value} onChange={bound.set} align={align} testId={`gradient-wheel-${label.toLowerCase()}`} />}
     </div>
   )
 }
