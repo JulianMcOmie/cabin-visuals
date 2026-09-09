@@ -1,3 +1,4 @@
+import { createRasterCanvas, type RasterCanvas } from '../core/visual/rasterCanvas'
 import { useRef, useEffect, useState } from 'react'
 import { useThree } from '@react-three/fiber'
 import { Group, Mesh, MeshBasicMaterial, PlaneGeometry, CanvasTexture, LinearFilter } from 'three'
@@ -32,16 +33,16 @@ const NUM_EMOJIS = 8
 const CANVAS_SIZE = 512
 
 // Shared canvas cache keyed by (token, size).
-const canvasCache = new Map<string, HTMLCanvasElement>()
+const canvasCache = new Map<string, RasterCanvas>()
 const CACHE_MAX = 64
 
-function createEmojiCanvas(token: string, size: number): HTMLCanvasElement {
+function createEmojiCanvas(token: string, size: number): RasterCanvas {
   const key = `${token}|${size}`
   const cached = canvasCache.get(key)
   if (cached) return cached
 
-  const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1
-  const canvas = document.createElement('canvas')
+  const dpr = (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1
+  const canvas = createRasterCanvas()
   canvas.width = size * dpr
   canvas.height = size * dpr
   const ctx = canvas.getContext('2d')!

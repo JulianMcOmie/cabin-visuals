@@ -1,3 +1,4 @@
+import { previewRuntime } from '../../core/visual/previewRuntime'
 import { useMemo, useRef, useEffect, type ReactNode } from 'react'
 import { useThree, createPortal } from '@react-three/fiber'
 import {
@@ -258,7 +259,7 @@ export function ShaderWrapper({
 
     // Same clock rule as VisualBeatSync: exports drive time through the beat
     // override while the transport stays frozen.
-    const beat = getBeatOverride() ?? useTimeStore.getState().currentBeat
+    const beat = getBeatOverride() ?? (previewRuntime.worker ? previewRuntime.beat : useTimeStore.getState().currentBeat)
 
     // Inherit the mounting scene's env map so env-driven materials (Texturizer
     // chrome/glass) keep their reflections inside the offscreen pass.

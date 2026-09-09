@@ -1042,7 +1042,54 @@ export function createVisualEngine() {
   function getObjectList() {
     return objectList
   }
-  return { setProject, syncParams, computeAtBeat, getSceneBackdrop, getSceneFxOverrides, setPreviewObjectState, getObjectState, isTrackStaggered, getCompositionLayers, setMainCompositionOverride, setMainPreviewEnabled, setEditorPreviewSceneId, setMountedRenderScenes, getMountedRenderScenes, getVisualCopies, getPeakVisualCopyOpacity, getVisualCopy, getVisualCopyCount, subscribeObjects, getObjectList }
+  /** Only evaluated data crosses the worker boundary; resolved graphs contain
+   * functions and stay in the evaluator. Structured clone retains Maps/Sets but
+   * drops Matrix4 prototypes, restored at this single receiving seam. */
+  function captureFrame() {
+    return { objectList, states, copyStatesByTrack, visualCopiesByTrack, visualCopyCounts,
+      activeTrackIds, staggeredTracks, compositionLayers, sceneBackdrops, sceneFxOverrides }
+  }
+  function applyFrame(frame: ReturnType<typeof captureFrame>, sameDocument = false) {
+    const restoreState = (state: ObjectState, previous?: ObjectState) => {
+      Object.setPrototypeOf(state.world, Matrix4.prototype)
+      // Static input identities are part of instrumentFrame's paused signature.
+      // Re-cloning unchanged notes must not regenerate text/particle geometry.
+      if (sameDocument && previous) {
+        for (const key of ['notes', 'automations', 'abilityEvents', 'lyricClips', 'styleLanes',
+          'videoPads', 'photoPads', 'synthMods'] as const) {
+          (state as unknown as Record<string, unknown>)[key] = previous[key]
+        }
+      }
+      return state
+    }
+    for (const [id, state] of frame.states) restoreState(state, states.get(id))
+    for (const [id, copies] of frame.copyStatesByTrack) copies.forEach((state, i) => {
+      if (state) restoreState(state, copyStatesByTrack.get(id)?.[i] ?? undefined)
+    })
+    for (const copies of frame.visualCopiesByTrack.values()) {
+      for (const copy of copies) Object.setPrototypeOf(copy.transform, Matrix4.prototype)
+    }
+    const replace = <K, V>(target: Map<K, V>, source: Map<K, V>) => {
+      target.clear(); for (const [key, value] of source) target.set(key, value)
+    }
+    replace(states, frame.states)
+    replace(copyStatesByTrack, frame.copyStatesByTrack)
+    replace(visualCopiesByTrack, frame.visualCopiesByTrack)
+    replace(visualCopyCounts, frame.visualCopyCounts)
+    replace(sceneBackdrops, frame.sceneBackdrops)
+    replace(sceneFxOverrides, frame.sceneFxOverrides)
+    activeTrackIds = frame.activeTrackIds
+    staggeredTracks = frame.staggeredTracks
+    compositionLayers = frame.compositionLayers
+    const changed = objectList.length !== frame.objectList.length || objectList.some((o, i) => {
+      const next = frame.objectList[i]
+      return o.trackId !== next.trackId || o.sceneId !== next.sceneId || o.instrumentId !== next.instrumentId
+        || o.visualCopyIndex !== next.visualCopyIndex || o.masksTargets !== next.masksTargets
+        || o.maskSourceIds.join('\0') !== next.maskSourceIds.join('\0')
+    })
+    if (changed) { objectList = frame.objectList; listeners.forEach(listener => listener()) }
+  }
+  return { captureFrame, applyFrame, setProject, syncParams, computeAtBeat, getSceneBackdrop, getSceneFxOverrides, setPreviewObjectState, getObjectState, isTrackStaggered, getCompositionLayers, setMainCompositionOverride, setMainPreviewEnabled, setEditorPreviewSceneId, setMountedRenderScenes, getMountedRenderScenes, getVisualCopies, getPeakVisualCopyOpacity, getVisualCopy, getVisualCopyCount, subscribeObjects, getObjectList }
 }
 
 export type VisualEngineInstance = ReturnType<typeof createVisualEngine>

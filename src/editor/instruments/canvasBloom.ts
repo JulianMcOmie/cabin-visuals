@@ -1,3 +1,4 @@
+import { createRasterCanvas, type RasterCanvas, type RasterContext } from '../core/visual/rasterCanvas'
 // A 2D-canvas bloom chain for the canvas-texture instruments: an emissive
 // layer is downsampled to half and quarter resolution, blurred at widening
 // octaves with falling gain (approximating a real bloom PSF's exponential
@@ -22,22 +23,22 @@ export const DEFAULT_BLOOM_OCTAVES: readonly BloomOctave[] = [
   { res: 4, blur: 40, gain: 0.7 },
 ]
 
-function makeCanvas(w: number, h: number): HTMLCanvasElement {
-  const c = document.createElement('canvas')
+function makeCanvas(w: number, h: number): RasterCanvas {
+  const c = createRasterCanvas()
   c.width = Math.max(1, Math.round(w))
   c.height = Math.max(1, Math.round(h))
   return c
 }
 
 export class CanvasBloom {
-  readonly emissive: HTMLCanvasElement
-  readonly ectx: CanvasRenderingContext2D
-  private readonly half: HTMLCanvasElement
-  private readonly quarter: HTMLCanvasElement
-  private readonly hctx: CanvasRenderingContext2D
-  private readonly qctx: CanvasRenderingContext2D
-  private readonly octaves: HTMLCanvasElement[]
-  private readonly octx: CanvasRenderingContext2D[]
+  readonly emissive: RasterCanvas
+  readonly ectx: RasterContext
+  private readonly half: RasterCanvas
+  private readonly quarter: RasterCanvas
+  private readonly hctx: RasterContext
+  private readonly qctx: RasterContext
+  private readonly octaves: RasterCanvas[]
+  private readonly octx: RasterContext[]
   /** True while the emissive layer holds pixels - clearing a blank layer is
    *  a full-surface touch for nothing. */
   private dirty = false
@@ -47,7 +48,7 @@ export class CanvasBloom {
     this.half = makeCanvas(width / 2, height / 2)
     this.quarter = makeCanvas(width / 4, height / 4)
     this.octaves = spec.map((o) => (o.res === 2 ? makeCanvas(width / 2, height / 2) : makeCanvas(width / 4, height / 4)))
-    const get = (c: HTMLCanvasElement) => {
+    const get = (c: RasterCanvas) => {
       const ctx = c.getContext('2d')
       if (!ctx) throw new Error('2d context unavailable')
       return ctx
@@ -68,7 +69,7 @@ export class CanvasBloom {
 
   /** Blur and screen the emissive layer onto `ctx`. `reach` scales every
    *  octave's radius; `gain` scales the summed light. */
-  composite(ctx: CanvasRenderingContext2D, reach: number, gain: number): void {
+  composite(ctx: RasterContext, reach: number, gain: number): void {
     this.dirty = true
     const { half, quarter, hctx, qctx } = this
     hctx.clearRect(0, 0, half.width, half.height)

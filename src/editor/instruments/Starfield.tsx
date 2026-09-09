@@ -1,3 +1,4 @@
+import { createRasterCanvas, type RasterCanvas, type RasterContext } from '../core/visual/rasterCanvas'
 import { useEffect, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import { CanvasTexture, LinearFilter, Mesh, MeshBasicMaterial } from 'three'
@@ -78,14 +79,14 @@ function starConsts(): Float64Array {
 function StarfieldVisual({ trackId }: { trackId: string }) {
   const { viewport, invalidate } = useThree()
   const meshRef = useRef<Mesh>(null)
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const ctxRef = useRef<CanvasRenderingContext2D | null>(null)
+  const canvasRef = useRef<RasterCanvas | null>(null)
+  const ctxRef = useRef<RasterContext | null>(null)
   const textureRef = useRef<CanvasTexture | null>(null)
   const aspect = viewport.height > 0 ? viewport.width / viewport.height : 1
   const textureWidth = Math.max(256, Math.min(2048, Math.round((TEXTURE_HEIGHT * aspect) / 64) * 64))
 
   useEffect(() => {
-    const canvas = document.createElement('canvas')
+    const canvas = createRasterCanvas()
     canvas.width = textureWidth
     canvas.height = TEXTURE_HEIGHT
     canvasRef.current = canvas
@@ -199,7 +200,7 @@ function StarfieldVisual({ trackId }: { trackId: string }) {
 
     // Dev-only probe (see "renderer bugs: probe first"): the drawn layer plus
     // this frame's inputs, for console/Playwright checks.
-    if (process.env.NODE_ENV !== 'production') {
+    if (process.env.NODE_ENV !== 'production' && 'document' in globalThis) {
       ;(window as unknown as Record<string, unknown>).__starfieldDebug = { canvas, count, inBlock, beat }
     }
   })

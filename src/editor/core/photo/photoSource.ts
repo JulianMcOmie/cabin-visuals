@@ -1,3 +1,4 @@
+import { requestPreviewMedia } from '../visual/previewMedia'
 import { mintPhotoPath, uploadPhotoTo, getPhotoUrl } from '../../../persistence/photoStorage'
 
 // Ref-based access to photo bytes, mirroring core/video/videoSource.ts: with a
@@ -51,6 +52,8 @@ export function retryPhotoUpload(ref: string, onProgress?: (fraction: number) =>
  *  File if we have it, else the bucket's signed URL. Signed URLs expire, so
  *  hydrated photos resolve fresh per call. */
 export async function getPhotoPlayableUrl(ref: string): Promise<string> {
+  const remote = requestPreviewMedia('photo', ref)
+  if (remote) return await remote as string
   // Public app asset (same convention as audio/video refs): served as-is.
   if (ref.startsWith('/')) return ref
   const file = memFiles.get(ref)

@@ -1,3 +1,4 @@
+import type { RasterContext } from '../core/visual/rasterCanvas'
 import { useThree } from '@react-three/fiber'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
 import { useFullFrameCanvas, commitCanvasFrame } from '../core/visual/fullFrameCanvas'
@@ -28,7 +29,7 @@ const PARAMS: ParamDef[] = [
   { key: 'palette', label: 'Color Palette', type: 'string', default: '#7a1f1f,#17c917,#9adfe0,#8c2020,#ffffff' },
 ]
 
-type Ctx = CanvasRenderingContext2D
+type Ctx = RasterContext
 
 function paletteColor(palette: string[], velocity: number): string {
   if (!palette.length) return '#ffffff'

@@ -1,87 +1,54 @@
 'use client'
 
-import { useEffect, useLayoutEffect } from 'react'
-import { advance, useThree } from '@react-three/fiber'
+import { useEffect } from 'react'
+import { useThree } from '@react-three/fiber'
 import { useUIStore } from '../../store/UIStore'
 import { useTimeStore } from '../../store/TimeStore'
 import { useProjectStore } from '../../store/ProjectStore'
 import { subscribeObjects } from '../../core/visual/VisualEngine'
+import { isExportPinned } from '../../core/export/frameDriver'
+import { getBeatOverride } from '../../core/visual/beatOverride'
+import { previewRuntime } from '../../core/visual/previewRuntime'
 
-/**
- * Mounted once inside <Canvas>. While the transport is paused the Canvas runs
- * frameloop='demand' (the prop is set in Scene - it must be the PROP, because
- * <Canvas> re-applies its props on every re-render and would clobber an
- * imperative setFrameloop). The pause invariant makes the frame a pure function
- * of (beat, document): with both static there is nothing to render, the loop
- * idles, and heavy instruments stop stealing main-thread time from the UI.
- *
- * "Paused" freezes the beat, not the document - so this component asks R3F for
- * exactly one frame (invalidate) whenever an input changes:
- *
- *  - any ProjectStore change: edits reach the engine synchronously via
- *    VisualBeatSync.syncParams, so render now. One whole-store subscription -
- *    no enumeration of edit types that could miss one;
- *  - the debounced structural re-resolve landing ~80ms later: notes, blocks,
- *    and tracks live in the RESOLVED graph, not in syncParams - without this
- *    second frame, a note added while paused would render once against the old
- *    graph and then sit stale;
- *  - the beat moving while paused (scrub, ruler click, jump-to-start), and the
- *    play→pause edge (one settled frame at the paused position);
- *  - canvas geometry changes (panel resize, fullscreen): viewport-aware
- *    instruments re-compose for the new box.
- *
- * While playing the loop is 'always', where invalidate is inert. The export
- * path pins frameloop='never', where invalidate is a hard no-op (verified in
- * R3F source) - the governor cannot fight the export pin.
- */
+/** The primary canvas never joins R3F's shared animation loop. Worker frames
+ * arrive independently; compatibility renders get one background task and an
+ * adaptive cooldown (at most 30fps, at most ~25% CPU duty after a slow frame).
+ * A single non-preemptible compatibility render can still take longer than an
+ * input budget, which is why suitable instruments render in the worker. */
 export function RenderGovernor() {
-  const invalidate = useThree((s) => s.invalidate)
-  const size = useThree((s) => s.size)
-  const get = useThree((s) => s.get)
-
-  // Dev hook: read the live loop state from the console -
-  // __r3fState().frameloop / .internal.frames (pending demand frames).
+  const get = useThree(s => s.get)
   useEffect(() => {
-    if (process.env.NODE_ENV === 'production') return
-    ;(window as unknown as { __r3fState?: typeof get }).__r3fState = get
+    let alive = true, dirty = true, next = 0
+    let timer: ReturnType<typeof setTimeout>
+    const originalInvalidate = get().invalidate
+    const request = () => { dirty = true }
+    get().set({ invalidate: request })
+    const stopProject = useProjectStore.subscribe(request)
+    const stopGraph = subscribeObjects(request)
+    // Includes timeline Shift-hover changes while paused.
+    const stopUI = useUIStore.subscribe(request)
+    const stopTime = useTimeStore.subscribe(request)
+    const tick = () => {
+      if (!alive) return
+      const now = performance.now()
+      const input = navigator as Navigator & { scheduling?: { isInputPending?: () => boolean } }
+      if (!isExportPinned() && getBeatOverride() === null && !previewRuntime.rendering && now >= next
+        && !input.scheduling?.isInputPending?.()
+        && (previewRuntime.frameReady || dirty)) {
+        dirty = false; previewRuntime.frameReady = false
+        const start = performance.now()
+        get().advance(start)
+        next = performance.now() + Math.max(33, (performance.now() - start) * 3)
+      }
+      timer = setTimeout(tick, 16)
+    }
+    timer = setTimeout(tick, 0)
+    if (process.env.NODE_ENV !== 'production') Object.assign(window, { __r3fState: get })
     return () => {
-      delete (window as unknown as { __r3fState?: typeof get }).__r3fState
+      alive = false; clearTimeout(timer)
+      stopProject(); stopGraph(); stopUI(); stopTime()
+      get().set({ invalidate: originalInvalidate })
     }
   }, [get])
-
-  useEffect(() => {
-    const unsubProject = useProjectStore.subscribe(() => invalidate())
-    const unsubGraph = subscribeObjects(() => invalidate())
-    const unsubUI = useUIStore.subscribe((s, prev) => {
-      // Timeline hover also needs a frame while the scene is paused.
-      if (s.previewQuality !== prev.previewQuality || s.canvasHover !== prev.canvasHover) invalidate()
-    })
-    const unsubTime = useTimeStore.subscribe((s, prev) => {
-      if (!s.isPlaying && (s.currentBeat !== prev.currentBeat || prev.isPlaying)) invalidate()
-    })
-    return () => {
-      unsubProject()
-      unsubGraph()
-      unsubUI()
-      unsubTime()
-    }
-  }, [invalidate])
-
-  // First frame on mount, and one frame per resize - rendered SYNCHRONOUSLY
-  // (layout effect, pre-paint). r3f applies gl.setSize + the camera update in
-  // its store subscription BEFORE this component is notified of the new size,
-  // so advancing here paints the resized frame in the same visual frame as
-  // the element's new geometry. Without it the compositor scales the LAST
-  // presented frame into the new box for a beat - the squashed-aspect stutter
-  // at the settle of a sidebar glide. invalidate() stays as the safety net
-  // for any path the sync render misses. frameloop 'never' is the export pin,
-  // and advance() is exactly the API that drives 'never' - so it is guarded
-  // out here (invalidate is already a no-op there); the governor must not
-  // fight the export's frame stepping.
-  useLayoutEffect(() => {
-    if (get().frameloop !== 'never') advance(performance.now(), true)
-    invalidate()
-  }, [size, get, invalidate])
-
   return null
 }

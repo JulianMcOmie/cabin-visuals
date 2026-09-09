@@ -27,3 +27,14 @@
   stack starts (the earrape pattern). This also keeps `Tone.start()` inside the user's
   click. A clip whose fetch FAILED isn't retried mid-playback — the failure isn't cached
   (waveform.ts), so the next play press re-fetches and it joins live from there.
+
+
+## Oscilloscope worker windows
+
+`waveformWindow.ts` is the shared pure sampler for `AudioEngine.getWaveformAtBeat`
+and `readWaveformWindow.ts`. The latter reads only audible overlapping clips from
+the captured audio document, awaits the existing decode cache and returns exactly
+1024 float samples (4KiB, a 20ms beat-addressed window). Playback players, transport
+and AudioContext scheduling remain on main. Worker queries deduplicate in flight;
+no full PCM buffer is copied. Do not use a live analyser or transport clock for
+this path: backward seeks, paused gain/trim/mute edits and export must agree.

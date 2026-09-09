@@ -62,6 +62,7 @@ export async function walkFrames(
     // Let async per-frame inputs (video seeks) settle before the render
     // samples them. No preparers → no await at all.
     if (framePreparers.size > 0) {
+      driver.prepareFrame?.(beat)
       await Promise.all([...framePreparers].map((fn) => fn(beat)))
     }
     driver.renderFrame(beat, (i * 1000) / fps)
@@ -187,6 +188,7 @@ export async function runExport(
 
   driver.pin(settings.width, settings.height)
   try {
+    await driver.prepare?.(timebase.startBeat)
     const completed = await walkFrames(
       timebase,
       settings.fps,

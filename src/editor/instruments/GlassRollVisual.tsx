@@ -1,3 +1,4 @@
+import { createRasterCanvas, type RasterCanvas, type RasterContext } from '../core/visual/rasterCanvas'
 import { useEffect, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import { CanvasTexture, LinearFilter, Mesh, MeshBasicMaterial } from 'three'
@@ -87,9 +88,9 @@ function hueShift(c: Rgb, deg: number): Rgb {
 
 // ── The mosaic strip ────────────────────────────────────────────────────────
 
-const stripCache = new Map<string, HTMLCanvasElement>()
+const stripCache = new Map<string, RasterCanvas>()
 
-function buildGlassStrip(palette: GlassPalette, seed: number, detail: number, tint: number, leadBright: number, flowers: number): HTMLCanvasElement {
+function buildGlassStrip(palette: GlassPalette, seed: number, detail: number, tint: number, leadBright: number, flowers: number): RasterCanvas {
   const W = STRIP_W
   const H = STRIP_H
   // Facet grid: about two sites across a tile at detail 1 - the diagonal
@@ -276,7 +277,7 @@ function buildGlassStrip(palette: GlassPalette, seed: number, detail: number, ti
     }
   }
 
-  const raw = document.createElement('canvas')
+  const raw = createRasterCanvas()
   raw.width = W
   raw.height = H
   const rctx = raw.getContext('2d')!
@@ -341,7 +342,7 @@ function buildGlassStrip(palette: GlassPalette, seed: number, detail: number, ti
   }
 
   // Soften: the reference glass is luminous and slightly out of focus.
-  const out = document.createElement('canvas')
+  const out = createRasterCanvas()
   out.width = W
   out.height = H
   const octx = out.getContext('2d')!
@@ -351,7 +352,7 @@ function buildGlassStrip(palette: GlassPalette, seed: number, detail: number, ti
   return out
 }
 
-function glassStrip(paletteIndex: number, seed: number, detail: number, tint: number, leadBright: number, flowers: number): HTMLCanvasElement {
+function glassStrip(paletteIndex: number, seed: number, detail: number, tint: number, leadBright: number, flowers: number): RasterCanvas {
   const palette = GLASS_PALETTES[Math.max(0, Math.min(GLASS_PALETTES.length - 1, paletteIndex))]
   const id = `${paletteIndex}|${seed}|${detail.toFixed(2)}|${Math.round(tint)}|${leadBright.toFixed(2)}|${flowers.toFixed(1)}`
   let strip = stripCache.get(id)
@@ -365,13 +366,13 @@ function glassStrip(paletteIndex: number, seed: number, detail: number, tint: nu
 
 // ── Sprites ─────────────────────────────────────────────────────────────────
 
-const spriteCache = new Map<string, HTMLCanvasElement>()
+const spriteCache = new Map<string, RasterCanvas>()
 /** A soft dust mote: hot core, quick falloff, faint wide skirt. */
-function dotSprite(col: Rgb): HTMLCanvasElement {
+function dotSprite(col: Rgb): RasterCanvas {
   const id = `dot|${col[0] | 0},${col[1] | 0},${col[2] | 0}`
   let s = spriteCache.get(id)
   if (s) return s
-  s = document.createElement('canvas')
+  s = createRasterCanvas()
   s.width = s.height = 32
   const c = s.getContext('2d')!
   const gr = c.createRadialGradient(16, 16, 0, 16, 16, 16)
@@ -430,7 +431,7 @@ function notesOnsetWithin(idx: NoteIndex, lo: number, hi: number, out: number[])
   return out
 }
 
-function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+function roundRectPath(ctx: RasterContext, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath()
   const rr = Math.max(0, Math.min(r, w / 2, h / 2))
   if (rr > 0) ctx.roundRect(x, y, w, h, rr)
@@ -445,8 +446,8 @@ const PARTICLE_BLUE: Rgb = [154, 181, 255]
 export function GlassRollVisual({ trackId }: { trackId: string }) {
   const { viewport, invalidate } = useThree()
   const meshRef = useRef<Mesh>(null)
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const ctxRef = useRef<CanvasRenderingContext2D | null>(null)
+  const canvasRef = useRef<RasterCanvas | null>(null)
+  const ctxRef = useRef<RasterContext | null>(null)
   const textureRef = useRef<CanvasTexture | null>(null)
   const bloomRef = useRef<CanvasBloom | null>(null)
   const visibleRef = useRef<number[]>([])
@@ -454,12 +455,12 @@ export function GlassRollVisual({ trackId }: { trackId: string }) {
   const poseRef = useRef<DustPose>({ x: 0, y: 0, t: 0 })
   // The Night backdrop (gradient + washes) is static per settings: painted
   // once into its own canvas and blitted, not rebuilt from gradients per frame.
-  const backdropRef = useRef<{ key: string; canvas: HTMLCanvasElement } | null>(null)
+  const backdropRef = useRef<{ key: string; canvas: RasterCanvas } | null>(null)
   const aspect = viewport.height > 0 ? viewport.width / viewport.height : 1
   const textureWidth = Math.max(256, Math.min(2048, Math.round((TEXTURE_HEIGHT * aspect) / 64) * 64))
 
   useEffect(() => {
-    const canvas = document.createElement('canvas')
+    const canvas = createRasterCanvas()
     canvas.width = textureWidth
     canvas.height = TEXTURE_HEIGHT
     canvasRef.current = canvas
@@ -568,7 +569,7 @@ export function GlassRollVisual({ trackId }: { trackId: string }) {
       const bkey = `${W}|${H}|${hitLine.toFixed(3)}|${ambient.toFixed(2)}`
       let bd = backdropRef.current
       if (!bd || bd.key !== bkey) {
-        const c = document.createElement('canvas')
+        const c = createRasterCanvas()
         c.width = W
         c.height = H
         const bctx = c.getContext('2d')
@@ -1007,7 +1008,7 @@ export function GlassRollVisual({ trackId }: { trackId: string }) {
       material.needsUpdate = true
     }
 
-    if (process.env.NODE_ENV !== 'production') {
+    if (process.env.NODE_ENV !== 'production' && 'document' in globalThis) {
       ;(window as unknown as Record<string, unknown>).__glassRollDebug = { main: canvas, emissive: bloom.emissive, strip, layout, visible: visible.length }
     }
   })

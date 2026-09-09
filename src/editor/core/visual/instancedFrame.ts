@@ -3,6 +3,7 @@ import { Color, Matrix4 } from 'three'
 import { useVisualEngine, useVisualFrame as useFrame } from './VisualEngineContext'
 import { applyColorShiftToColor } from './colorShift'
 import { getBeatOverride } from './beatOverride'
+import { previewRuntime } from './previewRuntime'
 import { composePostMoverScale, evaluatePostMoverScale } from './postMoverScale'
 import { useTimeStore } from '../../store/TimeStore'
 import type { ObjectState } from './types'
@@ -70,7 +71,7 @@ export function useInstancedCopyFrame(
     effectScaleRef.current = scaleInstances.length === 0 ? 1 : evaluatePostMoverScale(
       scaleInstances,
       state.effectOverrides,
-      getBeatOverride() ?? useTimeStore.getState().currentBeat,
+      getBeatOverride() ?? (previewRuntime.worker ? previewRuntime.beat : useTimeStore.getState().currentBeat),
     )
     let frame = frameRef.current
     if (!frame) {

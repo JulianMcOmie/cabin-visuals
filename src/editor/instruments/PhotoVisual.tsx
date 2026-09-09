@@ -1,7 +1,7 @@
 'use client'
 
 import { useContext, useEffect, useMemo, useRef } from 'react'
-import { Mesh, ShaderMaterial, SRGBColorSpace, LinearFilter, TextureLoader, Vector2, type Texture } from 'three'
+import { Mesh, ShaderMaterial, SRGBColorSpace, LinearFilter, TextureLoader, Vector2, Texture } from 'three'
 import { useThree } from '@react-three/fiber'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { VisualEngineContext, useVisualEngine } from '../core/visual/VisualEngineContext'
@@ -28,7 +28,10 @@ function loadPhotoTexture(ref: string): Promise<Texture | null> {
   const promise = (async (): Promise<Texture | null> => {
     try {
       const url = await getPhotoPlayableUrl(ref)
-      const texture = await new TextureLoader().loadAsync(url)
+      const texture = typeof document === 'undefined'
+        ? new Texture(await createImageBitmap(await (await fetch(url)).blob(), { imageOrientation: 'flipY', premultiplyAlpha: 'none' }))
+        : await new TextureLoader().loadAsync(url)
+      texture.needsUpdate = true
       // `load` fires before the JPEG is decoded; without this the decode
       // happens synchronously inside the first texImage2D - i.e. on the frame
       // the photo first shows. decode() does it off-thread ahead of time.

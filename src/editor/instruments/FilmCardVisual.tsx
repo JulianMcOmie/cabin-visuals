@@ -1,3 +1,4 @@
+import { createRasterCanvas, type RasterCanvas, type RasterContext } from '../core/visual/rasterCanvas'
 import { midiVelocity } from '../utils/midiVelocity'
 import { useInstrumentFrame, seededRand, beatInBlock } from '../core/visual/instrumentFrame'
 import { useFullFrameCanvas, commitCanvasFrame } from '../core/visual/fullFrameCanvas'
@@ -13,14 +14,14 @@ const FILM_FPS = 24
 const CANVAS_H = 1024
 
 // Cache the vignette per canvas size, amount and card mode.
-const vignetteCache = new Map<string, HTMLCanvasElement>()
+const vignetteCache = new Map<string, RasterCanvas>()
 
-function drawVignette(ctx: CanvasRenderingContext2D, w: number, h: number, amount: number, outro: boolean) {
+function drawVignette(ctx: RasterContext, w: number, h: number, amount: number, outro: boolean) {
   if (amount <= 0) return
   const key = `${w}x${h}|${amount.toFixed(3)}|${outro ? 'o' : 'i'}`
   let baked = vignetteCache.get(key)
   if (!baked) {
-    baked = document.createElement('canvas')
+    baked = createRasterCanvas()
     baked.width = w
     baked.height = h
     const bctx = baked.getContext('2d')!

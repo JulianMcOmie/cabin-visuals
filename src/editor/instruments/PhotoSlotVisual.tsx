@@ -1,3 +1,8 @@
+import { useContext, useEffect } from 'react'
+import { useVisualEngine, VisualEngineContext } from '../core/visual/VisualEngineContext'
+import { InstrumentCopyContext } from '../core/visual/instrumentColor'
+import { registerFramePreparer } from '../core/export/framePreparers'
+import { createRasterCanvas, type RasterCanvas, type RasterContext } from '../core/visual/rasterCanvas'
 import { useThree } from '@react-three/fiber'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
 import { useFullFrameCanvas, commitCanvasFrame } from '../core/visual/fullFrameCanvas'
@@ -18,35 +23,32 @@ const REF_W = 422
 const REF_H = 254
 
 // ---------------------------------------------------------------------------
-// Photo bytes -> HTMLImageElement, cached per ref for canvas drawing.
-
-interface ImgEntry { img: HTMLImageElement | null; failed: boolean }
+// Images are decoded asynchronously in either renderer; the 2D draw uses
+// unflipped ImageBitmaps. Readiness wakes paused frames, including worker roots.
+interface ImgEntry { img: ImageBitmap | null; failed: boolean; promise: Promise<void> }
 const imageCache = new Map<string, ImgEntry>()
-function cachedImage(ref: string): HTMLImageElement | null {
-  const entry = imageCache.get(ref)
-  if (entry) return entry.img
-  const rec: ImgEntry = { img: null, failed: false }
+let imageRevision = 0
+const imageListeners = new Set<() => void>()
+function cachedImage(ref: string): ImageBitmap | null {
+  const existing = imageCache.get(ref)
+  if (existing) return existing.img
+  const rec: ImgEntry = { img: null, failed: false, promise: Promise.resolve() }
   imageCache.set(ref, rec)
-  void getPhotoPlayableUrl(ref)
-    .then((url) => {
-      const img = new Image()
-      // Signed storage URLs are cross-origin; without CORS clearance the 2D
-      // canvas is TAINTED by drawImage and the WebGL texture upload throws a
-      // SecurityError. Same default THREE's TextureLoader uses (which is why
-      // the Photo instrument never hit this). Harmless for object/public URLs.
-      img.crossOrigin = 'anonymous'
-      img.onload = () => { rec.img = img }
-      img.onerror = () => { rec.failed = true }
-      img.src = url
+  rec.promise = getPhotoPlayableUrl(ref)
+    .then(async url => {
+      const response = await fetch(url)
+      if (!response.ok) throw new Error(`Photo HTTP ${response.status}`)
+      rec.img = await createImageBitmap(await response.blob())
     })
     .catch(() => { rec.failed = true })
+    .finally(() => { imageRevision++; imageListeners.forEach(listener => listener()) })
   return null
 }
 
 // ---------------------------------------------------------------------------
 // Shared drawing vocabulary (ported from the source-edit analysis).
 
-type Ctx = CanvasRenderingContext2D
+type Ctx = RasterContext
 
 export function paperRect(ctx: Ctx, x0: number, y0: number, x1: number, y1: number, bulge: number, seed: number): void {
   const bx = bulge * (0.8 + seededRand(seed) * 0.4)
@@ -97,12 +99,12 @@ function squishedLine(ctx: Ctx, text: string, cx: number, cy: number, size: numb
 }
 
 /** Blurred title sprite ("Spider scene"): radial zoom blur, cached per label. */
-const titleCache = new Map<string, HTMLCanvasElement>()
-function titleSprite(label: string): HTMLCanvasElement {
+const titleCache = new Map<string, RasterCanvas>()
+function titleSprite(label: string): RasterCanvas {
   const hit = titleCache.get(label)
   if (hit) return hit
   const w = 512, h = 200
-  const base = document.createElement('canvas')
+  const base = createRasterCanvas()
   base.width = w; base.height = h
   const bctx = base.getContext('2d')!
   bctx.fillStyle = '#ffffff'
@@ -110,7 +112,7 @@ function titleSprite(label: string): HTMLCanvasElement {
   bctx.textAlign = 'center'
   bctx.textBaseline = 'middle'
   bctx.fillText(label, w / 2, h / 2)
-  const out = document.createElement('canvas')
+  const out = createRasterCanvas()
   out.width = w; out.height = h
   const octx = out.getContext('2d')!
   for (let i = 0; i < 14; i++) {
@@ -125,11 +127,11 @@ function titleSprite(label: string): HTMLCanvasElement {
 }
 
 /** Radial light rays (the Spider-scene backdrop), deterministic. */
-let raySprite: HTMLCanvasElement | null = null
-function getRaySprite(): HTMLCanvasElement {
+let raySprite: RasterCanvas | null = null
+function getRaySprite(): RasterCanvas {
   if (raySprite) return raySprite
   const w = 512, h = 308
-  const c = document.createElement('canvas')
+  const c = createRasterCanvas()
   c.width = w; c.height = h
   const ctx = c.getContext('2d')!
   ctx.translate(w / 2, h / 2)
@@ -195,6 +197,28 @@ function useSlotTexHeight(): number {
 
 export function PhotoSlotVisual({ trackId }: { trackId: string }) {
   const { viewport, meshRef, canvasRef, textureRef, unchanged, invalidate } = useFullFrameCanvas(useSlotTexHeight())
+  const wake = useThree(s => s.invalidate)
+  const { getObjectState } = useVisualEngine()
+  const preview = useContext(VisualEngineContext)
+  const copy = useContext(InstrumentCopyContext)
+  useEffect(() => {
+    imageListeners.add(wake)
+    return () => { imageListeners.delete(wake) }
+  }, [wake])
+  useEffect(() => {
+    if (preview) return
+    return registerFramePreparer(async () => {
+      const state = getObjectState(trackId, copy?.visualCopyIndex)
+      if (!state || state.blackedOut) return
+      const ev = activeEvent(state.notes, state.beat, (state.params.hold ?? 0) >= 0.5)
+      const pads = state.photoPads ?? []
+      if (!ev || !pads.length) return
+      const n = ev.counter > 0 ? ev.counter - 1 : ev.ordinal
+      const ref = pads[((n % pads.length) + pads.length) % pads.length].ref
+      cachedImage(ref)
+      await imageCache.get(ref)!.promise
+    })
+  }, [preview, getObjectState, trackId, copy?.visualCopyIndex])
 
   useInstrumentFrame(trackId, (state) => {
     const canvas = canvasRef.current
@@ -379,7 +403,7 @@ export function PhotoSlotVisual({ trackId }: { trackId: string }) {
     // A photo that is still loading: retry until it lands so a paused frame
     // doesn't hold the placeholder forever.
     if (padRef && !imgReady && !imageCache.get(padRef)?.failed) return false
-  })
+  }, () => imageRevision)
 
   return (
     <mesh ref={meshRef}>

@@ -55,3 +55,10 @@ Both axes are forced even (H.264 chroma subsampling). Two consequences worth kno
 - `runExport` awaits `whenInstrumentsSettled()` (instruments/lazyInstrument.ts) before frame 0: instrument visuals are lazy chunks, and an object whose chunk is still on the wire is showing its Suspense fallback - an empty object in the capture. `capturePreviewClip`'s `waitUntilRenderable` does the same after the tracks hydrate.
 - Starting an export PAUSES the transport (ExportDialog): playback and the encode share one canvas, so a running transport only steals frames from the render.
 - UI entry: `components/ExportDialog.tsx` + `components/visual/ExportDriver.tsx`.
+
+
+After worker preview, `FrameDriver.prepare` mounts the exact current document and
+primes one unencoded frame at the starting beat before frame 0. For frames with
+async preparers, `prepareFrame(beat)` resolves current object/copy states first.
+PhotoSlot awaits the image selected by that exact state; Oscilloscope awaits its
+bounded waveform window. Both keep per-copy clocks and paused export deterministic.

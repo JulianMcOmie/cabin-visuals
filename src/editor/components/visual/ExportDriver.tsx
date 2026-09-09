@@ -1,10 +1,26 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useThree } from '@react-three/fiber'
+import { reconciler, useThree } from '@react-three/fiber'
 import { setBeatOverride } from '../../core/visual/beatOverride'
-import { setMainCompositionOverride } from '../../core/visual/VisualEngine'
+import { useTimeStore } from '../../store/TimeStore'
+import { useProjectStore } from '../../store/ProjectStore'
+import { preloadProjectInstruments } from '../../instruments'
+import { whenFontsSettled } from '../../core/visual/fonts'
+import { whenInstrumentsSettled } from '../../instruments/lazyInstrument'
+import { computeAtBeat, setProject, setMainCompositionOverride } from '../../core/visual/VisualEngine'
 import { registerFrameDriver, setExportPinned } from '../../core/export/frameDriver'
+
+// MessageChannel yields without background-tab timer throttling.
+function yieldRenderTask(): Promise<void> {
+  return new Promise(resolve => {
+    const channel = new MessageChannel()
+    channel.port1.onmessage = () => {
+      channel.port1.close(); channel.port2.close(); resolve()
+    }
+    channel.port2.postMessage(null)
+  })
+}
 
 /**
  * Mounted once inside <Canvas>, next to VisualBeatSync. Registers the
@@ -28,6 +44,37 @@ export function ExportDriver() {
     let saved: { frameloop: 'always' | 'demand' | 'never'; width: number; height: number; dpr: number } | null = null
 
     registerFrameDriver({
+      async prepare(beat = useTimeStore.getState().currentBeat) {
+        // Resolve the export composition before waiting for its React mounts.
+        computeAtBeat(beat)
+        // Publishing the exact document schedules React's structural mounts.
+        // Yield a task before asking whether their lazy boundaries have settled.
+        await yieldRenderTask()
+        await whenInstrumentsSettled()
+        // Lazy boundaries settle during layout effects; several instruments
+        // allocate their Three objects in passive effects. Flush those as well,
+        // before the encoder is allowed to see frame 0.
+        const renderer = reconciler as unknown as { flushSyncWork: () => void; flushPassiveEffects: () => void }
+        renderer.flushSyncWork()
+        renderer.flushPassiveEffects()
+        await whenInstrumentsSettled()
+        renderer.flushSyncWork()
+        renderer.flushPassiveEffects()
+        computeAtBeat(beat)
+        // A mount may create its render objects from its first pure frame.
+        // Prime at the requested beat, then commit those objects before frame 0.
+        setBeatOverride(beat)
+        get().advance(0)
+        await whenFontsSettled()
+        await yieldRenderTask()
+        renderer.flushSyncWork()
+        renderer.flushPassiveEffects()
+        await whenInstrumentsSettled()
+      },
+      prepareFrame(beat) {
+        setBeatOverride(beat)
+        computeAtBeat(beat)
+      },
       renderFrame(beat, timeMs) {
         setBeatOverride(beat)
         get().advance(timeMs)
@@ -38,11 +85,19 @@ export function ExportDriver() {
         saved = { frameloop: s.frameloop, width: s.size.width, height: s.size.height, dpr: s.viewport.dpr }
         // Before setSize: VisualScene's target-resize effect must see the pin
         // and stand the draft preview scale down for the export dimensions.
-        setExportPinned(true)
-        setMainCompositionOverride(true)
-        s.setFrameloop('never')
-        s.setDpr(1)
-        s.setSize(width, height)
+        // React's separate canvas root must commit its object tree before a
+        // frame-exact export can sample it. This synchronous flush is export-only.
+        const flush = (reconciler as unknown as { flushSyncFromReconciler: (fn: () => void) => void }).flushSyncFromReconciler
+        flush(() => {
+          setExportPinned(true)
+          const project = useProjectStore.getState()
+          preloadProjectInstruments(project.scenes)
+          setProject(project)
+          setMainCompositionOverride(true)
+          s.setFrameloop('never')
+          s.setDpr(1)
+          s.setSize(width, height)
+        })
         // The drawing buffer is now export-sized, but the element must not
         // reflow the editor: keep its on-screen CSS box where it was.
         const el = s.gl.domElement

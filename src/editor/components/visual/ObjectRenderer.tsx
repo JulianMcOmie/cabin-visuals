@@ -1,3 +1,4 @@
+import { previewRuntime } from '../../core/visual/previewRuntime'
 import { useContext, memo, Suspense, useEffect, useMemo, useRef } from 'react'
 import { Group, Matrix4 } from 'three'
 import { getInstrument } from '../../instruments'
@@ -191,7 +192,7 @@ export const ObjectRenderer = memo(function ObjectRenderer({
       composeScreenAnchor(camera.position, camera.quaternion, visualCopy?.transform, _composed)
       _composed.decompose(g.position, g.quaternion, g.scale)
     } else if (state) {
-      const beat = getBeatOverride() ?? useTimeStore.getState().currentBeat
+      const beat = getBeatOverride() ?? (previewRuntime.worker ? previewRuntime.beat : useTimeStore.getState().currentBeat)
       const effectScale = evaluatePostMoverScale(scaleInstances, state.effectOverrides, beat)
       composePostMoverScale(state.world, visualCopy?.transform, effectScale, _composed)
       _composed.decompose(g.position, g.quaternion, g.scale)

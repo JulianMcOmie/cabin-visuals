@@ -1,3 +1,4 @@
+import { previewRuntime } from '../../core/visual/previewRuntime'
 import { useEffect, useRef, type ReactNode } from 'react'
 import { BufferAttribute, BufferGeometry, Group, Mesh, Material, type IUniform } from 'three'
 import { useTimeStore } from '../../store/TimeStore'
@@ -172,7 +173,7 @@ export function MaterialWrapper({
     const group = groupRef.current
     if (!group) return
     const state = getObjectState(trackId)
-    const beat = getBeatOverride() ?? useTimeStore.getState().currentBeat
+    const beat = getBeatOverride() ?? (previewRuntime.worker ? previewRuntime.beat : useTimeStore.getState().currentBeat)
 
     // The LAST enabled material effect owns the surface. Stacking two generated
     // surfaces has no meaningful composition - one simply overwrites albedo - so

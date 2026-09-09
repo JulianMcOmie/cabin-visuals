@@ -1,3 +1,4 @@
+import { createRasterCanvas } from '../core/visual/rasterCanvas'
 import {
   AdditiveBlending,
   BufferAttribute,
@@ -93,7 +94,7 @@ export function wordShape(word: string, font: ParticleFont): WordShape | null {
   const cached = wordShapeCache.get(key)
   if (cached !== undefined) return cached
 
-  const canvas = document.createElement('canvas')
+  const canvas = createRasterCanvas()
   const ctx = canvas.getContext('2d', { willReadFrequently: true })
   if (!ctx) return null
 

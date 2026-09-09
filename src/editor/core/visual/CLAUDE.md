@@ -380,3 +380,113 @@ rotation, phase/hue and signed offsets use Sum. Effect namespaces are stripped
 before classification. Defaults apply only to creation: retargeting, duplication,
 loading and user mode choices retain the stored mode. New target families belong
 in this pure policy, never in a sampler or a saved-document fallback.
+
+## Asynchronous editor preview
+
+`VisualBeatSync` only marks preview work dirty in store listeners. `LatestPreview`
+keeps one request in flight and one replaceable dirty flag; it reads/clones the
+latest snapshot at dispatch, not during a note gesture. Continuous edits make
+progress without a trailing debounce. `preview.worker.ts` boots the evaluator
+and `previewWorkerRuntime.tsx` owns a separate R3F root and OffscreenCanvas for
+worker-safe instruments (`previewProtocol.ts`). That root renders the real
+VisualScene compositor and the local-chain track thumbnails. Raster text, emoji,
+film cards, particles' word sprites, MIDI Roll, photos and WebCodecs video use
+OffscreenCanvas/worker fonts. Media RPC resolves session File/Blob or signed URLs
+on the editor thread; decoding stays in the worker. Async decode arrivals wake
+paused previews, including the rolling video buffer past its initial head cache.
+
+All currently registered visual instruments have worker paths, including PhotoSlot
+(ImageBitmap assets, raster sprites, paused asset wakeups and export readiness)
+and Oscilloscope (fixed 1024-sample windows, 4KiB per RPC). Audio decoding and
+playback stay on main; `waveformWindow.ts` shares exact sampling math with
+AudioEngine. In-flight equal queries are deduplicated and each mounted scope
+retains only its current window. Audio edits increment preview revision, so gain,
+trim, mute and solo changes repaint even at a static beat. No whole PCM buffer
+crosses the thread boundary.
+
+`previewPicking.ts` runs the same raycast/layer math on the owning renderer.
+Pointer moves replace one pending pick, piggybacked on the next preview request;
+late answers are ignored after pointer leave/Shift release. Worker camera matrices
+are mirrored for DOM gradient handles; frame notifications update their projection
+without advancing main WebGL. Picking and gradient editing keep worker rendering.
+
+Unknown future instruments fail closed until audited. Missing OffscreenCanvas
+keeps worker evaluation and main rendering; worker startup/runtime failure falls
+back to both on main. These platform compatibility paths cannot provide full
+input/render independence.
+
+The main Canvas always has `frameloop="never"`. `RenderGovernor` alone advances
+compatibility frames in later tasks, with an adaptive cooldown and pending-input
+check; export advances directly. `PreviewSceneRenderer` unmounts the duplicate
+main-thread scene tree while worker GL is active, so thousands of copy selectors
+cannot run synchronously inside a MIDI edit. Canvas Shift picking also stays in
+the worker, and never changes the rendering mode of a Shift MIDI gesture.
+
+Worker graphs contain executable functions and never cross the boundary.
+`captureFrame`/`applyFrame` transfer evaluated data, restore Matrix4 prototypes,
+retain static note/automation identities between unchanged-document frames, and
+publish the React object list only when its structure changes. The worker's beat
+also drives compositor/effect time in the compatibility renderer: sampling the
+newer transport beat there would mix two different frames.
+
+Finished pixels, thumbnail readbacks and the ambient downsample are computed in
+the worker. **Do not replace the pixel handoff with a GPU ImageBitmap attached to
+the DOM without measuring Chromium Commit tasks.** In the dense Wormhole probe,
+JS presentation cost was under 1ms yet main-thread compositor commits stalled
+for ~150ms against the next worker GL frame. CPU pixel transfer plus a worker
+cooldown avoids sharing that busy GL surface. A saturated software GPU can still
+stall browser compositing: workers do not give the UI a separate physical GPU.
+Likewise, one synchronous compatibility render cannot be preempted by a timer.
+
+Export pin invalidates outstanding preview replies, resolves the current document
+(including an edit whose preview is unfinished), mounts the main scene, then
+`FrameDriver.prepare` waits for lazy instruments, resolves the export composition,
+flushes canvas effects, primes one unencoded frame at the exact initial beat,
+and waits for its mount/font work before frame 0. No transport advances and no
+encoded frame is skipped. Video export awaits the clip's actual arm promise
+instead of a 50ms guess. Preview supersamples small viewports; pinned export uses
+its requested native resolution, so pixel comparison must account for that. Preview jobs are
+paused while pinned; unpin requests the latest document and unchanged transport
+beat. Export never drops a requested frame or inherits preview throttling.
+Before async media preparers, `FrameDriver.prepareFrame(beat)` resolves the exact
+beat (including per-copy clocks); PhotoSlot and waveform preparers must read these
+states rather than the previous exported frame. Geometry-only exports avoid this
+extra preparation. `useInstrumentFrame` accepts an optional external dependency
+stamp for async assets/audio that change without a visual document/beat edit.
+
+Next 15 Turbopack's dev-worker refresh stub returns undefined from component
+signature wrappers, erasing `memo(function Component)` exports. The worker
+bootstrap installs identity signatures BEFORE dynamically loading React modules;
+production has no refresh wrappers. Keep this bootstrap ahead of all React imports.
+Next app-client bundles also constant-fold `typeof window` as present inside worker
+chunks. Use document/globalThis capability guards for raster/DPR paths.
+
+Validation: `npm run test:visual`, `npx tsc --noEmit`, and
+`BASE=http://localhost:<port> node scripts/perf/responsive-preview.mjs`.
+`MODE=compat` measures the same workload with worker evaluation and main-thread
+rendering. The probe uses three max-detail Wormholes, real MIDI drag/place/scroll,
+checks final paused notes and pixels, and compares worker output with a pinned
+export frame. Its CPU profile and compositor trace go to `/private/tmp`.
+
+`useNoteGestures` keeps drag ownership and the draft note in synchronous refs.
+Native pointerup may arrive before React paints pointerdown; mirroring refs only
+from render drops quick note placement under load. The browser probe deliberately
+uses a zero-delay right-button down/up and checks the persisted note count.
+
+Additional browser checks: `scripts/perf/worker-media.mjs` covers eight instrument
+cases, seeks, gain edits, PhotoSlot styles and export repeats;
+`scripts/perf/worker-interactions.mjs` covers worker picking and gradient dragging.
+
+`INSTRUMENTS=cube EXPORT_SCALE=2 node scripts/perf/worker-media.mjs` compares
+textured gloss at the preview compositor resolution. PMREM targets contain GPU-only
+pixels: create and dispose them in the same effect so StrictMode replay regenerates
+them. A memoized target disposed by an effect can silently lose its reflections.
+Starfield sprites, FundamentalGeometry grain, Glass Roll and the shared
+CanvasBloom buffers use the raster canvas helper. `scripts/perf/worker-registry.mjs` renders all registered instruments in
+the worker; a capability allowlist alone does not catch DOM-only raster code.
+
+Worker FrameCommit waits for passive effects before advancing. A layout-effect
+gate can cache an empty cold-start frame before scene resources attach.
+`worker-cold-start.mjs` injects a visible initial document at the worker protocol
+boundary and checks that a paused preview settles without any later document edit.
+It also runs against production builds, which omit editor debug hooks.

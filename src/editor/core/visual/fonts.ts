@@ -42,12 +42,13 @@ const loading = new Map<string, Promise<void>>()
  */
 export function ensureFont(family: string): boolean {
   if (loaded.has(family)) return true
-  if (typeof document === 'undefined') return false
   const files = FONT_FILES[family]
   if (!files) {
     loaded.add(family)
     return true
   }
+  const fonts = typeof document !== 'undefined' ? document.fonts : (globalThis as unknown as { fonts?: FontFaceSet }).fonts
+  if (!fonts || typeof FontFace === 'undefined') return false
   if (!loading.has(family)) {
     loading.set(
       family,
@@ -57,7 +58,7 @@ export function ensureFont(family: string): boolean {
             style: f.style ?? 'normal',
             weight: f.weight ?? '400',
           })
-          document.fonts.add(face)
+          fonts.add(face)
           return face.load()
         }),
       )
@@ -66,4 +67,12 @@ export function ensureFont(family: string): boolean {
     )
   }
   return false
+}
+
+/** Worker rendering awaits fonts requested by its first instrument frame. */
+export async function whenFontsSettled(): Promise<boolean> {
+  const pending = [...loading].filter(([family]) => !loaded.has(family))
+  if (!pending.length) return false
+  await Promise.all(pending.map(([, promise]) => promise))
+  return true
 }

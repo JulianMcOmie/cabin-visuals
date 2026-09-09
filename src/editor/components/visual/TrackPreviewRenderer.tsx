@@ -18,6 +18,10 @@ import {
 import { ObjectRenderer } from './ObjectRenderer'
 import { InstancedObjectRenderer } from './InstancedObjectRenderer'
 
+const pendingReadbacks = new Set<Promise<void>>()
+/** The worker waits for this atlas before transferring its thumbnail bitmaps. */
+export async function whenTrackPreviewsPainted() { await Promise.all([...pendingReadbacks]) }
+
 const EMPTY_SURFACES: ReturnType<typeof getTrackPreviewSurfaces> = []
 
 function makeStage(id: string, project: ProjectSnapshot, previous?: Stage): Stage {
@@ -85,12 +89,14 @@ const StageObjects = memo(function StageObjects({ stage, sceneId }: { stage: Sta
  * production evaluator on an inclusive chain prefix, a fixed camera and the
  * SAME playhead. The 2D destination stays in its row, so scroll never waits for
  * a render or a coordinate mirror. */
-export function TrackPreviewRenderer() {
+export function TrackPreviewRenderer({ immediate = false }: { immediate?: boolean } = {}) {
+  const immediateProject = useProjectStore(s => immediate ? s : null)
   const invalidate = useThree(s => s.invalidate)
   const surfaces = useSyncExternalStore(subscribeTrackPreviews, getTrackPreviewSurfaces, () => EMPTY_SURFACES)
   const [revision, setRevision] = useState(0)
   const cache = useRef(new Map<string, Stage>())
   useEffect(() => {
+    if (immediate) return
     // Structural edits are batched off the pointermove path. A changed prefix
     // rebuilds only its affected stages; foreign edits preserve scene mounts.
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -99,7 +105,7 @@ export function TrackPreviewRenderer() {
       timer = setTimeout(() => { setRevision(value => value + 1); invalidate() }, 80)
     })
     return () => { stop(); clearTimeout(timer) }
-  }, [invalidate])
+  }, [invalidate, immediate])
   const stages = useMemo(() => {
     const p = useProjectStore.getState()
     const snapshot = { tracks: p.tracks, rootTrackIds: p.rootTrackIds, bpm: p.bpm, beatsPerBar: p.beatsPerBar, totalBars: p.totalBars }
@@ -118,7 +124,7 @@ export function TrackPreviewRenderer() {
     return [...cache.current.values()]
     // revision represents the debounced project snapshot.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [surfaces, revision])
+  }, [surfaces, revision, immediateProject])
   const sceneId = useProjectStore(s => s.activeSceneId)
   const runtime = useMemo(() => ({
     target: new WebGLRenderTarget(W, H), busy: false, alive: true,
@@ -190,7 +196,7 @@ export function TrackPreviewRenderer() {
       const pixels = new Uint8Array(W * height * 4)
       runtime.busy = true
       runtime.pending = false
-      void gl.readRenderTargetPixelsAsync(runtime.target, 0, 0, W, height, pixels).then(() => {
+      const readback = gl.readRenderTargetPixelsAsync(runtime.target, 0, 0, W, height, pixels).then(() => {
         if (!runtime.alive || useProjectStore.getState().activeSceneId !== sceneId) return
         for (let i = 0; i < count; i++) {
           const surface = surfaces[i]
@@ -205,10 +211,12 @@ export function TrackPreviewRenderer() {
           ctx.putImageData(image, 0, 0)
         }
       }).catch(() => {}).finally(() => {
+        pendingReadbacks.delete(readback)
         runtime.busy = false
         if (!runtime.alive) runtime.target.dispose()
         else if (runtime.pending) invalidate()
       })
+      pendingReadbacks.add(readback)
     } finally {
       gl.autoClear = autoClear
       gl.setRenderTarget(previousTarget)

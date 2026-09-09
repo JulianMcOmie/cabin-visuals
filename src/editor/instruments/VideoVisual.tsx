@@ -109,7 +109,7 @@ export function VideoComponent({ trackId }: { trackId: string }) {
     const res = engine.draw(key, sourceTime)
     if (res.updated) texture.needsUpdate = true
     mesh.visible = res.visible
-    if (!res.visible) return
+    if (!res.visible) return false
 
     if (material.map !== texture) {
       material.map = texture

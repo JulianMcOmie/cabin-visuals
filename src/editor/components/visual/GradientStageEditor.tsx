@@ -1,10 +1,11 @@
 'use client'
-import { useMemo, useRef, useState, type PointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { Html } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { Plane, Raycaster, Vector2, Vector3 } from 'three'
 import { buildGradientPath, parseGradientPath, type PathPoint } from '../../core/visualCopies/gradientPath'
 import { moveGradientHandle, splitGradientSegment, useGradientEditing, type HandleKind } from '../../userInterfaceRenderers/gradientEditing'
+import { subscribePreviewFrames } from '../../core/visual/previewRuntime'
 import { gradientStops } from '../../utils/oklch'
 
 /** DOM overlay: editor handles never enter the rendered scene or exported video. */
@@ -18,7 +19,10 @@ function StagePath({session}:{session:NonNullable<ReturnType<typeof useGradientE
   const path=useMemo(()=>buildGradientPath(session.raw,session.curved),[session.raw,session.curved])
   const [revision,setRevision]=useState(0)
   const cameraKey=useRef('')
-  useFrame(()=>{const key=camera.matrixWorld.elements.join(',')+camera.projectionMatrix.elements.join(',');if(key!==cameraKey.current){cameraKey.current=key;setRevision(v=>v+1)}})
+  const updateCamera=()=>{const key=camera.matrixWorld.elements.join(',')+camera.projectionMatrix.elements.join(',');if(key!==cameraKey.current){cameraKey.current=key;setRevision(v=>v+1)}}
+  const updateCameraRef=useRef(updateCamera);updateCameraRef.current=updateCamera
+  useFrame(updateCamera)
+  useEffect(()=>subscribePreviewFrames(()=>updateCameraRef.current()),[])
   const project=(p:PathPoint)=>{const v=new Vector3(...p).project(camera);return [(v.x+1)*size.width/2,(1-v.y)*size.height/2,v.z]}
   const drag=useRef<{index:number;kind:HandleKind;z:number}|null>(null)
   function move(e:PointerEvent<SVGSVGElement>) {

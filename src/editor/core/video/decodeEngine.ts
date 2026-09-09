@@ -1,3 +1,4 @@
+import { createRasterCanvas, type RasterCanvas, type RasterContext } from '../visual/rasterCanvas'
 // The Video instrument's decode engine (proven in the July 2026 mediabunny
 // beat-cut spike, since removed - see git history). NO <video> elements and NO
 // element seeking - that approach could not do instant, re-triggerable cuts.
@@ -52,6 +53,7 @@ interface ClipRuntime {
   head: { bitmaps: ImageBitmap[]; timestamps: number[] }
   ready: boolean
   failed: boolean
+  armed?: Promise<void>
 }
 
 /** Rolling decoded window pulled from a sink iterator (past the head cache). */
@@ -60,8 +62,9 @@ class LiveBuffer {
   private iter: AsyncGenerator<VideoSample, void, unknown>
   private exhausted = false
   private pulling = false
+  private disposed = false
 
-  constructor(sink: VideoSampleSink, startAt: number) {
+  constructor(sink: VideoSampleSink, startAt: number, private onReady: () => void) {
     this.iter = sink.samples(startAt)
   }
 
@@ -73,16 +76,20 @@ class LiveBuffer {
     if (this.pulling || this.exhausted) return
     this.pulling = true
     void (async () => {
+      let added = false
       try {
         while (this.samples.length < target && !this.exhausted) {
           const { value, done } = await this.iter.next()
           if (done || !value) { this.exhausted = true; break }
+          if (this.disposed) { value.close(); break }
           this.samples.push(value)
+          added = true
         }
       } catch {
         this.exhausted = true
       } finally {
         this.pulling = false
+        if (added && !this.disposed) this.onReady()
       }
     })()
   }
@@ -103,6 +110,7 @@ class LiveBuffer {
   }
 
   dispose(): void {
+    this.disposed = true
     for (const s of this.samples) s.close()
     this.samples = []
     this.exhausted = true
@@ -129,8 +137,8 @@ const HIDDEN: DrawResult = { visible: false, updated: false, aspect: 16 / 9 }
 
 export class VideoDecodeEngine {
   private clips = new Map<string, ClipRuntime>()
-  private canvas: HTMLCanvasElement
-  private ctx: CanvasRenderingContext2D
+  private canvas: RasterCanvas
+  private ctx: RasterContext
 
   // Single live playhead: one clip plays at a time (activeVideoAt latches one).
   private liveKey: string | null = null
@@ -152,14 +160,14 @@ export class VideoDecodeEngine {
    *  the instrument can redraw its last request (the frame callback is skip-
    *  gated and won't re-run on its own at a static beat). */
   constructor(private onFrameReady: () => void) {
-    this.canvas = document.createElement('canvas')
+    this.canvas = createRasterCanvas()
     this.canvas.width = 16
     this.canvas.height = 16
     this.ctx = this.canvas.getContext('2d')!
   }
 
   /** The canvas the instrument wraps in a CanvasTexture. */
-  get canvasSource(): HTMLCanvasElement {
+  get canvasSource(): RasterCanvas {
     return this.canvas
   }
 
@@ -179,7 +187,7 @@ export class VideoDecodeEngine {
         w: 16, h: 16, head: { bitmaps: [], timestamps: [] }, ready: false, failed: false,
       }
       this.clips.set(clip.key, rt)
-      void this.arm(rt)
+      rt.armed = this.arm(rt)
     }
   }
 
@@ -242,7 +250,7 @@ export class VideoDecodeEngine {
    *  onward. Called on a clip change or a scrub discontinuity. */
   private reseat(rt: ClipRuntime, fromTime: number): void {
     this.live?.dispose()
-    this.live = rt.sink ? new LiveBuffer(rt.sink, fromTime) : null
+    this.live = rt.sink ? new LiveBuffer(rt.sink, fromTime, this.onFrameReady) : null
     this.liveKey = rt.key
   }
 
@@ -325,11 +333,10 @@ export class VideoDecodeEngine {
   async drawExact(key: string | null, sourceTime: number): Promise<number | null> {
     if (!key) return null
     const rt = this.clips.get(key)
-    if (!rt || rt.failed || !rt.sink) {
-      // Give a just-added clip a moment to arm.
-      if (rt && !rt.ready && !rt.failed) await new Promise((r) => setTimeout(r, 50))
-      if (!rt?.sink) return null
-    }
+    // Exports remount the live scene after worker preview. Wait for this
+    // clip's actual initialization instead of guessing a 50ms fetch budget.
+    await rt?.armed
+    if (!rt || rt.failed || !rt.sink) return null
     this.ensureCanvasSize(rt!)
     const sample = await rt!.sink!.getSample(sourceTime)
     if (!sample) return rt!.w / rt!.h

@@ -65,7 +65,7 @@ function put(sig: FrameSignature, v: unknown) {
   sig.i = i + 1
 }
 
-export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => void | false) {
+export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => void | false, dependency?: () => unknown) {
   const { getObjectState, getVisualCopy } = useVisualEngine()
   const copyContext = useContext(InstrumentCopyContext)
   // Signature buffer, reused across frames (write-and-compare, no allocation).
@@ -119,6 +119,7 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
       sig.dirty = true
     } else {
       put(sig, currentParticleBudget())
+      put(sig, dependency?.())
       put(sig, state.beat)
       put(sig, state.secPerBeat)
       put(sig, state.beatsPerBar)

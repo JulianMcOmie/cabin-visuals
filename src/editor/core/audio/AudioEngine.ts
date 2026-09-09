@@ -1,5 +1,6 @@
 import * as Tone from 'tone'
 import type { AudioBlock, Track } from '../../types'
+import { mixWaveformWindow } from './waveformWindow'
 import { getBuffer } from './waveform'
 import { blockPlacement, delayAtRate } from './placement'
 
@@ -81,28 +82,9 @@ class AudioEngine {
     sampleCount = 1024,
     trackId?: string,
   ): Float32Array {
-    const count = Math.max(2, Math.round(sampleCount))
-    const out = new Float32Array(count)
-    const projectSec = atBeat * 60 / Math.max(1, bpm)
-    const windowSec = 1 / 50
-
-    for (const { block, audible, trackId: blockTrackId, volume } of this.blocks) {
-      if (!audible || (trackId && blockTrackId !== trackId)) continue
-      const buffer = this.entries.get(block.id)?.buffer
-      if (!buffer) continue
-      const blockStartSec = block.startBar * beatsPerBar * 60 / Math.max(1, bpm)
-      const channels = buffer.numberOfChannels
-      const channelData = Array.from({ length: channels }, (_, channel) => buffer.getChannelData(channel))
-      for (let i = 0; i < count; i++) {
-        const clipSec = block.trimStart + projectSec - blockStartSec + (i / (count - 1)) * windowSec
-        if (clipSec < block.trimStart || clipSec >= block.trimEnd) continue
-        const frame = Math.min(buffer.length - 1, Math.max(0, Math.floor(clipSec * buffer.sampleRate)))
-        let sample = 0
-        for (let channel = 0; channel < channels; channel++) sample += channelData[channel][frame]
-        out[i] += (sample / Math.max(1, channels)) * 0.85 * volume
-      }
-    }
-    return out
+    return mixWaveformWindow(this.blocks.filter(sb => !trackId || sb.trackId === trackId).map(sb => ({
+      ...sb, buffer: this.entries.get(sb.block.id)?.buffer ?? null,
+    })), { beat: atBeat, bpm, beatsPerBar }, sampleCount)
   }
 
   /**

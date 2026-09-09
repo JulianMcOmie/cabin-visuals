@@ -1,3 +1,4 @@
+import { previewRuntime } from '../../core/visual/previewRuntime'
 import { TrackPreviewRenderer } from './TrackPreviewRenderer'
 
 import { hasSceneGlow, setSceneGlowHalo, renderSceneWithGlow } from './glowScene'
@@ -652,10 +653,10 @@ function postProcessTracksByScene(objects: readonly ObjectListEntry[], instrumen
  * come from preview or Scene Switcher, but multiple directors already append
  * simultaneous layers without a singular active-scene assumption.
  */
-// memo: no props, so a re-render of the panel above (the aspect glide after a
+// memo: stable props, so a re-render of the panel above (the aspect glide after a
 // project opens, the fullscreen control's hover state) no longer re-runs
 // mountObjects over every copy; only its own subscriptions re-render it.
-export const VisualScene = memo(function VisualScene() {
+export const VisualScene = memo(function VisualScene({ trackPreviews = true }: { trackPreviews?: boolean } = {}) {
   const objects = useSyncExternalStore(subscribeObjects, getObjectList, getObjectList)
   const { gl, camera, size, invalidate } = useThree()
   // Fast Preview: every offscreen target shrinks by the level's factor and the
@@ -669,13 +670,21 @@ export const VisualScene = memo(function VisualScene() {
   // Fast levels also spend lighting (see previewLighting); read here so the
   // frame loop's pool syncs and the legacy rigs below agree on one budget.
   const lighting = usePreviewLighting()
-  const environment = useMemo(() => {
+  const environment = useRef<WebGLRenderTarget | null>(null)
+  useEffect(() => {
+    // PMREM has GPU-only pixels. React StrictMode's setup/cleanup/setup cycle
+    // must regenerate them: disposing a useMemo target leaves a valid-looking
+    // texture object whose regenerated allocation is empty (dark gloss exports).
     const room = new RoomEnvironment()
     const pmrem = new PMREMGenerator(gl)
     const target = pmrem.fromScene(room, 0.04)
     room.dispose()
     pmrem.dispose()
-    return target
+    environment.current = target
+    return () => {
+      target.dispose()
+      if (environment.current === target) environment.current = null
+    }
   }, [gl])
   const sceneKey = [...new Set(objects.map((o) => o.sceneId))].sort().join(',')
   // Incremental scene mounting: runtimes are keyed by scene id and REUSED when
@@ -925,12 +934,11 @@ export const VisualScene = memo(function VisualScene() {
 
   useEffect(() => {
     for (const runtime of mounted.values()) {
-      runtime.base.environment = environment.texture
-      runtime.front.environment = environment.texture
+      runtime.base.environment = environment.current?.texture ?? null
+      runtime.front.environment = environment.current?.texture ?? null
     }
-  }, [environment, mounted])
-
-  useEffect(() => () => environment.dispose(), [environment])
+    invalidate()
+  }, [gl, mounted, invalidate])
 
   useEffect(() => {
     const roots = new Map<string, ThreeScene>()
@@ -1348,7 +1356,7 @@ export const VisualScene = memo(function VisualScene() {
           const sceneChain = projectScene?.effects
           if (sceneChain?.length) {
             const fxOverrides = getSceneFxOverrides(sceneId)
-            const fxBeat = getBeatOverride() ?? useTimeStore.getState().currentBeat
+            const fxBeat = getBeatOverride() ?? (previewRuntime.worker ? previewRuntime.beat : useTimeStore.getState().currentBeat)
             for (const inst of sceneChain) {
               const plugin = getEffect(inst.pluginId)
               const material = plugin ? compositor.sceneFxMaterials.get(plugin.id) : undefined
@@ -1467,7 +1475,7 @@ export const VisualScene = memo(function VisualScene() {
 
         compositor.filterMesh.material = compositor.finalMaterial
         compositor.finalMaterial.uniforms.tBloom.value = compositor.bloomEffect.texture
-        compositor.finalMaterial.uniforms.time.value = getBeatOverride() ?? useTimeStore.getState().currentBeat
+        compositor.finalMaterial.uniforms.time.value = getBeatOverride() ?? (previewRuntime.worker ? previewRuntime.beat : useTimeStore.getState().currentBeat)
         // Color-exact instruments (the Crazy Edit template's photo slots / FX)
         // reproduce external footage: with one in the composition the stylistic
         // grade and the ACES tone map switch off for the frame, so drawn colors
@@ -1558,7 +1566,7 @@ export const VisualScene = memo(function VisualScene() {
 
   return (
     <>
-      <TrackPreviewRenderer />
+      {trackPreviews && <TrackPreviewRenderer immediate={typeof document === 'undefined'} />}
       {[...mounted.entries()].map(([sceneId, runtime]) => {
         // One pass with the index in hand (indexOf inside three filters was
         // O(n²) per render of this component).

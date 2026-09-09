@@ -1,3 +1,4 @@
+import { createRasterCanvas } from '../core/visual/rasterCanvas'
 import type { Ref } from 'react'
 import {
   BoxGeometry,
@@ -223,7 +224,7 @@ let grainTexture: CanvasTexture | null = null
  *  (seeded - Math.random would make two exports disagree), built lazily so the
  *  module stays importable outside the browser. */
 export function fundamentalGrainTexture(): CanvasTexture | null {
-  if (typeof document === 'undefined') return null
+  if (typeof document === 'undefined' && typeof OffscreenCanvas === 'undefined') return null
   if (grainTexture) return grainTexture
   const size = 256
   const cells = 16
@@ -238,7 +239,7 @@ export function fundamentalGrainTexture(): CanvasTexture | null {
   const lattice = new Float32Array((cells + 1) * (cells + 1))
   for (let i = 0; i < lattice.length; i++) lattice[i] = rand()
   const at = (x: number, y: number) => lattice[(y % cells) * (cells + 1) + (x % cells)]
-  const canvas = document.createElement('canvas')
+  const canvas = createRasterCanvas()
   canvas.width = size
   canvas.height = size
   const ctx = canvas.getContext('2d')

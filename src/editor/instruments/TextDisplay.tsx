@@ -1,3 +1,4 @@
+import { createRasterCanvas, type RasterCanvas, type RasterContext } from '../core/visual/rasterCanvas'
 import { previewParticleCount } from '../core/visual/liveParticleBudget'
 import { midiVelocity } from '../utils/midiVelocity'
 import { useContext, useRef, useEffect, useMemo, useState } from 'react'
@@ -159,7 +160,7 @@ function configureTextMaterial(material: MeshBasicMaterial, invertBehind: boolea
 }
 
 // Shared canvas cache keyed by (word, stroke, font, color, strokeColor).
-const canvasCache = new Map<string, HTMLCanvasElement>()
+const canvasCache = new Map<string, RasterCanvas>()
 const CANVAS_CACHE_MAX = 64
 
 /** Everything a word canvas is drawn from, as the cache key both caches
@@ -194,7 +195,7 @@ function createTextCanvas(
   glowContained = false,
   shadow = 0,
   outline = false,
-): HTMLCanvasElement {
+): RasterCanvas {
   const entry = typeof word === 'string' ? singleTextEntry(word) : word
   const key = textureKey(entry, strokeWidth, font, color, strokeColor, glow, glowContained, shadow, outline)
   // Outline (a style-lane fx): the glyph is stroke-only in the word's color -
@@ -206,8 +207,8 @@ function createTextCanvas(
   const cached = canvasCache.get(key)
   if (cached) return cached
 
-  const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1
-  const canvas = document.createElement('canvas')
+  const dpr = (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1
+  const canvas = createRasterCanvas()
   const ctx = canvas.getContext('2d')!
 
   // Constant glyph height; the canvas WIDTH follows the text (the mesh
@@ -300,7 +301,7 @@ function createTextCanvas(
   ctx.textAlign = entry.syllableCount > 1 ? 'left' : 'center'
   /** Every paint pass goes through here so wrapped rows and single words
    *  share the stroke/glow/shadow pipeline unchanged. */
-  const drawAll = (target: CanvasRenderingContext2D, mode: 'fill' | 'stroke') => {
+  const drawAll = (target: RasterContext, mode: 'fill' | 'stroke') => {
     for (const l of lines) {
       if (mode === 'fill') target.fillText(l.text, drawX, l.y)
       else target.strokeText(l.text, drawX, l.y)
@@ -326,7 +327,7 @@ function createTextCanvas(
     // Projected-light bloom: a wide soft halo, then a tight inner glow, in the
     // text's own color. The plain fill after clears the shadow and lays the
     // bright core on top.
-    const paintGlow = (target: CanvasRenderingContext2D) => {
+    const paintGlow = (target: RasterContext) => {
       target.fillStyle = color
       target.shadowColor = color
       target.shadowBlur = glow * fontSize * 0.22
@@ -348,7 +349,7 @@ function createTextCanvas(
       // so the glow stops at the glyph edge, which is the sensible reading of
       // "contained" when there is no stroke to stop at.
       const newLayer = () => {
-        const c = document.createElement('canvas')
+        const c = createRasterCanvas()
         c.width = canvas.width
         c.height = canvas.height
         const g = c.getContext('2d')!

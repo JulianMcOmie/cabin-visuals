@@ -1,5 +1,6 @@
 'use client'
 
+import { useGradientEditing } from './userInterfaceRenderers/gradientEditing'
 import { GradientStageEditor } from './components/visual/GradientStageEditor'
 
 import { getFrameDriver } from './core/export/frameDriver'
@@ -8,6 +9,8 @@ import dynamic from 'next/dynamic'
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import { InstantLink as Link } from '../components/instantNavigation'
 import { useSearchParams } from 'next/navigation'
+import { previewRuntime, subscribePreviewFrames } from './core/visual/previewRuntime'
+import { framePreparers } from './core/export/framePreparers'
 import { Canvas, useThree } from '@react-three/fiber'
 import { Play, Pause, Upload, Maximize, Minimize, Cloud, Pencil, Loader2 } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, type PanelImperativeHandle } from 'react-resizable-panels'
@@ -17,7 +20,7 @@ import { getPlaybackEngine } from './core/playback'
 import { useProjectStore, type ViewAspect } from './store/ProjectStore'
 import { ASPECT_RATIO_IDS, aspectRatioValue } from './core/aspectRatios'
 import { PREVIEW_QUALITIES, useUIStore, type PreviewQuality } from './store/UIStore'
-import { VisualScene } from './components/visual/VisualScene'
+import { PreviewSceneRenderer } from './components/visual/PreviewSceneRenderer'
 import { ExportDriver } from './components/visual/ExportDriver'
 import { RenderGovernor } from './components/visual/RenderGovernor'
 import { CanvasHoverPicker } from './components/visual/CanvasHoverPicker'
@@ -81,7 +84,7 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   // copies (transform + opacity) without reaching into an R3F scene graph.
   // getSceneBackdrop rides along because a scene colorizer's whole effect is a
   // clear colour - there is no object state to read it off (core/sceneTrack.ts).
-  ;(window as unknown as Record<string, unknown>).__cabinVisual = { getFrameDriver, getVisualCopies, getVisualCopyCount, getMountedRenderScenes, getCompositionLayers, getObjectState, getSceneBackdrop }
+  ;(window as unknown as Record<string, unknown>).__cabinVisual = { gradientEditing: useGradientEditing, getFrameDriver, framePreparers, getVisualCopies, getVisualCopyCount, getMountedRenderScenes, getCompositionLayers, getObjectState, getSceneBackdrop }
   // Load a saved document into the in-memory editor (perf probes replay real
   // projects through this; runs the same upgrade path a cloud open does).
   ;(window as unknown as Record<string, unknown>).__cabinHydrate = async (doc: unknown, name?: string) => {
@@ -176,10 +179,7 @@ function Scene({
   previewSceneId: string
   sourceCanvasRef: RefObject<HTMLCanvasElement | null>
 }) {
-  // Paused → 'demand': the render loop idles instead of redrawing a static
-  // frame 60×/s (heavy instruments were starving the editor UI even while
-  // paused). RenderGovernor requests single frames when an input changes.
-  const isPlaying = useTimeStore((s) => s.isPlaying)
+  // The worker owns preview cadence; the governor advances compatibility frames.
   return (
     // Geometry is antialiased in the offscreen pipeline; the backbuffer only displays its final quad.
     // preserveDrawingBuffer: PostHog's session replay captures this canvas on
@@ -187,11 +187,11 @@ function Scene({
     // buffer unless the frame is kept. The recorder forces the flag itself, but
     // only on contexts created after it loads - and on a fresh /editor load
     // this one exists first.
-    <Canvas className="visual-canvas-root" shadows="soft" frameloop={isPlaying ? 'always' : 'demand'} dpr={[1, 2]} camera={{ position: [0, 0, 5], fov: 55 }} gl={{ antialias: false, preserveDrawingBuffer: true }}>
+    <Canvas className="visual-canvas-root" shadows="soft" frameloop="never" dpr={[1, 2]} camera={{ position: [0, 0, 5], fov: 55 }} gl={{ antialias: false, preserveDrawingBuffer: true }}>
       <color attach="background" args={['#09090b']} />
       <CanvasSourceBridge sourceRef={sourceCanvasRef} />
       <PreviewSceneSync sceneId={previewSceneId} />
-      <VisualBeatSync />
+      <VisualBeatSync sceneId={previewSceneId} sourceRef={sourceCanvasRef} />
       <ExportDriver />
       <RenderGovernor />
       <CanvasHoverPicker />
@@ -200,7 +200,7 @@ function Scene({
       {process.env.NODE_ENV === 'development' && <DevRenderStats />}
       {/* Suspense: instruments may load assets through useLoader. */}
       <Suspense fallback={null}>
-        <VisualScene />
+        <PreviewSceneRenderer />
       </Suspense>
     </Canvas>
   )
@@ -223,6 +223,7 @@ function VisualAmbientBleed({ sourceCanvasRef }: { sourceCanvasRef: RefObject<HT
 
     let frame = 0
     let lastPaint = 0
+    let lastAmbient: ImageData | null = null
     // The WebGL frame only changes while playing or for a beat after an edit /
     // scrub / resolve (RenderGovernor's demand frames). Copying it - and so
     // re-blurring the whole workspace layer - 15×/s while paused and idle was
@@ -238,7 +239,12 @@ function VisualAmbientBleed({ sourceCanvasRef }: { sourceCanvasRef: RefObject<HT
         const source = sourceCanvasRef.current
         if (source?.width && source.height) {
           try {
-            ctx.drawImage(source, 0, 0, bleed.width, bleed.height)
+            if (previewRuntime.rendering) {
+              if (previewRuntime.ambient && previewRuntime.ambient !== lastAmbient) {
+                ctx.putImageData(previewRuntime.ambient, 0, 0)
+                lastAmbient = previewRuntime.ambient
+              }
+            } else ctx.drawImage(source, 0, 0, bleed.width, bleed.height)
           } catch {
             // A temporarily unavailable video-backed WebGL frame should not
             // take down the editor; the previous ambient frame can stay put.
@@ -254,6 +260,7 @@ function VisualAmbientBleed({ sourceCanvasRef }: { sourceCanvasRef: RefObject<HT
     }
     frame = requestAnimationFrame(paint)
     const unsubProject = useProjectStore.subscribe(wake)
+    const unsubPreview = subscribePreviewFrames(wake)
     const unsubGraph = subscribeObjects(wake)
     const unsubTime = useTimeStore.subscribe(wake)
     const resize = new ResizeObserver(wake)
@@ -262,6 +269,7 @@ function VisualAmbientBleed({ sourceCanvasRef }: { sourceCanvasRef: RefObject<HT
       if (frame) cancelAnimationFrame(frame)
       unsubProject()
       unsubGraph()
+      unsubPreview()
       unsubTime()
       resize.disconnect()
     }
