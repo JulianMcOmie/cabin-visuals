@@ -29,6 +29,7 @@ import type { Track } from '../../types'
  */
 
 const G = {
+  undertale: <path d="M2.5 3.5h3v2h5v-2h3v5h-2v2h-2v2h-3v-2h-2v-2h-2Z" fill="currentColor" stroke="none" />,
   bird: (
     <>
       <path d="M2 7 4 9C4 13 11 14 12 8L14 6 12 5C11 1 7 2 7 6ZM5 8q1 4 4 0" />

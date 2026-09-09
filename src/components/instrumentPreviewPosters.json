@@ -344,6 +344,13 @@
     "version": "4-1787038968369",
     "placeholder": "data:image/webp;base64,UklGRrQAAABXRUJQVlA4IKgAAACQBQCdASpQAC0APt1cp0+origmqrmbMcAbiWUGcAvFP+4/AJmejljE5r/F6bafHpa5tZ9eAAD+78kOzhrfNR/kwZFoXbfAtY2DkZFV7QmHEwhYsDP+Lm6pwfAbSEdHOv0drtPnQkzg3tDoxEFaUQL6YxUPgnisRfqShONiFW4g7ALt6p95f44smGD+HXRgXtZ4UpryEAFyssxkT3RBtAG0i7vB2KlQgAA="
   },
+  "undertale": {
+    "src": "/instrument-previews/undertale-16eb553c3943.webp",
+    "version": "undertale-1",
+    "time": 0,
+    "placeholder": "data:image/webp;base64,UklGRlIBAABXRUJQVlA4IEYBAADwBgCdASpQAC0APt1srlKopa4voipJ8BuJYgDFvHDWA2zRVAezxEh6dObiigjBXVBwX8DzVnUfzNIEbS4slE2gAP7wt8/7FnShjR6p5knE2aQtNbDn8K9fPJZVRtW8BI59TxuDbwisPhkyBLjsJ3yZk0xwdc3Xdmi2KJS+k+rrCjbu7axMoXmx+9Boe3ej2ii5VlRaS/NRVeqYAddcdlJ85xBiC4xXS6VrXLl8P2Q5178biLHQQ7orjYT8mtu91vGM6GkBG1g5WPn9XEI/5/OzU98PsFGKRPG/m7jFfqmd2tiuEgL4YHcsh7bHjVLx09U8+EAtWW2dTr9L3cm9dPjkBv+fYJDBufairUQKnyXYERac2FFqFT1AjCyWBIgYaQ+O7lfimvxomEgbKQ34GG7vlUQuPNvCUNExvNSNy2RISmG+zCAAAA==",
+    "clipSrc": "/instrument-previews/undertale.mp4?v=1"
+  },
   "visibility": {
     "src": "/instrument-previews/visibility-576603638e69.webp",
     "version": "4-1787038954715",

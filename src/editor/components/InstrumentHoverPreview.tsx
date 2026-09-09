@@ -258,7 +258,12 @@ const PREVIEW_NUMBER_PARAMS: Record<string, Record<string, number>> = {
 
 // Preview-only per-frame param motion, applied by ObjectPreviewDriver: Text
 // Display rapid-fire flickers through font stacks - system faces only, since
-const PREVIEW_PARAM_ANIMATORS: Record<string, (params: Record<string, number>, beat: number) => void> = {}
+const PREVIEW_PARAM_ANIMATORS: Record<string, (params: Record<string, number>, beat: number) => void> = {
+  undertale: (params, beat) => {
+    params.character = Math.floor(beat / 2) % 8
+    params.turn = -12 + Math.sin(beat * Math.PI) * 18
+  },
+}
 
 // Preview-only note overrides for instruments whose labeled vocabulary the
 // generic arc misses entirely. Text Display renders NOTHING without word notes

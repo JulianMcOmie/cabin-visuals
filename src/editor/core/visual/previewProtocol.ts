@@ -41,7 +41,7 @@ export interface PreviewResponse {
 // Unknown instruments opt out until their visual and assets are worker-safe.
 const WORKER_INSTRUMENTS = new Set([
   'glassRoll', 'photoSlot', 'oscilloscope', 'textDisplay', 'emojiDisplay', 'filmCard', 'video', 'photo', 'kaleidoSolid',
-  'cube', 'bird', 'circle', 'triangle', 'icosahedronBurst', 'stars', 'particleBurst',
+  'cube', 'bird', 'undertale', 'circle', 'triangle', 'icosahedronBurst', 'stars', 'particleBurst',
   'particle', 'fractalTunnel', 'neonPolar', 'hopfFibration', 'shapeFlight',
   'dotField', 'metronomeBalls', 'cameraControl', 'cameraOrbit', 'filmStock',
   'filmGrain', 'scribble', 'pixelBlast', 'colorFilters', 'bassRipple',

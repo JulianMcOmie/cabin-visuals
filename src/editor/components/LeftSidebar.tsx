@@ -147,6 +147,11 @@ const DIRECTOR_EXTRAS = DIRECTOR_INSTRUMENTS.filter((d) => DIRECTOR_EXTRA_IDS.ha
 // Every object instrument, icons and all. Partitioned below into the curated
 // core list and the Extras back catalog - nothing is removed, only demoted.
 const ALL_OBJECT_INSTRUMENTS = withKind('object', [
+  { id: 'undertale', name: 'Undertale', description: 'Choose Sans, Papyrus, Frisk, Toriel, Undyne, Flowey, Napstablook or Mettaton. Pixel-art characters with solid edges, adjustable depth and note-driven bounce.', icon: (
+    <svg width="12" height="12" viewBox="0 0 16 16" shapeRendering="crispEdges">
+      <path d="M2 3h4v2h4V3h4v6h-2v2h-2v2H6v-2H4V9H2Z" fill="#f0474c" />
+    </svg>
+  )},
   { id: 'bird', name: 'Bird', description: 'A rounded songbird with a little beak, feathered wings and a tail. Wings flap to the beat; notes give them an extra lift.', icon: (
     <svg width="12" height="12" viewBox="0 0 16 16">
       <path d="M2 7 4 9C4 13 11 14 12 8L14 6 12 5C11 1 7 2 7 6Z" fill="#52b8d6" />
@@ -407,7 +412,7 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
 // at the bottom - still available, out of the first impression.
 // Circle and Triangle left the library outright - 3D Shape's geometry picker
 // covers them (the instruments stay registered for old projects).
-const CORE_OBJECT_IDS = new Set(['cube', 'bird', 'laserLine', 'wireframe', 'particle', 'overlapShape', 'light'])
+const CORE_OBJECT_IDS = new Set(['cube', 'bird', 'undertale', 'laserLine', 'wireframe', 'particle', 'overlapShape', 'light'])
 const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.has(i.id))
 
 // The Instruments folder. These are object instruments like any other; what
