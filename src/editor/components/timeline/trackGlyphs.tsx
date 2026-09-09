@@ -29,6 +29,12 @@ import type { Track } from '../../types'
  */
 
 const G = {
+  bird: (
+    <>
+      <path d="M2 7 4 9C4 13 11 14 12 8L14 6 12 5C11 1 7 2 7 6ZM5 8q1 4 4 0" />
+      <circle cx="10" cy="5" r="0.65" fill="currentColor" stroke="none" />
+    </>
+  ),
   // ─── Object instruments ────────────────────────────────────────────────────
   // (3D Shape and Wireframe have no entry here on purpose - both resolve by
   // the shape their own picker is on, through SOLIDS / WIRE_SHAPES below.)

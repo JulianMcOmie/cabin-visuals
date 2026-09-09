@@ -9,6 +9,13 @@
     "version": "4-1787038969494",
     "placeholder": "data:image/webp;base64,UklGRsQAAABXRUJQVlA4ILgAAABwBgCdASpQAC0APt1YpEyora+lrv27AfAbiWUAwRBWQ1yl14g1BAYyhrutOqxKFOnGXCTCZCtJLHPTOAAA/u/JDtIDu/4w5pEUV9QxW58wTHnp5Hr+r6XO+YTFyKk19u8a1s2WQNv6yFKAKxzkyiwu6KOwNAPh8vf3HpkjdIRKAR2vGE9jyp+2JjplqhJk5fqeJdb8+nVJ1EMJ8SAdQquLkHQD0SF1KXzmxQnXCsmBkZKLgHsf6AAA"
   },
+  "bird": {
+    "src": "/instrument-previews/bird-d79fc835cdbd.webp",
+    "version": "bird-1",
+    "time": 0,
+    "placeholder": "data:image/webp;base64,UklGRsIAAABXRUJQVlA4ILYAAACwBQCdASpQAC0APt1sr1Kopa6roipJ0BuJYwZwDCsCLZkQ8x7eRgToG9WiSoOdlBHP/FHyg1AA/vDLDKI8Q7oaNQw7o7jTsrF+DelSlnBiizFl80D9Ml4Olo1TfY+593jKdDGt7ktoeURQqDOE8nW2YKabEO02PqijDXAcUmwRyGLr6Yso/56YeRCIt/vkYVn5SOZZDpBfUX5K+FeGdcGNGcqv/i7D3HFelgbq46sFJJzoWgAAAA==",
+    "clipSrc": "/instrument-previews/bird.mp4?v=1"
+  },
   "burst": {
     "src": "/instrument-previews/burst-604151a50a1e.webp",
     "version": "3-1787038950062",

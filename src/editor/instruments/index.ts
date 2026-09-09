@@ -6,6 +6,7 @@
 // registered but unreachable.
 
 import { cubeInstrument } from './Cube'
+import { birdInstrument } from './Bird'
 import { kaleidoSolidInstrument } from './KaleidoSolid'
 import { circleInstrument, triangleInstrument } from './shapes'
 import { icosahedronBurstInstrument } from './IcosahedronBurst'
@@ -57,6 +58,7 @@ export type { ObjectInstrumentDef, ParamDef } from './types'
 
 export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [cubeInstrument.id]: cubeInstrument,
+  [birdInstrument.id]: birdInstrument,
   [kaleidoSolidInstrument.id]: kaleidoSolidInstrument,
   [circleInstrument.id]: circleInstrument,
   [triangleInstrument.id]: triangleInstrument,
