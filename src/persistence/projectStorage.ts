@@ -94,14 +94,15 @@ function durationSecondsOf(totalBars: unknown, beatsPerBar: unknown, bpm: unknow
  * projected column written at save time, which is also what lets this query stop
  * touching `data` at all.
  */
-export async function list(): Promise<ProjectSummary[]> {
-  const { data, error } = await getSupabase()
+export async function list(signal?: AbortSignal): Promise<ProjectSummary[]> {
+  const query = getSupabase()
     .from('projects')
     // One string literal on purpose: supabase-js infers the row type by parsing
     // this at the type level, and a concatenated string widens to `string`,
     // which collapses the whole result to GenericStringError.
     .select('id, name, updated_at, rev, thumbnail:data->>thumbnail, totalBars:data->totalBars, beatsPerBar:data->beatsPerBar, bpm:data->bpm')
     .order('updated_at', { ascending: false })
+  const { data, error } = await (signal ? query.abortSignal(signal) : query)
   if (error) throw error
   return data.map((r) => ({
     id: r.id,

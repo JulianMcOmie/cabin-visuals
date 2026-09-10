@@ -1,5 +1,6 @@
 'use client'
 
+import { setPreviewBackfillEditor } from '../persistence/previewBackfillActivity'
 import { useGradientEditing } from './userInterfaceRenderers/gradientEditing'
 import { GradientStageEditor } from './components/visual/GradientStageEditor'
 
@@ -1409,6 +1410,20 @@ function BottomArea() {
 type PlaybackControls = ReturnType<typeof usePlayback>
 
 export default function EditorApp() {
+  useEffect(() => {
+    const update = () => setPreviewBackfillEditor(true,
+      useTimeStore.getState().isPlaying || useUIStore.getState().modalOpen ||
+      !['saved', 'idle'].includes(useSaveStatus.getState().status))
+    update()
+    const stops = [
+      useTimeStore.subscribe((state, previous) => { if (state !== previous) update() }),
+      useUIStore.subscribe((state, previous) => { if (state.modalOpen !== previous.modalOpen) update() }),
+      useProjectStore.subscribe(update),
+      useSaveStatus.subscribe(update),
+      subscribePreviewFrames(update),
+    ]
+    return () => { stops.forEach(stop => stop()); setPreviewBackfillEditor(false) }
+  }, [])
   useProjectPersistence()
   useAnonymousAdoption()
   // Leaving the editor stops the transport. The playback engine and Tone's

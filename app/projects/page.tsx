@@ -31,7 +31,7 @@ interface ProfileData {
 export default function ProjectsPage() {
   const { go } = useInstantNavigation()
   const { user, loading: authLoading, isAnonymous } = useAuth()
-  const { projects, loading: projectsLoading, createProject, duplicateProject, deleteProject } = useProjectList(!!user)
+  const { projects, loading: projectsLoading, createProject, duplicateProject, deleteProject } = useProjectList(!!user, user?.id)
   const plan = usePlan()
   const [profile, setProfile] = useState<ProfileData | null>(null)
   // Keep the skeleton mounted briefly after data resolves. Its smoking cabin

@@ -4,6 +4,7 @@ import { AnalyticsGate } from "../src/analytics/AnalyticsGate";
 import { AnalyticsIdentify } from "../src/analytics/AnalyticsIdentify";
 import { NavigationOverlay } from "../src/components/instantNavigation";
 import "./globals.css";
+import { ProjectPreviewBackfill } from "../src/persistence/ProjectPreviewBackfill";
 
 // "DAW Console 1a" type stack: Hanken Grotesk for UI sans, IBM Plex Mono for
 // numerics/readouts/section labels, Instrument Serif (400 + italic) for
@@ -61,6 +62,7 @@ export default function RootLayout({
         <AnalyticsIdentify />
         {/* The instant loading screen every internal navigation paints first. */}
         <NavigationOverlay />
+        <ProjectPreviewBackfill />
       </body>
     </html>
   );

@@ -23,3 +23,45 @@ Projects persist as one JSONB blob per row (`projects.data` = `ProjectDocument`)
 Schema v21 rewrites legacy Glow settings (`amount`/`size` → `strength`/`radius`)
 and remaps matching automation targets/ranges. The new blur aesthetic is
 intentional; instance IDs, enabled flags and unrelated tracks are preserved.
+
+## Missing project-card images
+
+Autosave only captures after an edit, with a mounted paused canvas; opening a
+project alone is not a capture guarantee. `list()` deliberately fetches projected
+fields, so it cannot render a missing image. `ProjectPreviewBackfill` in the root
+layout discovers missing images and survives navigation into another editor.
+It shares the list published by `useProjectList`, or fetches one if the editor was
+opened directly. It never calls `load()` (which would consume an editor preload)
+or `hydrate()` on the main thread and never writes project data or revisions.
+
+The disposable preview worker upgrades/hydrates its OWN stores and captures a
+320×180 JPEG at the first visual note. Capture immediately after the final
+`advance`, in the same worker task: async readiness waits can discard the WebGL
+drawing buffer and otherwise produce a valid JPEG containing only black pixels.
+Images live in a bounded (200-entry) IndexedDB/session cache keyed by account,
+project and revision. An autosave image always wins. This cache is browser-local;
+it is not cloud backfill and may be evicted. Current cache eviction can mean a
+large library must regenerate some previews on a later visit.
+
+Scheduling waits for 15 seconds without activity, a browser idle callback with
+10ms available (no forced deadline), and an origin-wide Web Lock. One fetch/worker
+at a time; 30 seconds minimum between jobs, or 20× the previous job duration for
+expensive work. Input, editor changes/frames/playback, modal/save activity, main
+thread long tasks, loss of focus and hidden tabs interrupt work. Offline/data saver
+and slow connections defer it. Worker termination handles cancellation; it cannot
+preempt GPU commands already submitted or impose an OS-level worker priority.
+The document fetch times out after 10s and rendering after 8s. Parsing and transfer
+of the fetched JSON are not preemptible, so this is best effort, not a promise of
+zero interference. The 2MB/150-track render limits are checked in the worker after
+fetching the document, not a server-side network-size limit.
+
+Media/waveform requests abort the job instead of fetching/decoding whole songs or
+videos or caching an incomplete still. Unsupported instruments/browsers and large
+projects also stand down. Failed jobs retry on a later app visit; interrupted jobs
+return to the queue tail. Continuous activity can defer generation indefinitely.
+These limits deliberately prefer foreground work over guaranteed completion.
+
+Checks: persistence tests cover gating, interruption, cooldown and account/revision
+cache isolation. `node scripts/perf/project-thumbnail-backfill.mjs` bundles the
+real worker and checks visible pixels in headless Chromium; it exercises software
+rendering and does not prove performance on the user's GPU.

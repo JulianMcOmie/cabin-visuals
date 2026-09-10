@@ -1,4 +1,9 @@
 import { createElement, useEffect } from 'react'
+import { upgradeDocument } from '../../../persistence/upgrade'
+import { hydrate } from '../../../persistence/serialize'
+import { aspectRatioValue } from '../aspectRatios'
+import { canRenderInWorker } from './previewProtocol'
+import { thumbnailBeat } from '../../../persistence/thumbnailBeat'
 import { createRoot, extend } from '@react-three/fiber'
 import * as THREE from 'three'
 import { whenTrackPreviewsPainted } from '../../components/visual/TrackPreviewRenderer'
@@ -105,7 +110,54 @@ async function render(request: PreviewRequest): Promise<ImageBitmap | undefined>
   }
 }
 
-self.onmessage = async (event: MessageEvent<PreviewRequest | PreviewMediaResponse | PreviewWaveformResponse>) => {
+// The same scene renderer in a disposable worker: no live editor stores or GL
+// context can be replaced by backfill. Only a tiny encoded image crosses back.
+async function thumbnail(document: unknown) {
+  const doc = upgradeDocument(document)
+  const trackCount = Object.values(doc.scenes).reduce((n, scene) => n + Object.keys(scene.tracks).length, 0)
+  if (trackCount > 150 || JSON.stringify(doc).length > 2_000_000) throw new Error('Project exceeds thumbnail budget')
+  hydrate(doc)
+  const project = useProjectStore.getState()
+  if (!canRenderInWorker(project)) throw new Error('Unsupported thumbnail instrument')
+  const aspect = doc.viewAspect && doc.viewAspect !== 'fill' ? aspectRatioValue(doc.viewAspect) : 16 / 9
+  const width = Math.round(Math.min(320, 180 * aspect)), height = Math.round(width / aspect)
+  const sceneId = doc.sceneOrder.find(id => doc.scenes[id]?.isMain && doc.scenes[id].rootTrackIds.length)
+    ?? project.activeSceneId
+  const beat = thumbnailBeat(doc, sceneId)
+  const request: PreviewRequest = {
+    id: 0, revision: 0, project, videoClips: doc.videoClips ?? {}, beat, playing: false,
+    sceneId, width, height, dpr: 1, quality: 'fast', canvasHover: null, trackIds: [], render: true,
+  }
+  Object.assign(globalThis, { devicePixelRatio: 1 })
+  useUIStore.setState({ previewQuality: 'fast', canvasHover: null })
+  useTimeStore.setState({ currentBeat: beat, isPlaying: false })
+  visualEngine.setProject(project)
+  visualEngine.setEditorPreviewSceneId(sceneId)
+  visualEngine.computeAtBeat(beat)
+  const initial = await render(request)
+  if (!initial) throw new Error(renderFailed ?? 'No thumbnail frame')
+  initial.close()
+  // WebGL does not preserve the drawing buffer across async readiness waits.
+  // Capture immediately after the final advance in this same worker task.
+  store!.getState().advance(beat * 1000)
+  const bitmap = canvas!.transferToImageBitmap()
+  const output = new OffscreenCanvas(320, 180), context = output.getContext('2d')!
+  context.fillStyle = '#000'
+  context.fillRect(0, 0, 320, 180)
+  context.drawImage(bitmap, (320 - width) / 2, (180 - height) / 2, width, height)
+  bitmap.close()
+  const bytes = new Uint8Array(await (await output.convertToBlob({ type: 'image/jpeg', quality: 0.6 })).arrayBuffer())
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return `data:image/jpeg;base64,${btoa(binary)}`
+}
+
+self.onmessage = async (event: MessageEvent<PreviewRequest | PreviewMediaResponse | PreviewWaveformResponse | { kind: 'thumbnail'; document: unknown }>) => {
+  if ('kind' in event.data && event.data.kind === 'thumbnail') {
+    try { self.postMessage({ kind: 'thumbnail', image: await thumbnail(event.data.document) }) }
+    catch (error) { self.postMessage({ kind: 'thumbnail', error: String(error) }) }
+    return
+  }
   if ('kind' in event.data) {
     if (event.data.kind === 'waveform') {
       const message = event.data, pending = waveformRequests.get(message.requestId)
