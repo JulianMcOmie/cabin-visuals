@@ -384,23 +384,28 @@ Note-driven state must stay a **pure function of the note stream and the beat** 
 
 For verification, use the [instrument checklist](../../../docs/add-an-instrument.md#verify-the-change).
 
-## Particle Stream: fixed density along continuously steered paths
+## Particle Stream: fixed density along predetermined paths
 
 `ParticleStream` reuses Particle's pool, glow shader, and billboard picking through
 `particleCore.ts`. Its primary count is **streams**; density fixes dots per stream,
 so the draw count is always their product, independent of MIDI. Permanent slots
 advance along local -Z, away from the default camera, with faint end fades hiding
-recycling. `particleStreamCore.ts` builds arc-length tables only when path geometry
-changes. Shape-preserving cubic lookup maintains smooth velocity and even spacing
-through curves and crossings, without per-frame integration.
+recycling. `particleStreamCore.ts` derives each journey's birth beat from its slot
+and cycle, so direct/backward seeks reproduce the same route without remembering
+past frames. Pattern weights are sampled at birth and remain fixed for the journey.
+Arc-length layouts are cached by geometry and weights, retaining only layouts used
+by the current cohorts (at most density). Shape-preserving cubic lookup maintains
+smooth speed through curves and crossings, without per-frame integration.
 
-MIDI now steers the entire path over one beat instead of emitting timed packets.
-Quintic-smoothed step differences produce a convex pattern blend, including during
-rapid rolls, and retain continuous velocity when a transition is interrupted.
+MIDI changes incoming routes over one beat, so changes propagate through the field
+with the particles instead of deforming the entire structure at once. Every particle
+keeps its entry route, including a blended route assigned during a transition.
+Quintic-smoothed step differences produce a convex blend for successive entries,
+including during rapid rolls. A journey lasts eight beats divided by flight speed.
 Notes do not guarantee a particle arrives on that exact beat. Highest supported
 pitch wins a chord; note duration and velocity are ignored. Odd pair counts send
 the leftover stream through center. Geometry/count/speed automation still reshapes
-or rephases the field at the sampled beat; MIDI is the smooth sequencing path.
+or rephases the field at the sampled beat; MIDI sequences per-journey routes.
 
 Particle's internal pool accepts `objectOpacity: true` for instruments that own their
 arrangements: this enables multiplication by the wrapper's `uOpacity` in the shared

@@ -64,7 +64,7 @@ export function streamTrajectory(out: StreamPoint, stream: number, age: number, 
   return out
 }
 
-/** Notes steer the continuous path, never add particles. Highest supported
+/** Notes steer incoming particles, never add particles. Highest supported
  * pitch wins a chord; unsupported notes do not interrupt a transition. */
 export function streamNoteEvents(notes: readonly ResolvedNote[]): StreamPatternEvent[] {
   const events = new Map<number, number>()
@@ -75,7 +75,8 @@ export function streamNoteEvents(notes: readonly ResolvedNote[]): StreamPatternE
   return [...events].sort((a, b) => a[0] - b[0]).map(([beat, pitch]) => ({ beat, pattern: NOTE_PATTERNS[pitch - 60] }))
 }
 
-/** Smooth the pattern's step signal with a quintic transition. Summed step
+/** Sample this signal at a particle's birth beat to keep its route for the
+ * entire journey. Smooth the pattern's step signal with a quintic transition. Summed step
  * differences remain a convex blend even in a rapid roll. Both velocity and
  * acceleration are continuous when another note arrives during a transition. */
 export function streamPatternWeights(events: readonly StreamPatternEvent[], beat: number, defaultPattern: number): number[] {
@@ -165,7 +166,16 @@ export function sampleStreamPath(out: StreamPoint, path: StreamPath, fraction: n
 
 /** A permanent ring of slots moving at uniform arc-length speed. Recycling is
  * hidden at the ends of the field. MIDI cannot change slot count or spacing. */
+export function streamParticleJourney(index: number, density: number, beat: number, speed: number): { fraction: number; birthBeat: number } {
+  const duration = STREAM_LIFETIME_BEATS / clamp(speed, 0.1, 4)
+  const offset = index / streamDensity(density)
+  const phase = offset + beat / duration
+  const cycle = Math.floor(phase)
+  // Derive birth from the cycle, not beat minus age: it stays bit-identical
+  // between frames and reproduces the same route after a direct/backward seek.
+  return { fraction: phase - cycle, birthBeat: (cycle - offset) * duration }
+}
+
 export function streamParticleFraction(index: number, density: number, beat: number, speed: number): number {
-  const phase = index / streamDensity(density) + beat * clamp(speed, 0.1, 4) / STREAM_LIFETIME_BEATS
-  return phase - Math.floor(phase)
+  return streamParticleJourney(index, density, beat, speed).fraction
 }
