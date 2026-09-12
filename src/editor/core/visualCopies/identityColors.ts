@@ -235,3 +235,6 @@ export const BYPASS_COLOR = '#d9d9d9'
 export const FRACTAL_COLOR = '#c084fc'
 export const WALLPAPER_COLOR = '#fb923c'
 export const SCATTER_COLOR = '#53d6a0'
+
+/** Polar attraction: orchid, shared by the lane and its console. */
+export const POLAR_WARP_COLOR = '#ce79e8'

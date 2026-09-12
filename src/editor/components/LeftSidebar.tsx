@@ -448,6 +448,7 @@ const MOVER_DESCRIPTIONS: Record<string, string> = {
   impactPulse: "Punches its objects' size on every note - a snare's envelope, instant at the onset and gone again, with optional squash-and-stretch.",
   symmetricMotion: 'Moves a whole formation symmetrically about its own center - notes bloom it out, pull it in, turn it, or split it apart across an axis.',
   approach: 'Streams copies at the camera, each born far away at nothing and swelling as it arrives - an endless flight into the object.',
+  polarWarp: "Pulls objects into a flower and stretches them along its petals. MIDI chooses 1–32 petals; Attack and Release shape the motion.",
   contour: "Sculpts a formation along the camera's depth axis: each copy's distance follows a surface of its own x/y - a cone to start.",
 }
 

@@ -30,6 +30,7 @@ export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRenderer
   conveyor: lazyPanel(() => import('./ConveyorMoverUserInterface'), 'ConveyorMoverUserInterfaceRenderer'),
   symmetricMotion: lazyPanel(() => import('./SymmetricMotionMoverUserInterface'), 'SymmetricMotionMoverUserInterfaceRenderer'),
   symmetricRotation: lazyPanel(() => import('./SymmetricRotationMoverUserInterface'), 'SymmetricRotationMoverUserInterfaceRenderer'),
+  polarWarp: lazyPanel(() => import('./PolarWarpUserInterface'), 'PolarWarpUserInterfaceRenderer'),
   contour: lazyPanel(() => import('./ContourMoverUserInterface'), 'ContourMoverUserInterfaceRenderer'),
   radialMotion: lazyPanel(() => import('./RadialMotionMoverUserInterface'), 'RadialMotionMoverUserInterfaceRenderer'),
   radial: lazyPanel(() => import('./RadialSplitterUserInterface'), 'RadialSplitterUserInterfaceRenderer'),

@@ -21,6 +21,7 @@ import { impactScatterMover } from './impactScatter'
 import { impactPulseMover } from './impactPulse'
 import { waveTerrainMover } from './waveTerrain'
 import { contourMover } from './contour'
+import { polarWarpMover } from './polarWarp'
 import { visibilityMover } from './visibility'
 import { freezeMover } from './freeze'
 import { bypassMover } from './bypass'
@@ -890,6 +891,7 @@ export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   forceFieldPushMover,
   waveTerrainMover,
   contourMover,
+  polarWarpMover,
   visibilityMover,
   freezeMover,
   bypassMover,
