@@ -21,13 +21,19 @@ import { whenInstrumentsSettled } from '../../instruments/lazyInstrument'
 import { visualEngine } from './VisualEngine'
 import { pickRenderedTrack } from './previewPicking'
 import { PauseCanary } from './pauseCanary'
+import { PreviewFrameEncoder, previewFrameTransfers } from './previewFrameCodec'
 import type { PreviewRequest, PreviewResponse, PreviewMediaResponse, PreviewWaveformResponse } from './previewProtocol'
+
+// Stable element identity lets React retain the scene subtree across beat-only
+// commits. Its external-store subscriptions still update on document/UI edits.
+const sceneElement = <VisualScene trackPreviews={true} />
+const frameEncoder = new PreviewFrameEncoder()
 
 function FrameCommit({ commit }: { commit: () => void }) {
   // Render only after child passive effects attach environments, scene roots
   // and frame resources. A layout-effect gate can cache an empty first frame.
   useEffect(commit, [commit])
-  return <VisualScene trackPreviews={true} />
+  return sceneElement
 }
 
 extend(THREE as unknown as Parameters<typeof extend>[0])
@@ -212,8 +218,8 @@ self.onmessage = async (event: MessageEvent<PreviewRequest | PreviewMediaRespons
       }))
     }
     response.renderError = renderFailed
-    response.frame = visualEngine.captureFrame()
+    response.frame = frameEncoder.encode(visualEngine.captureFrame(), request.id, request.revision, request.frameBase)
   } catch (error) { response.error = String(error) }
   response.duration = performance.now() - start
-  self.postMessage(response, { transfer: [...(response.pixels ? [response.pixels.data.buffer] : []), ...(response.thumbnails?.map(t => t.pixels.data.buffer) ?? []), ...(response.ambient ? [response.ambient.data.buffer] : [])] })
+  self.postMessage(response, { transfer: [...(response.frame ? previewFrameTransfers(response.frame) : []), ...(response.pixels ? [response.pixels.data.buffer] : []), ...(response.thumbnails?.map(t => t.pixels.data.buffer) ?? []), ...(response.ambient ? [response.ambient.data.buffer] : [])] })
 }

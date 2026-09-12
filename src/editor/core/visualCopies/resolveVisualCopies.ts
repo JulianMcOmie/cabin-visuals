@@ -1,6 +1,7 @@
 import type { Matrix4 } from 'three'
 import { identityVisualCopy } from './identityVisualCopy'
 import type { MoverOrSplitter, MoverOrSplitterContext, VisualCopy } from './types'
+import { withCopyEvaluation } from './evaluationMemo'
 
 /**
  * Evaluates an ordered mover-and-splitter chain at one beat.
@@ -84,7 +85,17 @@ export function resolveVisualCopies(
   /** Filled with the evaluation's per-copy clocks when provided. */
   clocksOut?: CopyClocks,
 ): VisualCopy[] {
-  let visualCopies = [identityVisualCopy()]
+  return withCopyEvaluation(() => resolveCopyChain(moverAndSplitterChain, beat, placementTransform, clocksOut))
+}
+
+function resolveCopyChain(
+  moverAndSplitterChain: MoverOrSplitter[],
+  beat: number,
+  placementTransform?: Matrix4,
+  clocksOut?: CopyClocks,
+  initialCopies?: VisualCopy[],
+): VisualCopy[] {
+  let visualCopies = initialCopies ?? [identityVisualCopy()]
   // Parallel to visualCopies: each copy's accumulated internal motion, or null.
   // Materialized lazily - a chain with no `applyFramed` entry never has an
   // internal transform to carry, and most chains are exactly that, so the
@@ -227,6 +238,68 @@ export function resolveVisualCopies(
     if (!internal) return visualCopy
     return { ...visualCopy, transform: visualCopy.transform.clone().multiply(internal) }
   })
+}
+
+/** Retained evaluator owned by one render track. Returned copies/clocks are
+ * immutable views: a consumer that pads/truncates must copy the array first.
+ * Static ordinary prefixes can be reused ahead of animated suffixes. Framed
+ * prefixes are never folded early, since their internal motion must remain
+ * separate until all downstream entries have run. */
+export function createVisualCopyEvaluator(): typeof resolveVisualCopies {
+  let entries: MoverOrSplitter[] | undefined
+  let signatures: MoverOrSplitter[] = []
+  let placement: number[] | undefined
+  let prefixLength = 0
+  let prefix: MoverOrSplitter[] = []
+  let suffix: MoverOrSplitter[] = []
+  let prefixCopies: VisualCopy[] | undefined
+  let lastCopies: VisualCopy[] | undefined
+  let lastBeat = Number.NaN
+  let reusable = false
+  let staticChain = false
+  const clocks: CopyClocks = { beatOffsets: null, birthBeats: null, checkpoints: null }
+  return (chain, beat, placementTransform, clocksOut) => {
+    const sameChain = entries?.length === chain.length && chain.every((entry, i) => {
+      const previous = signatures[i]
+      return entries![i] === entry && previous.apply === entry.apply
+        && previous.applyFramed === entry.applyFramed && previous.cachePolicy === entry.cachePolicy
+        && previous.clockSkipEmitters === entry.clockSkipEmitters && previous.emitsCopyClocks === entry.emitsCopyClocks
+    })
+    if (!sameChain) {
+      entries = chain.slice()
+      signatures = chain.map((entry) => ({ ...entry }))
+      reusable = chain.every((entry) => entry.cachePolicy !== undefined)
+      staticChain = chain.every((entry) => entry.cachePolicy === 'static' && !entry.emitsCopyClocks)
+      prefixLength = 0
+      while (prefixLength < chain.length && chain[prefixLength].cachePolicy === 'static'
+        && !chain[prefixLength].applyFramed && !chain[prefixLength].emitsCopyClocks) prefixLength++
+      prefix = chain.slice(0, prefixLength)
+      suffix = chain.slice(prefixLength)
+      prefixCopies = undefined
+      lastCopies = undefined
+    }
+    const elements = placementTransform?.elements
+    const samePlacement = elements
+      ? !!placement && elements.every((value, i) => Object.is(value, placement![i]))
+      : placement === undefined
+    if (!samePlacement) {
+      placement = elements?.slice()
+      prefixCopies = undefined
+      lastCopies = undefined
+    }
+    if (!lastCopies || !(staticChain || Object.is(lastBeat, beat))) {
+      const copies = withCopyEvaluation(() => {
+        if (prefixLength && !prefixCopies) prefixCopies = resolveCopyChain(prefix, beat, placementTransform)
+        return resolveCopyChain(suffix, beat, placementTransform, clocks, prefixCopies)
+      })
+      lastBeat = beat
+      if (clocksOut) Object.assign(clocksOut, clocks)
+      if (reusable) lastCopies = copies
+      return copies
+    }
+    if (clocksOut) Object.assign(clocksOut, clocks)
+    return lastCopies
+  }
 }
 
 /**

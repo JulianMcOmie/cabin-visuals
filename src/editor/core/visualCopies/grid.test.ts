@@ -318,3 +318,22 @@ test('hexagonal row count notes re-lay the lattice and zero spacing collapses it
   assert.deepEqual(copies.map(position), resolveGrid({ layout: 1, rows: 3, columns: 3 }).map(position))
   for (const copy of resolveGrid({ layout: 1, spacing: 0 })) assert.deepEqual(position(copy), [0, 0, 0])
 })
+
+test('resolved circular grid deltas stay private across transformed inputs', () => {
+  const entry = gridSplitter.resolve({
+    settings: settings({ rows: 2, columns: 3, depth: 2, columnsMode: 1, depthMode: 1, size: 0.7, spacing: 1.3 }),
+    notes: [],
+  })
+  const input = { transform: new Matrix4().makeRotationY(0.37).multiply(new Matrix4().makeScale(-1, 2, 0.5)),
+    opacity: 0.4, colorShift: { hue: 0.2, saturation: 0, lightness: 0, tint: null, tintAmount: 0 } }
+  const context = { beat: 0, index: 0, count: 1 }
+  const first = entry.apply(input, context)
+  const snapshot = first.map((copy) => copy.transform.elements.slice())
+  first[0].transform.makeTranslation(100, 100, 100)
+  first[0].colorShift.hue = 0.9
+  const repeated = entry.apply(input, { ...context, beat: 8 })
+  repeated.forEach((copy, i) => assert.deepEqual(copy.transform.elements, snapshot[i]))
+  assert.equal(repeated[0].colorShift.hue, 0.2)
+  assert.equal(input.colorShift.hue, 0.2)
+  assert.equal(repeated[0].opacity, 0.4)
+})

@@ -490,3 +490,24 @@ gate can cache an empty cold-start frame before scene resources attach.
 `worker-cold-start.mjs` injects a visible initial document at the worker protocol
 boundary and checks that a paused preview settles without any later document edit.
 It also runs against production builds, which omit editor debug hooks.
+
+
+## Shared calculations and preview transport
+
+The engine retains one `createVisualCopyEvaluator` per track (see
+`visualCopies/CLAUDE.md`) and opens one synchronous calculation scope per frame.
+Staggered object states are assembled once per equal offset, birth, and complete
+emitter-checkpoint sequence. Equal total lag alone is insufficient because lanes
+can skip different emitters. Strictly ordered distinct offsets bypass grouping entirely. A numeric offset
+lookup handles ordinary sharing; only routing variants need a serialized key. Per-slot owned scratch stays separate
+from the published slots, which may alias, so later clock divergence cannot
+mutate another copy's state. Renderers must treat engine states as read-only.
+
+`previewFrameCodec.ts` separates static object fields from changing frame values
+and packs copy transforms/colors into an encoder-owned Float64 buffer. Static
+metadata reuse is based on the receiver's acknowledged frame, not the last frame
+sent. A reset, changed session/revision, or discarded reply forces fresh metadata.
+Keep newly added ObjectState fields in the codec's appropriate field list and
+preserve optional-field presence and shared-state identity in round-trip tests.
+Worker `FrameCommit` retains the scene element between beat-only commits while
+keeping its passive-effect barrier; do not move that barrier to a layout effect.

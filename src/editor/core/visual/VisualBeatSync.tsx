@@ -13,6 +13,7 @@ import { getBeatOverride } from './beatOverride'
 import { PauseCanary } from './pauseCanary'
 import { isExportPinned, subscribeExportPinned } from '../export/frameDriver'
 import { LatestPreview } from './latestPreview'
+import { PreviewFrameDecoder } from './previewFrameCodec'
 import { canRenderInWorker, type PreviewRequest, type PreviewResponse, type PreviewWorkerMessage } from './previewProtocol'
 import { getTrackPreviewSurfaces, subscribeTrackPreviews } from '../../components/timeline/trackPreviewRegistry'
 import { useGradientEditing } from '../../userInterfaceRenderers/gradientEditing'
@@ -53,6 +54,7 @@ export function VisualBeatSync({ sceneId, sourceRef }: {
   }, -100)
 
   useEffect(() => {
+    const frameDecoder = new PreviewFrameDecoder()
     let alive = true
     let worker: Worker | undefined
     let pending: ((response: PreviewResponse) => void) | undefined
@@ -132,7 +134,7 @@ export function VisualBeatSync({ sceneId, sourceRef }: {
       const requestedPick = selection ?? pick
       const request: PreviewRequest = {
         videoClips: useVideoStore.getState().videoClips,
-        id: ++id, revision, beat: time.currentBeat, playing: time.isPlaying,
+        id: ++id, revision, frameBase: frameDecoder.id, beat: time.currentBeat, playing: time.isPlaying,
         sceneId: scene.current, width: Math.max(1, Math.round(state.size.width)), height: Math.max(1, Math.round(state.size.height)),
         dpr: state.viewport.dpr, quality: useUIStore.getState().previewQuality,
         pick: requestedPick ? { id: requestedPick.id, nx: requestedPick.nx, ny: requestedPick.ny } : undefined,
@@ -162,7 +164,7 @@ export function VisualBeatSync({ sceneId, sourceRef }: {
       } else if (!response.pixels) clearPick()
       const presentStart = performance.now()
       setPreviewRendering(!!response.pixels)
-      visualEngine.applyFrame(response.frame, response.revision === previewRuntime.revision)
+      visualEngine.applyFrame(frameDecoder.decode(response.frame), response.revision === previewRuntime.revision)
       // Export must resolve its own graph after a preview replaces evaluated caches.
       syncProject.current = null
       previewRuntime.revision = response.revision

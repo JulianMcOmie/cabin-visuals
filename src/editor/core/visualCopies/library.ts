@@ -429,39 +429,31 @@ function resolveRadialLayout(settings: RadialSettings) {
       size: Math.max(SPLITTER_SIZE_MIN, size * Math.pow(ringSize, ring)),
     }
   })
+  // A resolved layout owns fixed settings; automation/count changes resolve a
+  // new one. Fold its local pieces once, leaving one input × slot multiply.
   const radius = settings.radius ?? 0
+  const transforms = slots.map((slot) => {
+    // Rings step the radius additively and clamp at the center. Size is last,
+    // so it changes the copy itself without scaling its radius or axial rise.
+    const slotRadius = Math.max(0, radius + slot.radiusOffset) * slot.radiusFactor
+    const transform = slot.rotation.clone().multiply(new Matrix4().makeTranslation(
+      direction[0] * slotRadius + axis.x * slot.rise,
+      direction[1] * slotRadius + axis.y * slot.rise,
+      direction[2] * slotRadius + axis.z * slot.rise,
+    ))
+    // Tilt precedes facing: nod in the slot's radial frame, then re-aim it.
+    if (tiltFix) transform.multiply(tiltFix)
+    if (slot.faceFix) transform.multiply(slot.faceFix)
+    return applySplitterSize(transform, slot.size)
+  })
   return {
+    cachePolicy: 'static' as const,
     apply(visualCopy: VisualCopy) {
-      // Size composes AFTER the translation - R · T(radius) · S(size) - so
-      // it scales each copy about its own center and the ring radius stays
-      // exactly the knob's radius, whatever the size. (The shared splitter
-      // knob; see splitterSize.ts.) RISE joins the same translation: the
-      // slot rotation is ABOUT the axis, so the axial component is
-      // untouched by it and one translation says both.
-      return slots.map((slot) => {
-        // Rings step the radius additively and CLAMP at the center: a
-        // negative radius would come back out on the opposite side.
-        const slotRadius = Math.max(0, radius + slot.radiusOffset) * slot.radiusFactor
-        const transform = visualCopy.transform.clone()
-          .multiply(slot.rotation)
-          .multiply(new Matrix4().makeTranslation(
-            direction[0] * slotRadius + axis.x * slot.rise,
-            direction[1] * slotRadius + axis.y * slot.rise,
-            direction[2] * slotRadius + axis.z * slot.rise,
-          ))
-        // TILT before FACING: the nod is measured on the slot's own frame,
-        // where it is radially symmetric, and the facing fix then re-aims
-        // whatever it left. The other order would let Upright cancel the
-        // slot rotation FIRST, and every copy would nod the same way in
-        // world space - a rigid lean, not a ring closing.
-        if (tiltFix) transform.multiply(tiltFix)
-        if (slot.faceFix) transform.multiply(slot.faceFix)
-        return {
-          transform: applySplitterSize(transform, slot.size),
-          opacity: visualCopy.opacity,
-          colorShift: { ...visualCopy.colorShift },
-        }
-      })
+      return transforms.map((transform) => ({
+        transform: visualCopy.transform.clone().multiply(transform),
+        opacity: visualCopy.opacity,
+        colorShift: { ...visualCopy.colorShift },
+      }))
     },
   }
 }
@@ -566,6 +558,7 @@ function resolveLineLayout(settings: LineSettings) {
     return applySplitterSize(slot, size)
   })
   return {
+    cachePolicy: 'static' as const,
     apply(visualCopy: VisualCopy) {
       return slots.map((slot) => ({
         transform: visualCopy.transform.clone().multiply(slot),
@@ -784,7 +777,7 @@ function resolveGridLayout(settings: GridSettings) {
   const hexagonal = settings.layout === 1
   // One record per dimension, in composition order. `unitOffset` keeps the
   // exact legacy centering (rows grow downward from the top, layer 0 is the
-  // front) at spacing 1; the SPACING knob scales it in apply.
+  // front) at spacing 1; the resolved SPACING knob scales it below.
   const dimensions = [
     {
       count: columns,
@@ -811,10 +804,9 @@ function resolveGridLayout(settings: GridSettings) {
       unitOffset: (index: number) => (depth - 1) / 2 - index,
     },
   ]
-  // Everything except the linear translation is beat-independent, so each
-  // cell precomputes a unit lattice vector (the spacing's coefficient) plus
-  // the circular steps and SIZE folded into one tail matrix: the per-frame
-  // cell is T(spacing * unit) * tail.
+  // Spacing, circular steps and size are fixed within a resolved layout.
+  // Precompose T(spacing * unit) * tail once for every cell.
+  const spacing = Math.max(0, settings.spacing ?? 1)
   const cells = gridCellOrder3(rows, columns, depth, settings.indexing).map(([row, column, layer]) => {
     const indices = [column, row, layer]
     // Grid is a layout, not a fit-to-frame operation: adding rows/columns
@@ -843,19 +835,14 @@ function resolveGridLayout(settings: GridSettings) {
         .multiply(new Matrix4().makeRotationAxis(GRID_AXIS_VECTORS[dim.rotationAxis], (indices[d] / dim.count) * Math.PI * 2))
         .multiply(new Matrix4().makeTranslation(arm.x, arm.y, arm.z))
     }
-    return { unit, tail: applySplitterSize(tail, size) }
+    return new Matrix4().makeTranslation(unit.x * spacing, unit.y * spacing, unit.z * spacing)
+      .multiply(applySplitterSize(tail, size))
   })
-  const spacing = Math.max(0, settings.spacing ?? 1)
   return {
+    cachePolicy: 'static' as const,
     apply(visualCopy: VisualCopy) {
       return cells.map((cell) => ({
-        transform: visualCopy.transform.clone()
-          .multiply(new Matrix4().makeTranslation(
-            cell.unit.x * spacing,
-            cell.unit.y * spacing,
-            cell.unit.z * spacing,
-          ))
-          .multiply(cell.tail),
+        transform: visualCopy.transform.clone().multiply(cell),
         opacity: visualCopy.opacity,
         colorShift: { ...visualCopy.colorShift },
       }))

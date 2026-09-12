@@ -209,6 +209,13 @@ export interface FramedVisualCopy {
  *    more.
  */
 export interface MoverOrSplitter {
+  /** Opt-in to complete-chain result reuse for immutable resolved entries.
+   * `static` additionally guarantees apply/applyFramed ignore beat and birth;
+   * `beat` permits reuse at the same beat. Placement contents and chain entry
+   * revisions are always checked. This does NOT memoize an individual apply:
+   * index, formation, color and incoming transforms still vary per copy.
+   * Unknown entries default to fresh evaluation. */
+  cachePolicy?: 'static' | 'beat'
   apply(visualCopy: VisualCopy, context: MoverOrSplitterContext): VisualCopy[]
   /**
    * OPTIONAL: the composition convention this entry's transform uses, as
