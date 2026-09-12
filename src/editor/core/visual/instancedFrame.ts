@@ -1,7 +1,7 @@
 import { createContext, useContext, useRef } from 'react'
-import { Color, Matrix4 } from 'three'
+import { Matrix4, type Color } from 'three'
 import { useVisualEngine, useVisualFrame as useFrame } from './VisualEngineContext'
-import { applyColorShiftToColor } from './colorShift'
+import { createCopyColorSampler } from './copyColorSampler'
 import { getBeatOverride } from './beatOverride'
 import { previewRuntime } from './previewRuntime'
 import { composePostMoverScale, evaluatePostMoverScale } from './postMoverScale'
@@ -59,9 +59,8 @@ export function useInstancedCopyFrame(
 ): void {
   const { getObjectState, getVisualCopies } = useVisualEngine()
   const frameRef = useRef<InstancedCopyFrame | null>(null)
-  const scratchTint = useRef(new Color()).current
-  const scratchSourceColor = useRef(new Color()).current
-  const sourceHexRef = useRef<string | null>(null)
+  const sampleColor = useRef<ReturnType<typeof createCopyColorSampler> | null>(null)
+  sampleColor.current ??= createCopyColorSampler()
   const scaleInstances = useContext(InstancedScaleContext)
   const placement = useRef(new Matrix4()).current
   const meshScale = useRef(new Matrix4()).current
@@ -80,7 +79,6 @@ export function useInstancedCopyFrame(
     // prefix and scalar matrix across all copies in this frame.
     composePostMoverScale(state.world, undefined, effectScale, placement)
     if (state.meshScale !== 1) meshScale.makeScale(state.meshScale, state.meshScale, state.meshScale)
-    sourceHexRef.current = null
     let frame = frameRef.current
     if (!frame) {
       frame = {
@@ -102,20 +100,7 @@ export function useInstancedCopyFrame(
         },
         copyColor(i, sourceHex, out) {
           const f = frameRef.current as InstancedCopyFrame
-          if (sourceHexRef.current === sourceHex) {
-            out.copy(scratchSourceColor)
-          } else if (/^#[\da-f]{6}$/i.test(sourceHex)) {
-            scratchSourceColor.set(sourceHex)
-            sourceHexRef.current = sourceHex
-            out.copy(scratchSourceColor)
-          } else {
-            // The public contract is #rrggbb. Keep Three's exact fallback
-            // behavior for other CSS/invalid strings rather than caching it.
-            out.set(sourceHex)
-          }
-          const shift = f.copies[i]?.colorShift
-          if (shift) applyColorShiftToColor(out, shift, scratchTint)
-          return out
+          return sampleColor.current!(sourceHex, f.copies[i]?.colorShift, out)
         },
       }
       frameRef.current = frame

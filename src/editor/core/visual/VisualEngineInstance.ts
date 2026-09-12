@@ -1,3 +1,4 @@
+import { isDirectParticlePopulation } from './directParticleScene'
 import { Color, Matrix4, type Scene as ThreeScene } from 'three'
 import { applyColorShiftToColor, HEX_COLOR } from './colorShift'
 import { sceneTrackView } from '../sceneTrack'
@@ -1134,14 +1135,15 @@ export function createVisualEngine() {
 
   function getParticlePlan(trackId: string): ParticlePlan | undefined { return particlePlans.get(trackId) }
 
-  /** Direct presentation is reserved for scenes whose entire rendered
-   * population has a compact GPU plan. Other scenes keep the worker policy. */
-  function isDirectParticleScene(sceneId: string): boolean {
+  /** Direct presentation admits compact plans and bounded shared stream fields.
+   * The optional document is needed immediately after receiving a worker frame,
+   * before this engine resolves the current project locally. */
+  function isDirectParticleScene(sceneId: string, sceneDocuments = project?.scenes): boolean {
     const entries = objectList.filter(entry => entry.sceneId === sceneId)
     // Main has composition tracks rather than object-list entries. Require
     // every potential source scene to be compact so later cuts stay safe.
     const population = entries.length ? entries : objectList
-    return population.length > 0 && population.every(entry => particlePlans.has(entry.trackId))
+    return isDirectParticlePopulation(population, id => particlePlans.has(id), getVisualCopyCount, staggeredTracks, sceneDocuments)
   }
 
   // ── Object-list subscription (VisualScene via useSyncExternalStore) ──

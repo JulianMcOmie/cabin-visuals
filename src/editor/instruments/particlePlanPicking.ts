@@ -1,10 +1,10 @@
 import { Camera, Color, InstancedBufferGeometry, Matrix4, Mesh, NoBlending, PlaneGeometry, Scene, ShaderMaterial, Vector2, Vector3, Vector4, WebGLRenderTarget } from 'three'
 import type { WebGLRenderer } from 'three'
-import type { createParticlePlanMesh } from './particlePlanRenderer'
+import type { BufferGeometry, Points } from 'three'
 
 /** Pick the actual shader-expanded surface with a one-pixel depth pass. Only
  * pointer queries pay for a GPU readback; playback never enumerates instances. */
-export function attachParticlePlanPicking(mesh: ReturnType<typeof createParticlePlanMesh>['mesh']): () => void {
+export function attachParticlePlanPicking(mesh: Mesh<BufferGeometry, ShaderMaterial> | Points<BufferGeometry, ShaderMaterial>): () => void {
   let renderer: WebGLRenderer | undefined, drawnCamera: Camera | undefined
   let warmed: WebGLRenderer | undefined
   const drawViewport = new Vector4()
@@ -28,9 +28,10 @@ export function attachParticlePlanPicking(mesh: ReturnType<typeof createParticle
       #include <packing>
       uniform float uGlow, uOpacity;
       in vec2 vUv;
+      in vec4 vColor;
       out vec4 outColor;
       void main() {
-        if (uOpacity <= 0.001 || length(vUv * 2.0 - 1.0) > (uGlow > 0.0 ? 1.0 : 0.55)) discard;
+        if (uOpacity <= 0.001 || vColor.a <= 0.001 || length(vUv * 2.0 - 1.0) > (uGlow > 0.0 ? 1.0 : 0.55)) discard;
         outColor = packDepthToRGBA(gl_FragCoord.z);
       }
     `,

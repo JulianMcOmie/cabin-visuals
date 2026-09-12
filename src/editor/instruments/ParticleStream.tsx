@@ -32,5 +32,6 @@ export const particleStreamInstrument: ObjectInstrumentDef = {
   midiRows: STREAM_MIDI_ROWS,
   // An ambient flow along local -Z, away from the default camera. Normal
   // track transforms can aim the field; MIDI plans routes ahead so intersections land on the note beats.
+  instancedComponent: lazyInstrument(() => import('./ParticleStreamInstanced').then(m => m.ParticleStreamInstanced)),
   component: lazyInstrument(() => import('./ParticleStreamVisual').then(m => m.ParticleStreamVisual)),
 }

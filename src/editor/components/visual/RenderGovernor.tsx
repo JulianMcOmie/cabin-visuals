@@ -10,7 +10,7 @@ import { isExportPinned } from '../../core/export/frameDriver'
 import { getBeatOverride } from '../../core/visual/beatOverride'
 import { previewRuntime } from '../../core/visual/previewRuntime'
 
-/** The primary canvas never joins R3F's shared animation loop. Compact particle
+/** The primary canvas never joins R3F's shared animation loop. Batched particle
  * scenes advance directly at 60fps without worker readback. Other worker frames
  * arrive independently; compatibility renders get one background task and an
  * adaptive cooldown (at most 30fps, at most ~25% CPU duty after a slow frame).
@@ -44,7 +44,7 @@ export function RenderGovernor() {
       }
       timer = setTimeout(tick, 16)
     }
-    // Compact particle scenes have no per-copy CPU work or pixel readback.
+    // Batched particle scenes avoid repeated local fields and pixel readback.
     // Present directly at display cadence; retain the old cooldown for all
     // other scenes and stop redraws while a direct scene is paused and clean.
     const directTick = (now: number) => {

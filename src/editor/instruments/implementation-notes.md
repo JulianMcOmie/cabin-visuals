@@ -414,3 +414,21 @@ Particle's internal pool accepts `objectOpacity: true` for instruments that own 
 arrangements: this enables multiplication by the wrapper's `uOpacity` in the shared
 shader. Ordinary splitter copies must leave it false because `copyFade` already
 includes the object's fade. Enabling it there would square fades.
+
+### Particle Stream splitter fields and shared sampling
+
+Particle Stream's internal pool is not sufficient batching: a splitter used to
+mount and sample a full pool per copy. `ParticleStreamInstanced` now uses
+`particleFieldRenderer.ts` to draw copy × local-dot indices from two textures,
+with no product-sized CPU buffer. The ordinary component remains the fallback
+for private clocks and per-copy effects. Both paths consume
+`sampleParticleStream`, whose bounded cache shares equivalent local choreography
+across chain thumbnails even when they have separately resolved note arrays.
+Consume its borrowed Float32 buffer immediately; never retain it across sampling
+another beat. Color/opacity/placement are deliberately excluded from that cache.
+
+An isolated shader benchmark missed substantial repeated thumbnail sampling and
+the compatibility renderer's 30 Hz limit. Verify the complete editor with the
+actual instrument and modifier family before claiming FPS improvements. See
+[Particle Stream field validation](../../../docs/performance/particle-stream-fields.md)
+for the fixture, limits and measured results.

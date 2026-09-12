@@ -511,3 +511,11 @@ Keep newly added ObjectState fields in the codec's appropriate field list and
 preserve optional-field presence and shared-state identity in round-trip tests.
 Worker `FrameCommit` retains the scene element between beat-only commits while
 keeping its passive-effect barrier; do not move that barrier to a layout effect.
+
+- Particle Stream batching and presentation: `directParticleScene.ts` admits
+  bounded shared-clock fields plus ordinary lighting to direct presentation.
+  After decoding a worker frame, pass the current scene documents explicitly to
+  `isDirectParticleScene`: the receiving engine has not resolved that document
+  locally yet. Testing only `particlePlans.has(trackId)` excludes stream fields
+  and even default lighting. Full editor verification and limits are recorded in
+  [Particle Stream field validation](../../../../docs/performance/particle-stream-fields.md).

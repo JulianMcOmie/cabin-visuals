@@ -182,7 +182,7 @@ export function VisualBeatSync({ sceneId, sourceRef }: {
       const presentStart = performance.now()
       setPreviewRendering(!!response.pixels)
       visualEngine.applyFrame(frameDecoder.decode(response.frame), response.revision === previewRuntime.revision)
-      const directParticles = visualEngine.isDirectParticleScene(scene.current)
+      const directParticles = visualEngine.isDirectParticleScene(scene.current, project.scenes)
       previewRuntime.directParticles = directParticles
       previewRuntime.worker = !directParticles
       // Export must resolve its own graph after a preview replaces evaluated caches.

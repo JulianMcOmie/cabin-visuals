@@ -7,6 +7,7 @@ import { isExportPinned } from '../../core/export/frameDriver'
 import { createVisualEngine, type ObjectListEntry } from '../../core/visual/VisualEngine'
 import { VisualEngineContext } from '../../core/visual/VisualEngineContext'
 import type { ProjectSnapshot } from '../../core/visual/resolve'
+import { streamCount, streamDensity } from '../../instruments/particleStreamCore'
 import { getInstrument } from '../../instruments'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useTimeStore } from '../../store/TimeStore'
@@ -45,7 +46,12 @@ function makeStage(id: string, project: ProjectSnapshot, previous?: Stage): Stag
     id, snapshot: stage.snapshot, scene, camera,
     context: { engine, tracks: stage.snapshot.tracks, renderFrame: previous?.context.renderFrame ?? { current: false } },
     objects: engine.getObjectList().filter(object => stage.targets.has(object.trackId)),
-    denseParticles: engine.getObjectList().some(object => object.proceduralCopies && engine.getVisualCopyCount(object.trackId) >= 1_000_000),
+    particleCount: [...new Map(engine.getObjectList().map(object => [object.trackId, object])).values()].reduce((total, object) => {
+      const copies = engine.getVisualCopyCount(object.trackId)
+      const params = stage.snapshot.tracks[object.trackId]?.params
+      return total + (object.proceduralCopies ? copies : object.instrumentId === 'particleStream'
+        ? copies * streamCount(params?.count ?? 6) * streamDensity(params?.density ?? 16) : 0)
+    }, 0),
   }
 }
 interface Stage {
@@ -55,7 +61,7 @@ interface Stage {
   camera: PerspectiveCamera
   context: NonNullable<React.ContextType<typeof VisualEngineContext>>
   objects: ObjectListEntry[]
-  denseParticles: boolean
+  particleCount: number
 }
 
 function sameInputs(a: ProjectSnapshot, b: ProjectSnapshot) {
@@ -149,7 +155,7 @@ export function TrackPreviewRenderer({ immediate = false }: { immediate?: boolea
     const now = performance.now() / 1000
     // A million-particle row still renders its complete cloud, but live atlas
     // refreshes must leave GPU time for the 60fps primary canvas.
-    const dense = useTimeStore.getState().isPlaying && surfaces.some(surface => cache.current.get(surface.trackId)?.denseParticles)
+    const dense = useTimeStore.getState().isPlaying && surfaces.reduce((sum, surface) => sum + (cache.current.get(surface.trackId)?.particleCount ?? 0), 0) >= 1_000_000
     const remaining = 1 / (dense ? 10 : 30) - (now - runtime.lastFrame)
     if (remaining > 0) {
       // Pointer/scroll invalidations can arrive at display refresh even paused.
