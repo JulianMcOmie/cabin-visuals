@@ -707,3 +707,21 @@ the stagger (single rows need no shift), and slot order/count lanes stay shared.
 All four compose locally, preserve incoming appearance, and use the shared
 SIZE knob after their position calculation. FormationSplitterUserInterface.tsx
 previews actual matrices with asymmetric motifs so mirror parity stays legible.
+
+
+## Polar Warp
+
+`polarWarp.ts` is a world-space mover: a held note gathers copy positions into
+an XY polar rose and compresses/stretches each affine basis along its petals.
+It uses the existing scene, group pipeline, global routing and copy targets;
+it preserves copy count, opacity and color. It warps object transforms, not
+individual vertices or scene pixels. Radius and physical response are internal
+constants; Attack and Release (beats) are the only params. MIDI uses Radial's
+1–32 count grid and largest simultaneous onset latch, relabelled as petals.
+Duration additionally gates attraction: the last held note starts Release;
+releasing another chord tone never changes the latched count. Invalid rows
+are ignored. Resolved spring segments carry velocity across retargets and
+close their tails exactly at the selected time, so recovery returns the input
+matrix unchanged and direct seeks equal playback. The panel previews the real
+resolver at a labelled demo 120 BPM. `applyObjectPlacement` preserves shear on
+the ordinary renderer, matching the instanced path's full matrix handling.

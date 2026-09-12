@@ -1,3 +1,4 @@
+import { applyObjectPlacement } from '../../core/visual/applyObjectPlacement'
 import { previewRuntime } from '../../core/visual/previewRuntime'
 import { useContext, memo, Suspense, useEffect, useMemo, useRef } from 'react'
 import { Group, Matrix4 } from 'three'
@@ -190,16 +191,15 @@ export const ObjectRenderer = memo(function ObjectRenderer({
       // identity copy pins the viewport-filling plane exactly as before and
       // translated/scaled copies move as screen-space layers.
       composeScreenAnchor(camera.position, camera.quaternion, visualCopy?.transform, _composed)
-      _composed.decompose(g.position, g.quaternion, g.scale)
+      applyObjectPlacement(g, _composed)
     } else if (state) {
       const beat = getBeatOverride() ?? (previewRuntime.worker ? previewRuntime.beat : useTimeStore.getState().currentBeat)
       const effectScale = evaluatePostMoverScale(scaleInstances, state.effectOverrides, beat)
       composePostMoverScale(state.world, visualCopy?.transform, effectScale, _composed)
-      _composed.decompose(g.position, g.quaternion, g.scale)
       // The instrument's size lives OUTSIDE the world matrix (see VisualEngine):
       // it scales the mesh itself, applied inside the mover/copy layout, so
       // movers and child tracks work in unscaled placement space.
-      g.scale.multiplyScalar(state.meshScale)
+      applyObjectPlacement(g, _composed, state.meshScale)
     }
   })
 
