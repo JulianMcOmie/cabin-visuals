@@ -4,7 +4,7 @@ import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { paramDefault, stringParamDefault } from './types'
 import { particleStreamInstrument } from './ParticleStream'
 import { createParticlePool, disposeParticlePool } from './particleCore'
-import { STREAM_CAPACITY, streamCount, streamDensity, streamNoteEvents, streamPatternWeights, buildStreamPaths, sampleStreamPath, streamParticleJourney } from './particleStreamCore'
+import { STREAM_CAPACITY, streamCount, streamDensity, streamNoteEvents, streamPatternWeights, buildStreamPaths, sampleStreamJourney, streamParticleJourney, buildStreamTiming } from './particleStreamCore'
 
 export function ParticleStreamVisual({ trackId }: { trackId: string }) {
   const pool = useMemo(() => {
@@ -14,6 +14,7 @@ export function ParticleStreamVisual({ trackId }: { trackId: string }) {
   }, [])
   const scratch = useMemo(() => ({ matrix: new Matrix4(), color: new Color(), point: { x: 0, y: 0, z: 0, fade: 0 } }), [])
   const noteCache = useRef<{ notes: unknown; events: ReturnType<typeof streamNoteEvents> }>({ notes: null, events: [] })
+  const timingCache = useRef<{ events: unknown; key: string; timing: ReturnType<typeof buildStreamTiming> } | null>(null)
   const pathCache = useRef<{ key: string; layouts: Map<string, ReturnType<typeof buildStreamPaths>> }>({ key: '', layouts: new Map() })
   useEffect(() => () => disposeParticlePool(pool), [pool])
 
@@ -25,14 +26,18 @@ export function ParticleStreamVisual({ trackId }: { trackId: string }) {
     if (noteCache.current.notes !== state.notes) noteCache.current = { notes: state.notes, events: streamNoteEvents(state.notes) }
     const events = noteCache.current.events
     const density = streamDensity(value('density'))
+    const timingKey = [density, speed].join(',')
+    if (timingCache.current?.events !== events || timingCache.current.key !== timingKey) {
+      timingCache.current = { events, key: timingKey, timing: buildStreamTiming(events, density, speed) }
+    }
     const pathKey = [count, twist, spread, settings.meetX, settings.meetY].join(',')
     if (pathCache.current.key !== pathKey) pathCache.current = { key: pathKey, layouts: new Map() }
-    // A slot chooses a route only on entry. Retain just the layouts used by
-    // today's cohorts; this cache affects cost, never playback/seek behavior.
+    // Look ahead to each slot's planned intersection, not its entry beat.
+    // Retain only current layouts; the cache never determines the choreography.
     const layouts = new Map<string, ReturnType<typeof buildStreamPaths>>()
     const journeys = Array.from({ length: density }, (_, dot) => {
-      const journey = streamParticleJourney(dot, density, state.beat, speed)
-      const weights = streamPatternWeights(events, journey.birthBeat, value('pattern'))
+      const journey = streamParticleJourney(dot, density, state.beat, speed, timingCache.current!.timing)
+      const weights = streamPatternWeights(events, journey.crossBeat, value('pattern'))
       const key = weights.join(',')
       const paths = layouts.get(key) ?? pathCache.current.layouts.get(key) ?? buildStreamPaths(settings, weights)
       layouts.set(key, paths)
@@ -47,7 +52,7 @@ export function ParticleStreamVisual({ trackId }: { trackId: string }) {
     for (let stream = 0; stream < count; stream++) {
       for (let dot = 0; dot < density; dot++) {
         const { fraction, paths } = journeys[dot]
-        sampleStreamPath(point, paths[stream], fraction)
+        sampleStreamJourney(point, paths[stream], fraction)
         matrix.setPosition(point.x, point.y, point.z)
         const index = stream * density + dot
         mesh.setMatrixAt(index, matrix)

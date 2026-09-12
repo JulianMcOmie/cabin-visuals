@@ -24,8 +24,7 @@ try {
     p.addTrack({ id: 'stream-smoke', name: 'Particle Stream', type: 'base', instrumentId: 'particleStream',
       params: {}, stringParams: {}, color: '#7dd3fc', muted: false, solo: false, childIds: [], effects: [],
       blocks: [{ id: 'stream-block', startBar: 0, durationBars: 8,
-        notes: [{ id: 'center', pitch: 60, startBeat: 0, durationBeats: 0.25, velocity: 100 },
-          { id: 'pairs', pitch: 61, startBeat: 8.17, durationBeats: 0.25, velocity: 100 }] }],
+        notes: [60, 61, 62, 63, 64].map((pitch, i) => ({ id: `route-${pitch}`, pitch, startBeat: 4.13 + i * 0.04, durationBeats: 0.02, velocity: 100 })) }],
     })
     window.__cabinStores.ui.getState().setSelectedTrackId('stream-smoke')
   })
@@ -60,41 +59,64 @@ try {
       }
       return { hash, count: mesh.count, cross, opacity: mesh.material.uniforms.uOpacity.value }
     }
-    const frames = [6, 18, 3, 18, 6].map(render)
+    const frames = [4.13, 4.17, 3, 4.17, 4.13].map(render)
     const positions = () => Array.from({ length: window.__streamMesh.count }, (_, i) =>
       Array.from(window.__streamMesh.instanceMatrix.array.slice(i * 16 + 12, i * 16 + 15)))
-    render(10)
+    const hits = [4.13, 4.17, 4.21, 4.25, 4.29].map(beat => {
+      render(beat - 0.0001)
+      const before = positions()
+      const frame = render(beat)
+      const exact = positions()
+      render(beat + 0.0001)
+      return { frame, before, exact, after: positions() }
+    })
+    render(4.12)
     const sequenced = positions()
     const notes = stores.project.getState().tracks['stream-smoke'].blocks[0].notes
-    stores.project.getState().updateBlockNotes('stream-smoke', 'stream-block', notes.filter(n => n.id !== 'pairs'))
-    render(10)
-    const withoutLaterNote = positions()
+    stores.project.getState().updateBlockNotes('stream-smoke', 'stream-block', [])
+    render(4.12)
+    const withoutScore = positions()
     stores.project.getState().updateBlockNotes('stream-smoke', 'stream-block', notes)
-    render(10)
+    render(4.12)
     const sequencedAgain = positions()
     render(6.17)
-    const beforeZ = Array.from({ length: window.__streamMesh.count }, (_, i) => window.__streamMesh.instanceMatrix.array[i * 16 + 14])
+    const beforeZ = positions().map(p => p[2])
     render(6.18)
-    const movingAway = beforeZ.every((z, i) => window.__streamMesh.instanceMatrix.array[i * 16 + 14] < z)
+    const movingAway = beforeZ.every((z, i) => {
+      const next = window.__streamMesh.instanceMatrix.array[i * 16 + 14]
+      return next < z || (z < -22 && next > 14)
+    })
     stores.project.getState().setTrackParam('stream-smoke', 'tfOpacity', 0.25)
-    const faded = render(6)
+    const faded = render(4.13)
     stores.project.getState().setTrackParam('stream-smoke', 'tfOpacity', 1)
-    const restored = render(6)
+    const restored = render(4.13)
     stores.project.getState().setTrackParam('stream-smoke', 'count', 16)
     stores.project.getState().setTrackParam('stream-smoke', 'density', 48)
     const dense = render(10)
     stores.project.getState().setTrackParam('stream-smoke', 'count', 1)
     const one = render(10)
     const mesh = window.__streamMesh
-    return { frames, sequenced, withoutLaterNote, sequencedAgain, movingAway, faded, restored, dense, one, capacity: mesh.instanceMatrix.count,
+    return { frames, hits, sequenced, withoutScore, sequencedAgain, movingAway, faded, restored, dense, one, capacity: mesh.instanceMatrix.count,
       programs: three.gl.info.programs.map(p => p.diagnostics?.runnable ?? true) }
   })
   result.worker = worker
-  for (let stream = 0; stream < 6; stream++) {
-    assert.deepEqual(result.sequenced[stream * 16 + 4], result.withoutLaterNote[stream * 16 + 4], 'a particle born at beat 6 ignores the later note')
-    assert.notDeepEqual(result.sequenced[stream * 16 + 14], result.withoutLaterNote[stream * 16 + 14], 'a particle born at beat 9 takes the later route')
+  for (let hit = 0; hit < result.hits.length; hit++) {
+    const { frame, before, exact, after } = result.hits[hit]
+    assert.equal(frame.count, 96, 'closely spaced MIDI notes never add particles')
+    assert.equal(frame.cross.length, 6, 'every off-grid MIDI beat has six visible arrivals')
+    const arrivals = exact.flatMap((p, i) => Math.abs(p[2] + 4) < 1e-4 ? [i] : [])
+    for (const i of arrivals) {
+      assert.ok(before[i][2] > -4, 'the same particle approaches before the MIDI beat')
+      assert.ok(after[i][2] < -4, 'the same particle passes through after the MIDI beat')
+    }
+    if (hit === 2 || hit === 3) {
+      const x = hit === 2 ? -2.2 : 2.2
+      assert.ok(frame.cross.every(([px, py]) => Math.hypot(px - x, py) < 1e-4))
+    }
+    if (hit === 4) assert.ok(frame.cross.every(([x, y]) => Math.abs(Math.hypot(x, y) - 4) < 1e-4))
   }
-  assert.deepEqual(result.sequencedAgain, result.sequenced, 'editing and restoring the sequence reproduces all routes')
+  assert.notDeepEqual(result.sequenced, result.withoutScore, 'future notes shape the approach before the first note plays')
+  assert.deepEqual(result.sequencedAgain, result.sequenced, 'editing and restoring the score reproduces its choreography')
   assert.equal(result.movingAway, true, 'fixed slots move into the distance')
   assert.ok(result.frames.every(frame => frame.count === 96), 'MIDI keeps exactly 16 dots on each of six streams')
   assert.equal(result.frames[0].cross.length, 6)

@@ -64,7 +64,7 @@ export function streamTrajectory(out: StreamPoint, stream: number, age: number, 
   return out
 }
 
-/** Notes steer incoming particles, never add particles. Highest supported
+/** Notes specify intersection times, never add particles. Highest supported
  * pitch wins a chord; unsupported notes do not interrupt a transition. */
 export function streamNoteEvents(notes: readonly ResolvedNote[]): StreamPatternEvent[] {
   const events = new Map<number, number>()
@@ -75,22 +75,26 @@ export function streamNoteEvents(notes: readonly ResolvedNote[]): StreamPatternE
   return [...events].sort((a, b) => a[0] - b[0]).map(([beat, pitch]) => ({ beat, pattern: NOTE_PATTERNS[pitch - 60] }))
 }
 
-/** Sample this signal at a particle's birth beat to keep its route for the
- * entire journey. Smooth the pattern's step signal with a quintic transition. Summed step
- * differences remain a convex blend even in a rapid roll. Both velocity and
- * acceleration are continuous when another note arrives during a transition. */
+/** Choose a whole route by its planned intersection beat, including future
+ * notes. Transitions END on the next note and shorten to fit rapid sequences;
+ * a note's own arrival always gets its exact pattern, never a delayed blend. */
 export function streamPatternWeights(events: readonly StreamPatternEvent[], beat: number, defaultPattern: number): number[] {
   const weights = [0, 0, 0, 0, 0]
   let previous = Math.round(clamp(defaultPattern, 0, 4))
-  weights[previous] = 1
+  let previousBeat = -Infinity
   for (const event of events) {
-    if (event.beat > beat) break
-    const t = clamp((beat - event.beat) / STREAM_MORPH_BEATS, 0, 1)
-    const mix = t * t * t * (10 + t * (-15 + t * 6))
-    weights[previous] -= mix
-    weights[event.pattern] += mix
+    if (event.beat > beat) {
+      const start = Math.max(previousBeat, event.beat - STREAM_MORPH_BEATS)
+      const t = clamp((beat - start) / (event.beat - start), 0, 1)
+      const mix = t * t * t * (10 + t * (-15 + t * 6))
+      weights[previous] = 1 - mix
+      weights[event.pattern] += mix
+      return weights
+    }
     previous = event.pattern
+    previousBeat = event.beat
   }
+  weights[previous] = 1
   return weights
 }
 
@@ -99,6 +103,7 @@ export interface StreamPath {
   distances: Float64Array
   tangents: Float64Array
   length: number
+  crossingFraction: number
 }
 
 /** Cacheable arc-length tables for the current paths. Three coordinates share
@@ -136,7 +141,7 @@ export function buildStreamPaths(settings: StreamPathSettings, weights: readonly
       }
       tangents[i * 3 + axis] = slope
     }
-    return { positions, distances, tangents, length: distances[PATH_STEPS] }
+    return { positions, distances, tangents, length: distances[PATH_STEPS], crossingFraction: distances[PATH_STEPS / 2] / distances[PATH_STEPS] }
   })
 }
 
@@ -164,16 +169,109 @@ export function sampleStreamPath(out: StreamPoint, path: StreamPath, fraction: n
   return out
 }
 
-/** A permanent ring of slots moving at uniform arc-length speed. Recycling is
- * hidden at the ends of the field. MIDI cannot change slot count or spacing. */
-export function streamParticleJourney(index: number, density: number, beat: number, speed: number): { fraction: number; birthBeat: number } {
-  const duration = STREAM_LIFETIME_BEATS / clamp(speed, 0.1, 4)
-  const offset = index / streamDensity(density)
-  const phase = offset + beat / duration
+/** Arc-length motion with the geometric intersection anchored at half-flight.
+ * Blends involving Open are asymmetric: half the distance is not their meeting
+ * plane. A monotone C1 remap pins that plane without a speed kink at arrival. */
+export function sampleStreamJourney(out: StreamPoint, path: StreamPath, fraction: number): StreamPoint {
+  const t = clamp(fraction, 0, 1), cross = path.crossingFraction
+  const incoming = 2 * cross, outgoing = 2 * (1 - cross)
+  const through = 2 * incoming * outgoing / (incoming + outgoing)
+  const distance = t <= 0.5
+    ? hermite(t * 2, 0, cross, incoming * 0.5, through * 0.5)
+    : hermite((t - 0.5) * 2, cross, 1, through * 0.5, outgoing * 0.5)
+  sampleStreamPath(out, path, distance)
+  out.fade = smooth(t / 0.04) * smooth((1 - t) / 0.04)
+  return out
+}
+
+function hermite(t: number, a: number, b: number, da: number, db: number): number {
+  const t2 = t * t, t3 = t2 * t
+  return (2 * t3 - 3 * t2 + 1) * a + (t3 - 2 * t2 + t) * da
+    + (-2 * t3 + 3 * t2) * b + (t3 - t2) * db
+}
+
+export interface StreamTiming {
+  beats: number[]
+  phases: number[]
+  slopes: number[]
+  rate: number
+}
+
+/** Plan a monotone flow clock from the entire resolved score. Every MIDI beat
+ * is an exact crossing of a successive cohort of existing slots. Sparse notes
+ * leave room for ambient crossings; dense notes compress travel time instead
+ * of allocating particles or dropping hits. Phase units are one dot spacing. */
+export function buildStreamTiming(events: readonly StreamPatternEvent[], density: number, speed: number): StreamTiming {
+  const count = streamDensity(density)
+  const rate = count * clamp(speed, 0.1, 4) / STREAM_LIFETIME_BEATS
+  const beats = events.map(event => event.beat)
+  const phases: number[] = [], slopes: number[] = []
+  for (let i = 0; i < beats.length; i++) {
+    // Half-integer crossings for odd densities, integer crossings for even.
+    phases.push(i === 0 ? Math.round(beats[i] * rate - count / 2) + count / 2
+      : phases[i - 1] + Math.max(1, Math.round((beats[i] - beats[i - 1]) * rate)))
+  }
+  for (let i = 0; i < beats.length; i++) {
+    if (i === 0 || i === beats.length - 1) { slopes.push(rate); continue }
+    const before = beats[i] - beats[i - 1], after = beats[i + 1] - beats[i]
+    const left = (phases[i] - phases[i - 1]) / before, right = (phases[i + 1] - phases[i]) / after
+    const w1 = 2 * after + before, w2 = after + 2 * before
+    slopes.push((w1 + w2) / (w1 / left + w2 / right))
+  }
+  return { beats, phases, slopes, rate }
+}
+
+function interval(values: readonly number[], value: number): number {
+  let low = 0, high = values.length - 1
+  while (high - low > 1) {
+    const mid = (low + high) >>> 1
+    if (values[mid] <= value) low = mid
+    else high = mid
+  }
+  return low
+}
+
+function timingSegment(timing: StreamTiming, i: number, t: number): number {
+  const span = timing.beats[i + 1] - timing.beats[i]
+  return hermite(t, timing.phases[i], timing.phases[i + 1], timing.slopes[i] * span, timing.slopes[i + 1] * span)
+}
+
+export function streamFlowPhase(timing: StreamTiming, beat: number): number {
+  const { beats, phases, rate } = timing, last = beats.length - 1
+  if (last < 0) return beat * rate
+  if (beat <= beats[0]) return phases[0] + (beat - beats[0]) * rate
+  if (beat >= beats[last]) return phases[last] + (beat - beats[last]) * rate
+  const i = interval(beats, beat)
+  return timingSegment(timing, i, (beat - beats[i]) / (beats[i + 1] - beats[i]))
+}
+
+export function streamBeatAtPhase(timing: StreamTiming, phase: number): number {
+  const { beats, phases, rate } = timing, last = beats.length - 1
+  if (last < 0) return phase / rate
+  if (phase <= phases[0]) return beats[0] + (phase - phases[0]) / rate
+  if (phase >= phases[last]) return beats[last] + (phase - phases[last]) / rate
+  const i = interval(phases, phase)
+  if (phase === phases[i]) return beats[i]
+  let low = 0, high = 1
+  for (let step = 0; step < 44; step++) {
+    const mid = (low + high) * 0.5
+    if (timingSegment(timing, i, mid) < phase) low = mid
+    else high = mid
+  }
+  return beats[i] + (low + high) * 0.5 * (beats[i + 1] - beats[i])
+}
+
+/** Permanent slots follow a score-planned clock. Their crossing beat identifies
+ * their complete route; it remains stable throughout playback and seeking. */
+export function streamParticleJourney(index: number, density: number, beat: number, speed: number, timing?: StreamTiming): { fraction: number; birthBeat: number; crossBeat: number } {
+  const count = streamDensity(density)
+  const rate = count * clamp(speed, 0.1, 4) / STREAM_LIFETIME_BEATS
+  const phase = (index + (timing ? streamFlowPhase(timing, beat) : beat * rate)) / count
   const cycle = Math.floor(phase)
-  // Derive birth from the cycle, not beat minus age: it stays bit-identical
-  // between frames and reproduces the same route after a direct/backward seek.
-  return { fraction: phase - cycle, birthBeat: (cycle - offset) * duration }
+  const birth = cycle * count - index, cross = (cycle + 0.5) * count - index
+  return { fraction: phase - cycle,
+    birthBeat: timing ? streamBeatAtPhase(timing, birth) : birth / rate,
+    crossBeat: timing ? streamBeatAtPhase(timing, cross) : cross / rate }
 }
 
 export function streamParticleFraction(index: number, density: number, beat: number, speed: number): number {
