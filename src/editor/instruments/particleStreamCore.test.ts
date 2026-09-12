@@ -5,7 +5,7 @@ import type { ResolvedNote } from '../core/visual/types'
 import { applyMaterialOpacity } from '../core/visual/animatedOpacity'
 import { createParticlePool, disposeParticlePool } from './particleCore'
 import { particleStreamInstrument } from './ParticleStream'
-import { STREAM_CAPACITY, STREAM_CROSS_AGE, STREAM_FAR_Z, STREAM_NEAR_Z, streamCount, streamDensity, streamNoteEvents, streamPatternWeights, buildStreamPaths, sampleStreamPath, streamParticleFraction, streamParticleJourney, streamTrajectory } from './particleStreamCore'
+import { STREAM_CAPACITY, STREAM_CROSS_AGE, STREAM_FAR_Z, STREAM_NEAR_Z, streamCount, streamDensity, streamNoteEvents, streamPatternWeights, buildStreamPaths, sampleStreamPath, streamParticleJourney, streamTrajectory, buildStreamTiming, streamFlowPhase, streamBeatAtPhase, sampleStreamJourney } from './particleStreamCore'
 
 const settings = { count: 6, twist: 0.35, spread: 4, meetX: 0, meetY: 0 }
 const point = (stream: number, t: number, pattern = 1, config = settings) => streamTrajectory({ x: 0, y: 0, z: 0, fade: 0 }, stream, t, pattern, config)
@@ -75,7 +75,8 @@ test('particles remain evenly spaced along curved paths by distance, not depth',
 test('MIDI never changes the fixed slots or their spacing, including dense rolls and negative beats', () => {
   const events = streamNoteEvents(Array.from({ length: 1000 }, (_, i) => note(i / 100, 60 + i % 5)))
   for (const beat of [-100, 0, 0.001, 4.13, 5, 8, 10000]) for (const density of [2, 16, 48]) {
-    const phases = Array.from({ length: density }, (_, i) => streamParticleFraction(i, density, beat, 1)).sort((a, b) => a - b)
+    const timing = buildStreamTiming(events, density, 1)
+    const phases = Array.from({ length: density }, (_, i) => streamParticleJourney(i, density, beat, 1, timing).fraction).sort((a, b) => a - b)
     assert.equal(phases.length, density)
     assert.equal(new Set(phases).size, density)
     for (let i = 1; i < phases.length; i++) near(phases[i] - phases[i - 1], 1 / density, 1e-10)
@@ -86,51 +87,105 @@ test('MIDI never changes the fixed slots or their spacing, including dense rolls
   }
 })
 
-test('MIDI starts smooth path changes rather than scheduling new dot arrivals', () => {
-  const events = streamNoteEvents([note(2.33, 60), note(5.17, 61), note(5.17, 62), note(1, 80), note(1, 60.5)])
-  assert.deepEqual(events, [{ beat: 2.33, pattern: 1 }, { beat: 5.17, pattern: 3 }])
-  assert.deepEqual(streamPatternWeights(events, 2.33, 0), weights(0))
-  assert.deepEqual(streamPatternWeights(events, 3.33, 0), weights(1))
-  near(streamPatternWeights(events, 2.83, 0)[1], 0.5)
-  assert.deepEqual(streamPatternWeights(events, 6.17, 0), weights(3))
+test('future route blends finish exactly on each MIDI beat, including rapid changes', () => {
+  const events = streamNoteEvents([note(2.33, 60), note(2.37, 61), note(2.37, 62), note(1, 80), note(1, 60.5)])
+  assert.deepEqual(events, [{ beat: 2.33, pattern: 1 }, { beat: 2.37, pattern: 3 }])
+  assert.deepEqual(streamPatternWeights(events, 1, 0), weights(0))
+  near(streamPatternWeights(events, 1.83, 0)[1], 0.5)
+  assert.deepEqual(streamPatternWeights(events, 2.33, 0), weights(1))
+  near(streamPatternWeights(events, 2.35, 0)[3], 0.5)
+  assert.deepEqual(streamPatternWeights(events, 2.37, 0), weights(3))
 })
 
-test('a particle keeps its original route and velocity through later MIDI changes and seeks', () => {
-  const events = streamNoteEvents([note(4.13, 61), note(4.29, 60), note(4.51, 63)])
-  const original = buildStreamPaths(settings, weights(1))[0]
+test('every off-grid MIDI beat has an exact arrival in its own pattern, even in dense rolls', () => {
+  const events = streamNoteEvents([note(2.133, 60), note(2.163, 61), note(2.177, 62), note(2.241, 63), note(2.26, 64)])
+  for (const density of [2, 3, 16, 47, 48]) for (const speed of [0.1, 1, 4]) {
+    const timing = buildStreamTiming(events, density, speed)
+    for (const event of events) {
+      const arrivals = Array.from({ length: density }, (_, dot) => streamParticleJourney(dot, density, event.beat, speed, timing))
+        .filter(journey => Math.abs(journey.fraction - 0.5) < 1e-9)
+      assert.equal(arrivals.length, 1, 'one existing particle per stream reaches its intersection on every note')
+      const journey = arrivals[0]
+      near(journey.crossBeat, event.beat)
+      const blend = streamPatternWeights(events, journey.crossBeat, 0)
+      assert.deepEqual(blend, weights(event.pattern), 'rapid notes cannot blur the requested pattern at arrival')
+      for (const count of [1, 5, 6, 16]) {
+        const config = { ...settings, count, meetX: 1.2, meetY: -0.7 }
+        const paths = buildStreamPaths(config, blend)
+        for (let stream = 0; stream < count; stream++) {
+          const actual = sampleStreamJourney(blank(), paths[stream], journey.fraction)
+          const target = point(stream, 0.5, event.pattern, config)
+          near(actual.x, target.x, 1e-8); near(actual.y, target.y, 1e-8); near(actual.z, -4, 1e-8)
+          assert.equal(actual.fade, 1, 'the collision is fully visible')
+        }
+      }
+    }
+  }
+})
+
+test('each complete route is planned before its MIDI beat and stays fixed through the flight', () => {
+  const events = streamNoteEvents([note(4.13, 61), note(4.16, 60), note(4.21, 63)])
+  const timing = buildStreamTiming(events, 16, 1)
+  const crossPhase = timing.phases[0]
+  const dot = ((8 - crossPhase) % 16 + 16) % 16
+  const path = buildStreamPaths(settings, weights(2))[0]
   const sample = (beat: number) => {
-    const journey = streamParticleJourney(3, 16, beat, 1)
-    const path = buildStreamPaths(settings, streamPatternWeights(events, journey.birthBeat, 1))[0]
-    return sampleStreamPath(blank(), path, journey.fraction)
+    const journey = streamParticleJourney(dot, 16, beat, 1, timing)
+    const route = streamPatternWeights(events, journey.crossBeat, 1)
+    return { journey, route, point: sampleStreamJourney(blank(), buildStreamPaths(settings, route)[0], journey.fraction) }
   }
-  for (const beat of [0, 4.13, 4.29, 4.51, 5.13, 5.29, 5.51, 6.49]) {
-    const journey = streamParticleJourney(3, 16, beat, 1)
-    assert.equal(journey.birthBeat, -1.5)
-    assert.deepEqual(sample(beat), sampleStreamPath(blank(), original, journey.fraction), 'later notes cannot bend an existing journey')
+  for (const offset of [-7.9, -6, -1, 0, 1, 6, 7.9]) {
+    const beat = streamBeatAtPhase(timing, crossPhase + offset)
+    const actual = sample(beat)
+    near(actual.journey.crossBeat, 4.13)
+    assert.deepEqual(actual.route, weights(2), 'later notes do not retarget an already planned route')
+    assert.deepEqual(actual.point, sampleStreamJourney(blank(), path, actual.journey.fraction))
   }
-  const expected = sample(4.4)
-  sample(8); sample(-2)
-  assert.deepEqual(sample(4.4), expected)
-  const h = 1e-5
-  for (const beat of [4.13, 4.29, 4.51, 5.13, 5.29, 5.51]) {
-    const a = sample(beat - h), b = sample(beat), c = sample(beat + h)
-    for (const axis of ['x', 'y', 'z'] as const) near((b[axis] - a[axis]) / h, (c[axis] - b[axis]) / h, 0.03)
+  const approach = sample(4.12)
+  assert.ok(approach.point.z > -4, 'particles approach before the note')
+  assert.ok(sample(4.131).point.z < -4, 'particles continue away immediately after the note')
+  sample(12); sample(-10)
+  assert.deepEqual(sample(4.12), approach, 'direct, forward, and backward sampling agree')
+})
+
+test('the planned flow clock stays forward and C1 across isolated and rapidly spaced notes', () => {
+  for (const density of [2, 3, 16, 48]) for (const speed of [0.1, 1, 4]) {
+    const events = streamNoteEvents([note(-3.17, 60), note(2.13, 61), note(2.131, 62), note(2.2, 63), note(70, 60)])
+    const timing = buildStreamTiming(events, density, speed)
+    for (let i = 0; i < events.length; i++) {
+      const beat = events[i].beat, h = 1e-7
+      const a = streamFlowPhase(timing, beat - h), b = streamFlowPhase(timing, beat), c = streamFlowPhase(timing, beat + h)
+      const leftHalf = streamFlowPhase(timing, beat - h / 2), rightHalf = streamFlowPhase(timing, beat + h / 2)
+      near(b, timing.phases[i])
+      const expected = timing.slopes[i]
+      near((3 * b - 4 * leftHalf + a) / h, expected, Math.max(0.003, expected * 0.001))
+      near((-3 * b + 4 * rightHalf - c) / h, expected, Math.max(0.003, expected * 0.001))
+      if (i === 0) continue
+      const start = events[i - 1].beat
+      let previous = streamFlowPhase(timing, start)
+      for (let step = 1; step <= 100; step++) {
+        const t = start + (beat - start) * step / 100
+        const phase = streamFlowPhase(timing, t)
+        assert.ok(phase > previous, 'no reversals or pauses')
+        near(streamBeatAtPhase(timing, phase), t, 1e-9)
+        previous = phase
+      }
+    }
   }
 })
 
-test('route changes propagate in entry order while old and new journeys coexist', () => {
-  const events = streamNoteEvents([note(4, 61)])
-  const route = (dot: number, beat: number) => {
-    const journey = streamParticleJourney(dot, 16, beat, 1)
-    return streamPatternWeights(events, journey.birthBeat, 1)
+test('mixed Open routes reach the meeting plane on schedule without a velocity kink', () => {
+  for (const open of [0, 0.1, 0.5, 0.9, 1]) {
+    const paths = buildStreamPaths({ ...settings, twist: 2 }, [open, 1 - open, 0, 0, 0])
+    for (const path of paths) {
+      const h = 1e-7
+      const a = sampleStreamJourney(blank(), path, 0.5 - h), b = sampleStreamJourney(blank(), path, 0.5), c = sampleStreamJourney(blank(), path, 0.5 + h)
+      near(b.z, -4, 1e-8)
+      for (const axis of ['x', 'y', 'z'] as const) near((b[axis] - a[axis]) / h, (c[axis] - b[axis]) / h, 0.01)
+      near(sampleStreamJourney(blank(), path, 0).fade, 0)
+      near(sampleStreamJourney(blank(), path, 1).fade, 0)
+    }
   }
-  // At beat 6, these particles entered at 2, 4.5 and 5 beats respectively.
-  assert.deepEqual(route(12, 6), weights(1))
-  assert.deepEqual(route(7, 6), [0, 0.5, 0.5, 0, 0])
-  assert.deepEqual(route(6, 6), weights(2))
-  assert.deepEqual(route(7, 11), route(7, 6), 'a transitional route is also fixed for its whole flight')
-  assert.deepEqual(route(7, 12.5), weights(2), 'only recycling picks a new route')
-  for (let dot = 0; dot < 16; dot++) assert.deepEqual(route(dot, 13), weights(2))
 })
 
 test('journey birth is stable across speeds, negative beats, and wrap boundaries', () => {

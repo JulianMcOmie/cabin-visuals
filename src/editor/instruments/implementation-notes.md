@@ -390,22 +390,25 @@ For verification, use the [instrument checklist](../../../docs/add-an-instrument
 `particleCore.ts`. Its primary count is **streams**; density fixes dots per stream,
 so the draw count is always their product, independent of MIDI. Permanent slots
 advance along local -Z, away from the default camera, with faint end fades hiding
-recycling. `particleStreamCore.ts` derives each journey's birth beat from its slot
-and cycle, so direct/backward seeks reproduce the same route without remembering
-past frames. Pattern weights are sampled at birth and remain fixed for the journey.
-Arc-length layouts are cached by geometry and weights, retaining only layouts used
-by the current cohorts (at most density). Shape-preserving cubic lookup maintains
-smooth speed through curves and crossings, without per-frame integration.
+recycling. `particleStreamCore.ts` plans a monotone flow clock from the complete
+resolved note sequence. Each note anchors the next cohort crossing at its exact
+beat; gaps retain ambient crossings, dense rolls compress travel rather than
+adding particles or dropping notes. Monotone cubic interpolation keeps velocity
+continuous, including where timing returns to the nominal speed before/after MIDI.
 
-MIDI changes incoming routes over one beat, so changes propagate through the field
-with the particles instead of deforming the entire structure at once. Every particle
-keeps its entry route, including a blended route assigned during a transition.
-Quintic-smoothed step differences produce a convex blend for successive entries,
-including during rapid rolls. A journey lasts eight beats divided by flight speed.
-Notes do not guarantee a particle arrives on that exact beat. Highest supported
-pitch wins a chord; note duration and velocity are ignored. Odd pair counts send
-the leftover stream through center. Geometry/count/speed automation still reshapes
-or rephases the field at the sampled beat; MIDI sequences per-journey routes.
+A slot's cycle determines its planned crossing beat via the inverse clock. Route
+weights are sampled at that crossing beat, including future notes, and stay fixed
+for the journey. Quintic route blends finish on the next note, shortening for
+rapid sequences, so each MIDI arrival has its exact pattern. Arc-length layouts
+are cached by geometry and weights, retaining only current cohorts (at most
+density). A C1 distance remap anchors the geometric meeting plane at half-flight,
+including asymmetric blends with Open. Playback, direct/backward scrubbing and
+export evaluate this same score without frame history or spawn state.
+
+Highest supported pitch wins a chord; note duration and velocity are ignored. Odd
+pair counts send the leftover stream through center. Open reaches the meeting
+depth on time without converging. Geometry/count/speed automation still reshapes
+or replans the field at the sampled beat; MIDI specifies planned intersections.
 
 Particle's internal pool accepts `objectOpacity: true` for instruments that own their
 arrangements: this enables multiplication by the wrapper's `uOpacity` in the shared

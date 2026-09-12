@@ -4,9 +4,8 @@ Find **Particle Stream** in the library's **Instruments** folder. It continuousl
 flows away from the default camera, into the distance, without needing MIDI.
 
 **Streams** chooses 1–16 trajectories. **Density** fixes 2–48 dots on each stream:
-six streams at density 16 always contain 96 dots. Dots enter at regular intervals
-and travel at a constant distance rate along their own curved path. They keep moving through crossings and recycle quietly at
-the ends. MIDI never adds extra particles or bursts.
+six streams at density 16 always contain 96 dots. They move through crossings and
+recycle quietly at the ends. MIDI never adds extra particles or bursts.
 
 **Twist** bends the paths, with zero giving straight flights. Speed, spread, particle
 size, glow, and color shape the appearance. **Meeting point X/Y** under More moves
@@ -20,15 +19,21 @@ Draw MIDI notes to steer the paths:
 - **Path · left / right:** every stream crosses an offset point.
 - **Path · separate streams:** streams flow without converging.
 
-A particle chooses its whole route when it enters and follows that route to the
-far end. A note changes the routes of incoming particles over one beat; particles
-already traveling keep their paths. The change moves into the distance with the
-flow, so several stages of the sequence can be visible at once. At default speed,
-a journey takes eight beats. Rapid notes blend the routes assigned to successive
-particles without bending particles already in flight. Notes do not schedule a
-dot's exact arrival time or add new groups of dots. Note length and velocity do not change the route. In a chord,
-the highest supported pitch wins. The pattern buttons choose the starting pattern
-before MIDI takes over.
+MIDI specifies **when particles meet**, not when their routes begin. The complete
+sequence is used to plan approaches in advance: a particle from each stream reaches
+the requested intersection on the note's exact beat, then continues into the
+distance. Each particle follows its own predetermined route for the whole journey.
+Closely spaced notes get distinct arrivals and can send consecutive particles along
+different paths. The structure does not reshape every particle at once.
+
+Routes between notes blend toward the next pattern, completing by that note; rapid
+notes shorten the blend instead of waiting one beat. **Speed** sets the ambient
+travel rate (eight beats per journey at speed 1 without MIDI). The flow smoothly
+adjusts its speed to place existing particles on every MIDI beat, accelerating for
+dense passages while keeping the same number of particles. Separate streams pass
+the meeting depth on the note without converging. Note length and velocity do not
+change the route. In a chord, the highest supported pitch wins. The pattern buttons
+choose the starting pattern before the first MIDI approach.
 
 Numeric controls accept ordinary parameter automation. Geometry, stream-count and
 speed edits reshape or rephase the current field; use MIDI for smooth pattern
