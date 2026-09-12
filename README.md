@@ -32,9 +32,13 @@ Without a `?project=` id (or without Supabase configured) the editor still runs 
 - **Export** (header button, Chrome) renders the project to an MP4 deterministically - frame-exact, faster than realtime, optional audio.
 - Space = play/pause · Enter = return to start · F = fullscreen visual · Ctrl+Z/Y = undo/redo · drag across M/S buttons to mass-toggle.
 
-## The one rule of the codebase
+## Developing
 
-**Instruments are pure functions of the beat.** A paused playhead is a frozen frame; scrubbing to a beat shows exactly what playback shows there. This is what makes scrubbing trustworthy and video export exact. It's enforced, not aspirational: ESLint bans `useFrame`, `performance.now`, `Date.now`, `Math.random`, and clock/delta access inside `src/editor/instruments/`, and a dev-mode canary hashes the scene while paused and names any object that moves. Use `useInstrumentFrame(trackId, cb)` for per-frame visuals and `seededRand(seed)` for stable randomness.
+Start with [CLAUDE.md](CLAUDE.md) for the working map and shared invariants, or
+[Add an instrument](docs/add-an-instrument.md) for the supported contract,
+shared UI and integration checklist. [AGENTS.md](AGENTS.md) points agents to the
+same guidance. Definition-site types/comments own API mechanics; scoped guides
+link to specialized reasons and examples.
 
 ## Architecture in one paragraph
 
@@ -64,4 +68,4 @@ Useful invariants beyond the big one: the project document is versioned and upgr
 
 ## Docs
 
-The `docs/` folder is the real documentation - greyscale, print-ready HTML. Each major feature has an architecture doc (the *why* and the decisions) and an implementation plan (the file-by-file *how*): persistence, audio track, video export, visual engine. `rapid-todos.html` tracks the backlog with an at-a-glance progress overview.
+The `docs/` folder includes task guides and historical, print-ready HTML design documents. Each major feature has an architecture doc (the *why* and the decisions) and an implementation plan (the file-by-file *how*): persistence, audio track, video export, visual engine. `rapid-todos.html` tracks the backlog with an at-a-glance progress overview.

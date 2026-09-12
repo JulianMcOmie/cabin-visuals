@@ -1,9 +1,13 @@
 # src/editor/userInterfaceRenderers — registered settings UIs
 
+For an ordinary instrument panel, start with [the supported settings path](../../../docs/add-an-instrument.md#reuse-the-settings-library)
+and the [console kit exports](console/index.ts). The feature notes below are
+conditional references for custom panels, not prerequisite reading for `panelSpec`.
+
 The inspector panel (in `TrackEditor.tsx`) renders a track's settings through a REGISTERED renderer instead of hardcoding layouts. A renderer is a component `({ targetId, parameters })` where each `UserInterfaceParameter` arrives with `{ definition, value, setValue }` — the canonical update path is already bound; renderers never write stores directly.
 
 Three registries:
-- **Object instruments** (`index.ts`, keyed by `UserInterfaceRendererId` from `ids.ts`): every instrument def explicitly names one via `userInterfaceRenderer`. `'parameters'` is the generic auto-generated list (`ParametersUserInterface.tsx`); the rest are bespoke (Cube, TextDisplay, Video…).
+- **Object instruments** (`index.ts`, keyed by `UserInterfaceRendererId` from `ids.ts`): every instrument def explicitly names one via `userInterfaceRenderer`, but a declared `panelSpec` takes precedence and needs no registry entry. `'parameters'` is the generic auto-generated list (`ParametersUserInterface.tsx`); the rest are bespoke (Cube, TextDisplay, Video…).
 - **Movers/splitters and effects** (`bespokeRegistries.ts`, keyed by definition/plugin id): registration is OPTIONAL — a missing entry falls back to the generic ParamControl list in TrackEditor.
 - Automation tracks use `AutomationUserInterface.tsx` directly; word-formation lanes use `WordFormationUserInterface.tsx` directly (both are plain presentational components TrackEditor binds, not registry entries).
 

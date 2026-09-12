@@ -1,6 +1,17 @@
 # Cabin Visuals
 
-A browser DAW for music visuals: MIDI notes drive 3D instruments on a timeline; exports to MP4. Next.js 15 / React 19 / react-three-fiber / zustand / Tone.js / Supabase. README.md has the product-level overview; this file is the working map. Per-directory CLAUDE.md files carry the deep contracts — trust them before re-deriving from code.
+A browser DAW for music visuals: MIDI notes drive 3D instruments on a timeline; exports to MP4. Next.js 15 / React 19 / react-three-fiber / zustand / Tone.js / Supabase. README.md has the product-level overview; this file is the working map. Start with the task links below. Per-directory CLAUDE.md files index scoped guidance; definition-site types/comments own API mechanics.
+
+## Start with the task
+
+- **Add an instrument** → [supported development path](docs/add-an-instrument.md):
+  contract, small examples, existing UI kit, integration points and verification.
+  Specialized implementation notes are linked only where needed.
+- **Other work** → choose the relevant area in [Where things are](#where-things-are)
+  and read its scoped guide before exploring source.
+
+Use shared components and contracts first. Keep this map and task guides as
+navigation; put mechanics beside authoritative code instead of copying them here.
 
 ## Commands
 
@@ -9,8 +20,10 @@ A browser DAW for music visuals: MIDI notes drive 3D instruments on a timeline; 
   directory and the live server then 500s on every route with `ENOENT … build-manifest.json`, which
   reads like a code error and is not one. Give the build its own dir (`NEXT_DIST_DIR=.next-build-<port>`);
   recovering means stopping the server, deleting the dist dir, and restarting.
-- `npm run test:visual` — the node test suite (core, core/visual, visualCopies, directors, photo, video, **export**, effects/deform, effects/materials, **instruments**, store, utils, timeline, **midi/vim**, persistence). Tests are colocated `*.test.ts` run with `node --test` + tsx; no jest/vitest. 1219 pass, none red (verified 2026-08-15 — export/video/effects were added to the glob that day, having silently never run) — a new instrument's colocated test runs in the normal suite with no extra step, but a test in a directory the script's glob list doesn't name is silently never run: add the directory to `test:visual` when you open a new one.
-- `npm run build` — production build; the `/commit` skill runs this first.
+- `npm run test:visual` — colocated Node tests via tsx. [package.json](package.json)
+  owns the included directory globs (including instruments); add a new test directory
+  there if it is not covered. Single-file command below.
+- `npm run build` — production build.
 - `npm run db:generate` / `db:migrate` — Drizzle (needs `DATABASE_URL`).
 - Single test file: `node --import tsx --test --experimental-test-module-mocks path/to/file.test.ts`.
 
