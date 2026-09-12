@@ -289,29 +289,17 @@ void main() {
   gl_FragColor = texture2D(tDiffuse, clamp(vUv + offset, 0.0, 1.0));
 }`
 
-/** The percussive counterpart: a triggered, single-strike displacement in one of
- *  four shapes, plus the channel split that makes a hit read as a hit
- *  (instruments/ImpactWarp.tsx owns the field, the split and the style enum). */
+/** One centered movement of the complete scene, with all channels together. */
 const IMPACT_WARP_FRAGMENT = `
 uniform sampler2D tDiffuse;
-uniform float style;
 uniform float amount;
-uniform vec2 dir;
-uniform float phase;
-uniform float size;
-uniform float seed;
-uniform float aspect;
 varying vec2 vUv;
 
 ${IMPACT_WARP_FIELD_GLSL}
 
 void main() {
-  vec2 offset = impactWarpOffset(vUv, style, amount, dir, phase, size, seed, aspect);
-  vec2 split = impactWarpSplit(offset);
-  vec4 mid = texture2D(tDiffuse, impactWarpWrap(vUv + offset));
-  float red = texture2D(tDiffuse, impactWarpWrap(vUv + offset + split)).r;
-  float blue = texture2D(tDiffuse, impactWarpWrap(vUv + offset - split)).b;
-  gl_FragColor = vec4(red, mid.g, blue, mid.a);
+  vec2 offset = impactWarpOffset(vUv, amount);
+  gl_FragColor = texture2D(tDiffuse, impactWarpWrap(vUv + offset));
 }`
 
 const FINAL_GRADE_FRAGMENT = `
@@ -780,13 +768,7 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
       fragmentShader: IMPACT_WARP_FRAGMENT,
       uniforms: {
         tDiffuse: { value: null as Texture | null },
-        style: { value: 0 },
         amount: { value: 0 },
-        dir: { value: new Vector2() },
-        phase: { value: 0 },
-        size: { value: 0.5 },
-        seed: { value: 0 },
-        aspect: { value: 1 },
       },
       depthTest: false,
       depthWrite: false,
@@ -1314,14 +1296,7 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
           for (const trackId of impactWarpTrackIds.get(sceneId) ?? []) {
             const hit = resolveActiveImpactWarp(getObjectState(trackId))
             if (!hit) continue
-            const uniforms = compositor.impactWarpMaterial.uniforms
-            uniforms.style.value = hit.style
-            uniforms.amount.value = hit.amount
-            ;(uniforms.dir.value as Vector2).set(hit.dirX, hit.dirY)
-            uniforms.phase.value = hit.phase
-            uniforms.size.value = hit.size
-            uniforms.seed.value = hit.seed
-            uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
+            compositor.impactWarpMaterial.uniforms.amount.value = hit.amount
             drawFilter(compositor.impactWarpMaterial)
           }
           for (const trackId of colorFilterTrackIds.get(sceneId) ?? []) {

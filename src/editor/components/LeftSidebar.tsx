@@ -90,7 +90,7 @@ const SCENE_INSTRUMENTS = withKind('object', [
       <path d="M0.5 8.5 Q3 6.5 6 8.5 T11.5 8.5" fill="none" stroke="#a78bfa" strokeWidth="1" />
     </svg>
   )},
-  { id: 'impactWarp', name: 'Impact Warp', description: 'Punches the whole scene on every MIDI hit — zoom slam, shockwave, sideways shove or torn slabs — then lets it recover.', icon: (
+  { id: 'impactWarp', name: 'Impact Warp', description: 'Punches the whole scene symmetrically on every MIDI hit, with a weighty attack and smooth recovery.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <rect x="4" y="4" width="4" height="4" rx="0.5" fill="none" stroke="#ff6a00" strokeWidth="1.1" />
       <path d="M3.1 3.1 L0.8 0.8M8.9 3.1 L11.2 0.8M3.1 8.9 L0.8 11.2M8.9 8.9 L11.2 11.2" fill="none" stroke="#ff6a00" strokeWidth="1.1" strokeLinecap="round" />

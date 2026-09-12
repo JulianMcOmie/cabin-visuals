@@ -2,7 +2,7 @@
 
 import { useLayoutEffect, useRef } from 'react'
 import { strobePreviewGate } from '../instruments/Strobe'
-import { impactEnvelope } from '../instruments/ImpactWarp'
+import { impactEnvelope, impactDrive, IMPACT_WARP_SECONDS, IMPACT_WARP_REACH, IMPACT_WARP_DEFAULT } from '../instruments/ImpactWarp'
 import { OVERLAP_SHAPE_OPTIONS, overlapShapePoints } from '../instruments/overlapShapeCore'
 import {
   OVERLAP_SOLID_OPTIONS,
@@ -421,19 +421,9 @@ const drawBassRipple: Draw2D = (ctx, w, h, t) => {
   }
 }
 
-/** Impact Warp: the name run through its own effect - punched every two beats
- *  by the instrument's REAL envelope, so the card shows the thing that makes it
- *  a different instrument from Bass Ripple: a single-frame attack, and a
- *  rebound that crosses back the other way before it settles. The channel split
- *  is the stage pass's, in miniature - a fringe that is exactly as wide as the
- *  displacement and gone the moment the frame recovers. */
+/** The library card shares the stage's timing and centered magnification. */
 const drawImpactWarp: Draw2D = (ctx, w, h, t) => {
-  const beat = t * BEATS_PER_SEC
-  const hitEvery = 2
-  // Long enough that the rebound is legible at 120bpm; the instrument's own
-  // default is shorter, but a card is watched, not played.
-  const release = 0.9
-  const envelope = impactEnvelope((((beat % hitEvery) + hitEvery) % hitEvery) / release)
+  const amount = impactDrive(impactEnvelope((t % 1.5) / IMPACT_WARP_SECONDS)) * IMPACT_WARP_DEFAULT
 
   const bg = ctx.createLinearGradient(0, 0, 0, h)
   bg.addColorStop(0, '#1a0a02')
@@ -466,12 +456,7 @@ const drawImpactWarp: Draw2D = (ctx, w, h, t) => {
 
   // The punch itself: a zoom about the center, signed, so the rebound pulls the
   // word back through smaller-than-life before it settles.
-  const zoom = 1 + envelope * 0.34
-  const split = Math.abs(envelope) * 0.9
-  ctx.globalCompositeOperation = 'lighter'
-  word(zoom * (1 + 0.06 * split), '#ff2200', 0.85)
-  word(zoom * (1 - 0.06 * split), '#00b7ff', 0.85)
-  ctx.globalCompositeOperation = 'source-over'
+  const zoom = 1 / (1 - amount * IMPACT_WARP_REACH)
   word(zoom, '#ff6a00', 1)
 
   ctx.globalAlpha = 1
