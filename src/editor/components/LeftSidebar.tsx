@@ -217,7 +217,7 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <circle cx="6" cy="6" r="1.8" fill="#7dd3fc" />
     </svg>
   )},
-  { id: 'particleStream', name: 'Particle Stream', description: 'A steady flow of glowing dots travels into the distance. MIDI smoothly steers central, paired, or offset paths.', icon: (
+  { id: 'particleStream', name: 'Particle Stream', description: 'Glowing dots follow fixed routes into the distance. MIDI sends later dots along central, paired, or offset paths.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#7dd3fc" strokeWidth="0.8">
       <path d="M1 1Q9 4 6 6T1 11M11 1Q3 4 6 6T11 11" />
       <circle cx="6" cy="6" r="1.4" fill="#7dd3fc" />

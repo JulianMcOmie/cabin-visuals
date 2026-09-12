@@ -5,7 +5,7 @@ import type { ResolvedNote } from '../core/visual/types'
 import { applyMaterialOpacity } from '../core/visual/animatedOpacity'
 import { createParticlePool, disposeParticlePool } from './particleCore'
 import { particleStreamInstrument } from './ParticleStream'
-import { STREAM_CAPACITY, STREAM_CROSS_AGE, STREAM_FAR_Z, STREAM_NEAR_Z, streamCount, streamDensity, streamNoteEvents, streamPatternWeights, buildStreamPaths, sampleStreamPath, streamParticleFraction, streamTrajectory } from './particleStreamCore'
+import { STREAM_CAPACITY, STREAM_CROSS_AGE, STREAM_FAR_Z, STREAM_NEAR_Z, streamCount, streamDensity, streamNoteEvents, streamPatternWeights, buildStreamPaths, sampleStreamPath, streamParticleFraction, streamParticleJourney, streamTrajectory } from './particleStreamCore'
 
 const settings = { count: 6, twist: 0.35, spread: 4, meetX: 0, meetY: 0 }
 const point = (stream: number, t: number, pattern = 1, config = settings) => streamTrajectory({ x: 0, y: 0, z: 0, fade: 0 }, stream, t, pattern, config)
@@ -95,11 +95,18 @@ test('MIDI starts smooth path changes rather than scheduling new dot arrivals', 
   assert.deepEqual(streamPatternWeights(events, 6.17, 0), weights(3))
 })
 
-test('rapid path changes keep velocity continuous and backward seeks reproduce the same positions', () => {
+test('a particle keeps its original route and velocity through later MIDI changes and seeks', () => {
   const events = streamNoteEvents([note(4.13, 61), note(4.29, 60), note(4.51, 63)])
+  const original = buildStreamPaths(settings, weights(1))[0]
   const sample = (beat: number) => {
-    const path = buildStreamPaths(settings, streamPatternWeights(events, beat, 1))[0]
-    return sampleStreamPath(blank(), path, streamParticleFraction(3, 16, beat, 1))
+    const journey = streamParticleJourney(3, 16, beat, 1)
+    const path = buildStreamPaths(settings, streamPatternWeights(events, journey.birthBeat, 1))[0]
+    return sampleStreamPath(blank(), path, journey.fraction)
+  }
+  for (const beat of [0, 4.13, 4.29, 4.51, 5.13, 5.29, 5.51, 6.49]) {
+    const journey = streamParticleJourney(3, 16, beat, 1)
+    assert.equal(journey.birthBeat, -1.5)
+    assert.deepEqual(sample(beat), sampleStreamPath(blank(), original, journey.fraction), 'later notes cannot bend an existing journey')
   }
   const expected = sample(4.4)
   sample(8); sample(-2)
@@ -108,6 +115,38 @@ test('rapid path changes keep velocity continuous and backward seeks reproduce t
   for (const beat of [4.13, 4.29, 4.51, 5.13, 5.29, 5.51]) {
     const a = sample(beat - h), b = sample(beat), c = sample(beat + h)
     for (const axis of ['x', 'y', 'z'] as const) near((b[axis] - a[axis]) / h, (c[axis] - b[axis]) / h, 0.03)
+  }
+})
+
+test('route changes propagate in entry order while old and new journeys coexist', () => {
+  const events = streamNoteEvents([note(4, 61)])
+  const route = (dot: number, beat: number) => {
+    const journey = streamParticleJourney(dot, 16, beat, 1)
+    return streamPatternWeights(events, journey.birthBeat, 1)
+  }
+  // At beat 6, these particles entered at 2, 4.5 and 5 beats respectively.
+  assert.deepEqual(route(12, 6), weights(1))
+  assert.deepEqual(route(7, 6), [0, 0.5, 0.5, 0, 0])
+  assert.deepEqual(route(6, 6), weights(2))
+  assert.deepEqual(route(7, 11), route(7, 6), 'a transitional route is also fixed for its whole flight')
+  assert.deepEqual(route(7, 12.5), weights(2), 'only recycling picks a new route')
+  for (let dot = 0; dot < 16; dot++) assert.deepEqual(route(dot, 13), weights(2))
+})
+
+test('journey birth is stable across speeds, negative beats, and wrap boundaries', () => {
+  for (const speed of [0.1, 0.73, 1, 4]) for (const density of [2, 16, 48]) {
+    for (let dot = 0; dot < density; dot++) {
+      const journey = streamParticleJourney(dot, density, -3.125, speed)
+      const duration = 8 / speed
+      const middle = streamParticleJourney(dot, density, journey.birthBeat + duration * 0.5, speed)
+      const end = streamParticleJourney(dot, density, journey.birthBeat + duration * 0.999, speed)
+      assert.equal(middle.birthBeat, journey.birthBeat)
+      assert.equal(end.birthBeat, journey.birthBeat)
+      near(middle.fraction, 0.5)
+      const next = streamParticleJourney(dot, density, journey.birthBeat + duration * 1.001, speed)
+      near(next.birthBeat - journey.birthBeat, duration)
+      assert.ok(next.fraction < 0.002)
+    }
   }
 })
 

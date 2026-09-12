@@ -24,7 +24,7 @@ try {
     p.addTrack({ id: 'stream-smoke', name: 'Particle Stream', type: 'base', instrumentId: 'particleStream',
       params: {}, stringParams: {}, color: '#7dd3fc', muted: false, solo: false, childIds: [], effects: [],
       blocks: [{ id: 'stream-block', startBar: 0, durationBars: 8,
-        notes: [{ id: 'center', pitch: 60, startBeat: 4.13, durationBeats: 0.25, velocity: 100 },
+        notes: [{ id: 'center', pitch: 60, startBeat: 0, durationBeats: 0.25, velocity: 100 },
           { id: 'pairs', pitch: 61, startBeat: 8.17, durationBeats: 0.25, velocity: 100 }] }],
     })
     window.__cabinStores.ui.getState().setSelectedTrackId('stream-smoke')
@@ -60,7 +60,18 @@ try {
       }
       return { hash, count: mesh.count, cross, opacity: mesh.material.uniforms.uOpacity.value }
     }
-    const frames = [6, 10, 3, 10, 6].map(render)
+    const frames = [6, 18, 3, 18, 6].map(render)
+    const positions = () => Array.from({ length: window.__streamMesh.count }, (_, i) =>
+      Array.from(window.__streamMesh.instanceMatrix.array.slice(i * 16 + 12, i * 16 + 15)))
+    render(10)
+    const sequenced = positions()
+    const notes = stores.project.getState().tracks['stream-smoke'].blocks[0].notes
+    stores.project.getState().updateBlockNotes('stream-smoke', 'stream-block', notes.filter(n => n.id !== 'pairs'))
+    render(10)
+    const withoutLaterNote = positions()
+    stores.project.getState().updateBlockNotes('stream-smoke', 'stream-block', notes)
+    render(10)
+    const sequencedAgain = positions()
     render(6.17)
     const beforeZ = Array.from({ length: window.__streamMesh.count }, (_, i) => window.__streamMesh.instanceMatrix.array[i * 16 + 14])
     render(6.18)
@@ -75,10 +86,15 @@ try {
     stores.project.getState().setTrackParam('stream-smoke', 'count', 1)
     const one = render(10)
     const mesh = window.__streamMesh
-    return { frames, movingAway, faded, restored, dense, one, capacity: mesh.instanceMatrix.count,
+    return { frames, sequenced, withoutLaterNote, sequencedAgain, movingAway, faded, restored, dense, one, capacity: mesh.instanceMatrix.count,
       programs: three.gl.info.programs.map(p => p.diagnostics?.runnable ?? true) }
   })
   result.worker = worker
+  for (let stream = 0; stream < 6; stream++) {
+    assert.deepEqual(result.sequenced[stream * 16 + 4], result.withoutLaterNote[stream * 16 + 4], 'a particle born at beat 6 ignores the later note')
+    assert.notDeepEqual(result.sequenced[stream * 16 + 14], result.withoutLaterNote[stream * 16 + 14], 'a particle born at beat 9 takes the later route')
+  }
+  assert.deepEqual(result.sequencedAgain, result.sequenced, 'editing and restoring the sequence reproduces all routes')
   assert.equal(result.movingAway, true, 'fixed slots move into the distance')
   assert.ok(result.frames.every(frame => frame.count === 96), 'MIDI keeps exactly 16 dots on each of six streams')
   assert.equal(result.frames[0].cross.length, 6)
