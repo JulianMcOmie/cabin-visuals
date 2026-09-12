@@ -118,30 +118,23 @@ browser picker with its discrete swatches:
   white center (radial overlay); drag anywhere, marker shows the current spot
   and remembers hue even at zero saturation.
 - Brightness bar beneath (black → full-value color), draggable.
-- Opens *upward* over the preview (`bottom-full`) so it never extends the
-  panel into scrolling; closes on outside click or Escape.
+- Floats in the browser top layer, above or below the circle as space allows;
+  clamps to the viewport and closes on outside click or Escape.
 
 Reuse this pattern anywhere an instrument exposes a color.
 
-### When the color is the subject: the flat field
+### One picker across the UI
 
-`ColorField` (same module) is the wheel's anatomy laid flat and always open — a
-captioned header with the live hex, a hue rail, a saturation/brightness field.
-Take it over the pill when either is true:
+`ColorPicker` in `colorWheel.tsx` owns the current-color circle, floating HSV
+wheel, hex input, and dismissal. `ColorWheelPill` adds the console label and hex
+readout; the kit's bound `ColorPill` adapts a color parameter. Compact rows and
+gradient stops use the plain picker with a smaller circle.
 
-- **The popover would cover the thing you are judging.** The scene backdrop's
-  wheel opened upward over the stage that *shows* the backdrop, so every drag
-  was made blind. A flat field keeps the preview under your thumb.
-- **Two colors must be live at once.** Two stacked fields give a two-stop
-  gradient one editor per stop with no selector deciding where a drag lands —
-  which is what SceneSettingsPanel does (FROM over TO, angle knob and kind
-  centered below). One anatomy serves both states: fill is the same field once,
-  captioned BACKGROUND.
-
-It costs ~85px per color against the pill's ~50px, so it is a trade you make on
-purpose. Two fields plus a knob row DO run the panel past the height budget;
-that is the sanctioned grid-console trade (below) when the ask is explicitly
-"everything visible at once".
+Scene backgrounds, gradient stops, text/style-lane colors, generic parameters,
+and bespoke instruments all use this control. Scene gradients expose a circle
+for each stop beneath the gradient preview. Preset swatches and numeric hue
+shortcuts remain useful companions. Do not introduce separate native color
+inputs, always-open fields, or popup implementations.
 
 A panel whose modes swap controls should hold its PREVIEW at one height across
 all of them. The scene panel used to crop its stage 148 → 118px to pay for

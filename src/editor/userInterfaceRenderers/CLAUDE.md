@@ -114,7 +114,7 @@ Chromium pointer, keyboard, entry and cancellation checks across the skins and k
 it omits only the unrelated GPU preview/frame hook so the fixture doesn't boot the
 whole rendering engine. Generic ParameterControl readouts use the same editor too.
 
-Building blocks — use these, don't hand-roll controls: **the console kit in `console/` first** (see above), then the plain-value primitives it wraps: `ParameterControl.tsx` exports `ParamControl` (dispatches on param type), `ParamSlider` (drag + curve + fine-step behavior), `ParamToggle`, `ParamStepper` (small integer counts as −/+ around a detent strip — segment/facet counts, where a smooth slider makes the exact value a hunt), `ParamHueSlider` (a radians hue param on a rainbow track); `colorWheel.tsx` is the shared color picker in TWO shapes — `ColorWheelPill` + `ColorWheelPopover` (a swatch that opens a floating HSV wheel: the default, and what the kit's bound `ColorPill` wraps) and **`ColorField`** (the same picker laid FLAT and always open — captioned header with live hex, hue rail, saturation/brightness field; plain values in/out, no bound kit wrapper yet). Reach for the field when the color IS the panel's subject and the popover would cover the very preview you are judging, or when two colors must be editable at once: stacking two `ColorField`s is how SceneSettingsPanel edits a gradient's stops with no selector between them. It costs ~85px per color against the pill's ~50px, so it is a deliberate trade, not the new default; `laserKnob.tsx` is the guide's console knob (`LaserKnob`, plain numbers in/out — the layer to bind when the value is NOT a `UserInterfaceParameter`: an ADSR field, a mover input; otherwise use the kit's bound `Knob`). Two options on it exist for grid panels: **`bipolar`** anchors the arc at 12 o'clock and grows it either way, which is mandatory for a signed rate (a half-lit ring for zero reads as half ON); and passing **`label=""`** drops the caption row entirely, for a panel that labels its rows and columns instead. The kit `Knob` also takes **`detents`** (uneven allowed stops driven in index units — Radial Motion's pattern, folded in). Respect `showIf` gating (already handled if you go through ParamControl). See `docs/instrument-panel-design-guide.md` for the visual language.
+Building blocks — use these, don't hand-roll controls: **the console kit in `console/` first** (see above), then the plain-value primitives it wraps: `ParameterControl.tsx` exports `ParamControl` (dispatches on param type), `ParamSlider` (drag + curve + fine-step behavior), `ParamToggle`, `ParamStepper` (small integer counts as −/+ around a detent strip — segment/facet counts, where a smooth slider makes the exact value a hunt), `ParamHueSlider` (a radians hue param on a rainbow track); `colorWheel.tsx` exports **`ColorPicker`**, the Colorizer's current-color circle opening its HSV wheel and hex input. It owns open state, top-layer placement, outside-click/Escape dismissal and keyboard isolation for every color input. `ColorWheelPill` only adds the console label/hex layout; the kit's bound `ColorPill` wraps it. Use the plain picker in compact rows and gradient stops, and the pill in console/Scene rows. Scene gradients show one pill per stop. Preset colors and numeric hue shortcuts can accompany it, but do not add native color inputs, embedded fields, or another popup host; `laserKnob.tsx` is the guide's console knob (`LaserKnob`, plain numbers in/out — the layer to bind when the value is NOT a `UserInterfaceParameter`: an ADSR field, a mover input; otherwise use the kit's bound `Knob`). Two options on it exist for grid panels: **`bipolar`** anchors the arc at 12 o'clock and grows it either way, which is mandatory for a signed rate (a half-lit ring for zero reads as half ON); and passing **`label=""`** drops the caption row entirely, for a panel that labels its rows and columns instead. The kit `Knob` also takes **`detents`** (uneven allowed stops driven in index units — Radial Motion's pattern, folded in). Respect `showIf` gating (already handled if you go through ParamControl). See `docs/instrument-panel-design-guide.md` for the visual language.
 
 **Live shader previews**: `KaleidoSolidUserInterface.tsx` imports the instrument's exported GLSL (`KALEIDO_FIELD_GLSL`) and runs it in a small raw-WebGL canvas, rather than redrawing an impression of it in SVG — so the preview cannot drift from what renders. It evaluates the field over an orthographic sphere: the object-space direction at each pixel of a front-facing sphere is just `(x, y, sqrt(1-x²-y²))`. Three things this depends on:
 
@@ -260,18 +260,14 @@ with COPIES/SPACING while GROWTH drops to the modifier row, and Tunnel's geometr
 gained a fourth knob and therefore `flex-wrap` — four knobs plus its stepper column
 overrun a narrow inspector pane, and a fixed-size knob row CLIPS rather than shrinking.
 
-**A `ColorWheelPopover` anchor owes two decisions, and both are about what CLIPS
-it.** Text Display's per-lane colour chip (`LaneColorSwatch`, 2026-08-21 — the eight
-preset swatches are quick looks, the chip is any colour at all) is the worked example.
-It opens `edge="bottom"` because the thing you judge a lane colour against is the live
-name preview at the TOP of that card, and the default upward popover covers it. And it
-sits FIRST in a wrapping swatch row rather than last, because the card renders in two
-hosts and the tighter one — the piano roll's sidecar, `w-[236px] overflow-y-auto`, and
-**a box that scrolls on one axis scrolls on both** — leaves a trailing chip with no
-predictable x to open from: hugging either edge puts the ~158px popover outside one host
-or the other. Pinned to the row's start with `align="left"` it always opens inward.
-Dismissal (outside pointerdown / Escape) is the shared `useColorPopoverDismiss` hook in
-`colorWheel.tsx` — `ColorWheelPill` uses it too, so a second anchor cannot drift.
+**All freely chosen colors go through `ColorPicker`.** Text Display's preset
+swatches remain shortcuts; its custom chip uses the same current-color circle as
+Colorizer. `align="left"` keeps compact lane rows opening inward. The shared popup
+uses the browser top layer to escape scroll clipping, chooses above/below from
+available viewport space, and clamps horizontally. Keep the popup inside the
+picker's DOM host: outside-pointer dismissal relies on that ancestry. Keyboard
+events inside the popup are isolated from editor shortcuts; Escape dismissal is
+captured before that isolation.
 
 **SVG can only say INTERSECTION by nesting clipPaths, and that is enough to preview a
 set operation honestly.** `OverlapShapeUserInterface`'s counted preview paints one group

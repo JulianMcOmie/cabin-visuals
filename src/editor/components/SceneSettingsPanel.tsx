@@ -12,11 +12,8 @@
 // Below the stage, the backdrop IS a choice - fill, gradient, or nothing - so
 // it reads as a segmented deck whose three segments always wear their NAME and
 // their real preview (an unlabelled swatch can only be read by clicking it).
-// Under the deck, one anatomy in every state: a captioned `ColorField` laid
-// flat in the panel. Fill has one (BACKGROUND); gradient has the SAME control
-// twice, FROM stacked over TO, both live at once - no selector deciding which
-// one a drag lands on - with the angle knob and the kind below them. Nothing
-// floats: the old wheel popover opened over the very stage you were judging.
+// Under the deck, shared Colorizer circles edit the background or each gradient
+// stop. Each opens the same top-layer wheel; angle and kind stay below them.
 // The stage holds ONE height across all three modes, so reaching for a
 // gradient no longer re-lays the console out under the pointer. The CSS
 // gradient previews here are pixel-honest - the renderer's backdrop shader
@@ -24,7 +21,8 @@
 
 import { Grid, OrbitControls } from '@react-three/drei'
 import { useProjectStore } from '../store/ProjectStore'
-import { ColorField, withAlpha } from '../userInterfaceRenderers/colorWheel'
+import { withAlpha } from '../userInterfaceRenderers/colorWheel'
+import { SceneColorSwatch } from './SceneColorSwatch'
 import { PreviewCanvas } from '../userInterfaceRenderers/console'
 import { LaserKnob } from '../userInterfaceRenderers/laserKnob'
 import { defaultSceneGradient, sceneBackdropMode, type Scene, type SceneGradient, type SceneGradientKind } from '../types'
@@ -210,11 +208,8 @@ function BackdropDeck({ scene }: { scene: Scene }) {
   )
 }
 
-/** Gradient's editor: the fill control REPEATED - FROM stacked over TO, both
- *  armed, so editing the second stop costs reaching for it and nothing else -
- *  then the angle knob and the kind, centered, below both. Radial has no angle,
- *  so the knob dims instead of vanishing: the rows never reflow under the
- *  pointer. */
+/** Each gradient stop has its own shared picker. Radial has no angle, so the
+ * knob dims instead of vanishing and reflowing the controls. */
 function GradientControls({ scene }: { scene: Scene }) {
   const setSceneBackgroundGradient = useProjectStore((s) => s.setSceneBackgroundGradient)
   const gradient = scene.backgroundGradient ?? defaultSceneGradient()
@@ -229,24 +224,14 @@ function GradientControls({ scene }: { scene: Scene }) {
 
   return (
     <div data-testid="scene-gradient-controls">
-      <div className="px-4 pb-3">
-        <ColorField
-          value={gradient.from}
-          onChange={(hex) => setSceneBackgroundGradient(scene.id, { from: hex })}
-          label="From"
-          ariaLabel="Gradient start color"
-          testId="scene-gradient-from-field"
-        />
-      </div>
-      <div className="px-4 pb-3">
-        <ColorField
-          value={gradient.to}
-          onChange={(hex) => setSceneBackgroundGradient(scene.id, { to: hex })}
-          label="To"
-          ariaLabel="Gradient end color"
-          testId="scene-gradient-to-field"
-        />
-      </div>
+      <SceneColorSwatch
+        key={scene.id}
+        background={cssGradient(gradient)}
+        colors={[
+          { label: 'From', value: gradient.from, onChange: (from) => setSceneBackgroundGradient(scene.id, { from }) },
+          { label: 'To', value: gradient.to, onChange: (to) => setSceneBackgroundGradient(scene.id, { to }) },
+        ]}
+      />
       <div className="flex justify-center pb-1.5">
         <div
           className={gradient.kind === 'radial' ? 'pointer-events-none opacity-30' : ''}
@@ -322,15 +307,11 @@ export function SceneSettingsPanel({ scene }: { scene: Scene }) {
         <BackdropDeck scene={scene} />
       </div>
       {mode === 'color' && (
-        <div className="px-4 pb-3">
-          <ColorField
-            value={scene.backgroundColor}
-            onChange={(hex) => setSceneBackgroundColor(scene.id, hex)}
-            label="Background"
-            ariaLabel="Backdrop color"
-            testId="scene-backdrop-field"
-          />
-        </div>
+        <SceneColorSwatch
+          key={scene.id}
+          background={scene.backgroundColor}
+          colors={[{ label: 'Background', value: scene.backgroundColor, onChange: (hex) => setSceneBackgroundColor(scene.id, hex) }]}
+        />
       )}
       {mode === 'gradient' && <GradientControls scene={scene} />}
       {mode === 'transparent' && (

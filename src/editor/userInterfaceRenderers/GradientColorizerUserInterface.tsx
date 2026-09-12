@@ -16,7 +16,7 @@ import { percentEntry } from './knobValueParsing'
 // The accent is DERIVED: mid-ramp of the current blend, so the console lights
 // with the gradient itself (the same spirit as accent-follows-color-param).
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import { gradientAccent } from '../utils/gradientAccent'
 import { GradientPathEditor } from './GradientPathEditor'
 import { ArrowLeftRight } from 'lucide-react'
@@ -25,7 +25,7 @@ import {
 } from '../core/visualCopies/gradientColorizer'
 import {
   bindPanel,
-  ColorWheelPopover,
+  ColorPicker,
   Console,
   ControlRow,
   Knob,
@@ -36,46 +36,13 @@ import {
 } from './console'
 import type { UserInterfaceRendererDefinition } from './types'
 
-/** One gradient stop: a round swatch anchored to an end of the ramp, opening
- *  the shared color wheel. Open state + outside-click close follow the
- *  ColorWheelPill idiom (the pill itself brings its own caption layout, which
- *  the ramp's ends have no room for). */
+/** A gradient stop uses the same picker as Colorizer, without its caption. */
 function StopSwatch({ bound, label, align }: {
   bound: ColorBinding
   label: string
   align: 'left' | 'right'
 }) {
-  const hostRef = useRef<HTMLDivElement>(null)
-  const anchorRef = useRef<HTMLButtonElement>(null)
-  const [open, setOpen] = useState(false)
-
-  useEffect(() => {
-    if (!open) return
-    const controller = new AbortController()
-    window.addEventListener('pointerdown', (event) => {
-      if (!hostRef.current?.contains(event.target as Node)) setOpen(false)
-    }, { signal: controller.signal, capture: true })
-    window.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') setOpen(false)
-    }, { signal: controller.signal })
-    return () => controller.abort()
-  }, [open])
-
-  return (
-    <div ref={hostRef} className="relative">
-      <button
-        ref={anchorRef}
-        data-testid={`gradient-stop-${label.toLowerCase()}`}
-        aria-label={`Gradient color ${label}`}
-        aria-expanded={open}
-        title={`Color ${label} · ${bound.value}`}
-        onClick={() => setOpen((o) => !o)}
-        className="h-5 w-5 cursor-pointer rounded-full border-2 border-white/85 shadow-[0_1px_4px_rgba(0,0,0,.6)] active:scale-95"
-        style={{ background: bound.value }}
-      />
-      {open && <ColorWheelPopover anchorRef={anchorRef} value={bound.value} onChange={bound.set} align={align} testId={`gradient-wheel-${label.toLowerCase()}`} />}
-    </div>
-  )
+  return <ColorPicker value={bound.value} onChange={bound.set} ariaLabel={`Gradient color ${label}`} align={align} size={20} pillTestId={`gradient-stop-${label.toLowerCase()}`} wheelTestId={`gradient-wheel-${label.toLowerCase()}`} />
 }
 
 export const GradientColorizerUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters, targetId }) => {

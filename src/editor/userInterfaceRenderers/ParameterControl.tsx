@@ -1,5 +1,6 @@
 'use client'
 
+import { ColorPicker } from './colorWheel'
 import { KnobValue } from './KnobValue'
 
 import { useRef, type PointerEvent as ReactPointerEvent } from 'react'
@@ -250,11 +251,11 @@ export function ParamControl({ param, numValue, strValue, onNum, onStr }: {
       <div className="grid grid-cols-[100px_1fr] items-center gap-2.5 mb-[13px]">
         <span className="text-[11px] text-[var(--text-3)] truncate" title={param.label}>{param.label}</span>
         <div className="flex justify-end">
-          <input
-            type="color"
+          <ColorPicker
+            ariaLabel={param.label}
             value={strValue ?? param.default}
-            onChange={(e) => onStr?.(e.target.value)}
-            className="w-8 h-5 rounded bg-transparent border border-[var(--border)] cursor-pointer flex-shrink-0 active:scale-95"
+            onChange={(hex) => onStr?.(hex)}
+            size={24}
           />
         </div>
       </div>

@@ -1,5 +1,7 @@
 'use client'
 
+import { ColorPicker } from './colorWheel'
+
 // Bespoke settings for FractalTunnel: a live tunnel gauge (concentric polygons
 // whose side count, ring count, twist, and hue ramp come straight from the
 // bound params), notch-row steppers for the small discrete counts, and a PULSE
@@ -126,12 +128,11 @@ function ColorRow({ bound }: { bound: UserInterfaceParameter | undefined }) {
     <div className="mb-[13px] grid grid-cols-[100px_1fr] items-center gap-2.5">
       <span className="truncate text-[11px] text-[var(--text-3)]">{bound.definition.label}</span>
       <div className="flex justify-end">
-        <input
-          type="color"
-          aria-label={bound.definition.label}
+        <ColorPicker
+          ariaLabel={bound.definition.label}
           value={bound.value}
-          onChange={(e) => bound.setValue(e.target.value)}
-          className="h-5 w-8 flex-shrink-0 cursor-pointer rounded border border-[var(--border)] bg-transparent active:scale-95"
+          onChange={(hex) => bound.setValue(hex)}
+          size={24}
         />
       </div>
     </div>

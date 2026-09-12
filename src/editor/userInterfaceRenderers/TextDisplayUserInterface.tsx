@@ -11,7 +11,7 @@ import type { LyricClipLayout, LyricLayoutKind, StyleLaneFx } from '../types'
 import { placeTranscription } from '../utils/lyricPlacement'
 import { firstAudioBlock, transcribeActiveSong, type TranscribePhase } from '../utils/transcribeSong'
 import { ParamControl, ParamSlider, ParamToggle } from './ParameterControl'
-import { ColorWheelPopover, useColorPopoverDismiss } from './colorWheel'
+import { ColorPicker } from './colorWheel'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 
 // Track settings cover typography, color and motion, followed by style lanes.
@@ -91,21 +91,10 @@ function BoundToggleRow({ bound }: { bound: UserInterfaceParameter | undefined }
 function ColorWell({ bound, label, dimmed }: { bound: UserInterfaceParameter | undefined; label: string; dimmed: boolean }) {
   if (!bound || typeof bound.value !== 'string') return null
   return (
-    <label className={`flex cursor-pointer items-center gap-2 transition-opacity ${dimmed ? 'opacity-35' : ''}`}>
-      <span
-        className={`relative h-6 ${label ? 'w-10' : 'w-6'} flex-shrink-0 overflow-hidden rounded border border-[var(--border-strong)]`}
-        style={{ background: bound.value }}
-      >
-        <input
-          type="color"
-          aria-label={bound.definition.label}
-          value={bound.value}
-          onChange={(event) => bound.setValue(event.target.value)}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-        />
-      </span>
+    <div className="flex items-center gap-2">
+      <ColorPicker value={bound.value} onChange={bound.setValue} ariaLabel={bound.definition.label} dimmed={dimmed} size={24} />
       {label && <span className="text-[10px] text-[var(--text-3)]">{label}</span>}
-    </label>
+    </div>
   )
 }
 
@@ -128,39 +117,9 @@ const LANE_FX: StyleLaneFx[] = ['shake', 'rainbow', 'outline']
  * The shared top-layer wheel chooses its side from the available viewport space.
  */
 function LaneColorSwatch({ value, onChange }: { value: string; onChange: (hex: string) => void }) {
-  const [open, setOpen] = useState(false)
-  const hostRef = useColorPopoverDismiss(open, () => setOpen(false))
-  const anchorRef = useRef<HTMLButtonElement>(null)
   const custom = !LANE_COLOR_SWATCHES.includes(value.toLowerCase())
   return (
-    <div ref={hostRef} className="relative">
-      <button
-        ref={anchorRef}
-        data-testid="lane-color-custom"
-        onClick={() => setOpen((o) => !o)}
-        aria-label="Custom lane color"
-        aria-expanded={open}
-        aria-pressed={custom}
-        title={`Custom color${custom ? ` ${value}` : ''}`}
-        className={`flex h-6 w-6 cursor-pointer items-center justify-center rounded border-2 ${custom ? 'border-white' : 'border-transparent'}`}
-        style={{ background: 'conic-gradient(#f00, #ff0 60deg, #0f0 120deg, #0ff 180deg, #00f 240deg, #f0f 300deg, #f00 360deg)' }}
-      >
-        {/* The picked colour sits in the middle of the wheel once it IS the
-            lane's colour, so the chip is a swatch and an invitation at once. */}
-        {custom && (
-          <span className="h-3 w-3 rounded-full border border-black/40" style={{ background: value }} />
-        )}
-      </button>
-      {open && (
-        <ColorWheelPopover
-          anchorRef={anchorRef}
-          value={value}
-          onChange={onChange}
-          align="left"
-          testId="lane-color-wheel"
-        />
-      )}
-    </div>
+    <ColorPicker value={value} onChange={onChange} ariaLabel="Custom lane color" selected={custom} size={24} align="left" pillTestId="lane-color-custom" wheelTestId="lane-color-wheel" />
   )
 }
 
