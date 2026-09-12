@@ -1,11 +1,11 @@
 import { useContext, useEffect, useMemo, useRef } from 'react'
-import { Color, DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, Mesh, PlaneGeometry } from 'three'
+import { Color, Group, Matrix4, Mesh, PlaneGeometry } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { useInstancedCopyFrame } from '../core/visual/instancedFrame'
 import { VisualEngineContext } from '../core/visual/VisualEngineContext'
 import { useThree } from '@react-three/fiber'
 import { PARTICLE_COLOR, PARTICLE_GLOW } from './Particle'
-import { configureParticlePicking, createParticleMaterial } from './particleCore'
+import { configureParticlePicking, createParticleMaterial, createParticlePool, disposeParticlePool } from './particleCore'
 
 export function ParticleVisual({ trackId }: { trackId: string }) {
   const preview = useContext(VisualEngineContext)
@@ -29,25 +29,6 @@ export function ParticleVisual({ trackId }: { trackId: string }) {
   return <primitive object={mesh} />
 }
 
-function createParticlePool(capacity: number) {
-  const geometry = new PlaneGeometry(2, 2)
-  const colors = new InstancedBufferAttribute(new Float32Array(capacity * 4), 4).setUsage(DynamicDrawUsage)
-  geometry.setAttribute('particleColor', colors)
-  const mesh = new InstancedMesh(geometry, createParticleMaterial(), capacity)
-  mesh.name = 'Particle instances'
-  mesh.count = 0
-  mesh.frustumCulled = false
-  mesh.instanceMatrix.setUsage(DynamicDrawUsage)
-  configureParticlePicking(mesh)
-  return { mesh, colors, capacity }
-}
-
-function disposePool(pool: ReturnType<typeof createParticlePool>) {
-  pool.mesh.geometry.dispose()
-  pool.mesh.material.dispose()
-  pool.mesh.dispose()
-}
-
 export function ParticleInstanced({ trackId }: { trackId: string }) {
   const preview = useContext(VisualEngineContext)
   const height = useThree(s => s.size.height)
@@ -61,7 +42,7 @@ export function ParticleInstanced({ trackId }: { trackId: string }) {
     return () => {
       if (pool.current) {
         group?.remove(pool.current.mesh)
-        disposePool(pool.current)
+        disposeParticlePool(pool.current)
       }
       pool.current = null
     }
@@ -73,7 +54,7 @@ export function ParticleInstanced({ trackId }: { trackId: string }) {
     if (!pool.current || pool.current.capacity < count) {
       if (pool.current) {
         root.current.remove(pool.current.mesh)
-        disposePool(pool.current)
+        disposeParticlePool(pool.current)
       }
       pool.current = createParticlePool(2 ** Math.ceil(Math.log2(count)))
       root.current.add(pool.current.mesh)

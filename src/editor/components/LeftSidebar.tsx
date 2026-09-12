@@ -217,6 +217,12 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <circle cx="6" cy="6" r="1.8" fill="#7dd3fc" />
     </svg>
   )},
+  { id: 'particleStream', name: 'Particle Stream', description: 'Glowing streams fly toward you. MIDI schedules center, paired, or offset crossings; each note is the meeting time.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#7dd3fc" strokeWidth="0.8">
+      <path d="M1 1Q9 4 6 6T1 11M11 1Q3 4 6 6T11 11" />
+      <circle cx="6" cy="6" r="1.4" fill="#7dd3fc" />
+    </svg>
+  )},
   { id: 'particleBurst', name: 'Particle Burst', description: 'Each note explodes particles outward - pitch picks the color.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <g fill="#f59e0b">
@@ -411,7 +417,7 @@ const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.
 // The Instruments folder. These are object instruments like any other; what
 // they share is that MIDI plays their hits, sustains, and releases, so they
 // belong together rather than scattered through Objects and Extras.
-const INSTRUMENT_FOLDER_IDS = new Set(['radialBloom', 'flashWall', 'glassRoll'])
+const INSTRUMENT_FOLDER_IDS = new Set(['radialBloom', 'flashWall', 'glassRoll', 'particleStream'])
 const INSTRUMENT_FOLDER_ITEMS = ALL_OBJECT_INSTRUMENTS.filter((i) => INSTRUMENT_FOLDER_IDS.has(i.id))
 
 // The in-scene Crop masks the whole scene while its rows are held - the

@@ -42,7 +42,7 @@ export interface PreviewResponse {
 const WORKER_INSTRUMENTS = new Set([
   'glassRoll', 'photoSlot', 'oscilloscope', 'textDisplay', 'emojiDisplay', 'filmCard', 'video', 'photo', 'kaleidoSolid',
   'cube', 'bird', 'undertale', 'circle', 'triangle', 'icosahedronBurst', 'stars', 'particleBurst',
-  'particle', 'fractalTunnel', 'neonPolar', 'hopfFibration', 'shapeFlight',
+  'particle', 'particleStream', 'fractalTunnel', 'neonPolar', 'hopfFibration', 'shapeFlight',
   'dotField', 'metronomeBalls', 'cameraControl', 'cameraOrbit', 'filmStock',
   'filmGrain', 'scribble', 'pixelBlast', 'colorFilters', 'bassRipple',
   'impactWarp', 'strobe', 'laserSphere', 'laserLine', 'wormhole',

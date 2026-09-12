@@ -15,6 +15,7 @@ import { textDisplayInstrument } from './TextDisplay'
 import { starsInstrument } from './Stars'
 import { particleBurstInstrument } from './ParticleBurst'
 import { particleInstrument } from './Particle'
+import { particleStreamInstrument } from './ParticleStream'
 import { fractalTunnelInstrument } from './FractalTunnel'
 import { neonPolarInstrument } from './NeonPolar'
 import { hopfFibrationInstrument } from './HopfFibration'
@@ -68,6 +69,7 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [starsInstrument.id]: starsInstrument,
   [particleBurstInstrument.id]: particleBurstInstrument,
   [particleInstrument.id]: particleInstrument,
+  [particleStreamInstrument.id]: particleStreamInstrument,
   [fractalTunnelInstrument.id]: fractalTunnelInstrument,
   [neonPolarInstrument.id]: neonPolarInstrument,
   [hopfFibrationInstrument.id]: hopfFibrationInstrument,

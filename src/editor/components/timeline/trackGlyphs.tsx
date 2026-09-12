@@ -72,6 +72,12 @@ const G = {
       <circle cx="8" cy="8" r="2.2" fill="currentColor" stroke="none" />
     </>
   ),
+  particleStream: (
+    <>
+      <path d="M2 2Q12 5 8 8T2 14M14 2Q4 5 8 8T14 14" />
+      <circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none" />
+    </>
+  ),
   particleBurst: (
     <>
       <circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none" />
