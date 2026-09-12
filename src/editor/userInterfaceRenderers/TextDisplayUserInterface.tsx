@@ -194,7 +194,7 @@ function StyleLanesSection({ trackId }: { trackId: string }) {
                     tabIndex={0}
                     onClick={(e) => { e.stopPropagation(); removeStyleLane(trackId, i); setOpenIndex(null) }}
                     title="Remove this lane (its notes become orphans)"
-                    className="flex h-4 w-4 items-center justify-center rounded text-[var(--text-muted)] hover:text-[#d68383]"
+                    className="flex h-4 w-4 items-center justify-center rounded text-[var(--text-muted)] hover:text-[var(--danger)]"
                   ><X size={10} /></span>
                 )}
               </span>
@@ -277,7 +277,7 @@ export function StyleLaneEditorCard({ trackId, laneIndex, frameless }: { trackId
             onClick={() => updateStyleLane(trackId, open, { color: c })}
             aria-label={`Lane color ${c}`}
             aria-pressed={lane.color.toLowerCase() === c}
-            className={`h-6 w-6 cursor-pointer rounded border-2 ${lane.color.toLowerCase() === c ? 'border-white' : 'border-transparent'}`}
+            className={`h-6 w-6 cursor-pointer rounded border-2 ${lane.color.toLowerCase() === c ? 'border-[color-mix(in_srgb,var(--text)_100%,transparent)]' : 'border-transparent'}`}
             style={{ background: c }}
           />
         ))}
@@ -524,7 +524,7 @@ function TranscribeButton({ trackId }: { trackId: string }) {
           </span>
         </div>
       )}
-      <p className={`mb-3 mt-1 text-[9px] leading-relaxed ${error ? 'text-[#d68383]' : 'text-[var(--text-muted)]'}`}>
+      <p className={`mb-3 mt-1 text-[9px] leading-relaxed ${error ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'}`}>
         {error ?? status ?? (hasSong
           ? 'Writes the song’s words and their timing onto this track, replacing what is here.'
           : 'Add a song to the timeline to transcribe it onto this track.')}

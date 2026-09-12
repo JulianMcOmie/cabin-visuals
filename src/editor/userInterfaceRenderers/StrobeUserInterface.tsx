@@ -148,12 +148,12 @@ function RateChip({ row, active, onSelect }: {
       // two-line chips overran the panel and pushed the knobs out of view.
       className={`flex min-w-0 flex-1 items-baseline justify-center gap-1 overflow-hidden rounded-sm border px-1 py-[2px] ${
         active
-          ? 'border-transparent bg-white text-black'
-          : 'border-white/10 bg-black/25 text-white/55 hover:bg-white/[0.06]'
+          ? 'border-transparent bg-[color-mix(in_srgb,var(--text)_100%,transparent)] text-black'
+          : 'border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]'
       }`}
     >
       <span className="font-mono text-[9px] leading-tight tabular-nums">{division}</span>
-      <span className={`font-mono text-[7px] leading-tight tabular-nums ${active ? 'text-black/50' : 'text-white/25'}`}>
+      <span className={`font-mono text-[7px] leading-tight tabular-nums ${active ? 'text-black/50' : 'text-[var(--text-muted)]'}`}>
         {row.pitch}
       </span>
     </button>
@@ -186,13 +186,13 @@ function RateLegend({ selected, onSelect }: {
   return (
     <div className="px-3 pt-2">
       <div className="mb-1 flex items-baseline justify-between">
-        <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">RATE</span>
-        <span className="text-[8px] text-white/25">played as a MIDI row</span>
+        <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">RATE</span>
+        <span className="text-[8px] text-[var(--text-muted)]">played as a MIDI row</span>
       </div>
       <div className="flex flex-col gap-1">
         {RATE_GROUPS.map((group) => (
           <div key={group.label} className="flex items-stretch gap-1">
-            <span className="w-[46px] flex-none self-center text-[7px] font-semibold leading-tight tracking-[0.1em] text-white/30">
+            <span className="w-[46px] flex-none self-center text-[7px] font-semibold leading-tight tracking-[0.1em] text-[var(--text-muted)]">
               {group.label}
             </span>
             {group.rows.map((row) => (
@@ -206,7 +206,7 @@ function RateLegend({ selected, onSelect }: {
           </div>
         ))}
       </div>
-      <p className="mt-0.5 text-[7px] leading-snug text-white/25">
+      <p className="mt-0.5 text-[7px] leading-snug text-[var(--text-muted)]">
         T = triplet. f rows flash on a {STROBE_REFERENCE_FPS}fps grid at a fixed Hz, ignoring tempo.
       </p>
     </div>
@@ -255,8 +255,8 @@ function StyleSelector({ b }: { b: SelectBinding | null }) {
         }))}
         name="Style"
       />
-      <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">STYLE</span>
-      <span className="font-mono text-[9px] text-white/70">
+      <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">STYLE</span>
+      <span className="font-mono text-[9px] text-[var(--text-2)]">
         {b.def.options.find((option) => option.value === selected)?.label.toUpperCase() ?? ''}
       </span>
     </div>

@@ -127,7 +127,7 @@ export function ProfileMenu({ size = 'md' }: { size?: 'sm' | 'md' }) {
         </DropdownMenuItem>
         <DropdownMenuSeparator className="bg-[var(--border)]" />
         <DropdownMenuItem
-          className={`flex w-full cursor-pointer items-center text-[13px] text-[#d68383] focus:bg-[var(--bg-elevated)] focus:text-[#d68383] ${isLoggingOut ? 'cursor-not-allowed opacity-50' : ''}`}
+          className={`flex w-full cursor-pointer items-center text-[13px] text-[var(--danger)] focus:bg-[var(--bg-elevated)] focus:text-[var(--danger)] ${isLoggingOut ? 'cursor-not-allowed opacity-50' : ''}`}
           disabled={isLoggingOut}
           onSelect={(event) => {
             event.preventDefault()

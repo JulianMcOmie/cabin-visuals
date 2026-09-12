@@ -127,7 +127,7 @@ function HueRing({ value, onChange }: { value: string; onChange: (hex: string) =
         }}
       >
         <span
-          className="pointer-events-none absolute h-2 w-2 rounded-full border border-white/80"
+          className="pointer-events-none absolute h-2 w-2 rounded-full border border-[color-mix(in_srgb,var(--text)_80%,transparent)]"
           style={{
             left: `calc(50% + ${Math.cos(markerAngle) * 16}px - 4px)`,
             top: `calc(50% + ${Math.sin(markerAngle) * 16}px - 4px)`,
@@ -138,8 +138,8 @@ function HueRing({ value, onChange }: { value: string; onChange: (hex: string) =
       <div className="absolute top-[7px] left-1/2 -translate-x-1/2">
         <ColorPicker value={value} onChange={onChange} ariaLabel="Open color editor" size={22} />
       </div>
-      <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-white/40">COLOR</span>
-      <span className="font-mono text-[9px] uppercase text-white/70">{value}</span>
+      <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">COLOR</span>
+      <span className="font-mono text-[9px] uppercase text-[var(--text-2)]">{value}</span>
     </div>
   )
 }
@@ -201,7 +201,7 @@ export const WireframeUserInterfaceRenderer: UserInterfaceRendererDefinition = (
             aria-pressed={index === selected}
             onClick={() => shape?.set(index)}
             className={`snap-start rounded-[7px] border p-[3px] text-center ${
-              index === selected ? 'bg-white/[0.05]' : 'border-white/[0.07] bg-white/[0.015] hover:border-white/30'
+              index === selected ? 'bg-[color-mix(in_srgb,var(--text)_5%,transparent)]' : 'border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--text)_1.5%,transparent)] hover:border-[color-mix(in_srgb,var(--text)_30%,transparent)]'
             }`}
             style={index === selected ? { borderColor: accent } : undefined}
           >
@@ -212,7 +212,7 @@ export const WireframeUserInterfaceRenderer: UserInterfaceRendererDefinition = (
                 else cellCanvases.current.delete(index)
               }}
             />
-            <div className="truncate pb-[2px] text-[9px] leading-tight text-white/50">{def.name}</div>
+            <div className="truncate pb-[2px] text-[9px] leading-tight text-[var(--text-3)]">{def.name}</div>
           </button>
         ))}
       </div>

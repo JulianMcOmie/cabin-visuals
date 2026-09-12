@@ -53,7 +53,7 @@ function Segmented({ bound, labels, name }: {
     <div
       role="radiogroup"
       aria-label={name}
-      className="flex gap-[2px] rounded-[7px] border border-white/[0.07] bg-black/30 p-[2px]"
+      className="flex gap-[2px] rounded-[7px] border border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_30%,transparent)] p-[2px]"
     >
       {labels.map((label, value) => {
         const active = value === selected
@@ -64,7 +64,7 @@ function Segmented({ bound, labels, name }: {
             aria-checked={active}
             onClick={() => bound.setValue(value)}
             className={`h-6 min-w-0 flex-1 cursor-pointer truncate rounded-[5px] px-1 text-[9px] font-semibold tracking-[0.1em] ${
-              active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
+              active ? '' : 'text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] hover:text-[var(--text-2)]'
             }`}
             style={active ? { background: withAlpha(ACCENT, 0.22), color: '#e9f5cf' } : undefined}
           >
@@ -134,7 +134,7 @@ function FieldPad({
   }
 
   return (
-    <div className="relative overflow-hidden rounded-[10px] border border-white/[0.08]" style={{ background: '#0a0c11' }}>
+    <div className="relative overflow-hidden rounded-[10px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)]" style={{ background: '#0a0c11' }}>
       <svg
         ref={svgRef}
         viewBox="-1.15 -1.15 2.3 2.3"
@@ -191,7 +191,7 @@ function FieldPad({
           )
         })}
       </svg>
-      <span className="pointer-events-none absolute bottom-1.5 left-2 font-mono text-[8px] uppercase tracking-[0.12em] text-white/25">
+      <span className="pointer-events-none absolute bottom-1.5 left-2 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
         {editable ? 'Drag positions' : 'Custom layout to drag'}
       </span>
     </div>
@@ -235,11 +235,11 @@ export const WaypointsUserInterfaceRenderer: UserInterfaceRendererDefinition = (
 
       <Segmented bound={layout} labels={['Line', 'Grid', 'Ring', 'Custom']} name="Layout" />
       <Segmented bound={curve} labels={WAYPOINT_CURVE_LABELS} name="Curve" />
-      <p className="m-0 text-center font-mono text-[8px] uppercase tracking-[0.14em] text-white/30">
+      <p className="m-0 text-center font-mono text-[8px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
         {CURVE_HINTS[curveValue] ?? ''}
       </p>
 
-      <div className="flex items-start justify-center gap-3 rounded-lg border border-white/[0.07] bg-white/[0.025] px-2 py-2">
+      <div className="flex items-start justify-center gap-3 rounded-lg border border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--text)_2.5%,transparent)] px-2 py-2">
         <ParamKnob parameter={positions} label="POINTS" large />
         {!custom && <ParamKnob parameter={spread} label="SPREAD" />}
         <ParamKnob parameter={travel} label="TRAVEL" />

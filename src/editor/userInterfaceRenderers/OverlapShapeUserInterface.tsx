@@ -110,7 +110,7 @@ function OverlapPreview({ shape, mode, baseColor, overlapColor }: {
     <div
       ref={hostRef}
       data-testid="overlap-shape-preview"
-      className="relative h-[112px] overflow-hidden rounded-t-[9px] border-b border-white/[0.06] bg-[#05070c]"
+      className="relative h-[112px] overflow-hidden rounded-t-[9px] border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[var(--bg-canvas-deep)]"
     >
       <svg
         className="h-full w-full"
@@ -192,7 +192,7 @@ function CountedPreview({ shape, colors }: { shape: number; colors: string[] }) 
     <div
       ref={hostRef}
       data-testid="overlap-shape-preview"
-      className="relative h-[112px] overflow-clip rounded-t-[9px] border-b border-white/[0.06] bg-[#05070c]"
+      className="relative h-[112px] overflow-clip rounded-t-[9px] border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[var(--bg-canvas-deep)]"
     >
       <svg
         className="h-full w-full"
@@ -247,7 +247,7 @@ function Segmented({ options, value, accent, ariaLabel, onChange }: {
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className="flex gap-[2px] rounded-[7px] border border-white/[0.07] bg-black/30 p-[2px]"
+      className="flex gap-[2px] rounded-[7px] border border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_30%,transparent)] p-[2px]"
     >
       {options.map((option) => {
         const active = option.value === value
@@ -259,7 +259,7 @@ function Segmented({ options, value, accent, ariaLabel, onChange }: {
             title={option.title}
             onClick={() => onChange(option.value)}
             className={`h-[22px] flex-1 cursor-pointer rounded-[5px] px-1.5 text-[9px] font-semibold tracking-[0.08em] ${
-              active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
+              active ? '' : 'text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] hover:text-[var(--text-2)]'
             }`}
             style={active
               ? { background: withAlpha(accent, 0.22), color: towardWhite(accent, 0.6) }
@@ -397,7 +397,7 @@ export const OverlapShapeUserInterfaceRenderer: UserInterfaceRendererDefinition 
             accent={accent}
             onChange={(v) => overlapMode.setValue(v)}
           />
-          <span className="mt-[3px] text-[8px] font-semibold tracking-[0.12em] text-white/40">OVERLAP</span>
+          <span className="mt-[3px] text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">OVERLAP</span>
         </div>
         {/* How many colors deep the count goes. Present only in Color mode,
             where it is also what turns the counted rule on at all. */}
@@ -454,7 +454,7 @@ export const OverlapShapeUserInterfaceRenderer: UserInterfaceRendererDefinition 
             pillTestId="overlap-shape-ramp-near-pill"
           />
           <div className="flex min-w-0 flex-1 flex-col gap-[3px] pb-3">
-            <div className="flex h-4 overflow-clip rounded-[3px] border border-white/10">
+            <div className="flex h-4 overflow-clip rounded-[3px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
               {rampHexes.slice(1).map((hex, i) => (
                 <span
                   key={i}
@@ -464,7 +464,7 @@ export const OverlapShapeUserInterfaceRenderer: UserInterfaceRendererDefinition 
                 />
               ))}
             </div>
-            <span className="text-center text-[8px] font-semibold tracking-[0.12em] text-white/40">
+            <span className="text-center text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">
               DEPTH RAMP
             </span>
           </div>

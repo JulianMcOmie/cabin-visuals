@@ -169,11 +169,11 @@ export function ColorWheelPopover({ value, onChange, anchorRef, align = 'right',
       aria-label={ariaLabel}
       onKeyDown={(event) => event.stopPropagation()}
       data-testid={testId}
-      className="fixed m-0 w-max overflow-auto rounded-md border border-white/10 bg-[#0d1017] p-3 text-white shadow-[0_8px_24px_rgba(0,0,0,.5)]"
+      className="fixed m-0 w-max overflow-auto rounded-md border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[var(--bg-panel)] p-3 text-[var(--text)] shadow-[0_8px_24px_rgba(0,0,0,.5)]"
       style={{ inset: 'auto' }}
     >
       <ColorWheelPicker value={value} onChange={onChange} />
-      <label className="mt-3 flex items-center gap-2 text-[10px] text-white/45">
+      <label className="mt-3 flex items-center gap-2 text-[10px] text-[var(--text-3)]">
         Hex
         <input
           key={value}
@@ -189,7 +189,7 @@ export function ColorWheelPopover({ value, onChange, anchorRef, align = 'right',
           onKeyDown={(event) => {
             if (event.key === 'Enter') event.currentTarget.blur()
           }}
-          className="w-24 min-w-0 rounded border border-white/10 bg-white/5 px-2 py-1 font-mono text-[11px] text-white/80"
+          className="w-24 min-w-0 rounded border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] px-2 py-1 font-mono text-[11px] text-[var(--text-2)]"
         />
       </label>
     </div>
@@ -276,7 +276,7 @@ export function ColorWheelPicker({ value, onChange }: {
         }}
       >
         <span
-          className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_4px_rgba(0,0,0,.8)]"
+          className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[color-mix(in_srgb,var(--text)_100%,transparent)] shadow-[0_0_4px_rgba(0,0,0,.8)]"
           style={{ left: markerX, top: markerY, background: fullColor }}
         />
       </div>
@@ -300,7 +300,7 @@ export function ColorWheelPicker({ value, onChange }: {
         style={{ background: `linear-gradient(to right, #000, ${fullColor})` }}
       >
         <span
-          className="absolute top-1/2 h-4 w-2 -translate-x-1/2 -translate-y-1/2 rounded-[2px] border border-white/60 bg-white/90"
+          className="absolute top-1/2 h-4 w-2 -translate-x-1/2 -translate-y-1/2 rounded-[2px] border border-[color-mix(in_srgb,var(--text)_60%,transparent)] bg-[color-mix(in_srgb,var(--text)_90%,transparent)]"
           style={{ left: `${hsv.v * 100}%` }}
         />
       </div>
@@ -368,7 +368,7 @@ export function ColorPicker({ value, onChange, ariaLabel, title, halo, align = '
         aria-haspopup="dialog"
         title={title ?? `${ariaLabel} ${value}`}
         onClick={() => setOpen((o) => !o)}
-        className={`shrink-0 cursor-pointer rounded-full border border-white/15 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white ${dimmed ? 'opacity-45' : ''} ${selected ? 'ring-2 ring-white' : ''}`}
+        className={`shrink-0 cursor-pointer rounded-full border border-[color-mix(in_srgb,var(--text)_15%,transparent)] active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${dimmed ? 'opacity-45' : ''} ${selected ? 'ring-2 ring-[var(--accent)]' : ''}`}
         style={{ width: size, height: size, background: value, boxShadow: halo }}
       />
       {open && <ColorWheelPopover anchorRef={anchorRef} value={value} onChange={onChange} align={align} testId={wheelTestId} ariaLabel={ariaLabel} />}
@@ -396,8 +396,8 @@ export function ColorWheelPill({ label, ...pickerProps }: {
   return (
     <div className="relative flex min-w-0 flex-col items-center">
       <ColorPicker {...pickerProps} />
-      <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-white/40">{label}</span>
-      <span className="font-mono text-[9px] uppercase text-white/70">{pickerProps.value}</span>
+      <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">{label}</span>
+      <span className="font-mono text-[9px] uppercase text-[var(--text-2)]">{pickerProps.value}</span>
     </div>
   )
 }

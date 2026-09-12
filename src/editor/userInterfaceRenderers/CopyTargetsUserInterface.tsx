@@ -351,7 +351,7 @@ export function CopyTargetsUserInterface({ track }: { track: Track }) {
 
               <GutterRow label={rule === 'every' ? 'STRIDE' : 'SLICES'}>
                 <div className="flex flex-1 flex-wrap items-center gap-2 pb-3 pt-2">
-                  <div className="flex items-center gap-px rounded-[6px] border border-white/[0.07] bg-black/30 p-px">
+                  <div className="flex items-center gap-px rounded-[6px] border border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_30%,transparent)] p-px">
                     <StepButton label="Fewer slices" disabled={slices <= COPY_TARGET_MIN_SLICES} onClick={() => setSlices(slices - 1)}>−</StepButton>
                     <span className="min-w-[20px] text-center text-[11px] tabular-nums text-[var(--text-2)]">{slices}</span>
                     <StepButton label="More slices" disabled={slices >= Math.min(COPY_TARGET_MAX_SLICES, count)} onClick={() => setSlices(slices + 1)}>+</StepButton>
@@ -397,7 +397,7 @@ function StepButton({ label, disabled, onClick, children }: {
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="h-[20px] w-[20px] cursor-pointer rounded-[5px] text-[12px] leading-none text-[var(--text-2)] hover:bg-white/[0.06] disabled:cursor-default disabled:opacity-30"
+      className="h-[20px] w-[20px] cursor-pointer rounded-[5px] text-[12px] leading-none text-[var(--text-2)] hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] disabled:cursor-default disabled:opacity-30"
     >
       {children}
     </button>

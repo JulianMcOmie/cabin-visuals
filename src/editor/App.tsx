@@ -399,7 +399,7 @@ function CanvasTransportBar({
               else void playback.play()
             }}
             aria-label={isPlaying ? 'Pause' : 'Play'}
-            className="visualizer-glass-control flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-[rgba(16,19,28,0.8)] text-white/90 hover:text-white cursor-pointer"
+            className="visualizer-glass-control flex h-9 w-9 items-center justify-center rounded-full border border-[var(--border-strong)] bg-[color-mix(in_srgb,var(--bg-panel-raised)_80%,transparent)] text-[var(--text)] hover:text-[var(--accent-hover)] cursor-pointer"
           >
             {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="translate-x-px" />}
           </button>
@@ -436,7 +436,7 @@ function AspectPill({ open, setOpen, glass }: {
         title="Preview aspect ratio - see the visual as an export at that shape would compose it"
         className={`flex h-7 items-center gap-1.5 rounded-md px-2 @[530px]:px-2.5 font-mono text-[9px] uppercase tracking-wide text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer ${
           glass
-            ? 'visualizer-glass-control border border-[var(--border)] bg-[rgba(16,19,28,0.8)]'
+            ? 'visualizer-glass-control border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-panel-raised)_80%,transparent)]'
             : 'bg-[var(--bg-elevated)]'
         }`}
       >
@@ -790,7 +790,7 @@ function VisualPanel({
           }}
           onBlur={hideFullscreenControl}
           title={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
-          className="visualizer-glass-control flex items-center justify-center w-6 h-6 rounded border border-[var(--border)] bg-[rgba(16,19,28,0.8)] text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer"
+          className="visualizer-glass-control flex items-center justify-center w-6 h-6 rounded border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-panel-raised)_80%,transparent)] text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer"
         >
           {isFullscreen ? <Minimize size={11} /> : <Maximize size={11} />}
         </button>

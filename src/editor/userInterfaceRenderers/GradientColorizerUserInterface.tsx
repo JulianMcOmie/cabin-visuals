@@ -91,7 +91,7 @@ export const GradientColorizerUserInterfaceRenderer: UserInterfaceRendererDefini
       <div className="px-3 pb-1 pt-3">
         <div
           data-testid="gradient-ramp"
-          className="relative h-9 rounded-lg border border-white/15"
+          className="relative h-9 rounded-lg border border-[color-mix(in_srgb,var(--text)_15%,transparent)]"
           style={{ background: ramp }}
         >
           <div className="absolute inset-y-0 left-1.5 flex items-center">
@@ -108,7 +108,7 @@ export const GradientColorizerUserInterfaceRenderer: UserInterfaceRendererDefini
               aria-pressed={flipped}
               title="Flip A ↔ B"
               onClick={() => flip.set(flipped ? 0 : 1)}
-              className="pointer-events-auto flex h-5 w-5 items-center justify-center rounded-full border border-white/25 bg-black/45 text-white/85 backdrop-blur-sm hover:bg-black/60 active:scale-95"
+              className="pointer-events-auto flex h-5 w-5 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--text)_25%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_45%,transparent)] text-[var(--text)] backdrop-blur-sm hover:bg-[color-mix(in_srgb,var(--bg-canvas-deep)_60%,transparent)] active:scale-95"
             >
               <ArrowLeftRight size={10} />
             </button>
@@ -119,8 +119,8 @@ export const GradientColorizerUserInterfaceRenderer: UserInterfaceRendererDefini
       <div className="flex flex-col gap-2 px-3 pb-3 pt-1">
         {/* APPLY BY: which axis the ramp spreads along - the world, or the
             chain's copy order. */}
-        <label className="flex items-center justify-between text-xs text-white/60">Color by
-          <select aria-label="Color by" className="rounded bg-zinc-900 px-2 py-1 text-white" value={mode.value} onChange={e => mode.set(Number(e.target.value))}>
+        <label className="flex items-center justify-between text-xs text-[var(--text-3)]">Color by
+          <select aria-label="Color by" className="rounded bg-[var(--bg-panel)] px-2 py-1 text-[var(--text)]" value={mode.value} onChange={e => mode.set(Number(e.target.value))}>
             {mode.def.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </label>

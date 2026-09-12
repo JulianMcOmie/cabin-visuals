@@ -30,7 +30,7 @@ function SketchMark({ hue }: { hue: string }) {
       }}
     >
       {rows.map((notes, i) => (
-        <div key={i} className="relative h-[15px] border-t border-white/[0.06] last:border-b">
+        <div key={i} className="relative h-[15px] border-t border-[color-mix(in_srgb,var(--text)_6%,transparent)] last:border-b">
           {notes.map(({ x, w }, j) => (
             <div
               key={j}

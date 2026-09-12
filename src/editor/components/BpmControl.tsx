@@ -13,7 +13,7 @@ const DOUBLE_CLICK_MS = 350
 // Quiet corner readout - theme mono, no LCD chrome.
 const LCD_VALUE = 'font-mono text-[12px] leading-none tabular-nums'
 const LCD_CAPTION =
-  'font-mono text-[8px] font-semibold uppercase tracking-[0.12em] leading-none text-[#5a6274] select-none'
+  'font-mono text-[8px] font-semibold uppercase tracking-[0.12em] leading-none text-[var(--text-muted)] select-none'
 
 /**
  * Tempo cell of the transport display. The value is a vertical drag scrubber

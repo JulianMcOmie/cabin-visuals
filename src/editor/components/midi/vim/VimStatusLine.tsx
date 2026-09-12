@@ -66,25 +66,25 @@ export function VimStatusLine({
     state.mode === 'draft' ? (state.draft?.kind === 'copy' ? 'COPY' : 'MOVE') : state.mode === 'select' ? 'SELECT' : 'VIM'
 
   return (
-    <div className="flex h-6 flex-shrink-0 items-center gap-3 border-t border-zinc-800 bg-zinc-900/80 px-3 font-mono text-[10px] text-zinc-500">
+    <div className="flex h-6 flex-shrink-0 items-center gap-3 border-t border-[var(--border)] bg-[var(--bg-panel)]/80 px-3 font-mono text-[10px] text-[var(--text-muted)]">
       <button
         onClick={onExit}
         title="Leave midi vim (Esc)"
         className="rounded px-1.5 font-semibold tracking-[0.08em] hover:opacity-80"
-        style={{ background: accent, color: '#0b0d12' }}
+        style={{ background: accent, color: 'var(--on-accent)' }}
       >
         {modeLabel}
       </button>
 
-      <span className="text-zinc-300">
+      <span className="text-[var(--text-2)]">
         {bar}:{(Math.floor(beatInBar) + 1).toString()}
-        <span className="text-zinc-600">.{Math.round((beatInBar % 1) * 100).toString().padStart(2, '0')}</span>
+        <span className="text-[var(--text-muted)]">.{Math.round((beatInBar % 1) * 100).toString().padStart(2, '0')}</span>
       </span>
 
-      {row && <span className="max-w-[140px] truncate text-zinc-400">{row.noteLabel ?? row.label}</span>}
+      {row && <span className="max-w-[140px] truncate text-[var(--text-3)]">{row.noteLabel ?? row.label}</span>}
 
-      <span>grid <span className="text-zinc-300">{beatLabel(stepBeats)}</span></span>
-      <span>len <span className="text-zinc-300">{beatLabel(state.noteLengthBeats)}</span></span>
+      <span>grid <span className="text-[var(--text-2)]">{beatLabel(stepBeats)}</span></span>
+      <span>len <span className="text-[var(--text-2)]">{beatLabel(state.noteLengthBeats)}</span></span>
 
       {state.count && <span style={{ color: accent }}>×{state.count}</span>}
       {state.staged.length > 0 && <span style={{ color: accent }}>{state.staged.length} staged</span>}
@@ -97,10 +97,10 @@ export function VimStatusLine({
       <div className="hidden items-center gap-2.5 md:flex">
         {hints.map(([keys, what]) => (
           <span key={keys} className="whitespace-nowrap">
-            <span className="text-zinc-400">{keys}</span> {what}
+            <span className="text-[var(--text-3)]">{keys}</span> {what}
           </span>
         ))}
-        <span className="whitespace-nowrap"><span className="text-zinc-400">?</span> keys</span>
+        <span className="whitespace-nowrap"><span className="text-[var(--text-3)]">?</span> keys</span>
       </div>
     </div>
   )
@@ -167,24 +167,24 @@ const SHEET: { title: string; items: [string, string][] }[] = [
  *  status line shows constantly. */
 export function VimKeySheet({ accent, onClose }: { accent: string; onClose: () => void }) {
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-[color-mix(in_srgb,var(--bg-canvas-deep)_60%,transparent)] p-4" onClick={onClose}>
       <div
-        className="max-h-full w-full max-w-3xl overflow-y-auto rounded-xl border border-zinc-700 bg-[#0f1118] p-5 shadow-2xl"
+        className="max-h-full w-full max-w-3xl overflow-y-auto rounded-xl border border-[var(--border-strong)] bg-[var(--bg-panel)] p-5 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-baseline gap-3">
           <h2 className="text-[13px] font-bold uppercase tracking-[0.12em]" style={{ color: accent }}>midi vim</h2>
-          <span className="text-[11px] text-zinc-500">esc closes · esc again leaves the mode</span>
+          <span className="text-[11px] text-[var(--text-muted)]">esc closes · esc again leaves the mode</span>
         </div>
         <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
           {SHEET.map((section) => (
             <section key={section.title}>
-              <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-500">{section.title}</h3>
+              <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">{section.title}</h3>
               <dl className="space-y-1">
                 {section.items.map(([keys, what]) => (
                   <div key={keys} className="flex gap-3 text-[11px]">
-                    <dt className="w-[130px] flex-shrink-0 font-mono text-zinc-300">{keys}</dt>
-                    <dd className="text-zinc-500">{what}</dd>
+                    <dt className="w-[130px] flex-shrink-0 font-mono text-[var(--text-2)]">{keys}</dt>
+                    <dd className="text-[var(--text-muted)]">{what}</dd>
                   </div>
                 ))}
               </dl>

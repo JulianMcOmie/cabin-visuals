@@ -214,7 +214,7 @@ function FieldWindow({ settings }: { settings: MoverSettings }) {
         })}
       </div>
       {/* Which cell is playing, in the window's own corner. */}
-      <span className="pointer-events-none absolute right-2 top-1.5 text-[8px] font-bold tracking-[0.16em] text-white/25">
+      <span className="pointer-events-none absolute right-2 top-1.5 text-[8px] font-bold tracking-[0.16em] text-[var(--text-muted)]">
         {['TRANSLATE', 'ROTATE', 'ORBIT'][motion] ?? 'TRANSLATE'} · {['BURST', 'CONSTANT', 'OSCILLATE'][settings.mode] ?? 'BURST'}
       </span>
       {/* The demo loop's playhead, riding the bottom hairline. */}
@@ -270,7 +270,7 @@ function EasingStrip({ b }: { b: SelectBinding }) {
             aria-pressed={active}
             onClick={() => b.set(option.value)}
             className={`flex min-w-0 cursor-pointer flex-col items-center gap-0.5 rounded-md border py-1 ${
-              active ? '' : 'border-white/[0.07] bg-white/[0.025] text-white/30 hover:bg-white/[0.06] hover:text-white/65'
+              active ? '' : 'border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--text)_2.5%,transparent)] text-[var(--text-muted)] hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-[var(--text-2)]'
             }`}
             style={active ? { borderColor: withAlpha(AMBER, 0.4), background: withAlpha(AMBER, 0.15), color: towardWhite(AMBER, 0.45) } : undefined}
           >
@@ -361,7 +361,7 @@ export const MoverUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ pa
         )}
 
         <div className="px-4">
-          <p className="mb-1 text-right text-[7px] font-bold tracking-[0.16em] text-white/25">
+          <p className="mb-1 text-right text-[7px] font-bold tracking-[0.16em] text-[var(--text-muted)]">
             {amountHint(motionValue, modeValue, midiOnly)}
           </p>
           <div className="flex items-end gap-5">

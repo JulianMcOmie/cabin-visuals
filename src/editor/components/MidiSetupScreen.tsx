@@ -194,7 +194,7 @@ export function MidiSetupScreen({
                 addFiles(files)
               }}
             />
-            {error && <p className="m-0 max-w-[340px] text-[12px] leading-relaxed text-[#d68383]">{error}</p>}
+            {error && <p className="m-0 max-w-[340px] text-[12px] leading-relaxed text-[var(--danger)]">{error}</p>}
           </div>
 
           {midiName || songName ? (

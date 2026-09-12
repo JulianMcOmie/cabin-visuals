@@ -94,10 +94,10 @@ function ModeWindow({ mirror, planeLabel }: { mirror: boolean; planeLabel: strin
           )
         })}
       </svg>
-      <span className="pointer-events-none absolute right-1.5 top-1 font-mono text-[8px] text-white/30">
+      <span className="pointer-events-none absolute right-1.5 top-1 font-mono text-[8px] text-[var(--text-muted)]">
         {mirror ? 'PER AXIS' : planeLabel}
       </span>
-      <span className="pointer-events-none absolute bottom-1 left-1.5 font-mono text-[8px] text-white/40">
+      <span className="pointer-events-none absolute bottom-1 left-1.5 font-mono text-[8px] text-[var(--text-3)]">
         {mirror ? 'APART / TOGETHER · SIDE PICKS THE SIGN' : 'OUT / IN / TURN · ABOUT THE CENTER'}
       </span>
     </PreviewWindow>
@@ -109,18 +109,18 @@ function ModeWindow({ mirror, planeLabel }: { mirror: boolean; planeLabel: strin
 function NoteMap({ mirror }: { mirror: boolean }) {
   const rows = mirror ? SYMMETRIC_MOTION_MIRROR_ROWS : SYMMETRIC_MOTION_RADIAL_ROWS
   return (
-    <div className="rounded-md border border-white/[0.06] bg-black/25 p-1.5">
+    <div className="rounded-md border border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] p-1.5">
       <div className="mb-1 flex items-baseline justify-between">
-        <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40 select-none">NOTE MAP</span>
-        <span className="text-[7px] text-white/25 select-none">one note moves every copy</span>
+        <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)] select-none">NOTE MAP</span>
+        <span className="text-[7px] text-[var(--text-muted)] select-none">one note moves every copy</span>
       </div>
       <div className="grid grid-cols-2 gap-x-2 gap-y-[3px]">
         {rows.map((row) => (
           <div key={row.pitch} className="flex items-center gap-1.5">
-            <span className="w-6 flex-shrink-0 rounded-[3px] border border-white/10 py-[2px] text-center font-mono text-[8px] leading-none tabular-nums text-white/40">
+            <span className="w-6 flex-shrink-0 rounded-[3px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] py-[2px] text-center font-mono text-[8px] leading-none tabular-nums text-[var(--text-3)]">
               {row.pitch}
             </span>
-            <span className="truncate text-[9px] text-white/60">{row.label}</span>
+            <span className="truncate text-[9px] text-[var(--text-3)]">{row.label}</span>
           </div>
         ))}
       </div>
@@ -133,7 +133,7 @@ function NoteMap({ mirror }: { mirror: boolean }) {
 function CaptionedSegments({ b, caption }: { b: NonNullable<ReturnType<ReturnType<typeof bindPanel>['select']>>; caption?: string }) {
   return (
     <div>
-      <span className="mb-1 block text-[8px] font-semibold tracking-[0.12em] text-white/40 select-none">
+      <span className="mb-1 block text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)] select-none">
         {(caption ?? b.def.label).toUpperCase()}
       </span>
       <Segmented b={b} />

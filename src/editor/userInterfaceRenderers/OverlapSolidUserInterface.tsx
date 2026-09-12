@@ -99,7 +99,7 @@ function OverlapSolidPreview({ solid, mode, baseColor, overlapColor }: {
     <div
       ref={hostRef}
       data-testid="overlap-solid-preview"
-      className="relative h-[112px] overflow-hidden rounded-t-[9px] border-b border-white/[0.06] bg-[#05070c]"
+      className="relative h-[112px] overflow-hidden rounded-t-[9px] border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[var(--bg-canvas-deep)]"
     >
       <svg
         className="h-full w-full"
@@ -147,7 +147,7 @@ function Segmented({ options, value, accent, ariaLabel, onChange }: {
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className="flex gap-[2px] rounded-[7px] border border-white/[0.07] bg-black/30 p-[2px]"
+      className="flex gap-[2px] rounded-[7px] border border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_30%,transparent)] p-[2px]"
     >
       {options.map((option) => {
         const active = option.value === value
@@ -159,7 +159,7 @@ function Segmented({ options, value, accent, ariaLabel, onChange }: {
             title={option.title}
             onClick={() => onChange(option.value)}
             className={`h-[22px] flex-1 cursor-pointer rounded-[5px] px-1.5 text-[9px] font-semibold tracking-[0.08em] ${
-              active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
+              active ? '' : 'text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] hover:text-[var(--text-2)]'
             }`}
             style={active
               ? { background: withAlpha(accent, 0.22), color: towardWhite(accent, 0.6) }
@@ -266,7 +266,7 @@ export const OverlapSolidUserInterfaceRenderer: UserInterfaceRendererDefinition 
             accent={accent}
             onChange={(v) => overlapMode.setValue(v)}
           />
-          <span className="mt-[3px] text-[8px] font-semibold tracking-[0.12em] text-white/40">OVERLAP</span>
+          <span className="mt-[3px] text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">OVERLAP</span>
         </div>
         {overlapColor && (
           <ColorWheelPill

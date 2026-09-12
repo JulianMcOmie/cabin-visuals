@@ -2,7 +2,7 @@
 
 Thin shell around `src/`. Pages are mostly small; the product lives in `src/editor` and `src/components`.
 
-- `page.tsx` — landing. Landing pages are swappable "covers" in `src/components/landing/`: each cover is a complete page, registered in its `index.tsx`, and the one-line `ACTIVE_LANDING` const picks which ships (`editorial` = the 2026 serif/cyan redesign, `classic` = the previous design, kept intact for instant revert). The editorial look extends to pricing/auth/start/projects via `<EditorialSkin>` (`editorialTheme.tsx`) — a scoped `.editorial-skin` class in `globals.css` that remaps the global design tokens (and reroutes `font-sans`/`font-mono` onto Manrope/DM Mono), so those screens restyle without markup rewrites and un-skin by removing the wrapper. The editor is never skinned. `layout.tsx` — root layout + analytics gate (PostHog, opt-out at `/analytics-optout`).
+- `page.tsx` — landing. Landing pages are swappable "covers" in `src/components/landing/`: each cover is a complete page, registered in its `index.tsx`, and the one-line `ACTIVE_LANDING` const picks which ships (`editorial` = the 2026 serif/cyan redesign, `classic` = the previous design, kept intact for instant revert). The editorial look extends to pricing/auth/start/projects via `<EditorialSkin>` (`editorialTheme.tsx`) — a scoped `.editorial-skin` class in `globals.css` that reroutes `font-sans`/`font-mono` onto Manrope/DM Mono. Colors inherit the global account theme; the editor retains its own typography. `layout.tsx` — root layout + analytics gate (PostHog, opt-out at `/analytics-optout`).
 - `editor/page.tsx` — client-only `dynamic()` import of `src/editor/App` (three.js bundle is heavy; `EditorLoadingShell` fills both the chunk load and the required Suspense boundary for `useSearchParams`). Query params: `?project=<id>` (persisted project), `?template=<id>` (a demo, but no longer account-free — see below). **No project id / no Supabase env = fully in-memory editor.** That used to be the no-login smoke-test path and is not any more: `EditorSignupGate` mounts at the editor root and puts an un-dismissable signup card over EVERY way in — bare `/editor`, a `?template=` demo, the `/start` and pricing funnels — for anyone without a real account, anonymous sessions included. Sign in before smoke-testing. It also supersedes the guest-cap prompt on `/projects` and the account gate inside `ExportDialog`, both of which are now unreachable and left in place so that deleting the gate restores them.
 - `projects/` — project grid (list/create/delete; `src/persistence/hooks/useProjectList`, thumbnails from autosave captures).
 - `start/`, `lyric-setup/`, `photo-setup/` — onboarding funnels into templates (lyric flow: upload audio → transcribe → pick a style; screens live in `src/editor/components/*SetupScreen.tsx`).
@@ -42,3 +42,20 @@ the middleware before hunting in the page.
   — `/auth/v1/.well-known/jwks.json` returns `{"keys":[]}`, i.e. legacy HS256 shared
   secret, and `getClaims()` silently falls back to `getUser()` for HS256. It becomes
   available only after migrating the project to asymmetric JWT signing keys.
+
+## Account appearance
+
+`src/settings/ThemeProvider` wraps the root layout, including navigation overlays
+and body portals. `/account` renders `ThemePicker`; `app/themes.css` owns all
+interface palettes. EditorialSkin changes typography only, never palette tokens.
+Use semantic CSS tokens for chrome; keep authored colors, instrument identity
+colors, swatches and rendered canvas pixels independent of the account theme.
+
+Settings live in Supabase user metadata under `cabin_settings`. `/api/settings`
+authenticates and checks the expected user id before updating that namespace;
+other metadata and future settings are preserved. Guest preferences use their own
+localStorage key. Signed-in metadata is authoritative on account change/reload;
+per-user cache writes broadcast successful changes to other tabs. Never apply
+a guest or previous account's preference to a newly signed-in user. Failed saves
+remain visible as an unsaved preview with a retry; account switches invalidate
+in-flight UI completions. No database migration is required.

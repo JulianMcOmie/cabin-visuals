@@ -207,7 +207,7 @@ function LaneWindow({ children, testId, title }: { children: JSX.Element; testId
     <div
       data-testid={testId}
       title={title}
-      className="relative h-[120px] select-none overflow-hidden rounded-t-[9px] border-b border-white/[0.06] bg-[#05070c]"
+      className="relative h-[120px] select-none overflow-hidden rounded-t-[9px] border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[var(--bg-canvas-deep)]"
     >
       {children}
     </div>
@@ -269,7 +269,7 @@ function CurveHandle({ padRef, x, y, accent, ariaLabel, ariaMin, ariaMax, ariaNo
       onPointerCancel={onPointerUp}
       onDoubleClick={onReset}
       onKeyDown={onKeyDown}
-      className="absolute z-10 h-[10px] w-[10px] -translate-x-1/2 -translate-y-1/2 touch-none select-none rounded-full border border-white/70 outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+      className="absolute z-10 h-[10px] w-[10px] -translate-x-1/2 -translate-y-1/2 touch-none select-none rounded-full border border-[color-mix(in_srgb,var(--text)_70%,transparent)] outline-none focus-visible:ring-2 focus-visible:ring-white/60"
       style={{ left: `${x}%`, top: `${y}%`, cursor, background: towardWhite(accent, 0.55), boxShadow: `0 0 6px 1px ${withAlpha(accent, 0.8)}` }}
     />
   )
@@ -569,7 +569,7 @@ function CyclePresetRow({ cycle, accent, onCycle }: {
       role="radiogroup"
       aria-label="Cycle shape preset"
       data-testid="automation-cycle-presets"
-      className="flex gap-[2px] rounded-[7px] border border-white/[0.07] bg-black/30 p-[2px]"
+      className="flex gap-[2px] rounded-[7px] border border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_30%,transparent)] p-[2px]"
     >
       {CYCLE_PRESETS.map((preset) => {
         const active = matches(preset.shape)
@@ -582,7 +582,7 @@ function CyclePresetRow({ cycle, accent, onCycle }: {
             title={preset.title}
             onClick={() => onCycle({ ...cycle, ...preset.shape })}
             className={`h-7 min-w-0 flex-1 cursor-pointer rounded-[5px] px-[3px] ${
-              active ? '' : 'hover:bg-white/[0.04]'
+              active ? '' : 'hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)]'
             }`}
             style={active ? { background: withAlpha(accent, 0.2) } : undefined}
           >
@@ -622,7 +622,7 @@ function ShapeSegmented({ burst, accent, onBurst }: {
       role="tablist"
       aria-label="Burst envelope shape"
       data-testid="automation-burst-shape-segmented"
-      className="flex gap-[2px] rounded-[7px] border border-white/[0.07] bg-black/30 p-[2px]"
+      className="flex gap-[2px] rounded-[7px] border border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_30%,transparent)] p-[2px]"
     >
       {SHAPE_OPTIONS.map((option) => {
         const active = option.value === shape
@@ -639,7 +639,7 @@ function ShapeSegmented({ burst, accent, onBurst }: {
               spring: option.value === 'spring' ? burst.spring ?? { ...DEFAULT_BURST_SPRING } : burst.spring,
             })}
             className={`h-[22px] flex-1 cursor-pointer rounded-[5px] text-[9px] font-semibold tracking-[0.1em] ${
-              active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
+              active ? '' : 'text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] hover:text-[var(--text-2)]'
             }`}
             style={active
               ? { background: withAlpha(accent, 0.22), color: towardWhite(accent, 0.6) }
@@ -707,8 +707,8 @@ function ForceSegmented<T extends string>({ label, value, options, accent, onCha
 }) {
   return (
     <div>
-      <div className="mb-[5px] text-[8px] font-semibold tracking-[0.12em] text-white/40">{label}</div>
-      <div role="radiogroup" aria-label={label} className="flex gap-[2px] rounded-[7px] border border-white/[0.07] bg-black/30 p-[2px]">
+      <div className="mb-[5px] text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">{label}</div>
+      <div role="radiogroup" aria-label={label} className="flex gap-[2px] rounded-[7px] border border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_30%,transparent)] p-[2px]">
         {options.map((option) => {
           const active = option.value === value
           return (
@@ -719,7 +719,7 @@ function ForceSegmented<T extends string>({ label, value, options, accent, onCha
               title={option.title}
               onClick={() => onChange(option.value)}
               className={`h-[22px] min-w-0 flex-1 cursor-pointer truncate rounded-[5px] px-1 text-[8.5px] font-semibold tracking-[0.06em] ${
-                active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
+                active ? '' : 'text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] hover:text-[var(--text-2)]'
               }`}
               style={active ? { background: withAlpha(accent, 0.22), color: towardWhite(accent, 0.6) } : undefined}
             >
@@ -742,12 +742,12 @@ function MoreRow({ label, children }: { label: string; children: JSX.Element }) 
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="flex cursor-pointer items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 hover:text-white/60"
+        className="flex cursor-pointer items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-[var(--text-muted)] hover:text-[var(--text-3)]"
       >
         {open ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
         {label}
       </button>
-      {open && <div className="mt-1.5 flex flex-col gap-2.5 rounded-md border border-white/[0.06] bg-black/25 p-2">{children}</div>}
+      {open && <div className="mt-1.5 flex flex-col gap-2.5 rounded-md border border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] p-2">{children}</div>}
     </div>
   )
 }
@@ -791,7 +791,7 @@ function ModeSegmented({ mode, accent, onMode }: {
       role="tablist"
       aria-label="Automation mode"
       data-testid="automation-mode-segmented"
-      className="flex gap-[2px] rounded-[7px] border border-white/[0.07] bg-black/30 p-[2px]"
+      className="flex gap-[2px] rounded-[7px] border border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_30%,transparent)] p-[2px]"
     >
       {MODE_OPTIONS.map((option) => {
         const active = option.value === mode
@@ -803,7 +803,7 @@ function ModeSegmented({ mode, accent, onMode }: {
             title={option.title}
             onClick={() => onMode(option.value)}
             className={`h-[22px] flex-1 cursor-pointer rounded-[5px] text-[9px] font-semibold tracking-[0.1em] ${
-              active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
+              active ? '' : 'text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] hover:text-[var(--text-2)]'
             }`}
             style={active
               ? { background: withAlpha(accent, 0.22), color: towardWhite(accent, 0.6) }
@@ -833,7 +833,7 @@ function CurveSegmented({ interpolation, tension, accent, onInterpolation }: {
         role="radiogroup"
         aria-label="Interpolation curve"
         data-testid="automation-curve-segmented"
-        className="flex gap-[2px] rounded-[7px] border border-white/[0.07] bg-black/30 p-[2px]"
+        className="flex gap-[2px] rounded-[7px] border border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_30%,transparent)] p-[2px]"
       >
         {INTERP_OPTIONS.map((option) => {
           const selected = option.value === interpolation
@@ -846,7 +846,7 @@ function CurveSegmented({ interpolation, tension, accent, onInterpolation }: {
               title={option.label}
               onClick={() => onInterpolation(option.value)}
               className={`h-7 min-w-0 flex-1 cursor-pointer rounded-[5px] px-[3px] ${
-                selected ? '' : 'hover:bg-white/[0.04]'
+                selected ? '' : 'hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)]'
               }`}
               style={selected ? { background: withAlpha(accent, 0.2) } : undefined}
             >
@@ -864,7 +864,7 @@ function CurveSegmented({ interpolation, tension, accent, onInterpolation }: {
           )
         })}
       </div>
-      <p className="mt-1.5 text-center text-[9px] font-semibold tracking-[0.1em] text-white/40">{active.label.toUpperCase()}</p>
+      <p className="mt-1.5 text-center text-[9px] font-semibold tracking-[0.1em] text-[var(--text-3)]">{active.label.toUpperCase()}</p>
     </div>
   )
 }
@@ -933,7 +933,7 @@ function AmountFader({ amount, accent, onAmount }: {
   const fillWidth = Math.abs(frac - neutralFrac)
   return (
     <div className="flex items-center gap-2.5" data-testid="automation-amount-row">
-      <span className="w-[44px] shrink-0 text-[8px] font-semibold tracking-[0.12em] text-white/40">AMOUNT</span>
+      <span className="w-[44px] shrink-0 text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">AMOUNT</span>
       <div
         role="slider"
         tabIndex={0}
@@ -953,7 +953,7 @@ function AmountFader({ amount, accent, onAmount }: {
         className="relative h-4 min-w-0 flex-1 cursor-ew-resize touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-white/50"
       >
         {/* The recessed rail, in the segmented controls' chassis language. */}
-        <div ref={railRef} className="absolute inset-x-0 top-1/2 h-[5px] -translate-y-1/2 rounded-full border border-white/[0.07] bg-black/30" />
+        <div ref={railRef} className="absolute inset-x-0 top-1/2 h-[5px] -translate-y-1/2 rounded-full border border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_30%,transparent)]" />
         {/* Lit fill from the neutral detent to the thumb. */}
         <div
           className="absolute top-1/2 h-[5px] -translate-y-1/2 rounded-full"
@@ -966,15 +966,15 @@ function AmountFader({ amount, accent, onAmount }: {
         />
         {/* The 100% detent mark. */}
         <span
-          className="absolute top-1/2 h-[9px] w-[1.5px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/25"
+          className="absolute top-1/2 h-[9px] w-[1.5px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[color-mix(in_srgb,var(--text)_25%,transparent)]"
           style={{ left: `${neutralFrac * 100}%` }}
         />
         <span
-          className="absolute top-1/2 h-[10px] w-[10px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/70"
+          className="absolute top-1/2 h-[10px] w-[10px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[color-mix(in_srgb,var(--text)_70%,transparent)]"
           style={{ left: `${frac * 100}%`, background: towardWhite(accent, 0.55), boxShadow: `0 0 6px 1px ${withAlpha(accent, 0.8)}` }}
         />
       </div>
-      <span className="w-[34px] shrink-0 text-right font-mono text-[9px] tabular-nums text-white/70">{percent}%</span>
+      <span className="w-[34px] shrink-0 text-right font-mono text-[9px] tabular-nums text-[var(--text-2)]">{percent}%</span>
     </div>
   )
 }
@@ -1030,15 +1030,15 @@ function RangeConsole({ bounds, range, accent, onRange }: {
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-white/[0.06] bg-black/20 p-2">
+    <div className="flex flex-col gap-2 rounded-lg border border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_20%,transparent)] p-2">
       <div className="flex items-center justify-between">
-        <span className="font-mono text-[8px] uppercase tracking-[0.14em] text-white/35">Rows · Range</span>
+        <span className="font-mono text-[8px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Rows · Range</span>
         <button
           onClick={() => emit({ min: lo, max: hi, rows: range?.rows, integer: !integer, curve })}
           aria-pressed={integer}
           title="Count the rows in whole numbers, one per step from min to max"
           className={`h-[18px] rounded-full px-2 font-mono text-[8px] font-semibold tracking-[0.1em] cursor-pointer ${
-            integer ? '' : 'border border-white/10 text-white/40 hover:text-white/70'
+            integer ? '' : 'border border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text-3)] hover:text-[var(--text-2)]'
           }`}
           style={integer ? { background: withAlpha(accent, 0.25), color: towardWhite(accent, 0.6) } : undefined}
         >
@@ -1068,7 +1068,7 @@ function RangeConsole({ bounds, range, accent, onRange }: {
         <div
           role="radiogroup"
           aria-label="Row spread curve"
-          className={`ml-auto flex gap-[2px] rounded-[7px] border border-white/[0.07] bg-black/30 p-[2px] ${
+          className={`ml-auto flex gap-[2px] rounded-[7px] border border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_30%,transparent)] p-[2px] ${
             integer ? 'pointer-events-none opacity-35' : ''
           }`}
         >
@@ -1085,7 +1085,7 @@ function RangeConsole({ bounds, range, accent, onRange }: {
                 title={integer ? 'Whole-number rows are evenly spread' : option.title}
                 onClick={() => emit({ min: lo, max: hi, rows: range?.rows, integer, curve: option.value })}
                 className={`h-[20px] cursor-pointer rounded-[5px] px-1.5 text-[8px] font-semibold tracking-[0.08em] ${
-                  active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
+                  active ? '' : 'text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] hover:text-[var(--text-2)]'
                 }`}
                 style={active ? { background: withAlpha(accent, 0.22), color: towardWhite(accent, 0.6) } : undefined}
               >
@@ -1161,11 +1161,11 @@ export function AutomationUserInterface({
     // shade wash runs to the frame, and round the section itself to sit inside
     // the card's 10px border.
     <section data-testid="automation-user-interface" className="-m-3 rounded-[9px]" style={{ background: shade }}>
-      {onCombine && <label className="flex items-center justify-between gap-3 px-4 py-3 text-xs text-white/70">
+      {onCombine && <label className="flex items-center justify-between gap-3 px-4 py-3 text-xs text-[var(--text-2)]">
         Combine
         <select aria-label="Automation combination mode" value={combine ?? 'override'}
           onChange={(event) => onCombine(event.target.value as 'override' | 'sum' | 'multiply')}
-          className="rounded bg-black/30 px-2 py-1 text-white"
+          className="rounded bg-[color-mix(in_srgb,var(--bg-canvas-deep)_30%,transparent)] px-2 py-1 text-[var(--text)]"
           title="Top to bottom: Sum adds, Multiply scales, Override replaces the value so far.">
           <option value="sum">Sum</option><option value="multiply">Multiply</option><option value="override">Override</option>
         </select>
@@ -1264,7 +1264,7 @@ export function AutomationUserInterface({
             rides the list even when unresolvable, so the select never lies. */}
         {targetOptions && targetOptions.length > 0 && onTarget && (
           <div className="flex items-center gap-2.5" data-testid="automation-target-row">
-            <span className="w-[44px] shrink-0 text-[8px] font-semibold tracking-[0.12em] text-white/40">TARGET</span>
+            <span className="w-[44px] shrink-0 text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">TARGET</span>
             <select
               value={targetKey ?? ''}
               aria-label="Which parameter this lane drives"
@@ -1272,7 +1272,7 @@ export function AutomationUserInterface({
                 const option = targetOptions.find((o) => o.key === e.target.value)
                 if (option && !option.disabled) onTarget(option.key, option.label)
               }}
-              className="h-6 min-w-0 flex-1 cursor-pointer rounded-[5px] border border-white/[0.07] bg-black/30 px-1.5 text-[11px] text-white/70 outline-none"
+              className="h-6 min-w-0 flex-1 cursor-pointer rounded-[5px] border border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_30%,transparent)] px-1.5 text-[11px] text-[var(--text-2)] outline-none"
             >
               {targetKey !== undefined && !targetOptions.some((o) => o.key === targetKey) && (
                 <option value={targetKey} disabled>{targetLabel}</option>
@@ -1393,7 +1393,7 @@ export function AutomationUserInterface({
                   title="Flip which bound the notes own: normally a note is the cycle's high over the floor; inverted it is the low under a constant ceiling"
                   data-testid="automation-cycle-invert"
                   className={`mb-4 h-[22px] rounded-full px-2.5 font-mono text-[8px] font-semibold tracking-[0.1em] cursor-pointer ${
-                    invert ? '' : 'border border-white/10 text-white/40 hover:text-white/70'
+                    invert ? '' : 'border border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text-3)] hover:text-[var(--text-2)]'
                   }`}
                   style={invert ? { background: withAlpha(accent, 0.25), color: towardWhite(accent, 0.6) } : undefined}
                 >
@@ -1405,7 +1405,7 @@ export function AutomationUserInterface({
                   title="End each cycle at its note's end instead of stretching to the next onset - duration matters, a lone note cycles, and the gap after a note lets go"
                   data-testid="automation-cycle-notespan"
                   className={`mb-4 h-[22px] rounded-full px-2.5 font-mono text-[8px] font-semibold tracking-[0.1em] cursor-pointer ${
-                    cycle.noteSpan ? '' : 'border border-white/10 text-white/40 hover:text-white/70'
+                    cycle.noteSpan ? '' : 'border border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text-3)] hover:text-[var(--text-2)]'
                   }`}
                   style={cycle.noteSpan ? { background: withAlpha(accent, 0.25), color: towardWhite(accent, 0.6) } : undefined}
                 >
@@ -1465,7 +1465,7 @@ export function AutomationUserInterface({
               title="Re-roll the noise (a new random take; each take replays identically)"
               aria-label="Re-roll the noise seed"
               data-testid="automation-noise-reroll"
-              className="mb-4 flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-white/50 hover:bg-white/[0.08] hover:text-white/80"
+              className="mb-4 flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--text)_4%,transparent)] text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-[var(--text-2)]"
             >
                 <Dices size={13} />
               </button>
@@ -1558,18 +1558,18 @@ export function AutomationUserInterface({
         )}
 
         {/* What this lane does, in the mode it is in. */}
-        <p className="text-[10px] leading-relaxed text-white/40">
+        <p className="text-[10px] leading-relaxed text-[var(--text-3)]">
           {mode === 'burst' ? (
-            <>Every note fires this envelope on <span className="text-white/75">{targetLabel}</span>, starting from
+            <>Every note fires this envelope on <span className="text-[var(--text-2)]">{targetLabel}</span>, starting from
               whatever value is underneath and heading for the note&apos;s own row. Velocity is the note&apos;s intensity;
               between bursts the lane lets go.</>
           ) : mode === 'cycle' ? (
             <>
               {cycle?.noteSpan ? (
-                <>The curve plays once over each note on <span className="text-white/75">{targetLabel}</span>, onset
+                <>The curve plays once over each note on <span className="text-[var(--text-2)]">{targetLabel}</span>, onset
                   to note end; in the gap after a note the lane lets go. </>
               ) : (
-                <>The curve plays once between each pair of note onsets on <span className="text-white/75">{targetLabel}</span>,
+                <>The curve plays once between each pair of note onsets on <span className="text-[var(--text-2)]">{targetLabel}</span>,
                   stretched to fit; outside the onsets the lane lets go. </>
               )}
               {cycle?.invert ? (
@@ -1580,21 +1580,21 @@ export function AutomationUserInterface({
               )}
             </>
           ) : mode === 'force' && force ? (
-            <>Each note applies <em className="not-italic text-white/75">{force.push === 'kick' ? 'an instant kick' : force.push === 'thrust' ? 'a steady thrust for as long as it is held' : 'a force that swells in and out'}</em> to
-              <span className="text-white/75"> {targetLabel}</span> - {force.aim === 'signed' ? 'the row is the force, and the middle row is none' : 'the row is where it gets pushed'} - and
+            <>Each note applies <em className="not-italic text-[var(--text-2)]">{force.push === 'kick' ? 'an instant kick' : force.push === 'thrust' ? 'a steady thrust for as long as it is held' : 'a force that swells in and out'}</em> to
+              <span className="text-[var(--text-2)]"> {targetLabel}</span> - {force.aim === 'signed' ? 'the row is the force, and the middle row is none' : 'the row is where it gets pushed'} - and
               {force.drag === 'friction' ? ' friction brings it to a crisp stop.' : force.drag === 'linear' ? ' drag bleeds the speed off smoothly.' : force.drag === 'quad' ? ' air resistance bites at speed, then lets it float.' : ' nothing slows it down.'}
               {force.field === 'gravity' ? ' Gravity is always pulling it toward the bottom.' : force.field === 'pull' ? ' A steady pull always draws it back toward HOME.' : ' Nothing else acts on it, so it stays where it lands.'}</>
           ) : mode === 'physics' ? (
-            <>Each note sets a value and crossing time for <span className="text-white/75">{targetLabel}</span>.
+            <>Each note sets a value and crossing time for <span className="text-[var(--text-2)]">{targetLabel}</span>.
               Velocity and acceleration stay continuous through every note; the curve can swing beyond the note range.
               Positive velocity crosses upward, negative downward. Controls use lane ranges per beat and per beat squared.
               Motion eases from and to rest one beat before the first and after the last note.</>
           ) : mode === 'noise' ? (
-            <>While a note is held, <span className="text-white/75">{targetLabel}</span> wanders around the note&apos;s
+            <>While a note is held, <span className="text-[var(--text-2)]">{targetLabel}</span> wanders around the note&apos;s
               row; between notes the lane lets go. The seed is fixed per take, so scrubbing and export replay the
               exact same wobble.</>
           ) : (
-            <>Each note is a keyframe on <span className="text-white/75">{targetLabel}</span> - its row is the value,
+            <>Each note is a keyframe on <span className="text-[var(--text-2)]">{targetLabel}</span> - its row is the value,
               its position the time. {interpolation === 'step'
                 ? 'Step holds each value until the next.'
                 : interpolation === 'spline'

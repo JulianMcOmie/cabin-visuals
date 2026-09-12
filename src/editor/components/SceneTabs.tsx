@@ -36,13 +36,13 @@ function SceneTabMenu({ x, y, canDelete, onDuplicate, onDelete, onClose }: {
         onContextMenu={(e) => { e.preventDefault(); onClose() }}
       />
       <div
-        className="fixed z-50 min-w-[140px] py-1 rounded-md border border-zinc-700 bg-[#202024] text-xs shadow-lg shadow-black/50 select-none"
+        className="fixed z-50 min-w-[140px] py-1 rounded-md border border-[var(--border-strong)] bg-[var(--bg-elevated)] text-xs shadow-lg shadow-black/50 select-none"
         style={{ left, top: y }}
         onContextMenu={(e) => e.preventDefault()}
       >
         <button
           onClick={() => { onDuplicate(); onClose() }}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-zinc-200 hover:bg-zinc-700/60 cursor-pointer"
+          className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[var(--text)] hover:bg-[var(--bg-elevated)]/60 cursor-pointer"
         >
           <Copy size={12} /> Duplicate
         </button>
@@ -194,7 +194,7 @@ export function SceneTabs() {
     // Slightly translucent (the /85) so the workspace's ambient light passes
     // through the seam between visualizer and timeline instead of stopping at
     // an opaque bar - the strip sits exactly on that boundary.
-    <div className="flex h-[34px] [@media(pointer:coarse)]:h-[52px] flex-shrink-0 items-center gap-3 border-t border-[rgba(255,255,255,0.06)] bg-[var(--bg-app)]/85 px-3 select-none">
+    <div className="flex h-[34px] [@media(pointer:coarse)]:h-[52px] flex-shrink-0 items-center gap-3 border-t border-[var(--border-subtle)] bg-[var(--bg-app)]/85 px-3 select-none">
       <div
         ref={tabsRef}
         className="flex h-full min-w-0 flex-1 items-center gap-1 overflow-x-auto no-scrollbar"
@@ -226,10 +226,10 @@ export function SceneTabs() {
                 if (!scene.isMain) setMenu({ x: e.clientX, y: e.clientY, id })
               }}
               title={scene.isMain ? 'The final composition - composes the other scenes into the exported frame' : `${scene.name} · Double-click to rename · Right-click for options`}
-              className={`flex h-[26px] [@media(pointer:coarse)]:h-11 flex-shrink-0 items-center rounded-[5px] border px-3 font-sans text-[13px] leading-none cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#c1c4ca] ${
+              className={`flex h-[26px] [@media(pointer:coarse)]:h-11 flex-shrink-0 items-center rounded-[5px] border px-3 font-sans text-[13px] leading-none cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--text-2)] ${
                 active
-                  ? 'border-[#3e4148] bg-[#1b1d22] text-[#c1c4ca]'
-                  : 'border-transparent text-[#858991] hover:bg-white/[0.03] hover:text-[#b0b4bc]'
+                  ? 'border-[var(--border-strong)] bg-[var(--bg-elevated)] text-[var(--text-2)]'
+                  : 'border-transparent text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_3%,transparent)] hover:text-[var(--text-2)]'
               }`}
             >
               <span className="max-w-44 truncate">
@@ -241,7 +241,7 @@ export function SceneTabs() {
         <button
           onClick={create}
           title="Add scene"
-          className="h-[26px] [@media(pointer:coarse)]:h-11 flex-shrink-0 rounded-[5px] border border-transparent px-3 font-sans text-[13px] leading-none text-[#858991] hover:bg-white/[0.03] hover:text-[#b0b4bc] cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#c1c4ca]"
+          className="h-[26px] [@media(pointer:coarse)]:h-11 flex-shrink-0 rounded-[5px] border border-transparent px-3 font-sans text-[13px] leading-none text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_3%,transparent)] hover:text-[var(--text-2)] cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--text-2)]"
         >
           + new scene
         </button>
@@ -250,7 +250,7 @@ export function SceneTabs() {
         {/* Timeline zoom lives here so it never covers track content. The two
             sliders share one pill: they are one control ("how big is the
             timeline"), not two unrelated settings. */}
-        <div className="ml-1 flex h-6 flex-shrink-0 items-center gap-2.5 rounded-full bg-white/[0.03] px-2.5 hover:bg-white/[0.06]">
+        <div className="ml-1 flex h-6 flex-shrink-0 items-center gap-2.5 rounded-full bg-[color-mix(in_srgb,var(--text)_3%,transparent)] px-2.5 hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]">
           <ZoomSlider
             icon={<BeatWidthGlyph />}
             label="Horizontal zoom - beat width"

@@ -10,7 +10,7 @@ import { useUIStore } from '../store/UIStore'
  * The editor's modal shell - one voice for every dialog that floats over the
  * workspace (Export, the signup gate inside it, Save to cloud).
  *
- * The look is the "DAW Console 1a" dialog: a scrim, a #0f1118 card behind a
+ * The look is the "DAW Console 1a" dialog: a scrim, a themed panel behind a
  * white-alpha hairline at radius 14, and an Archivo 700 uppercase title with
  * a 30px close square. The motion is Radix/shadcn's dialog voice - fade + zoom
  * from 95%, 200ms in, 150ms out, because dismissal should feel obedient.
@@ -91,11 +91,9 @@ export function EditorDialog({
   /** Supply one if the caller needs to hit-test the panel itself. */
   panelRef?: RefObject<HTMLDivElement | null>
   /**
-   * Classes for the SCRIM. The dialog portals to document.body, so it lands
-   * outside any wrapper the caller sits in - a screen under `<EditorialSkin>`
-   * passes that skin's classes here or its dialog wears the unskinned palette
-   * (editor blue on a teal page). Editor callers want exactly that default and
-   * pass nothing.
+   * Classes for the SCRIM. The dialog portals to document.body; callers can
+   * pass editorial typography here. The account palette already inherits
+   * from the document root, including inside nested dialogs.
    */
   portalClassName?: string
 }) {
@@ -135,7 +133,7 @@ export function EditorDialog({
 
   const nested = scrim === 'nested'
   const chrome = variant === 'chrome'
-  // The two looks, kept byte-for-byte as they shipped.
+  // Both layouts inherit the account palette.
   const pad = chrome ? 'px-[26px] pb-[22px] pt-5' : 'p-[26px]'
   const headRow = chrome ? 'mb-4' : 'mb-5'
   const titleClass = chrome
@@ -143,13 +141,13 @@ export function EditorDialog({
     : 'text-[15px] font-semibold text-[var(--text)]'
 
   const scrimStyle = nested
-    ? { background: 'rgba(8,9,13,0.45)', backdropFilter: 'blur(6px)' }
-    : { background: 'rgba(8,9,13,0.72)', backdropFilter: 'blur(2px)' }
+    ? { background: 'color-mix(in srgb,var(--bg-canvas-deep) 45%,transparent)', backdropFilter: 'blur(6px)' }
+    : { background: 'color-mix(in srgb,var(--bg-canvas-deep) 72%,transparent)', backdropFilter: 'blur(2px)' }
   const scrimClass = `fixed inset-0 flex items-center justify-center ${nested ? 'z-[110]' : 'z-[100]'} ${portalClassName}`
   // --gsi-surface travels with the card colour it has to match: Google's
   // personalized sign-in button falls back to a white base, and globals.css
   // repaints it onto this value (see the .gsi-host rules there).
-  const panelClass = `relative ${width} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[14px] border border-[rgba(255,255,255,0.1)] bg-[#0f1118] [--gsi-surface:#0f1118] ${pad} shadow-[0_30px_80px_rgba(0,0,0,0.6)]`
+  const panelClass = `relative ${width} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[14px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[var(--bg-panel)] [--gsi-surface:var(--bg-panel)] ${pad} shadow-[0_30px_80px_rgba(0,0,0,0.6)]`
   const onScrimDown = (e: { target: EventTarget | null; currentTarget: EventTarget | null }) => {
     if (dismissible && dismissOnScrimClick && e.target === e.currentTarget) onClose?.()
   }

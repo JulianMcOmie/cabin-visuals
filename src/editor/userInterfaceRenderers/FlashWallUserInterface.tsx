@@ -100,7 +100,7 @@ function WallPreview({ zones, layout, env, idle, gap, texture, cellColors }: {
     <div
       ref={hostRef}
       data-testid="flash-wall-preview"
-      className="relative h-[112px] overflow-hidden rounded-t-[9px] border-b border-white/[0.06] bg-[#05070c]"
+      className="relative h-[112px] overflow-hidden rounded-t-[9px] border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[var(--bg-canvas-deep)]"
     >
       <div
         className="grid h-full w-full"
@@ -156,7 +156,7 @@ function Segmented({ options, value, accent, ariaLabel, onChange }: {
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className="flex gap-[2px] rounded-[7px] border border-white/[0.07] bg-black/30 p-[2px]"
+      className="flex gap-[2px] rounded-[7px] border border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_30%,transparent)] p-[2px]"
     >
       {options.map((option) => {
         const active = option.value === value
@@ -168,7 +168,7 @@ function Segmented({ options, value, accent, ariaLabel, onChange }: {
             title={option.title}
             onClick={() => onChange(option.value)}
             className={`h-[22px] flex-1 cursor-pointer rounded-[5px] px-2 text-[9px] font-semibold tracking-[0.1em] ${
-              active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
+              active ? '' : 'text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] hover:text-[var(--text-2)]'
             }`}
             style={active
               ? { background: withAlpha(accent, 0.22), color: towardWhite(accent, 0.6) }
@@ -192,21 +192,21 @@ function ZoneStepper({ bound, accent }: { bound: UserInterfaceParameter; accent:
       aria-label={direction === 1 ? 'More zones' : 'Fewer zones'}
       onClick={() => bound.setValue(clamp(n + direction, definition.min, definition.max))}
       disabled={direction === -1 ? n <= definition.min : n >= definition.max}
-      className="h-[22px] w-6 cursor-pointer rounded-[5px] font-mono text-[11px] leading-none text-white/50 hover:bg-white/[0.04] hover:text-white/80 disabled:cursor-default disabled:opacity-30"
+      className="h-[22px] w-6 cursor-pointer rounded-[5px] font-mono text-[11px] leading-none text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] hover:text-[var(--text-2)] disabled:cursor-default disabled:opacity-30"
     >
       {glyph}
     </button>
   )
   return (
     <div className="flex flex-col items-center">
-      <div className="flex items-center gap-[2px] rounded-[7px] border border-white/[0.07] bg-black/30 p-[2px]">
+      <div className="flex items-center gap-[2px] rounded-[7px] border border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_30%,transparent)] p-[2px]">
         {button(-1, '−')}
         <span className="w-6 text-center font-mono text-[11px] tabular-nums" style={{ color: towardWhite(accent, 0.5) }}>
           {n}
         </span>
         {button(1, '+')}
       </div>
-      <span className="mt-[3px] text-[8px] font-semibold tracking-[0.12em] text-white/40">ZONES</span>
+      <span className="mt-[3px] text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">ZONES</span>
     </div>
   )
 }
@@ -389,7 +389,7 @@ export const FlashWallUserInterfaceRenderer: UserInterfaceRendererDefinition = (
             accent={accent}
             onChange={(v) => colorMode.setValue(v)}
           />
-          <span className="mt-[3px] text-[8px] font-semibold tracking-[0.12em] text-white/40">ZONE COLOR</span>
+          <span className="mt-[3px] text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">ZONE COLOR</span>
         </div>
       </div>
     </section>

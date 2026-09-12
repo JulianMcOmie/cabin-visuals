@@ -163,7 +163,7 @@ function ScrubField({ trackId, spec }: { trackId: string; spec: FieldSpec }) {
           })
         }}
         onDoubleClick={() => resetTransformValues(trackId, [spec.key])}
-        className={`flex-1 cursor-ns-resize touch-none select-none rounded border border-[var(--border)] bg-black/25 px-2 py-1 text-right font-mono text-[12px] tabular-nums hover:border-[var(--border-strong)] ${
+        className={`flex-1 cursor-ns-resize touch-none select-none rounded border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] px-2 py-1 text-right font-mono text-[12px] tabular-nums hover:border-[var(--border-strong)] ${
           onSnap ? 'text-[var(--accent)]' : 'text-[var(--text)]'
         }`}
       >
@@ -309,7 +309,7 @@ function IsoViewport({ trackId, scale }: { trackId: string; scale: number }) {
       viewBox={`0 0 ${ISO_W} ${ISO_H}`}
       width={Math.round(ISO_W * scale)}
       height={Math.round(ISO_H * scale)}
-      className="cursor-crosshair touch-none rounded-md border border-[var(--border)] bg-black/30"
+      className="cursor-crosshair touch-none rounded-md border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_30%,transparent)]"
       onPointerDown={(e) => {
         if (e.button !== 0) return
         dragPosition(e)

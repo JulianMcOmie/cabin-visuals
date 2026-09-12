@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { ThemePicker } from '@/settings/ThemePicker'
 import { InstantLink as Link } from '@/components/instantNavigation'
 import { Loader2 } from 'lucide-react'
 import { CabinLogo } from '../../src/components/CabinLogo'
@@ -9,9 +10,7 @@ import { usePlan, openBillingPortal } from '../../src/billing/usePlan'
 import { useAuth } from '../../src/persistence/hooks/useAuth'
 import { track } from '../../src/analytics/analytics'
 
-// Account settings: the home for plan/billing. Console card style, same nav
-// skeleton as /pricing. Grows real settings later; today it answers "how do I
-// manage my subscription?".
+// Account settings shares the global theme provider with every route.
 
 const label = 'font-mono text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--text-muted)]'
 
@@ -43,7 +42,8 @@ export default function AccountPage() {
       </header>
 
       <main className="mx-auto max-w-xl px-6 pt-16 pb-24">
-        <h1 className="text-2xl font-semibold text-[var(--text)]">Account</h1>
+        <h1 className="text-2xl font-semibold text-[var(--text)]">Account settings</h1>
+        <ThemePicker />
 
         {loading ? null : !hasAccount ? (
           <div className="mt-8 rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-7">

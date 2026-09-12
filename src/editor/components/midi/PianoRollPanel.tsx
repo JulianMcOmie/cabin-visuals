@@ -57,11 +57,11 @@ function ToolbarSelect({ value, onChange, title, children }: {
         value={value}
         onChange={onChange}
         title={title}
-        className="appearance-none h-5 pl-1.5 pr-[18px] rounded bg-zinc-800/70 hover:bg-zinc-700/70 text-[10px] text-zinc-300 outline-none cursor-pointer "
+        className="appearance-none h-5 pl-1.5 pr-[18px] rounded bg-[var(--bg-panel-raised)]/70 hover:bg-[var(--bg-elevated)]/70 text-[10px] text-[var(--text-2)] outline-none cursor-pointer "
       >
         {children}
       </select>
-      <ChevronDown size={10} className="absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-500" />
+      <ChevronDown size={10} className="absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-muted)]" />
     </div>
   )
 }
@@ -80,7 +80,7 @@ function ToolbarSlider({ label, title, value, min, max, step, accent, onChange }
 }) {
   return (
     <div className="flex flex-shrink-0 items-center gap-1" title={title}>
-      <span className="text-[10px] text-zinc-600">{label}</span>
+      <span className="text-[10px] text-[var(--text-muted)]">{label}</span>
       <input
         type="range"
         min={min}
@@ -694,14 +694,14 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   }, [])
 
   return (
-    <div ref={containerRef} className="flex flex-col h-full border-t border-zinc-800">
+    <div ref={containerRef} className="flex flex-col h-full border-t border-[var(--border)]">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 h-8 px-3 bg-zinc-900/60 border-b border-zinc-800 flex-shrink-0">
+      <div className="flex items-center gap-2 h-8 px-3 bg-[var(--bg-panel)]/60 border-b border-[var(--border)] flex-shrink-0">
         <button
           onClick={onClose}
           title="Close (Esc)"
           data-midi-close=""
-          className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 "
+          className="flex items-center justify-center w-5 h-5 rounded bg-[var(--bg-panel-raised)] hover:bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] "
         >
           <X size={12} />
         </button>
@@ -719,7 +719,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
           onClick={() => setSnapEnabled(!snapEnabled)}
           title={snapEnabled ? 'Snap to grid (on)' : 'Snap to grid (off)'}
           className={`px-2 h-5 rounded text-[10px] font-medium cursor-pointer ${
-            snapEnabled ? '' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
+            snapEnabled ? '' : 'text-[var(--text-muted)] hover:text-[var(--text-2)] hover:bg-[var(--bg-panel-raised)]'
           }`}
           style={snapEnabled ? { background: accent.pillBg, color: accent.pillText } : undefined}
         >
@@ -733,9 +733,9 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
           onClick={() => setMidiVimEnabled(!midiVimEnabled)}
           title={midiVimEnabled ? 'midi vim is on — Esc leaves it, ? lists the keys' : 'midi vim: type notes from the keyboard (double-tap Shift)'}
           className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded font-mono text-[11px] leading-none cursor-pointer ${
-            midiVimEnabled ? '' : 'text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300'
+            midiVimEnabled ? '' : 'text-[var(--text-muted)] hover:bg-[var(--bg-panel-raised)] hover:text-[var(--text-2)]'
           }`}
-          style={midiVimEnabled ? { background: VIM_ACCENT, color: '#0b0d12' } : undefined}
+          style={midiVimEnabled ? { background: VIM_ACCENT, color: 'var(--on-accent)' } : undefined}
           aria-pressed={midiVimEnabled}
         >
           ⌶
@@ -755,11 +755,11 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
 
         {automation && (
           <>
-            <div className="w-px h-4 bg-zinc-800" />
+            <div className="w-px h-4 bg-[var(--bg-panel-raised)]" />
             {/* The lane's MODE, the same three the settings panel shows: value
                 keyframes on a curve, seeded noise gates, or ADSR bursts. The
                 mode's own controls follow it in the toolbar. */}
-            <div className="flex flex-shrink-0 items-center gap-[2px] rounded bg-zinc-800/50 p-[2px]">
+            <div className="flex flex-shrink-0 items-center gap-[2px] rounded bg-[var(--bg-panel-raised)]/50 p-[2px]">
               {MODE_OPTIONS.map((option) => {
                 const active = option.value === mode
                 return (
@@ -768,7 +768,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
                     onClick={() => setAutomationMode(trackId, option.value)}
                     title={option.title}
                     className={`flex items-center gap-1 px-1.5 h-[18px] rounded-[3px] text-[10px] font-medium cursor-pointer ${
-                      active ? '' : 'text-zinc-500 hover:text-zinc-300'
+                      active ? '' : 'text-[var(--text-muted)] hover:text-[var(--text-2)]'
                     }`}
                     style={active ? { background: accent.pillBg, color: accent.pillText } : undefined}
                   >
@@ -811,14 +811,14 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
                 <button
                   onClick={() => setTrackNoise(trackId, { ...noise, seed: Math.floor(Math.random() * 1e9) })}
                   title="Re-roll the noise (new random take; each take replays identically)"
-                  className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                  className="flex items-center justify-center w-5 h-5 rounded bg-[var(--bg-panel-raised)] hover:bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer"
                 >
                   <Dices size={11} />
                 </button>
               </>
             ) : (
               <>
-                <span className="text-[10px] text-zinc-600" title="Interpolation between keyframes">Interp</span>
+                <span className="text-[10px] text-[var(--text-muted)]" title="Interpolation between keyframes">Interp</span>
                 <ToolbarSelect
                   value={interpolation}
                   onChange={(e) => setTrackInterpolation(trackId, e.target.value as InterpolationMode)}
@@ -836,7 +836,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
         <div className="flex-1" />
 
         <div className="flex items-center gap-1.5" title="Horizontal zoom (Alt+scroll sideways)">
-          <span className="text-[10px] text-zinc-600">H</span>
+          <span className="text-[10px] text-[var(--text-muted)]">H</span>
           <input
             type="range"
             min={5}
@@ -849,7 +849,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
           />
         </div>
         <div className="flex items-center gap-1.5" title="Vertical zoom (Alt+scroll)">
-          <span className="text-[10px] text-zinc-600">V</span>
+          <span className="text-[10px] text-[var(--text-muted)]">V</span>
           <input
             type="range"
             min={MIDI_ROW_HEIGHT_MIN}

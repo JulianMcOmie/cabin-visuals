@@ -509,7 +509,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
               {tagList.slice(0, 3).map((t) => (
                 <span
                   key={t}
-                  className="flex-shrink-0 max-w-[64px] truncate rounded-[3px] border border-[var(--border)] bg-white/10 px-1 text-[9px] leading-[13px] text-[var(--text-3)]"
+                  className="flex-shrink-0 max-w-[64px] truncate rounded-[3px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-1 text-[9px] leading-[13px] text-[var(--text-3)]"
                 >
                   {t}
                 </span>
@@ -549,17 +549,17 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
             >
               {/* Logic-style horizontal fader: a THIN groove with a cap that
                   stands well taller than the track it rides. */}
-              <div className="relative h-[3px] w-full rounded-full bg-black/55 shadow-[inset_0_1px_1px_rgba(0,0,0,0.65)]">
+              <div className="relative h-[3px] w-full rounded-full bg-[color-mix(in_srgb,var(--bg-canvas-deep)_55%,transparent)] shadow-[inset_0_1px_1px_rgba(0,0,0,0.65)]">
                 <div
                   className="absolute inset-y-0 left-0 rounded-l-full opacity-90 group-hover:opacity-100"
                   style={{ width: `${opacityValue * 100}%`, background: trackChromeColor(identityColor) }}
                 />
-                <div className="absolute left-1/2 top-[-3px] h-[2px] w-px bg-white/25" />
+                <div className="absolute left-1/2 top-[-3px] h-[2px] w-px bg-[color-mix(in_srgb,var(--text)_25%,transparent)]" />
                 <div
                   className="absolute top-1/2 h-[15px] w-[8px] -translate-x-1/2 -translate-y-1/2 rounded-[2.5px] border border-black/65 bg-gradient-to-b from-[#e3e5ea] to-[#b9bcc4] shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
                   style={{ left: `${opacityValue * 100}%` }}
                 >
-                  <div className="absolute inset-y-[2px] left-1/2 w-px -translate-x-1/2 bg-black/50" />
+                  <div className="absolute inset-y-[2px] left-1/2 w-px -translate-x-1/2 bg-[color-mix(in_srgb,var(--bg-canvas-deep)_50%,transparent)]" />
                 </div>
               </div>
             </div>
@@ -581,7 +581,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
             className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center active:scale-75 cursor-pointer ${
               track.muted
                 ? 'bg-[var(--accent)] text-[var(--on-accent)]'
-                : 'bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-2)]'
+                : 'bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text-muted)] hover:text-[var(--text-2)]'
             }`}
           >
             M
@@ -598,7 +598,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
             className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center active:scale-75 cursor-pointer ${
               track.solo
                 ? 'bg-[var(--warn)] text-[var(--on-accent)]'
-                : 'bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-2)]'
+                : 'bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text-muted)] hover:text-[var(--text-2)]'
             }`}
           >
             S
@@ -619,8 +619,8 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
                 tagsAnchor
                   ? 'bg-[var(--accent)] text-[var(--on-accent)]'
                   : tagList.length > 0
-                    ? 'bg-white/10 text-[var(--accent)] hover:text-[var(--accent-hover)]'
-                    : 'bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-2)]'
+                    ? 'bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--accent)] hover:text-[var(--accent-hover)]'
+                    : 'bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text-muted)] hover:text-[var(--text-2)]'
               }`}
             >
               <Tag size={10} />
@@ -639,7 +639,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
               className={`w-4 h-4 rounded-[3px] flex items-center justify-center active:scale-75 cursor-pointer ${
                 panelAnchor
                   ? 'bg-[var(--accent)] text-[var(--on-accent)]'
-                  : 'bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-2)]'
+                  : 'bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text-muted)] hover:text-[var(--text-2)]'
               }`}
             >
               <Move3d size={10} />
@@ -670,7 +670,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
         // the song end every totalBars bump re-rendered EVERY row for what is
         // purely a CSS width change (measured 2026-08-19: 4 bumps x the whole
         // stack, the bulk of the drag's foreign-row renders).
-        className={`relative flex-1 ${isDarkenedRow ? 'bg-black/10' : ''} ${isLast ? '' : 'border-b border-[var(--timeline-row-line,var(--border))]'}`}
+        className={`relative flex-1 ${isDarkenedRow ? 'bg-[color-mix(in_srgb,var(--bg-canvas-deep)_10%,transparent)]' : ''} ${isLast ? '' : 'border-b border-[var(--timeline-row-line,var(--border))]'}`}
         // A muted track's blocks go gray (hue stripped, alpha kept) so the mute
         // state reads from the MIDI side without the blocks fading into the lane.
         style={{ filter: track.muted ? 'grayscale(1)' : undefined }}
