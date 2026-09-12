@@ -50,6 +50,9 @@ export interface PanelBindings {
   readonly missing: boolean
 }
 
+/** Create and consume a fresh binder during each render: lookups claim keys
+ *  destructively. If memoizing, memoize the resolved bindings together, never
+ *  reuse a binder whose pool was consumed by an earlier render. */
 export function bindPanel(parameters: readonly UserInterfaceParameter[]): PanelBindings {
   const pool = new Map(parameters.map((parameter) => [parameter.definition.key, parameter]))
   let missing = false

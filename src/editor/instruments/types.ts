@@ -17,8 +17,9 @@ interface ParamBase {
    *  the track's value for `showIf` is >= 0.5. Booleans are 0/1, and counts
    *  work too (e.g. delay params gated on `delayTaps` >= 1). 'key=2' pins to
    *  ONE select value instead (e.g. `layoutMode=1` for a scatter-only
-   *  slider). The param keeps its value while hidden - hiding is
-   *  presentation only. */
+   *  slider); 'key=0|1' accepts any listed select value. The param keeps its
+   *  value while hidden - hiding is presentation only. Instrument panels
+   *  receive only visible parameters, so gated bindings must be optional. */
   showIf?: string
 }
 export interface NumberParamDef extends ParamBase {
