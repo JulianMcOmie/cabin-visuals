@@ -106,6 +106,7 @@ export function gatedMoverOrSplitter(
   selection: CopyTargetSelection,
 ): MoverOrSplitter {
   const gated: MoverOrSplitter = {
+    cachePolicy: entry.cachePolicy,
     apply(visualCopy, context) {
       if (!copyIsTargeted(context.index, context.count, selection)) return [visualCopy]
       return entry.apply(visualCopy, context)

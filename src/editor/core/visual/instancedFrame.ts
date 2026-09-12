@@ -51,8 +51,6 @@ export interface InstancedCopyFrame {
   copyColor(i: number, sourceHex: string, out: Color): Color
 }
 
-const _scale = new Matrix4()
-
 export function useInstancedCopyFrame(
   trackId: string,
   cb: (frame: InstancedCopyFrame) => void,
@@ -60,19 +58,27 @@ export function useInstancedCopyFrame(
   const { getObjectState, getVisualCopies } = useVisualEngine()
   const frameRef = useRef<InstancedCopyFrame | null>(null)
   const scratchTint = useRef(new Color()).current
+  const scratchSourceColor = useRef(new Color()).current
+  const sourceHexRef = useRef<string | null>(null)
   const scaleInstances = useContext(InstancedScaleContext)
-  const effectScaleRef = useRef(1)
+  const placement = useRef(new Matrix4()).current
+  const meshScale = useRef(new Matrix4()).current
   useFrame(() => {
     const state = getObjectState(trackId)
     if (!state) return
     const copies = getVisualCopies(trackId)
     // Same beat source as ObjectRenderer's scale evaluation: the REAL playhead
     // (or export override), not the object's warped beat.
-    effectScaleRef.current = scaleInstances.length === 0 ? 1 : evaluatePostMoverScale(
+    const effectScale = scaleInstances.length === 0 ? 1 : evaluatePostMoverScale(
       scaleInstances,
       state.effectOverrides,
       getBeatOverride() ?? (previewRuntime.worker ? previewRuntime.beat : useTimeStore.getState().currentBeat),
     )
+    // Preserve the multiplication order while sharing the track's common
+    // prefix and scalar matrix across all copies in this frame.
+    composePostMoverScale(state.world, undefined, effectScale, placement)
+    if (state.meshScale !== 1) meshScale.makeScale(state.meshScale, state.meshScale, state.meshScale)
+    sourceHexRef.current = null
     let frame = frameRef.current
     if (!frame) {
       frame = {
@@ -80,9 +86,10 @@ export function useInstancedCopyFrame(
         copies,
         composeCopyMatrix(i, out) {
           const f = frameRef.current as InstancedCopyFrame
-          composePostMoverScale(f.state.world, f.copies[i]?.transform, effectScaleRef.current, out)
-          const s = f.state.meshScale
-          if (s !== 1) out.multiply(_scale.makeScale(s, s, s))
+          out.copy(placement)
+          const transform = f.copies[i]?.transform
+          if (transform) out.multiply(transform)
+          if (f.state.meshScale !== 1) out.multiply(meshScale)
           return out
         },
         copyFade(i) {
@@ -92,7 +99,17 @@ export function useInstancedCopyFrame(
         },
         copyColor(i, sourceHex, out) {
           const f = frameRef.current as InstancedCopyFrame
-          out.set(sourceHex)
+          if (sourceHexRef.current === sourceHex) {
+            out.copy(scratchSourceColor)
+          } else if (/^#[\da-f]{6}$/i.test(sourceHex)) {
+            scratchSourceColor.set(sourceHex)
+            sourceHexRef.current = sourceHex
+            out.copy(scratchSourceColor)
+          } else {
+            // The public contract is #rrggbb. Keep Three's exact fallback
+            // behavior for other CSS/invalid strings rather than caching it.
+            out.set(sourceHex)
+          }
           const shift = f.copies[i]?.colorShift
           if (shift) applyColorShiftToColor(out, shift, scratchTint)
           return out

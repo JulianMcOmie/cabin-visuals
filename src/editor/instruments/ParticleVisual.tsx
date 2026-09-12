@@ -79,8 +79,16 @@ export function ParticleInstanced({ trackId }: { trackId: string }) {
     }
     mesh.count = live
     mesh.visible = live > 0
-    mesh.instanceMatrix.needsUpdate = true
-    colors.needsUpdate = true
+    // The pool retains peak capacity, but hidden slots are not drawn. Upload
+    // only the freshly packed live prefix, including after a shrink or seek.
+    mesh.instanceMatrix.clearUpdateRanges()
+    colors.clearUpdateRanges()
+    if (live > 0) {
+      mesh.instanceMatrix.addUpdateRange(0, live * 16)
+      colors.addUpdateRange(0, live * 4)
+      mesh.instanceMatrix.needsUpdate = true
+      colors.needsUpdate = true
+    }
   })
   return <group ref={root} />
 }

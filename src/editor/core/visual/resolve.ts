@@ -21,6 +21,7 @@ import { framedMoverOrSplitter } from '../visualCopies/moverFrame'
 import { splitterWithChildChain } from '../visualCopies/splitterChildChain'
 import type { MoverOrSplitter } from '../visualCopies/types'
 import { structuralCopyCount } from '../visualCopies/resolveVisualCopies'
+import { memoizeEvaluation } from '../visualCopies/evaluationMemo'
 import { gatedMoverOrSplitter } from '../visualCopies/copyTargets'
 import { bypassGated } from '../visualCopies/bypass'
 import {
@@ -662,27 +663,24 @@ function resolveOwnMoverOrSplitter(track: Track, p: ProjectSnapshot): MoverOrSpl
   const settings = mergeDefinitionSettings(def, track.inputValues, track.stringParams)
   const notes = flattenTrackNotes(track, p)
   const resolved = def.resolve({ settings, notes })
+  // Registered definitions close over immutable resolved document inputs and
+  // obey the pure-copy contract. Only definitions with an explicit static
+  // declaration may reuse outputs across different beats.
+  resolved.cachePolicy ??= 'beat'
   const automation = resolveAutomationLanes(track, def.params, p)
   if (automation.length === 0) return resolved
-  let cachedBeat = Number.NaN
-  let cached = resolved
-  const resolveAtBeat = (beat: number): MoverOrSplitter => {
-    if (beat !== cachedBeat) {
-      cachedBeat = beat
-      cached = def.resolve({ settings: { ...settings, ...sampleAutomationLanes(automation, beat, settings) }, notes })
-    }
-    return cached
-  }
+  const resolveAtBeat = memoizeEvaluation((beat: number): MoverOrSplitter =>
+    def.resolve({ settings: { ...settings, ...sampleAutomationLanes(automation, beat, settings) }, notes }))
   const wrapped: MoverOrSplitter = {
+    cachePolicy: 'beat',
     apply(visualCopy, context) {
       return resolveAtBeat(context.beat).apply(visualCopy, context)
     },
   }
   // A definition-level applyFramed (a time emitter - Stagger) must survive the
   // automation wrapper, or automating its knobs silently drops every copy's
-  // clock. Same per-beat memo as apply; below an emitter the memo degrades to
-  // one re-resolve per distinct copy clock per frame, which is correct and
-  // merely un-memoized.
+  // clock. Interleaved equal copy clocks share a resolution within this
+  // evaluation; nothing retains a history of past playback beats.
   if (resolved.applyFramed) {
     wrapped.applyFramed = (visualCopy, context) => {
       const entry = resolveAtBeat(context.beat)

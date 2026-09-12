@@ -223,6 +223,7 @@ const _quat = new Quaternion()
 const _scl = new Vector3()
 const _instColor = new Color()
 const _baseScratch = new Color()
+const _fragmentLocal = CORNERS.map(() => new Matrix4())
 const WHITE = new Color('#ffffff')
 
 export function CubeInstanced({ trackId }: { trackId: string }) {
@@ -313,6 +314,19 @@ export function CubeInstanced({ trackId }: { trackId: string }) {
     const dimY = state.params.dimY ?? paramDefault(cubeInstrument, 'dimY')
     const dimZ = state.params.dimZ ?? paramDefault(cubeInstrument, 'dimZ')
     const fragsLive = a > 0.001
+    _scale2.makeScale(shatterScale * dimX, shatterScale * dimY, shatterScale * dimZ)
+    // Every eligible copy shares this track's clock and Shatter state. Build
+    // the eight local fragments once; only their placement varies per copy.
+    if (fragsLive) {
+      const dist = a * spread
+      _scl.setScalar(0.45 * a)
+      for (let c = 0; c < CORNERS.length; c++) {
+        const [dx, dy, dz] = CORNERS[c]
+        _pos.set(dx * dist, dy * dist, dz * dist)
+        _quat.setFromEuler(_euler.set(state.beat * 0.6 + c, state.beat * 0.8 + c, 0))
+        _fragmentLocal[c].compose(_pos, _quat, _scl)
+      }
+    }
 
     let anyFaded = false
     for (let i = 0; i < count; i++) {
@@ -328,19 +342,14 @@ export function CubeInstanced({ trackId }: { trackId: string }) {
       _placed.multiply(_spin)
       // Solid: placement × spin × (shatter shrink × per-axis dims).
       _local.copy(_placed)
-      _local.multiply(_scale2.makeScale(shatterScale * dimX, shatterScale * dimY, shatterScale * dimZ))
+      _local.multiply(_scale2)
       solid.setMatrixAt(i, _local)
       solid.setColorAt(i, f.copyColor(i, baseHex, _instColor))
       solid.setOpacityAt(i, Math.min(1, fade))
       if (fragsLive) {
-        const dist = a * spread
         for (let c = 0; c < CORNERS.length; c++) {
-          const [dx, dy, dz] = CORNERS[c]
           const idx = i * CORNERS.length + c
-          _pos.set(dx * dist, dy * dist, dz * dist)
-          _quat.setFromEuler(_euler.set(state.beat * 0.6 + c, state.beat * 0.8 + c, 0))
-          _scl.setScalar(0.45 * a)
-          _local.compose(_pos, _quat, _scl)
+          _local.copy(_fragmentLocal[c])
           _local.premultiply(_placed)
           frags.setMatrixAt(idx, _local)
           frags.setVisibilityAt(idx, true)

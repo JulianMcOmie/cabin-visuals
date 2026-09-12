@@ -2,12 +2,14 @@ import type { WaveformQuery } from '../audio/waveformWindow'
 import type { VideoClip } from '../../store/VideoStore'
 import type { ProjectState } from '../../store/ProjectStore'
 import type { useUIStore } from '../../store/UIStore'
-import type { VisualEngineInstance } from './VisualEngineInstance'
+import type { PreviewFramePacket } from './previewFrameCodec'
 
 export type PreviewProject = Pick<ProjectState, 'scenes' | 'sceneOrder' | 'activeSceneId' | 'bpm' | 'beatsPerBar' | 'totalBars' | 'tracks' | 'rootTrackIds'>
 export interface PreviewRequest {
   id: number
   revision: number
+  /** Last frame actually decoded by this receiver; absent after a new session. */
+  frameBase?: number
   project?: PreviewProject
   videoClips: Record<string, VideoClip>
   beat: number
@@ -25,7 +27,7 @@ export interface PreviewRequest {
 export interface PreviewResponse {
   id: number
   revision: number
-  frame?: ReturnType<VisualEngineInstance['captureFrame']>
+  frame?: PreviewFramePacket
   pick?: { id: number; hit: { sceneId: string; trackId: string } | null }
   camera?: { world: number[]; projection: number[] }
   pixels?: ImageData

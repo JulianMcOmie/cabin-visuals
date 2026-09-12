@@ -84,10 +84,11 @@ export function splitterWithChildChain(
    *  lane or a nested child must not silently lose its offsets) - the child
    *  chain itself still runs at the incoming beat, since children are internal
    *  to the device rather than below it. */
-  function evaluate(visualCopy: VisualCopy, context: MoverOrSplitterContext): {
+  function evaluate(visualCopy: VisualCopy, context: MoverOrSplitterContext, framed = false): {
     slots: VisualCopy[]
     slotTimes: readonly FramedVisualCopy[] | null
     outputs: SlotLocalCopy[] | null
+    slotInverses: (Matrix4 | null)[] | null
   } {
     const framedSlots = splitter.applyFramed?.call(splitter, visualCopy, context)
     // A raw definition's applyFramed never carries an internalTransform (only
@@ -102,9 +103,9 @@ export function splitterWithChildChain(
         : framed.visualCopy)
       : splitter.apply(visualCopy, context)
     const slotTimes = framedSlots ?? null
-    if (slots.length === 0) return { slots, slotTimes, outputs: [] }
+    if (slots.length === 0) return { slots, slotTimes, outputs: [], slotInverses: null }
     const previous = visualCopy.transform
-    if (isDegenerate(previous)) return { slots, slotTimes, outputs: null }
+    if (isDegenerate(previous)) return { slots, slotTimes, outputs: null, slotInverses: null }
     const previousInverse = previous.clone().invert()
     // The splitter's frame in the world: the object's placement composed with
     // everything above the splitter in the chain. World-placed children
@@ -113,45 +114,57 @@ export function splitterWithChildChain(
     const childPlacement = context.placementTransform
       ? context.placementTransform.clone().multiply(previous)
       : previous.clone()
-    let locals: SlotLocalCopy[] = slots.map((slot, index) => ({
-      copy: {
-        transform: previousInverse.clone().multiply(slot.transform),
-        opacity: slot.opacity,
-        colorShift: { ...slot.colorShift },
-      },
-      slot: index,
-    }))
+    // Every descendant of a slot uses the same frame inverse. Keep it once
+    // per slot, before the children fan out, rather than invert it per output.
+    // The immediate-fold path does not need this separate frame at all.
+    const slotInverses = framed ? new Array<Matrix4 | null>(slots.length) : null
+    let locals: SlotLocalCopy[] = slots.map((slot, index) => {
+      const transform = previousInverse.clone().multiply(slot.transform)
+      if (slotInverses) slotInverses[index] = isDegenerate(transform) ? null : transform.clone().invert()
+      return {
+        copy: { transform, opacity: slot.opacity, colorShift: { ...slot.colorShift } },
+        slot: index,
+      }
+    })
     for (const child of children) {
       const count = locals.length
       const formation = locals.map((local) => local.copy)
       const anchored = child.composition === 'chainRoot'
-      locals = locals.flatMap(({ copy, slot }, index) => {
+      const next: SlotLocalCopy[] = []
+      const childContext: MoverOrSplitterContext = {
+        beat: context.beat, index: 0, count, formation, placementTransform: childPlacement,
+      }
+      const incomingInverse = anchored ? null : new Matrix4()
+      for (let index = 0; index < count; index++) {
+        const { copy, slot } = locals[index]
         const incoming = copy.transform
-        return child
-          .apply(copy, {
-            beat: context.beat,
-            index,
-            count,
-            formation,
-            placementTransform: childPlacement,
-          })
-          .map((result) => {
-            // Chain-root deltas are already anchored on the splitter frame's
-            // axes; LOCAL deltas are re-anchored about the splitter's origin
-            // (t⁻¹·out·t) so e.g. a rotation orbits the formation. A
-            // degenerate incoming transform (Approach's scale-zero slots) has
-            // nothing to re-anchor against; the copy is invisible anyway.
-            const transform = anchored || isDegenerate(incoming)
-              ? result.transform
-              : incoming.clone().invert().multiply(result.transform).multiply(incoming)
-            return { copy: { ...result, transform }, slot }
-          })
-      })
+        childContext.index = index
+        const results = child.apply(copy, childContext)
+        // A local child can emit many outputs from one input. Its anchoring
+        // inverse and singularity are properties of that input, not each output.
+        const reanchor = incomingInverse && results.length > 0 && !isDegenerate(incoming)
+        if (reanchor) incomingInverse.copy(incoming).invert()
+        for (const result of results) {
+          // Chain-root deltas are already anchored on the splitter frame's
+          // axes; LOCAL deltas are re-anchored about the splitter's origin
+          // (t⁻¹·out·t) so e.g. a rotation orbits the formation. A
+          // degenerate incoming transform (Approach's scale-zero slots) has
+          // nothing to re-anchor against; the copy is invisible anyway.
+          const transform = reanchor
+            ? incomingInverse!.clone().multiply(result.transform).multiply(incoming)
+            : result.transform
+          next.push({ copy: { ...result, transform }, slot })
+        }
+      }
+      locals = next
     }
-    return { slots, slotTimes, outputs: locals }
+    return { slots, slotTimes, outputs: locals, slotInverses }
   }
 
   const wrapper: MoverOrSplitter = {
+    cachePolicy: splitter.cachePolicy === 'static' && !splitter.emitsCopyClocks
+      && children.every((child) => child.cachePolicy === 'static' && !child.emitsCopyClocks)
+      ? 'static' : undefined,
     apply(visualCopy, context) {
       // The immediate fold: time fields drop here exactly as the emitting
       // definition's own `apply` drops them - unobservable as a last entry.
@@ -164,7 +177,7 @@ export function splitterWithChildChain(
       }))
     },
     applyFramed(visualCopy, context) {
-      const { slots, slotTimes, outputs } = evaluate(visualCopy, context)
+      const { slots, slotTimes, outputs, slotInverses } = evaluate(visualCopy, context, true)
       // The parent slot's TIME channel rides every output derived from it - a
       // child splitter's fan-out inherits its slot's clock, as the kernel
       // would have it inherit down a chain.
@@ -174,16 +187,15 @@ export function splitterWithChildChain(
         return { beatOffset: time.beatOffset, birthBeat: time.birthBeat }
       }
       if (!outputs) return slots.map((copy, slot) => ({ visualCopy: copy, ...timeOf(slot) }))
-      const previousInverse = visualCopy.transform.clone().invert()
       return outputs.map(({ copy, slot }): FramedVisualCopy => {
         const frame = slots[slot].transform
-        const slotLocal = previousInverse.clone().multiply(frame)
+        const slotInverse = slotInverses![slot]
         // The frame is the splitter's own unmoved output; the child deltas
         // become internal motion, re-expressed inside the slot's frame:
         // frame · internal = prev · deltas · slot. A degenerate SLOT
         // (Approach grows copies from scale zero) has no inverse to split
         // against, so that copy folds immediately - invisible at scale zero.
-        if (isDegenerate(slotLocal)) {
+        if (!slotInverse) {
           return {
             visualCopy: {
               transform: visualCopy.transform.clone().multiply(copy.transform),
@@ -199,7 +211,7 @@ export function splitterWithChildChain(
             opacity: copy.opacity,
             colorShift: copy.colorShift,
           },
-          internalTransform: slotLocal.clone().invert().multiply(copy.transform),
+          internalTransform: slotInverse.clone().multiply(copy.transform),
           ...timeOf(slot),
         }
       })

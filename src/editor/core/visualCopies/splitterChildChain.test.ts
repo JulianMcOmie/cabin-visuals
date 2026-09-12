@@ -286,3 +286,44 @@ test('structural variants compose through the wrapper, so the probe sees child f
   assert.equal(resolveVisualCopies([wrapper], 0).length, 4)
   assert.equal(structuralCopyCount([wrapper]), 8)
 })
+
+test('descendants retain their own singular or mirrored slot frame and clock', () => {
+  const parent: MoverOrSplitter = {
+    emitsCopyClocks: true,
+    apply(copy) { return this.applyFramed!(copy, { beat: 0, index: 0, count: 1 }).map((f) => f.visualCopy) },
+    applyFramed(copy) {
+      return [0, -1].map((scale, slot) => ({
+        visualCopy: {
+          transform: copy.transform.clone().multiply(new Matrix4().makeTranslation(slot * 4 - 2, 1, 0))
+            .multiply(new Matrix4().makeScale(scale, 1, 1)),
+          opacity: copy.opacity * (slot + 1) / 2,
+          colorShift: { ...copy.colorShift, hue: slot / 3 },
+        },
+        beatOffset: slot + 1,
+        birthBeat: 8 + slot,
+      }))
+    },
+  }
+  const wrapper = splitterWithChildChain(parent, [gridRow(3), rotateZ(37), shiftX(0.4, true)])
+  const input = identityVisualCopy()
+  input.transform.makeRotationY(0.3).premultiply(new Matrix4().makeTranslation(3, 2, 1))
+  const context = { beat: 10, index: 0, count: 1 }
+  const folded = wrapper.apply(input, context)
+  const framed = wrapper.applyFramed!(input, context)
+  assert.equal(framed.length, 6)
+  for (let i = 0; i < framed.length; i++) {
+    const result = framed[i]
+    assert.equal(result.beatOffset, Math.floor(i / 3) + 1)
+    assert.equal(result.birthBeat, 8 + Math.floor(i / 3))
+    const transform = result.visualCopy.transform.clone()
+    if (result.internalTransform) transform.multiply(result.internalTransform)
+    transform.elements.forEach((value, j) => assert.ok(Math.abs(value - folded[i].transform.elements[j]) < 1e-10))
+    assert.equal(result.visualCopy.opacity, folded[i].opacity)
+    assert.deepEqual(result.visualCopy.colorShift, folded[i].colorShift)
+    assert.equal(!!result.internalTransform, i >= 3, 'only mirrored, invertible slots carry separate internal motion')
+  }
+  const untouched = framed[1].visualCopy.transform.clone()
+  framed[0].visualCopy.transform.makeScale(9, 9, 9)
+  assert.deepEqual(framed[1].visualCopy.transform.elements, untouched.elements, 'descendants own their frames')
+  assert.equal(wrapper.cachePolicy, undefined, 'clock emitters are never declared static')
+})

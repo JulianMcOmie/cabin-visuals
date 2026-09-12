@@ -7,7 +7,8 @@ import { sampleAutomationLane } from './automation'
 import { composeMatrix, identitySV, localTransformToSV } from './stateVector'
 import { isIdentityTransform, readTrackTransform, trackOpacity } from '../transform'
 import { identityVisualCopy } from '../visualCopies/identityVisualCopy'
-import { chainEmitsCopyClocks, copyClockShift, resolveVisualCopies, structuralCopyCount, warpChainBeat, type CopyClocks } from '../visualCopies/resolveVisualCopies'
+import { chainEmitsCopyClocks, copyClockShift, createVisualCopyEvaluator, resolveVisualCopies, structuralCopyCount, warpChainBeat, type CopyClocks } from '../visualCopies/resolveVisualCopies'
+import { withCopyEvaluation } from '../visualCopies/evaluationMemo'
 import type { MoverOrSplitter, VisualCopy } from '../visualCopies/types'
 import type { ResolvedGraph, ResolvedGroup, ObjectState, ResolvedNote } from './types'
 import { MIN_SOUNDING_BEATS, soundingNoteWindow } from './noteWindow'
@@ -15,6 +16,18 @@ import type { ProjectState } from '../../store/ProjectStore'
 import { DEFAULT_SCENE_BACKGROUND, type Scene, type SceneGradient, type Track } from '../../types'
 import { compositionAutomatableParams, compositionDef, isCompositionTrack, type CompositionLayer } from '../directors'
 import { clamp } from '../../utils/math'
+
+/** Triggered Stagger copies normally have strictly ordered, distinct clocks.
+ * A linear comparison avoids allocating a grouping table when none can share.
+ * Unordered clocks still take the general lookup path. */
+function hasUniqueOrderedOffsets(offsets: readonly number[] | null): boolean {
+  if (!offsets || offsets.length < 2) return true
+  const ascending = offsets[1] > offsets[0]
+  for (let i = 1; i < offsets.length; i++) {
+    if (ascending ? !(offsets[i] > offsets[i - 1]) : !(offsets[i] < offsets[i - 1])) return false
+  }
+  return true
+}
 
 
 /** One structural render-list entry per VisualCopy occurrence. The renderer
@@ -112,6 +125,7 @@ export function createVisualEngine() {
   // (matrices/opacity/color shift) refresh imperatively per frame in
   // computeAtBeat, so React never reconciles during playback.
   const visualCopiesByTrack = new Map<string, VisualCopy[]>()
+  const copyEvaluators = new Map<string, ReturnType<typeof createVisualCopyEvaluator>>()
   const visualCopyCounts = new Map<string, number>()
   // The chain each track's count was probed from. The count is a function of
   // the chain's entries alone, so a track whose chain still holds the same
@@ -140,6 +154,10 @@ export function createVisualEngine() {
   // clock; the switcher gate (`blackedOut`) stays object-clocked.
   let staggeredTracks = new Set<string>()
   const copyStatesByTrack = new Map<string, (ObjectState | null)[]>()
+  // Published slots may alias an equivalent clock's result. Scratch ownership
+  // stays separate so a later frame splitting those clocks cannot overwrite a
+  // sibling's state while it is still being assembled.
+  const copyStateOwners = new Map<string, (ObjectState | null)[]>()
   const copyClocksScratch: CopyClocks = { beatOffsets: null, birthBeats: null, checkpoints: null }
   const _copySV = identitySV()
   // The hidden copies that pad a frame's output up to the structural pool size.
@@ -288,6 +306,7 @@ export function createVisualEngine() {
     for (const id of worldMatrices.keys()) if (!live.has(id)) worldMatrices.delete(id)
     for (const id of inheritedOpacities.keys()) if (!live.has(id)) inheritedOpacities.delete(id)
     for (const id of visualCopiesByTrack.keys()) if (!live.has(id)) visualCopiesByTrack.delete(id)
+    for (const id of copyEvaluators.keys()) if (!live.has(id)) copyEvaluators.delete(id)
     for (const id of visualCopyCounts.keys()) if (!live.has(id)) visualCopyCounts.delete(id)
     for (const id of copyChainByTrack.keys()) if (!live.has(id)) copyChainByTrack.delete(id)
     copyCountWarned.clear()
@@ -323,6 +342,7 @@ export function createVisualEngine() {
     // Per-copy states exist exactly for the staggered set - a stale entry for a
     // track whose chain lost its emitter would keep serving frozen clocks.
     for (const id of copyStatesByTrack.keys()) if (!staggeredTracks.has(id)) copyStatesByTrack.delete(id)
+    for (const id of copyStateOwners.keys()) if (!staggeredTracks.has(id)) copyStateOwners.delete(id)
     publishList()
   }
 
@@ -480,6 +500,10 @@ export function createVisualEngine() {
    *  graph.objects is in parent-before-child order (resolve walks the tree DFS), so a
    *  parent's world is always ready when its children compose. */
   function computeAtBeat(beat: number) {
+    return withCopyEvaluation(() => computeFrameAtBeat(beat))
+  }
+
+  function computeFrameAtBeat(beat: number) {
     const secPerBeat = 60 / bpm
     compositionLayers = resolveComposition(beat)
     // Backdrops before the objects: cheap (one chain per scene that has one, and
@@ -657,10 +681,15 @@ export function createVisualEngine() {
       // its count with the beat, or one non-monotonic in an automated param - so
       // warn and truncate rather than render copies that have no mount.
       const staggered = staggeredTracks.has(obj.trackId)
-      const copies = resolveVisualCopies(
+      let evaluateCopies = copyEvaluators.get(obj.trackId)
+      if (!evaluateCopies) { evaluateCopies = createVisualCopyEvaluator(); copyEvaluators.set(obj.trackId, evaluateCopies) }
+      let copies = evaluateCopies(
         obj.moverAndSplitterChain, objBeat, world, staggered ? copyClocksScratch : undefined,
       )
       const structuralCount = visualCopyCounts.get(obj.trackId) ?? copies.length
+      // Evaluator results are immutable and may be reused for a later frame.
+      // Padding/truncation belongs to this renderer's structural array only.
+      if (copies.length !== structuralCount) copies = copies.slice()
       if (copies.length > structuralCount) {
         if (!copyCountWarned.has(obj.trackId)) {
           copyCountWarned.add(obj.trackId)
@@ -705,6 +734,11 @@ export function createVisualEngine() {
     let slots = copyStatesByTrack.get(obj.trackId)
     if (!slots) { slots = []; copyStatesByTrack.set(obj.trackId, slots) }
     slots.length = structuralCount
+    let owners = copyStateOwners.get(obj.trackId)
+    if (!owners) { owners = []; copyStateOwners.set(obj.trackId, owners) }
+    owners.length = structuralCount
+    const firstStateAtOffset = hasUniqueOrderedOffsets(clocks.beatOffsets) ? undefined : new Map<number, number>()
+    let clockVariants: Map<string, ObjectState> | undefined
     for (let i = 0; i < structuralCount; i++) {
       // Padded hidden copies sit past the kernel's clock arrays and carry no
       // shift; offset-0 copies need no state of their own.
@@ -717,6 +751,33 @@ export function createVisualEngine() {
       // offset. Skip 0 = the full copy clock (a pattern lane); skipping every
       // emitter = the object clock (a live lane after the emitter).
       const checkpoints = clocks.checkpoints?.[i] ?? null
+      // Equal total offsets alone are insufficient: lanes can skip different
+      // emitter prefixes. Include every checkpoint and birth, and share only
+      // finite clocks. All other inputs are common to this object's call.
+      const birth = clocks.birthBeats?.[i]
+      // Most clocks are either unique or repeated intact by a downstream
+      // splitter. Use the numeric offset first, avoiding serialization for both
+      // cases. Only equal-offset clocks with different routing need a full key.
+      const firstIndex = firstStateAtOffset?.get(offset)
+      let clockKey: string | undefined
+      if (firstIndex === undefined) firstStateAtOffset?.set(offset, i)
+      else if (Number.isFinite(copyBeat) && (birth === undefined || Number.isFinite(birth))
+        && (!checkpoints || checkpoints.every(Number.isFinite))) {
+        const firstCheckpoints = clocks.checkpoints?.[firstIndex] ?? null
+        const sameCheckpoints = checkpoints === firstCheckpoints || (
+          checkpoints !== null && firstCheckpoints !== null
+          && checkpoints.length === firstCheckpoints.length
+          && checkpoints.every((value, index) => Object.is(value, firstCheckpoints[index]))
+        )
+        if (Object.is(birth, clocks.birthBeats?.[firstIndex]) && sameCheckpoints) {
+          slots[i] = slots[firstIndex]
+          continue
+        }
+        // Preserve signed zero in the uncommon variant key as well.
+        clockKey = JSON.stringify([offset, birth, checkpoints], (_key, value) => Object.is(value, -0) ? '-0' : value)
+        const shared = clockVariants?.get(clockKey)
+        if (shared) { slots[i] = shared; continue }
+      }
       const laneBeatFor = (skip: number | undefined) =>
         objBeat - (skip ? copyClockShift(offset, checkpoints, skip) : offset)
 
@@ -729,7 +790,7 @@ export function createVisualEngine() {
           if (!Number.isNaN(v)) params[auto.param] = v
         }
       }
-      let state = slots[i]
+      let state = owners[i]
       if (!state) {
         // A copy state OWNS its world matrix and active-note scratch (the shared
         // per-track ones belong to the object state); everything else is
@@ -745,8 +806,10 @@ export function createVisualEngine() {
           notes: obj.notes, activeNotes: [],
           automations: obj.automations, baseParams: obj.params,
         }
-        slots[i] = state
+        owners[i] = state
       }
+      slots[i] = state
+      if (clockKey !== undefined) (clockVariants ??= new Map()).set(clockKey, state)
 
       const local = obj.localTransform ? obj.localTransform({ params, energy, beat: copyBeat }) : {}
       localTransformToSV(local, _copySV)

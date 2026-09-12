@@ -48,6 +48,7 @@ import { Matrix4 } from 'three'
 import type { MidiRowDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
+import { memoizeEvaluation } from './evaluationMemo'
 import { wrapToBound } from './motion'
 import { SIGNED_BASIS_DIRECTIONS } from './motionBasis'
 import { midiVelocity } from '../../utils/midiVelocity'
@@ -258,6 +259,7 @@ export const conveyorMover: MoverOrSplitterDefinition<ConveyorSettings> = {
   midiRows: () => CONVEYOR_ROWS,
   strictMidiRows: true,
   resolve({ settings, notes }) {
+    const travelAtBeat = memoizeEvaluation((beat: number) => evaluateConveyorTravel(notes, settings, beat))
     const spans = [settings.spanX, settings.spanY, settings.spanZ]
     const widths = spans.map((span) => fadeWidth(settings, span))
     const belt = settings.loopStyle !== GROUP_LOOP
@@ -278,7 +280,7 @@ export const conveyorMover: MoverOrSplitterDefinition<ConveyorSettings> = {
 
     return {
       apply(visualCopy, { beat, formation }) {
-        const travel = evaluateConveyorTravel(notes, settings, beat)
+        const travel = travelAtBeat(beat)
         const elements = visualCopy.transform.elements
         // The copy's own position in the field: where the entries above this one
         // put it. Read per copy - this is what makes the loop a belt.
