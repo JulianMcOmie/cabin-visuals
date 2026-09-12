@@ -3,7 +3,7 @@
 // note's ticks over the file's PPQ ARE beats (quarter note = 1 beat), so the
 // file's tempo map and the project's bpm never meet.
 import { Midi } from '@tonejs/midi'
-import type { Note } from '../types'
+import type { Note, Track } from '../types'
 
 // Floor for degenerate zero/near-zero durations - anything shorter is
 // invisible and un-grabbable in the editor.
@@ -16,6 +16,7 @@ export interface ImportedMidiTrack {
   notes: Note[]
   /** End of the last note, in file-absolute beats. */
   endBeat: number
+  drumMidi?: Track['drumMidi']
 }
 
 // Which files ARE MIDI (isMidiFileName / isMidiMimeType) lives with the rest

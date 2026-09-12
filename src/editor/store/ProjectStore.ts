@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { rescaleDrumMidi } from '../utils/drumMidi'
 import { getEffect } from '../effects'
 import { nextTrackColor, AUDIO_TRACK_COLOR } from '../utils/trackColors'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
@@ -793,7 +794,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     return {
       ...value,
       scenes: {
-        ...s.scenes,
+        ...(value.scenes ?? s.scenes),
         [active.id]: { ...active, ...scenePatch },
       },
       audioTracks,
@@ -2193,6 +2194,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         tracks[id] = {
           id,
           name: t.name || `MIDI ${i + 1}`,
+          ...(t.drumMidi ? { drumMidi: t.drumMidi } : {}),
           type: 'base',
           // An imported MIDI file lands as a Midi Roll: the notes ARE the
           // visual, whatever their pitch range - swap the instrument after.
@@ -2856,7 +2858,30 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         tracks[id] = { ...t, blocks: [{ ...block, notes: [...block.notes, ...lyricClipNotes(lyricClips, 0)] }] }
         totalBars = Math.max(totalBars, durationBars)
       }
-      return tracks === s.tracks ? { bpm: next } : { bpm: next, tracks, totalBars }
+      // Every scene may contain extracted drums. Scale edited notes rather
+      // than rebuilding detections, so manual cleanup survives tempo changes.
+      let scenes = s.scenes
+      const audioBlocks = Object.values(s.audioTracks).flatMap((t) => t.audioBlocks ?? [])
+      for (const [sceneId, scene] of Object.entries(s.scenes)) {
+        const sourceTracks = sceneId === s.activeSceneId ? tracks : scene.tracks
+        let changed = sourceTracks
+        for (const [id, track] of Object.entries(sourceTracks)) {
+          if (!track.drumMidi) continue
+          const anchor = audioBlocks.find((b) => b.id === track.drumMidi!.audioBlockId)?.startBar ?? track.drumMidi.anchorBar
+          if (changed === sourceTracks) changed = { ...sourceTracks }
+          changed[id] = rescaleDrumMidi(track, next / s.bpm, anchor)
+          for (const block of changed[id].blocks) totalBars = Math.max(totalBars, Math.ceil(block.startBar + block.durationBars))
+        }
+        if (changed !== sourceTracks) {
+          if (sceneId === s.activeSceneId) tracks = changed
+          else {
+            if (scenes === s.scenes) scenes = { ...s.scenes }
+            scenes[sceneId] = { ...scene, tracks: changed }
+          }
+        }
+      }
+      return { bpm: next, ...(tracks === s.tracks ? {} : { tracks }),
+        ...(scenes === s.scenes ? {} : { scenes }), totalBars: Math.min(MAX_TOTAL_BARS, totalBars) }
     }),
 
   // Blocks past the new end are left alone (the timeline just ends sooner);

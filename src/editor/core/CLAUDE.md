@@ -78,3 +78,13 @@ Composition params are automatable like any other track's: `compositionAutomatab
 `videoTime.ts` / `photoTime.ts`: pure `(beat, notes) → what's on screen` (which pad, and for video the in-clip time). No DOM/three — this purity is what makes scrub/pause/export land identical frames. Pads answer fixed base pitch 48 upward; the MIDI editor shows labelled rows so pitches are never user-facing. `decodeEngine.ts` keeps each pad's in-point frames warm so triggers land next display tick. `videoUploads.ts`/`photoUploads.ts`/`videoSource.ts`/`photoSource.ts` handle bytes (Supabase bucket + session cache) behind refs; only serializable descriptors reach the stores.
 
 Export video frame-exactness comes from a registered frame preparer (see export/CLAUDE.md).
+
+## Extracted drum MIDI
+
+`utils/drumDetection.ts` is heuristic band-onset detection, run in a browser
+worker. `utils/extractDrumMidi.ts` shares upload/separation/analysis across the
+three Text Display buttons. `utils/drumMidi.ts` owns seconds-to-beats placement
+and tempo rescaling of edited blocks. Track's optional `drumMidi` metadata must
+survive import/serialization: BPM changes rescale current notes in all scenes,
+never recreate them from detections. Audio trims are applied at insertion only.
+See `docs/drum-midi.md` for provider/cache contracts and validation limits.

@@ -59,3 +59,9 @@ per-user cache writes broadcast successful changes to other tabs. Never apply
 a guest or previous account's preference to a newly signed-in user. Failed saves
 remain visible as an unsaved preview with a retry; account switches invalidate
 in-flight UI completions. No database migration is required.
+
+`api/drum-stem` authenticates the song owner, separates via ElevenLabs using
+`ELEVENLABS_API_KEY`, and privately caches only the drum MP3 alongside the source
+in `project-audio`. It returns a signed URL, not song bytes, avoiding response
+body caps. Browser detection runs off-thread. See `docs/drum-midi.md` for limits,
+Storage path conventions, cancellation behavior and remaining live validation.

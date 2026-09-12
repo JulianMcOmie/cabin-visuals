@@ -1,0 +1,1059 @@
+{
+  "bpm": 120,
+  "beatsPerBar": 4,
+  "tracks": [
+    {
+      "name": "Kick MIDI",
+      "notes": [
+        {
+          "pitch": 36,
+          "time": 1.58859410430839,
+          "velocity": 83
+        },
+        {
+          "pitch": 36,
+          "time": 2.019569160997732,
+          "velocity": 87
+        },
+        {
+          "pitch": 36,
+          "time": 2.300204081632653,
+          "velocity": 97
+        },
+        {
+          "pitch": 36,
+          "time": 2.741201814058957,
+          "velocity": 81
+        },
+        {
+          "pitch": 36,
+          "time": 3.172176870748299,
+          "velocity": 79
+        },
+        {
+          "pitch": 36,
+          "time": 3.4628344671201816,
+          "velocity": 86
+        },
+        {
+          "pitch": 36,
+          "time": 3.743469387755102,
+          "velocity": 79
+        },
+        {
+          "pitch": 36,
+          "time": 3.893809523809524,
+          "velocity": 67
+        },
+        {
+          "pitch": 36,
+          "time": 4.184467120181406,
+          "velocity": 70
+        },
+        {
+          "pitch": 36,
+          "time": 4.324784580498866,
+          "velocity": 85
+        },
+        {
+          "pitch": 36,
+          "time": 4.610430839002268,
+          "velocity": 106
+        },
+        {
+          "pitch": 36,
+          "time": 5.061451247165533,
+          "velocity": 86
+        },
+        {
+          "pitch": 36,
+          "time": 5.482403628117914,
+          "velocity": 74
+        },
+        {
+          "pitch": 36,
+          "time": 5.622721088435374,
+          "velocity": 109
+        },
+        {
+          "pitch": 36,
+          "time": 5.783083900226758,
+          "velocity": 90
+        },
+        {
+          "pitch": 36,
+          "time": 6.204036281179138,
+          "velocity": 83
+        },
+        {
+          "pitch": 36,
+          "time": 6.63501133786848,
+          "velocity": 87
+        },
+        {
+          "pitch": 36,
+          "time": 6.9156462585034015,
+          "velocity": 97
+        },
+        {
+          "pitch": 36,
+          "time": 7.356643990929705,
+          "velocity": 82
+        },
+        {
+          "pitch": 36,
+          "time": 7.787619047619048,
+          "velocity": 79
+        },
+        {
+          "pitch": 36,
+          "time": 8.078276643990929,
+          "velocity": 85
+        },
+        {
+          "pitch": 36,
+          "time": 8.358911564625851,
+          "velocity": 80
+        },
+        {
+          "pitch": 36,
+          "time": 8.509251700680272,
+          "velocity": 67
+        },
+        {
+          "pitch": 36,
+          "time": 8.799909297052155,
+          "velocity": 71
+        },
+        {
+          "pitch": 36,
+          "time": 8.940226757369615,
+          "velocity": 85
+        },
+        {
+          "pitch": 36,
+          "time": 9.225873015873017,
+          "velocity": 107
+        },
+        {
+          "pitch": 36,
+          "time": 9.676893424036281,
+          "velocity": 85
+        },
+        {
+          "pitch": 36,
+          "time": 10.097845804988662,
+          "velocity": 74
+        },
+        {
+          "pitch": 36,
+          "time": 10.238163265306122,
+          "velocity": 108
+        },
+        {
+          "pitch": 36,
+          "time": 10.398526077097506,
+          "velocity": 90
+        },
+        {
+          "pitch": 36,
+          "time": 10.819478458049884,
+          "velocity": 83
+        },
+        {
+          "pitch": 36,
+          "time": 11.25045351473923,
+          "velocity": 87
+        },
+        {
+          "pitch": 36,
+          "time": 11.53108843537415,
+          "velocity": 99
+        },
+        {
+          "pitch": 36,
+          "time": 11.972086167800454,
+          "velocity": 82
+        },
+        {
+          "pitch": 36,
+          "time": 12.403061224489797,
+          "velocity": 80
+        },
+        {
+          "pitch": 36,
+          "time": 12.693718820861678,
+          "velocity": 86
+        },
+        {
+          "pitch": 36,
+          "time": 12.974353741496598,
+          "velocity": 79
+        },
+        {
+          "pitch": 36,
+          "time": 13.124693877551021,
+          "velocity": 65
+        },
+        {
+          "pitch": 36,
+          "time": 13.415351473922902,
+          "velocity": 71
+        },
+        {
+          "pitch": 36,
+          "time": 13.555668934240362,
+          "velocity": 84
+        },
+        {
+          "pitch": 36,
+          "time": 13.841315192743764,
+          "velocity": 108
+        },
+        {
+          "pitch": 36,
+          "time": 14.292335600907029,
+          "velocity": 84
+        },
+        {
+          "pitch": 36,
+          "time": 14.713287981859411,
+          "velocity": 74
+        },
+        {
+          "pitch": 36,
+          "time": 14.853605442176871,
+          "velocity": 108
+        },
+        {
+          "pitch": 36,
+          "time": 15.013968253968255,
+          "velocity": 89
+        },
+        {
+          "pitch": 36,
+          "time": 15.434920634920637,
+          "velocity": 83
+        },
+        {
+          "pitch": 36,
+          "time": 15.865895691609978,
+          "velocity": 87
+        },
+        {
+          "pitch": 36,
+          "time": 16.1465306122449,
+          "velocity": 99
+        },
+        {
+          "pitch": 36,
+          "time": 16.587528344671203,
+          "velocity": 83
+        },
+        {
+          "pitch": 36,
+          "time": 17.018503401360544,
+          "velocity": 80
+        },
+        {
+          "pitch": 36,
+          "time": 17.309160997732427,
+          "velocity": 85
+        },
+        {
+          "pitch": 36,
+          "time": 17.589795918367347,
+          "velocity": 79
+        },
+        {
+          "pitch": 36,
+          "time": 17.740136054421768,
+          "velocity": 66
+        },
+        {
+          "pitch": 36,
+          "time": 18.03079365079365,
+          "velocity": 72
+        },
+        {
+          "pitch": 36,
+          "time": 18.17111111111111,
+          "velocity": 83
+        },
+        {
+          "pitch": 36,
+          "time": 18.45675736961451,
+          "velocity": 108
+        },
+        {
+          "pitch": 36,
+          "time": 18.907777777777778,
+          "velocity": 83
+        },
+        {
+          "pitch": 36,
+          "time": 19.32873015873016,
+          "velocity": 73
+        },
+        {
+          "pitch": 36,
+          "time": 19.46904761904762,
+          "velocity": 108
+        },
+        {
+          "pitch": 36,
+          "time": 19.629410430839002,
+          "velocity": 89
+        },
+        {
+          "pitch": 36,
+          "time": 20.050362811791384,
+          "velocity": 83
+        },
+        {
+          "pitch": 36,
+          "time": 20.481337868480725,
+          "velocity": 87
+        },
+        {
+          "pitch": 36,
+          "time": 20.761972789115646,
+          "velocity": 101
+        },
+        {
+          "pitch": 36,
+          "time": 21.20297052154195,
+          "velocity": 84
+        },
+        {
+          "pitch": 36,
+          "time": 21.63394557823129,
+          "velocity": 80
+        },
+        {
+          "pitch": 36,
+          "time": 21.924603174603174,
+          "velocity": 86
+        },
+        {
+          "pitch": 36,
+          "time": 22.205238095238094,
+          "velocity": 78
+        },
+        {
+          "pitch": 36,
+          "time": 22.355578231292515,
+          "velocity": 65
+        },
+        {
+          "pitch": 36,
+          "time": 22.6462358276644,
+          "velocity": 72
+        },
+        {
+          "pitch": 36,
+          "time": 22.78655328798186,
+          "velocity": 82
+        },
+        {
+          "pitch": 36,
+          "time": 23.072199546485262,
+          "velocity": 109
+        },
+        {
+          "pitch": 36,
+          "time": 23.523219954648525,
+          "velocity": 84
+        },
+        {
+          "pitch": 36,
+          "time": 23.944172335600907,
+          "velocity": 74
+        },
+        {
+          "pitch": 36,
+          "time": 24.08448979591837,
+          "velocity": 108
+        },
+        {
+          "pitch": 36,
+          "time": 24.24485260770975,
+          "velocity": 88
+        },
+        {
+          "pitch": 36,
+          "time": 24.665804988662135,
+          "velocity": 82
+        },
+        {
+          "pitch": 36,
+          "time": 25.096780045351473,
+          "velocity": 87
+        },
+        {
+          "pitch": 36,
+          "time": 25.377414965986393,
+          "velocity": 101
+        },
+        {
+          "pitch": 36,
+          "time": 25.818412698412697,
+          "velocity": 85
+        },
+        {
+          "pitch": 36,
+          "time": 26.249387755102042,
+          "velocity": 81
+        },
+        {
+          "pitch": 36,
+          "time": 26.54004535147392,
+          "velocity": 85
+        },
+        {
+          "pitch": 36,
+          "time": 26.820680272108845,
+          "velocity": 79
+        },
+        {
+          "pitch": 36,
+          "time": 26.971020408163266,
+          "velocity": 65
+        },
+        {
+          "pitch": 36,
+          "time": 27.26167800453515,
+          "velocity": 73
+        },
+        {
+          "pitch": 36,
+          "time": 27.401995464852607,
+          "velocity": 80
+        },
+        {
+          "pitch": 36,
+          "time": 27.68764172335601,
+          "velocity": 110
+        },
+        {
+          "pitch": 36,
+          "time": 28.138662131519276,
+          "velocity": 83
+        },
+        {
+          "pitch": 36,
+          "time": 28.559614512471658,
+          "velocity": 75
+        },
+        {
+          "pitch": 36,
+          "time": 28.699931972789116,
+          "velocity": 109
+        },
+        {
+          "pitch": 36,
+          "time": 28.8602947845805,
+          "velocity": 87
+        },
+        {
+          "pitch": 36,
+          "time": 29.28124716553288,
+          "velocity": 82
+        },
+        {
+          "pitch": 36,
+          "time": 29.712222222222223,
+          "velocity": 87
+        }
+      ]
+    },
+    {
+      "name": "Snare MIDI",
+      "notes": [
+        {
+          "pitch": 38,
+          "time": 2.305215419501134,
+          "velocity": 115
+        },
+        {
+          "pitch": 38,
+          "time": 2.741201814058957,
+          "velocity": 77
+        },
+        {
+          "pitch": 38,
+          "time": 2.871496598639456,
+          "velocity": 74
+        },
+        {
+          "pitch": 38,
+          "time": 3.7484807256235833,
+          "velocity": 103
+        },
+        {
+          "pitch": 38,
+          "time": 4.615442176870748,
+          "velocity": 121
+        },
+        {
+          "pitch": 38,
+          "time": 5.622721088435374,
+          "velocity": 100
+        },
+        {
+          "pitch": 38,
+          "time": 6.920657596371882,
+          "velocity": 114
+        },
+        {
+          "pitch": 38,
+          "time": 7.356643990929705,
+          "velocity": 76
+        },
+        {
+          "pitch": 38,
+          "time": 8.36392290249433,
+          "velocity": 104
+        },
+        {
+          "pitch": 38,
+          "time": 9.230884353741496,
+          "velocity": 120
+        },
+        {
+          "pitch": 38,
+          "time": 9.80718820861678,
+          "velocity": 104
+        },
+        {
+          "pitch": 38,
+          "time": 10.233151927437643,
+          "velocity": 95
+        },
+        {
+          "pitch": 38,
+          "time": 11.536099773242631,
+          "velocity": 115
+        },
+        {
+          "pitch": 38,
+          "time": 11.972086167800454,
+          "velocity": 77
+        },
+        {
+          "pitch": 38,
+          "time": 12.97936507936508,
+          "velocity": 104
+        },
+        {
+          "pitch": 38,
+          "time": 13.846326530612243,
+          "velocity": 118
+        },
+        {
+          "pitch": 38,
+          "time": 14.853605442176871,
+          "velocity": 100
+        },
+        {
+          "pitch": 38,
+          "time": 16.15154195011338,
+          "velocity": 115
+        },
+        {
+          "pitch": 38,
+          "time": 16.587528344671203,
+          "velocity": 76
+        },
+        {
+          "pitch": 38,
+          "time": 17.59480725623583,
+          "velocity": 104
+        },
+        {
+          "pitch": 38,
+          "time": 18.45675736961451,
+          "velocity": 114
+        },
+        {
+          "pitch": 38,
+          "time": 19.464036281179137,
+          "velocity": 95
+        },
+        {
+          "pitch": 38,
+          "time": 20.766984126984127,
+          "velocity": 115
+        },
+        {
+          "pitch": 38,
+          "time": 21.20297052154195,
+          "velocity": 77
+        },
+        {
+          "pitch": 38,
+          "time": 21.33326530612245,
+          "velocity": 86
+        },
+        {
+          "pitch": 38,
+          "time": 22.210249433106576,
+          "velocity": 104
+        },
+        {
+          "pitch": 38,
+          "time": 23.072199546485262,
+          "velocity": 109
+        },
+        {
+          "pitch": 38,
+          "time": 23.653514739229024,
+          "velocity": 105
+        },
+        {
+          "pitch": 38,
+          "time": 24.08448979591837,
+          "velocity": 101
+        },
+        {
+          "pitch": 38,
+          "time": 25.382426303854874,
+          "velocity": 116
+        },
+        {
+          "pitch": 38,
+          "time": 25.818412698412697,
+          "velocity": 78
+        },
+        {
+          "pitch": 38,
+          "time": 26.825691609977323,
+          "velocity": 104
+        },
+        {
+          "pitch": 38,
+          "time": 27.68764172335601,
+          "velocity": 101
+        },
+        {
+          "pitch": 38,
+          "time": 28.69492063492063,
+          "velocity": 96
+        }
+      ]
+    },
+    {
+      "name": "Hi-hat MIDI",
+      "notes": [
+        {
+          "pitch": 42,
+          "time": 1.4933786848072566,
+          "velocity": 94
+        },
+        {
+          "pitch": 42,
+          "time": 1.7289115646258502,
+          "velocity": 111
+        },
+        {
+          "pitch": 42,
+          "time": 2.06968253968254,
+          "velocity": 108
+        },
+        {
+          "pitch": 42,
+          "time": 2.650997732426304,
+          "velocity": 114
+        },
+        {
+          "pitch": 42,
+          "time": 2.881519274376417,
+          "velocity": 112
+        },
+        {
+          "pitch": 42,
+          "time": 3.227301587301587,
+          "velocity": 115
+        },
+        {
+          "pitch": 42,
+          "time": 3.4578231292517003,
+          "velocity": 81
+        },
+        {
+          "pitch": 42,
+          "time": 3.8036054421768704,
+          "velocity": 113
+        },
+        {
+          "pitch": 42,
+          "time": 4.034126984126984,
+          "velocity": 97
+        },
+        {
+          "pitch": 42,
+          "time": 4.379909297052154,
+          "velocity": 111
+        },
+        {
+          "pitch": 42,
+          "time": 4.956213151927438,
+          "velocity": 111
+        },
+        {
+          "pitch": 42,
+          "time": 5.191746031746032,
+          "velocity": 124
+        },
+        {
+          "pitch": 42,
+          "time": 5.532517006802721,
+          "velocity": 101
+        },
+        {
+          "pitch": 42,
+          "time": 6.108820861678004,
+          "velocity": 92
+        },
+        {
+          "pitch": 42,
+          "time": 6.344353741496598,
+          "velocity": 117
+        },
+        {
+          "pitch": 42,
+          "time": 6.685124716553288,
+          "velocity": 92
+        },
+        {
+          "pitch": 42,
+          "time": 7.266439909297052,
+          "velocity": 110
+        },
+        {
+          "pitch": 42,
+          "time": 7.4969614512471665,
+          "velocity": 110
+        },
+        {
+          "pitch": 42,
+          "time": 7.8427437641723365,
+          "velocity": 115
+        },
+        {
+          "pitch": 42,
+          "time": 8.07326530612245,
+          "velocity": 80
+        },
+        {
+          "pitch": 42,
+          "time": 8.41904761904762,
+          "velocity": 109
+        },
+        {
+          "pitch": 42,
+          "time": 8.649569160997732,
+          "velocity": 95
+        },
+        {
+          "pitch": 42,
+          "time": 8.995351473922902,
+          "velocity": 112
+        },
+        {
+          "pitch": 42,
+          "time": 9.571655328798187,
+          "velocity": 106
+        },
+        {
+          "pitch": 42,
+          "time": 9.80718820861678,
+          "velocity": 120
+        },
+        {
+          "pitch": 42,
+          "time": 10.14795918367347,
+          "velocity": 105
+        },
+        {
+          "pitch": 42,
+          "time": 10.724263038548752,
+          "velocity": 99
+        },
+        {
+          "pitch": 42,
+          "time": 10.959795918367346,
+          "velocity": 120
+        },
+        {
+          "pitch": 42,
+          "time": 11.300566893424037,
+          "velocity": 91
+        },
+        {
+          "pitch": 42,
+          "time": 11.881882086167801,
+          "velocity": 116
+        },
+        {
+          "pitch": 42,
+          "time": 12.112403628117914,
+          "velocity": 109
+        },
+        {
+          "pitch": 42,
+          "time": 12.458185941043082,
+          "velocity": 112
+        },
+        {
+          "pitch": 42,
+          "time": 12.688707482993197,
+          "velocity": 86
+        },
+        {
+          "pitch": 42,
+          "time": 13.034489795918367,
+          "velocity": 107
+        },
+        {
+          "pitch": 42,
+          "time": 13.265011337868481,
+          "velocity": 99
+        },
+        {
+          "pitch": 42,
+          "time": 13.610793650793651,
+          "velocity": 117
+        },
+        {
+          "pitch": 42,
+          "time": 14.187097505668934,
+          "velocity": 100
+        },
+        {
+          "pitch": 42,
+          "time": 14.422630385487528,
+          "velocity": 124
+        },
+        {
+          "pitch": 42,
+          "time": 14.763401360544218,
+          "velocity": 101
+        },
+        {
+          "pitch": 42,
+          "time": 15.3397052154195,
+          "velocity": 101
+        },
+        {
+          "pitch": 42,
+          "time": 15.575238095238095,
+          "velocity": 120
+        },
+        {
+          "pitch": 42,
+          "time": 15.916009070294784,
+          "velocity": 88
+        },
+        {
+          "pitch": 42,
+          "time": 16.49732426303855,
+          "velocity": 114
+        },
+        {
+          "pitch": 42,
+          "time": 16.72784580498866,
+          "velocity": 111
+        },
+        {
+          "pitch": 42,
+          "time": 17.07362811791383,
+          "velocity": 112
+        },
+        {
+          "pitch": 42,
+          "time": 17.304149659863945,
+          "velocity": 91
+        },
+        {
+          "pitch": 42,
+          "time": 17.649931972789116,
+          "velocity": 107
+        },
+        {
+          "pitch": 42,
+          "time": 17.88045351473923,
+          "velocity": 95
+        },
+        {
+          "pitch": 42,
+          "time": 18.2262358276644,
+          "velocity": 117
+        },
+        {
+          "pitch": 42,
+          "time": 18.80253968253968,
+          "velocity": 105
+        },
+        {
+          "pitch": 42,
+          "time": 19.038072562358277,
+          "velocity": 124
+        },
+        {
+          "pitch": 42,
+          "time": 19.378843537414966,
+          "velocity": 104
+        },
+        {
+          "pitch": 42,
+          "time": 19.95514739229025,
+          "velocity": 99
+        },
+        {
+          "pitch": 42,
+          "time": 20.190680272108843,
+          "velocity": 113
+        },
+        {
+          "pitch": 42,
+          "time": 20.53145124716553,
+          "velocity": 87
+        },
+        {
+          "pitch": 42,
+          "time": 21.112766439909297,
+          "velocity": 114
+        },
+        {
+          "pitch": 42,
+          "time": 21.34328798185941,
+          "velocity": 109
+        },
+        {
+          "pitch": 42,
+          "time": 21.68907029478458,
+          "velocity": 118
+        },
+        {
+          "pitch": 42,
+          "time": 21.919591836734693,
+          "velocity": 88
+        },
+        {
+          "pitch": 42,
+          "time": 22.265374149659863,
+          "velocity": 112
+        },
+        {
+          "pitch": 42,
+          "time": 22.495895691609977,
+          "velocity": 94
+        },
+        {
+          "pitch": 42,
+          "time": 22.841678004535147,
+          "velocity": 115
+        },
+        {
+          "pitch": 42,
+          "time": 23.417981859410432,
+          "velocity": 110
+        },
+        {
+          "pitch": 42,
+          "time": 23.653514739229024,
+          "velocity": 118
+        },
+        {
+          "pitch": 42,
+          "time": 23.994285714285713,
+          "velocity": 105
+        },
+        {
+          "pitch": 42,
+          "time": 24.570589569160997,
+          "velocity": 97
+        },
+        {
+          "pitch": 42,
+          "time": 24.806122448979593,
+          "velocity": 117
+        },
+        {
+          "pitch": 42,
+          "time": 25.146893424036282,
+          "velocity": 98
+        },
+        {
+          "pitch": 42,
+          "time": 25.728208616780044,
+          "velocity": 114
+        },
+        {
+          "pitch": 42,
+          "time": 25.95873015873016,
+          "velocity": 110
+        },
+        {
+          "pitch": 42,
+          "time": 26.304512471655325,
+          "velocity": 113
+        },
+        {
+          "pitch": 42,
+          "time": 26.535034013605443,
+          "velocity": 87
+        },
+        {
+          "pitch": 42,
+          "time": 26.880816326530613,
+          "velocity": 112
+        },
+        {
+          "pitch": 42,
+          "time": 27.111337868480724,
+          "velocity": 105
+        },
+        {
+          "pitch": 42,
+          "time": 27.457120181405894,
+          "velocity": 114
+        },
+        {
+          "pitch": 42,
+          "time": 28.03342403628118,
+          "velocity": 110
+        },
+        {
+          "pitch": 42,
+          "time": 28.268956916099775,
+          "velocity": 123
+        },
+        {
+          "pitch": 42,
+          "time": 28.609727891156464,
+          "velocity": 103
+        },
+        {
+          "pitch": 42,
+          "time": 29.186031746031745,
+          "velocity": 97
+        },
+        {
+          "pitch": 42,
+          "time": 29.42156462585034,
+          "velocity": 119
+        },
+        {
+          "pitch": 42,
+          "time": 29.76233560090703,
+          "velocity": 93
+        }
+      ]
+    }
+  ],
+  "separationRequests": 1,
+  "pageErrors": [],
+  "validation": "Real 32-second bundled promo song, unseparated full mix substituted ONLY at the provider response; actual browser MP3 decoding, production worker detector, UI and store import. This is not live stem separation or a transcription-accuracy benchmark."
+}
