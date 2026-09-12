@@ -458,7 +458,7 @@ export function TimelineArea() {
   ), [handleAddTrack])
 
   return (
-    <div className="timeline-neon relative flex flex-col h-full border-t border-[var(--border)] bg-[#08090d]">
+    <div className="timeline-neon relative flex flex-col h-full border-t border-[var(--border)] bg-[var(--bg-canvas-deep)]">
       {/* Ruler in its own row (not inside the lane scroll container) so the lanes
           own the only scrollbars: the vertical one then ends below the ruler. Its
           content is translated to mirror the lane scroll (onTimelineScroll); the
@@ -842,7 +842,7 @@ export function TimelineArea() {
             }}
             className="group pointer-events-auto absolute top-0 bottom-0 -left-[5px] w-[10px] cursor-ew-resize touch-none outline-none"
           >
-            <span className="absolute top-0 bottom-0 left-1/2 w-px -translate-x-1/2 bg-white/[0.12] group-hover:w-0.5 group-hover:bg-[var(--accent)] group-hover:shadow-[0_0_6px_var(--accent)] group-focus-visible:w-0.5 group-focus-visible:bg-[var(--accent)] group-focus-visible:shadow-[0_0_6px_var(--accent)]" />
+            <span className="absolute top-0 bottom-0 left-1/2 w-px -translate-x-1/2 bg-[color-mix(in_srgb,var(--text)_12%,transparent)] group-hover:w-0.5 group-hover:bg-[var(--accent)] group-hover:shadow-[0_0_6px_var(--accent)] group-focus-visible:w-0.5 group-focus-visible:bg-[var(--accent)] group-focus-visible:shadow-[0_0_6px_var(--accent)]" />
           </div>
         </div>
       </div>
@@ -857,7 +857,7 @@ export function TimelineArea() {
         className="pointer-events-none absolute left-0 top-0 bottom-0 z-[45]"
         style={{ visibility: 'hidden', width: 0, willChange: 'transform' }}
       >
-        <div className="absolute top-0 bottom-0 w-px bg-white/60" style={{ left: -0.5 }} />
+        <div className="absolute top-0 bottom-0 w-px bg-[color-mix(in_srgb,var(--text)_60%,transparent)]" style={{ left: -0.5 }} />
       </div>
 
       {([

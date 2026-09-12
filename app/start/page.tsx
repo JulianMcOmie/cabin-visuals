@@ -171,7 +171,7 @@ export default function StartPage() {
                       : <TemplatePreviewVideo id={tpl.id} />}
                 </div>
                 <div className="p-3">
-                  <h3 className="m-0 text-[13px] font-semibold text-[var(--text)] group-hover:text-white">{tpl.name}</h3>
+                  <h3 className="m-0 text-[13px] font-semibold text-[var(--text)] group-hover:text-[var(--text)]">{tpl.name}</h3>
                   <p className="mt-1 mb-0 text-xs leading-snug text-[var(--text-muted)]">{tpl.description}</p>
                 </div>
               </button>

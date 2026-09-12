@@ -224,7 +224,7 @@ function LayoutPreview({ settings }: { settings: GridSettings }) {
       ref={hostRef}
       data-testid="grid-layout-preview"
       title="Drag to orbit"
-      className="relative w-full cursor-grab touch-none select-none overflow-hidden border-b border-white/[0.06] active:cursor-grabbing"
+      className="relative w-full cursor-grab touch-none select-none overflow-hidden border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] active:cursor-grabbing"
       style={{ height: PREVIEW_HEIGHT, background: ROOM }}
       onPointerDown={(event) => {
         event.preventDefault()
@@ -245,8 +245,8 @@ function LayoutPreview({ settings }: { settings: GridSettings }) {
       }}
     >
       <canvas ref={canvasRef} className="h-full w-full" />
-      <span className="pointer-events-none absolute right-1.5 top-1 font-mono text-[8px] tabular-nums text-white/45">{dims}</span>
-      <span className="pointer-events-none absolute bottom-1 right-1.5 font-mono text-[8px] tabular-nums text-white/45">
+      <span className="pointer-events-none absolute right-1.5 top-1 font-mono text-[8px] tabular-nums text-[var(--text-3)]">{dims}</span>
+      <span className="pointer-events-none absolute bottom-1 right-1.5 font-mono text-[8px] tabular-nums text-[var(--text-3)]">
         {total} {total === 1 ? 'COPY' : 'COPIES'}
       </span>
     </div>
@@ -281,7 +281,7 @@ function CircularModeGlyph() {
 
 function ModeControl({ b, axis }: { b: SelectBinding; axis: string }) {
   return (
-    <div role="radiogroup" aria-label={`${axis} axis layout`} className="grid w-full grid-cols-2 gap-px overflow-hidden rounded-md border border-white/[0.08]">
+    <div role="radiogroup" aria-label={`${axis} axis layout`} className="grid w-full grid-cols-2 gap-px overflow-hidden rounded-md border border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
       {b.def.options.map((option) => {
         const active = option.value === b.value
         return (
@@ -319,10 +319,10 @@ function AxisStrip({ axis, role, mode, count, radius, hexagonal = false }: {
 }) {
   const circular = !hexagonal && mode.value === 1
   return (
-    <div className="flex flex-col items-center gap-1.5 rounded-md border border-white/[0.06] bg-black/25 px-1 pb-1.5 pt-1">
+    <div className="flex flex-col items-center gap-1.5 rounded-md border border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] px-1 pb-1.5 pt-1">
       <div className="flex items-baseline gap-1">
         <span className="text-[11px] font-bold" style={{ color: ACCENT }}>{axis}</span>
-        <span className="text-[7px] font-semibold tracking-[0.14em] text-white/35">{role}</span>
+        <span className="text-[7px] font-semibold tracking-[0.14em] text-[var(--text-muted)]">{role}</span>
       </div>
       {!hexagonal && <ModeControl b={mode} axis={axis} />}
       <Knob b={count} label="COUNT" accent={ACCENT} format={(v) => `${Math.round(v)}`} />
@@ -362,7 +362,7 @@ function IndexingGlyph({ value }: { value: number }) {
 
 function IconRadioRow({ b, glyph }: { b: SelectBinding; glyph: (value: number) => ReactNode }) {
   return (
-    <div role="radiogroup" aria-label={b.def.label} className="flex gap-px overflow-hidden rounded-md border border-white/[0.08]">
+    <div role="radiogroup" aria-label={b.def.label} className="flex gap-px overflow-hidden rounded-md border border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
       {b.def.options.map((option) => {
         const active = option.value === b.value
         return (
@@ -487,7 +487,7 @@ function GridConsole({ bound }: { bound: GridBindings }) {
         </div>
       </div>
       {rest.length > 0 && (
-        <div className="border-t border-white/[0.06] px-2 pb-2 pt-2">
+        <div className="border-t border-[color-mix(in_srgb,var(--text)_6%,transparent)] px-2 pb-2 pt-2">
           <ParameterList parameters={rest} />
         </div>
       )}

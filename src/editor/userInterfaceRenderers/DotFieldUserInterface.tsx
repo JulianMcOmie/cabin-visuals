@@ -87,7 +87,7 @@ function SchemeChips({ b }: { b: SelectBinding }) {
             aria-label={`${b.def.label}: ${option.label}`}
             onClick={() => b.set(option.value)}
             className={`overflow-hidden rounded border cursor-pointer ${
-              active ? '' : 'border-white/[0.07] hover:border-white/20'
+              active ? '' : 'border-[color-mix(in_srgb,var(--text)_7%,transparent)] hover:border-[color-mix(in_srgb,var(--text)_20%,transparent)]'
             }`}
             style={active ? { borderColor: withAlpha(accent, 0.7) } : undefined}
           >
@@ -134,14 +134,14 @@ function CellStrip({ b }: { b: NumBinding | null }) {
               aria-label={`${def.label} ${cellValue}`}
               aria-pressed={lit}
               onClick={() => set(cellValue === current ? Math.round(def.min) : cellValue)}
-              className={`h-full flex-1 rounded-[1px] cursor-pointer ${lit ? '' : 'bg-white/[0.08] hover:bg-white/[0.16]'}`}
+              className={`h-full flex-1 rounded-[1px] cursor-pointer ${lit ? '' : 'bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_16%,transparent)]'}`}
               style={lit ? { background: withAlpha(accent, 0.75) } : undefined}
             />
           )
         })}
       </div>
-      <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-white/40">FX ROSTER</span>
-      <span className="font-mono text-[9px] tabular-nums text-white/70">{current}</span>
+      <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">FX ROSTER</span>
+      <span className="font-mono text-[9px] tabular-nums text-[var(--text-2)]">{current}</span>
     </div>
   )
 }

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./themes.css";
 
 /* Map Tailwind's font-sans/font-mono utilities onto the next/font variables
    (Hanken Grotesk / IBM Plex Mono, set on <html> in app/layout.tsx; the
@@ -23,65 +24,7 @@ body {
    palette (docs: design_handoff_console_redesign) - same token NAMES,
    so every surface follows without markup changes.
    ============================================================ */
-:root {
-  /* Surfaces. The handoff draws everything on a blue-black family around
-     #0c0d12 with raised panels at #10131c; the hierarchy (shell < canvas <
-     app < panel < raised < elevated) is preserved from the grey palette,
-     re-pitched onto the blue axis. */
-  --bg-app: #0c0d12;          /* editor app background / workspace card */
-  --bg-shell: #0c0d12;        /* editor shell: library surface, workspace frame, top bar - darker than the inset card, so the eye falls into the lighter workspace */
-  --bg-topbar: var(--bg-shell); /* editor top bar follows the library shell */
-  --bg-page: #0c0d12;         /* marketing/auth page background */
-  --bg-panel: #0e1119;        /* panels, cards, top bars */
-  --bg-panel-raised: #10131c; /* label columns, corner cells */
-  --bg-track-row: #0c0d12;    /* track label rows - flat with the lanes (4a) */
-  --bg-elevated: #1a1f2c;     /* buttons, chips, hover surfaces */
-  --bg-canvas: #0a0b10;       /* 3D viewport (the handoff's stage) */
-  --bg-canvas-deep: #08090d;
-  --bg-timeline: #0c0d12;     /* timeline lanes + ruler - the lifted work surface above the shell */
-
-  /* Borders - white-alpha hairlines per the handoff (panels 0.06-0.10). */
-  --border: rgba(233, 237, 244, 0.10);
-  --border-subtle: rgba(233, 237, 244, 0.05);
-  --border-strong: rgba(233, 237, 244, 0.18);
-
-  /* Text - the handoff's ramp: #e9edf4 / #b8c0d0 / #8a93a6 / #5a6274. */
-  --text: #e9edf4;
-  --text-2: #b8c0d0;
-  --text-3: #8a93a6;
-  --text-muted: #5a6274;
-  --text-faint: #6e7688;
-
-  /* Accent - THE ice blue */
-  --accent: #45c6ff;
-  --accent-hover: #7fd8ff;
-  --accent-muted: #3a8fc0; /* dampened accent: slider fills and other quiet-active surfaces */
-  --accent-button: #bfe6f7; /* the Export pill's fill (hover: --accent-hover) */
-  --on-accent: #0c0d12; /* dark text on accent buttons */
-  --warn: #d0a04c;
-
-  /* Track palette - rainbow clip hues per the 4a spec (notes stay neutral). */
-  --track-1: #3a7694;
-  --track-2: #3f7f7c;
-  --track-3: #76517f;
-  --track-4: #62589a;
-  --track-5: #8a4f73;
-
-  /* Legacy names remapped onto the console palette (pre-redesign CSS/components
-     that still reference them land on-palette instead of on the old theme). */
-  --highlight: #d0a04c;
-  --green: #6a9955;
-  --background: #0a0b10;
-  --surface: #10131c;
-  --lightSurface: #1a1f2c;
-  --lightSurfaceHover: #222839;
-  --activeBg: #1a1f2c;
-  --electricBlue: #45c6ff;
-  --selectedBlue: #7fd8ff;
-  --brightGreen: #00e676;
-  --brightYellow: #ffdd00;
-  --windowSelectionColor: rgba(69, 198, 255, 0.35);
-}
+/* The global palette and all aliases live in themes.css. */
 
 /* A tiny copy of the finished visualizer frame creates ONE low-frequency field
    of light behind the whole workspace card. Anchored high (the image's center
@@ -119,14 +62,14 @@ body {
    inspector (which share none of these vars inside this scope) keep their own
    chrome. */
 .timeline-glass-scope {
-  --bg-timeline: rgba(12, 13, 18, 0.9);
-  --bg-track-row: #0e1119;
+  --bg-timeline: color-mix(in srgb, var(--bg-app) 90%, transparent);
+  --bg-track-row: var(--bg-panel);
   /* The piano roll shares the scope; its ruler takes the same dim etched
      voicing as the timeline's instead of the brighter defaults. */
-  --ruler-number: rgba(255, 255, 255, 0.34);
-  --ruler-line: rgba(255, 255, 255, 0.1);
-  --ruler-tick-minor: rgba(255, 255, 255, 0.08);
-  --ruler-tick-sub: rgba(255, 255, 255, 0.05);
+  --ruler-number: color-mix(in srgb, var(--text) 45%, transparent);
+  --ruler-line: var(--border);
+  --ruler-tick-minor: var(--border);
+  --ruler-tick-sub: var(--border-subtle);
   /* The STRUCTURAL hairlines (bar gridlines, row dividers, label-column edge,
      hierarchy brackets) are OPAQUE on purpose: as translucent whites they sum
      wherever two lines cross - every grid/divider crossing and bracket joint
@@ -134,8 +77,8 @@ body {
      (extending 1px over the divider above) doubled instead of covering. These
      are the same alphas they always were (5.5% and 10% white), pre-composited
      against the lane's effective near-black, so a crossing just paints flat. */
-  --timeline-grid-line: #191a1f;
-  --timeline-row-line: #23252c;
+  --timeline-grid-line: color-mix(in srgb, var(--bg-app), var(--text) 6%);
+  --timeline-row-line: color-mix(in srgb, var(--bg-app), var(--text) 10%);
 }
 
 /* Ruler voicing for the TIMELINE's ruler only. Applied on TimelineArea's root
@@ -145,10 +88,10 @@ body {
    readable. Here the numbers recede to etched marks on the dark stage so the
    blocks (and the selected block's supernova) carry the scene. */
 .timeline-neon {
-  --ruler-number: rgba(255, 255, 255, 0.34);
-  --ruler-line: rgba(255, 255, 255, 0.1);
-  --ruler-tick-minor: rgba(255, 255, 255, 0.08);
-  --ruler-tick-sub: rgba(255, 255, 255, 0.05);
+  --ruler-number: color-mix(in srgb, var(--text) 45%, transparent);
+  --ruler-line: var(--border);
+  --ruler-tick-minor: var(--border);
+  --ruler-tick-sub: var(--border-subtle);
 }
 
 /* The inspector panel. Opaque on purpose (2026-08-18): it used to be a
@@ -160,7 +103,7 @@ body {
 }
 
 .visualizer-glass-control {
-  background: rgba(19, 24, 35, 0.7);
+  background: color-mix(in srgb, var(--bg-panel-raised) 85%, transparent);
   -webkit-backdrop-filter: blur(12px) saturate(120%);
   backdrop-filter: blur(12px) saturate(120%);
 }
@@ -204,7 +147,7 @@ button, input, select, textarea {
 /* Google's default hover wash is a blue tint meant for a white button; the
    white-alpha one is what its own dark themes use. */
 .gsi-host .nsm7Bb-HzV7m-LgbsSe.jVeSEe:hover .nsm7Bb-HzV7m-LgbsSe-MJoBVe {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--border);
 }
 .gsi-host .nsm7Bb-HzV7m-LgbsSe.jVeSEe:active .nsm7Bb-HzV7m-LgbsSe-MJoBVe,
 .gsi-host .nsm7Bb-HzV7m-LgbsSe.jVeSEe:focus .nsm7Bb-HzV7m-LgbsSe-MJoBVe {
@@ -633,55 +576,8 @@ body.drag-moving * {
   transform: translateX(-50%);
 }
 
-/* ============================================================
-   Editorial skin (2026 landing redesign, spec: black with a blue cast,
-   serif display, single soft-cyan accent). Scoped remap of the console
-   tokens so whole screens adopt the editorial look without rewriting
-   their markup - wrap a page in <EditorialSkin> from
-   src/components/landing/editorialTheme.tsx and everything built on the
-   global tokens follows. The editor itself is never skinned.
-   ============================================================ */
+/* Editorial typography stays scoped; account colors inherit from themes.css. */
 .editorial-skin {
-  /* Editorial tokens under their own names (the landing cover uses these).
-     Palette is "black·blue" (picked 2026-09-02): true black with a whisper
-     of steel blue, hairlines lifted a notch so they still read on black. */
-  --lp-bg: #03050b;
-  --lp-bg-deep: #000104;
-  --lp-text: #e9ebf0;
-  --lp-text-muted: #aab0be;
-  --lp-text-faint: #7d8494;
-  --lp-accent: #9ee8f5;
-  --lp-border: rgba(222, 232, 250, 0.13);
-  --lp-border-strong: rgba(222, 232, 250, 0.17);
-
-  /* Console tokens remapped so skinned screens' existing markup lands on the
-     editorial palette. Surface hierarchy is preserved, just sunk and cooled. */
-  --bg-page: #03050b;
-  --bg-panel: #000104;
-  --bg-panel-raised: #0a0e1a;
-  --bg-elevated: #121828;
-  --bg-app: #02030a;
-  --border: rgba(222, 232, 250, 0.13);
-  --border-subtle: rgba(222, 232, 250, 0.1);
-  --border-strong: rgba(222, 232, 250, 0.2);
-  --text: #e9ebf0;
-  --text-2: #ccd1dc;
-  --text-3: #aab0be;
-  --text-muted: #7d8494;
-  --text-faint: #7d8494;
-  --accent: #9ee8f5;
-  --accent-hover: #c3f2fb;
-  --accent-muted: #6fb9c7;
-  --on-accent: #12141a;
-
-  /* Deeper chrome (the landing's editor facsimile draws with these). */
-  --bg-shell: #050812;
-  --bg-topbar: #050812;
-  --bg-timeline: #070b16;
-  --bg-track-row: #0a0e1a;
-  --bg-canvas: #03050b;
-  --bg-canvas-deep: #000104;
-
   /* Reroute the font-sans / font-mono utilities (inlined from these vars by
      @theme inline) onto the editorial stack for everything inside the skin. */
   --font-ui-sans: var(--lp-font-body);
@@ -703,7 +599,7 @@ body.drag-moving * {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background-color: rgba(12, 5, 24, 0);
+  background-color: transparent;
   opacity: 0;
   transition: opacity 1.4s ease;
   animation: lp-tint-cycle 7s ease-in-out infinite;
@@ -714,8 +610,8 @@ body.drag-moving * {
   animation-play-state: running;
 }
 @keyframes lp-tint-cycle {
-  0%, 100% { background-color: rgba(12, 5, 24, 0); }
-  50% { background-color: rgba(12, 5, 24, 1); }
+  0%, 100% { background-color: transparent; }
+  50% { background-color: color-mix(in srgb, var(--accent) 7%, var(--bg-page)); }
 }
 @media (prefers-reduced-motion: reduce) {
   .lp-tint-wash { animation: none; }

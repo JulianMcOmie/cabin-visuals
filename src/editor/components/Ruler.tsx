@@ -86,14 +86,14 @@ const RulerTicks = memo(function RulerTicks({ pixelsPerBeat, beatsPerBar, totalB
           TIMELINE (.timeline-neon) can voice them as faint etched white on
           its near-black stage while the piano roll keeps these defaults. */}
       {subs.map((beat) => (
-        <div key={`s${beat}`} className="absolute bottom-0 w-px bg-[var(--ruler-tick-sub,#222228)]" style={{ left: beat * pixelsPerBeat, top: '78%' }} />
+        <div key={`s${beat}`} className="absolute bottom-0 w-px bg-[var(--ruler-tick-sub,var(--border-subtle))]" style={{ left: beat * pixelsPerBeat, top: '78%' }} />
       ))}
 
       {/* Short minor ticks - 4 per major span (one per measure when zoomed
           out). Clearly shorter than the numbered major lines, still a hair
           taller than the subdivision ticks. */}
       {minors.map((beat) => (
-        <div key={`b${beat}`} className="absolute bottom-0 w-px bg-[var(--ruler-tick-minor,#2c2c33)]" style={{ left: beat * pixelsPerBeat, top: '74%' }} />
+        <div key={`b${beat}`} className="absolute bottom-0 w-px bg-[var(--ruler-tick-minor,var(--border))]" style={{ left: beat * pixelsPerBeat, top: '74%' }} />
       ))}
     </>
   )
@@ -202,7 +202,7 @@ export function Ruler({
   onLoopResizeStart,
   children,
   loopFill = LOOP_REGION_ENABLED_COLOR,
-  loopEdge = '#3982b3',
+  loopEdge = 'var(--accent-muted)',
 }: RulerProps) {
   const loopRegion = useTimeStore((s) => s.loopRegion)
   const barWidthPx = beatsPerBar * pixelsPerBeat
@@ -277,8 +277,8 @@ export function Ruler({
               style={{
                 left: -leadInPx,
                 width: leadInPx,
-                backgroundImage: 'repeating-linear-gradient(-45deg, rgba(53,167,230,0.16) 0 5px, rgba(53,167,230,0.05) 5px 10px)',
-                borderRight: '1px solid rgba(53,167,230,0.55)',
+                backgroundImage: 'repeating-linear-gradient(-45deg, color-mix(in srgb,var(--accent) 16%,transparent) 0 5px, color-mix(in srgb,var(--accent) 5%,transparent) 5px 10px)',
+                borderRight: '1px solid color-mix(in srgb,var(--accent) 55%,transparent)',
               }}
             >
               <span className="absolute left-1 font-mono text-[10px] font-medium leading-none text-[var(--accent)]" style={{ top: 3 }}>

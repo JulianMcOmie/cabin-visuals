@@ -253,7 +253,7 @@ function IconSegmented({ b, label, icons, testId }: {
 
   return (
     <div className="flex flex-col items-center gap-1" data-testid={testId}>
-      <div className="flex overflow-hidden rounded-md border border-white/10">
+      <div className="flex overflow-hidden rounded-md border border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
         {b.def.options.map((option) => {
           const entry = icons[option.value]
           const Icon = entry?.icon
@@ -266,7 +266,7 @@ function IconSegmented({ b, label, icons, testId }: {
               title={entry?.title ?? option.label}
               onClick={() => b.set(option.value)}
               className={`flex h-[22px] w-[26px] items-center justify-center ${
-                active ? 'text-black' : 'bg-black/25 text-white/40 hover:text-white/70'
+                active ? 'text-black' : 'bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] text-[var(--text-3)] hover:text-[var(--text-2)]'
               }`}
               style={active ? { background: accent } : undefined}
             >
@@ -275,7 +275,7 @@ function IconSegmented({ b, label, icons, testId }: {
           )
         })}
       </div>
-      <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">{label}</span>
+      <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">{label}</span>
     </div>
   )
 }
@@ -351,18 +351,18 @@ export const ApproachSplitterUserInterfaceRenderer: UserInterfaceRendererDefinit
             <Knob b={bendDirection} label="BEND DIRECTION" suffix="°" />
             <Knob b={after} label="AFTER ARRIVAL" suffix=" beats" />
           </ControlRow>
-          <p className="px-4 text-[10px] text-white/50">
+          <p className="px-4 text-[10px] text-[var(--text-3)]">
             Every note sends one identical copy, reaching Target exactly on that note.
             {' '}Travel time starts the flight early. Bend 0 is straight; turn Bend direction to aim the curve.
           </p>
           <details className="px-4" data-testid="approach-flight-positions">
-            <summary className="cursor-pointer text-[10px] text-white/60">Start &amp; target</summary>
-            <p className="py-2 text-[10px] text-white/40">Offsets from the incoming copy, along its axes. Negative Z starts behind the object.</p>
+            <summary className="cursor-pointer text-[10px] text-[var(--text-3)]">Start &amp; target</summary>
+            <p className="py-2 text-[10px] text-[var(--text-3)]">Offsets from the incoming copy, along its axes. Negative Z starts behind the object.</p>
             {points.map((point) => <div key={point.label} className="flex items-center gap-3 py-1">
-              <span className="w-12 text-[9px] text-white/50">{point.label}</span>
+              <span className="w-12 text-[9px] text-[var(--text-3)]">{point.label}</span>
               {point.axes.map(({ axis, binding }) => <Knob key={axis} b={binding} label={axis} bipolar />)}
             </div>)}
-            <p className="pt-2 text-[10px] text-white/40">
+            <p className="pt-2 text-[10px] text-[var(--text-3)]">
               After arrival: {Math.round(settings.arrival ?? 0) === 1 ? 'hold at Target' : 'continue along the curve'} for {settings.afterBeats} beats, fading over the final quarter.
             </p>
           </details>

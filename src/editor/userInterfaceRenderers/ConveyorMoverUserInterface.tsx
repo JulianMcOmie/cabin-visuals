@@ -303,7 +303,7 @@ function LoopSelector({ b }: { b: SelectBinding }) {
   }
   return (
     <div className="flex w-[58px] flex-col items-center">
-      <div className="flex overflow-hidden rounded-md border border-white/10">
+      <div className="flex overflow-hidden rounded-md border border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
         {b.def.options.map((option) => {
           const active = option.value === selected
           return (
@@ -315,7 +315,7 @@ function LoopSelector({ b }: { b: SelectBinding }) {
                 ? 'Belt · each copy loops at the formation\'s own spacing, so the arrangement never breaks'
                 : 'Group · the whole formation travels out and back together, dissolving through the turn'}
               onClick={() => b.set(option.value)}
-              className={`px-1 pb-0.5 pt-1 ${active ? '' : 'bg-black/25 hover:bg-white/5'}`}
+              className={`px-1 pb-0.5 pt-1 ${active ? '' : 'bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)]'}`}
               style={active ? { background: CURRENT } : undefined}
             >
               <svg
@@ -331,10 +331,10 @@ function LoopSelector({ b }: { b: SelectBinding }) {
           )
         })}
       </div>
-      <span className="mt-1 whitespace-nowrap text-[8px] font-semibold leading-[11px] tracking-[0.12em] text-white/40">
+      <span className="mt-1 whitespace-nowrap text-[8px] font-semibold leading-[11px] tracking-[0.12em] text-[var(--text-3)]">
         LOOP
       </span>
-      <span className="whitespace-nowrap font-mono text-[9px] leading-[12px] text-white/70">
+      <span className="whitespace-nowrap font-mono text-[9px] leading-[12px] text-[var(--text-2)]">
         {b.def.options.find((option) => option.value === selected)?.label.toUpperCase() ?? ''}
       </span>
     </div>

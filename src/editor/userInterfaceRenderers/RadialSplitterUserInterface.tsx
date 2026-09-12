@@ -247,7 +247,7 @@ function KindSegmented({ b, caption, labels, testId }: {
 }) {
   return (
     <div className="flex flex-col items-center gap-1" data-testid={testId}>
-      <div className="flex overflow-hidden rounded-md border border-white/10">
+      <div className="flex overflow-hidden rounded-md border border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
         {b.def.options.map((option) => {
           const active = option.value === b.value
           return (
@@ -258,7 +258,7 @@ function KindSegmented({ b, caption, labels, testId }: {
               title={`${b.def.label}: ${option.label}`}
               onClick={() => b.set(option.value)}
               className={`flex h-[22px] min-w-[30px] items-center justify-center px-1.5 text-[8px] font-bold tracking-[0.1em] ${
-                active ? 'text-black' : 'bg-black/25 text-white/40 hover:text-white/70'
+                active ? 'text-black' : 'bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] text-[var(--text-3)] hover:text-[var(--text-2)]'
               }`}
               style={active ? { background: ACCENT } : undefined}
             >
@@ -267,7 +267,7 @@ function KindSegmented({ b, caption, labels, testId }: {
           )
         })}
       </div>
-      <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">{caption}</span>
+      <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">{caption}</span>
     </div>
   )
 }

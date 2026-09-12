@@ -296,7 +296,7 @@ function ImpactPreview({ style, impact, release, size }: {
     <div
       data-testid="impact-warp-preview"
       title="Drag to orbit the lattice"
-      className="relative h-[148px] cursor-grab overflow-hidden border-b border-white/[0.06] bg-[#05070c] active:cursor-grabbing"
+      className="relative h-[148px] cursor-grab overflow-hidden border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[var(--bg-canvas-deep)] active:cursor-grabbing"
     >
       <PreviewCanvas dpr={[1, 2]} camera={{ position: [0, 0, 6.1], fov: 40 }} gl={{ antialias: true, alpha: true }}>
         {/* Opaque in-scene background: the field samples the rendered image, and
@@ -334,7 +334,7 @@ function StyleStrip({ bound }: { bound: UserInterfaceParameter }) {
   if (definition.type !== 'select') return null
   const selected = typeof bound.value === 'number' ? Math.round(bound.value) : definition.default
   return (
-    <div className="grid grid-cols-4 border-b border-white/[0.06]">
+    <div className="grid grid-cols-4 border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)]">
       {definition.options.map((option) => {
         const active = option.value === selected
         return (
@@ -343,7 +343,7 @@ function StyleStrip({ bound }: { bound: UserInterfaceParameter }) {
             aria-pressed={active}
             title={STYLE_HINTS[option.value] ?? option.label}
             onClick={() => bound.setValue(option.value)}
-            className={`flex flex-col items-center gap-1 py-2 ${active ? '' : 'hover:bg-white/[0.04]'}`}
+            className={`flex flex-col items-center gap-1 py-2 ${active ? '' : 'hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)]'}`}
             style={active ? { background: withAlpha(ACCENT, 0.16), boxShadow: `inset 0 -2px 0 0 ${ACCENT}` } : undefined}
           >
             <svg

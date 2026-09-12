@@ -56,7 +56,7 @@ export function ConflictDialog() {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-[2px]">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[color-mix(in_srgb,var(--bg-canvas-deep)_60%,transparent)] backdrop-blur-[2px]">
       <div className="w-[min(30rem,calc(100vw-2rem))] rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-5 shadow-2xl">
         <div className="flex items-start gap-3">
           <AlertTriangle size={18} className="mt-0.5 flex-shrink-0 text-[var(--warn)]" />
@@ -79,7 +79,7 @@ export function ConflictDialog() {
           <button
             onClick={reload}
             disabled={busy !== null}
-            className="flex items-center justify-center gap-2 rounded-md bg-[var(--accent)] px-3 py-2 text-[13px] font-medium text-white hover:bg-[var(--accent-hover)] disabled:opacity-60"
+            className="flex items-center justify-center gap-2 rounded-md bg-[var(--accent)] px-3 py-2 text-[13px] font-medium text-[var(--text)] hover:bg-[var(--accent-hover)] disabled:opacity-60"
           >
             {busy === 'reload' && <Loader2 size={13} className="animate-spin" />}
             Load the newer version

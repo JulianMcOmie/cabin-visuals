@@ -131,7 +131,7 @@ export const NoteRect = memo(function NoteRect({
             width: '100%',
             background: 'rgba(10,12,16,0.92)',
             color: '#fff',
-            border: '1px solid rgba(255,255,255,0.6)',
+            border: '1px solid color-mix(in srgb,var(--text) 60%,transparent)',
             borderRadius: 3,
             fontSize: 11,
             padding: '0 3px',
@@ -234,11 +234,11 @@ const RowLabel = memo(function RowLabel({ row, rowIndex, rowHeight, isLane, lane
         gap: 4,
         paddingLeft: 6,
         paddingRight: 8,
-        borderBottom: '1px solid rgba(255,255,255,0.05)',
+        borderBottom: '1px solid color-mix(in srgb,var(--text) 5%,transparent)',
         backgroundColor: onCursorRow
-          ? 'rgba(255,255,255,0.07)'
+          ? 'color-mix(in srgb,var(--text) 7%,transparent)'
           : laneActive
-          ? 'rgba(255,255,255,0.09)'
+          ? 'color-mix(in srgb,var(--text) 9%,transparent)'
           : rowIndex % 2 === 1 ? 'rgba(0,0,0,0.08)' : 'transparent',
         boxSizing: 'border-box',
         overflow: 'hidden',
@@ -282,8 +282,8 @@ const RowLabel = memo(function RowLabel({ row, rowIndex, rowHeight, isLane, lane
             borderRadius: 3,
             padding: '0 3px',
             flexShrink: 0,
-            color: onCursorRow ? '#0b0d12' : 'rgba(255,255,255,0.55)',
-            backgroundColor: onCursorRow ? vimAccent : 'rgba(255,255,255,0.09)',
+            color: onCursorRow ? '#0b0d12' : 'color-mix(in srgb,var(--text) 55%,transparent)',
+            backgroundColor: onCursorRow ? vimAccent : 'color-mix(in srgb,var(--text) 9%,transparent)',
           }}
         >
           {vimKey}
@@ -292,7 +292,7 @@ const RowLabel = memo(function RowLabel({ row, rowIndex, rowHeight, isLane, lane
         <span
           style={{
             fontSize: 10,
-            color: 'rgba(255,255,255,0.35)',
+            color: 'color-mix(in srgb,var(--text) 35%,transparent)',
             whiteSpace: 'nowrap',
             flexShrink: 0,
           }}
@@ -390,7 +390,7 @@ export const RowStripes = memo(function RowStripes({ count, rowHeight }: { count
             right: 0,
             height: rowHeight,
             backgroundColor: i % 2 === 1 ? 'rgba(0,0,0,0.08)' : 'transparent',
-            borderBottom: '1px solid rgba(255,255,255,0.05)',
+            borderBottom: '1px solid color-mix(in srgb,var(--text) 5%,transparent)',
             boxSizing: 'border-box',
             pointerEvents: 'none',
           }}

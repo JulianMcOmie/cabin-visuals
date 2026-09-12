@@ -45,7 +45,7 @@ function SubMenu({ children }: { children: ReactNode }) {
     <div
       ref={ref}
       style={{ top: shift }}
-      className="absolute left-full -ml-1 min-w-[150px] py-1 rounded-md border border-zinc-700 bg-[#202024] shadow-lg shadow-black/50"
+      className="absolute left-full -ml-1 min-w-[150px] py-1 rounded-md border border-[var(--border-strong)] bg-[var(--bg-elevated)] shadow-lg shadow-black/50"
     >
       {children}
     </div>
@@ -124,11 +124,11 @@ export function NestedMenu({
       />
     <div
       ref={ref}
-      className="fixed z-50 min-w-[168px] py-1 rounded-md border border-zinc-700 bg-[#202024] text-xs shadow-lg shadow-black/50 select-none"
+      className="fixed z-50 min-w-[168px] py-1 rounded-md border border-[var(--border-strong)] bg-[var(--bg-elevated)] text-xs shadow-lg shadow-black/50 select-none"
       style={{ left: placement.left, top: placement.top }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {visible.length === 0 && <div className="px-3 py-1.5 text-zinc-500">{emptyLabel}</div>}
+      {visible.length === 0 && <div className="px-3 py-1.5 text-[var(--text-muted)]">{emptyLabel}</div>}
 
       {visible.map((group) => (
         <div
@@ -137,12 +137,12 @@ export function NestedMenu({
           onMouseEnter={() => setOpenSub(group.key)}
           onMouseLeave={() => setOpenSub(null)}
         >
-          <div className="flex items-center justify-between gap-4 px-3 py-1.5 text-zinc-200 hover:bg-zinc-700/60 cursor-default">
+          <div className="flex items-center justify-between gap-4 px-3 py-1.5 text-[var(--text)] hover:bg-[var(--bg-elevated)]/60 cursor-default">
             <span className="flex items-center gap-2">
-              {group.icon && <span aria-hidden="true" className="flex h-4 w-4 shrink-0 items-center justify-center text-zinc-400">{group.icon}</span>}
+              {group.icon && <span aria-hidden="true" className="flex h-4 w-4 shrink-0 items-center justify-center text-[var(--text-3)]">{group.icon}</span>}
               <span>{group.label}</span>
             </span>
-            <ChevronRight size={12} className="text-zinc-500" />
+            <ChevronRight size={12} className="text-[var(--text-muted)]" />
           </div>
           {openSub === group.key && (
             <SubMenu>
@@ -152,7 +152,7 @@ export function NestedMenu({
                   disabled={item.disabled}
                   onClick={() => { onPick(group.key, item.id); onClose() }}
                   className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 text-left ${
-                    item.disabled ? 'text-zinc-500 cursor-default' : 'text-zinc-200 hover:bg-zinc-700/60'
+                    item.disabled ? 'text-[var(--text-muted)] cursor-default' : 'text-[var(--text)] hover:bg-[var(--bg-elevated)]/60'
                   }`}
                 >
                   <span className="flex items-center gap-1.5 min-w-0">

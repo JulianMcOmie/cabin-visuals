@@ -83,12 +83,12 @@ export function SwitcherUserInterface({ trackId }: { trackId: string }) {
           name="Mode"
           testId="switcher-mode"
         />
-        <p className="mt-2 text-[11px] leading-[1.45] text-zinc-500">
+        <p className="mt-2 text-[11px] leading-[1.45] text-[var(--text-muted)]">
           {SWITCHER_MODE_HINTS[mode]}
         </p>
 
         {rack.rows.length === 0 ? (
-          <p className="mt-4 text-[11px] leading-[1.45] text-zinc-500">
+          <p className="mt-4 text-[11px] leading-[1.45] text-[var(--text-muted)]">
             Drag anything into this rack — instruments, groups, movers, splitters,
             colorizers — or add a device from its right-click menu. Each becomes a
             row of the lane.
@@ -99,27 +99,27 @@ export function SwitcherUserInterface({ trackId }: { trackId: string }) {
               {rack.rows.map((row) => (
                 <div
                   key={row.id}
-                  className="flex items-center gap-2 rounded-[5px] border border-white/[0.06] bg-black/25 px-2 py-[5px]"
+                  className="flex items-center gap-2 rounded-[5px] border border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] px-2 py-[5px]"
                 >
                   <span
                     className="h-[9px] w-[9px] flex-none rounded-[2px]"
                     style={{ background: row.color, opacity: row.muted ? 0.3 : 1 }}
                   />
-                  <span className={`truncate text-[12px] ${row.muted ? 'text-white/30' : 'text-white/75'}`}>
+                  <span className={`truncate text-[12px] ${row.muted ? 'text-[var(--text-muted)]' : 'text-[var(--text-2)]'}`}>
                     {row.name}
                   </span>
-                  <span className="ml-auto flex-none font-mono text-[10px] text-white/30">
+                  <span className="ml-auto flex-none font-mono text-[10px] text-[var(--text-muted)]">
                     {row.muted ? 'muted' : noteName(row.pitch)}
                   </span>
                 </div>
               ))}
             </div>
-            <p className="mt-3 text-[11px] leading-[1.45] text-zinc-500">
+            <p className="mt-3 text-[11px] leading-[1.45] text-[var(--text-muted)]">
               {switcherExclusive(mode)
                 ? `One device at a time, so this rack mounts up to ${rack.ceiling} ${rack.ceiling === 1 ? 'copy' : 'copies'} — its largest.`
                 : `Every device can run at once, so this rack mounts up to ${rack.ceiling} ${rack.ceiling === 1 ? 'copy' : 'copies'}.`}
             </p>
-            <p className="mt-1 text-[11px] leading-[1.45] text-zinc-600">
+            <p className="mt-1 text-[11px] leading-[1.45] text-[var(--text-muted)]">
               An empty lane runs everything: wrapping devices in a rack changes nothing
               until you play it.
             </p>

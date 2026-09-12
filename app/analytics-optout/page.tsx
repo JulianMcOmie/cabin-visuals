@@ -32,7 +32,7 @@ export default function AnalyticsOptoutPage() {
       />
       <p className="mb-[22px] text-center font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
         This browser:{' '}
-        <span className={optedOut ? 'text-[#6a9955]' : 'text-[var(--text)]'}>
+        <span className={optedOut ? 'text-[var(--success)]' : 'text-[var(--text)]'}>
           {optedOut === null ? '...' : optedOut ? 'excluded' : 'tracked'}
         </span>
       </p>

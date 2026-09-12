@@ -70,8 +70,8 @@ function HuePreview({ settings }: { settings: HueRotateSettings }) {
   return <PreviewWindow height={116} title="Demo palette: inner ring is the source, outer ring is the result. Continuous preview runs at 120 BPM.">
     <div ref={host} className="relative h-full">
       <canvas ref={canvas} className="h-full w-full" role="img" aria-label="Hue rotation preview: source palette inside, rotated palette outside" />
-      <div className="pointer-events-none absolute bottom-2 left-3 text-[8px] tracking-[0.12em] text-white/30">IN → OUT</div>
-      <div className="pointer-events-none absolute bottom-2 right-3 text-[8px] tracking-[0.12em] text-white/30">DEMO · 120 BPM</div>
+      <div className="pointer-events-none absolute bottom-2 left-3 text-[8px] tracking-[0.12em] text-[var(--text-muted)]">IN → OUT</div>
+      <div className="pointer-events-none absolute bottom-2 right-3 text-[8px] tracking-[0.12em] text-[var(--text-muted)]">DEMO · 120 BPM</div>
     </div>
   </PreviewWindow>
 }
@@ -107,15 +107,15 @@ export const HueRotateUserInterfaceRenderer: UserInterfaceRendererDefinition = (
         onChange={v => speed?.set(v)} label="RATE" ariaLabel="Hue rotation rate in turns per beat"
         accent={HUE_ROTATE_COLOR} bipolar disabled={!running || !speed} format={rate} suffix="/b" />
     </ControlRow>
-    <details className="border-t border-white/[0.06] px-3 py-2">
-      <summary className="cursor-pointer text-[8px] font-bold tracking-[0.14em] text-white/40 hover:text-white/70">MAPPING & COLOR</summary>
+    <details className="border-t border-[color-mix(in_srgb,var(--text)_6%,transparent)] px-3 py-2">
+      <summary className="cursor-pointer text-[8px] font-bold tracking-[0.14em] text-[var(--text-3)] hover:text-[var(--text-2)]">MAPPING & COLOR</summary>
       <div className="mt-3 space-y-3">
-        <div><div className="mb-1 text-[9px] tracking-widest text-white/40">MAP</div><Segmented b={mode} options={MAP_OPTIONS} name="Hue spread mapping" /></div>
+        <div><div className="mb-1 text-[9px] tracking-widest text-[var(--text-3)]">MAP</div><Segmented b={mode} options={MAP_OPTIONS} name="Hue spread mapping" /></div>
         {mode?.value !== HUE_MAP_INDEX && <ControlRow className="justify-around gap-2">
           <Knob b={span} label="SPAN" suffix="u" />
           <Knob b={offset} label="OFFSET" bipolar suffix="u" />
         </ControlRow>}
-        <div><div className="mb-1 text-[9px] tracking-widest text-white/40">COLOR SPACE</div><Segmented b={circle} name="Hue color space" /></div>
+        <div><div className="mb-1 text-[9px] tracking-widest text-[var(--text-3)]">COLOR SPACE</div><Segmented b={circle} name="Hue color space" /></div>
         <ControlRow className="justify-around gap-2 pb-1">
           <Knob b={saturation} label="SATURATION" bipolar entry={percentEntry} format={v => `${Math.round(v * 100)}%`} />
           <Knob b={lightness} label="LIGHTNESS" bipolar entry={percentEntry} format={v => `${Math.round(v * 100)}%`} />

@@ -46,7 +46,7 @@ export function Segmented({ b, options, value, onChange, name, accent, testId, c
       role="radiogroup"
       aria-label={name ?? b?.def.label}
       data-testid={testId}
-      className={`flex gap-[2px] rounded-[7px] border border-white/[0.07] bg-black/30 p-[2px] ${className}`}
+      className={`flex gap-[2px] rounded-[7px] border border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_30%,transparent)] p-[2px] ${className}`}
     >
       {resolvedOptions.map((option) => {
         const active = option.value === selected
@@ -60,7 +60,7 @@ export function Segmented({ b, options, value, onChange, name, accent, testId, c
             title={option.label}
             onClick={() => commit(option.value)}
             className={`flex h-6 min-w-0 flex-1 cursor-pointer items-center justify-center truncate rounded-[5px] px-1 text-[9px] font-semibold tracking-[0.1em] ${
-              active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
+              active ? '' : 'text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] hover:text-[var(--text-2)]'
             }`}
             style={active ? { background: withAlpha(lit, 0.22), color: towardWhite(lit, 0.6) } : undefined}
           >

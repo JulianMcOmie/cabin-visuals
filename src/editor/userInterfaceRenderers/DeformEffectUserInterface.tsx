@@ -325,7 +325,7 @@ function DeformPreview({ settings }: { settings: PreviewSettings }) {
   return (
     <div ref={hostRef} className="h-full w-full">
       {failed && (
-        <div className="flex h-full items-center justify-center text-[10px] text-white/35">
+        <div className="flex h-full items-center justify-center text-[10px] text-[var(--text-muted)]">
           preview unavailable
         </div>
       )}
@@ -341,7 +341,7 @@ function DriveTabs({ value, options, onChange }: {
   onChange: (value: number) => void
 }) {
   return (
-    <div role="tablist" aria-label="Drive" className="flex gap-1 border-b border-white/[0.06] bg-black/25 px-3">
+    <div role="tablist" aria-label="Drive" className="flex gap-1 border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] px-3">
       {options.map((option) => {
         const active = option.value === value
         return (
@@ -352,7 +352,7 @@ function DriveTabs({ value, options, onChange }: {
             aria-selected={active}
             onClick={() => onChange(option.value)}
             className={`border-b-2 px-2.5 py-[7px] text-[11px] ${
-              active ? 'text-white' : 'border-transparent text-white/40 hover:text-white/70'
+              active ? 'text-[var(--text)]' : 'border-transparent text-[var(--text-3)] hover:text-[var(--text-2)]'
             }`}
             style={active ? { borderBottomColor: DEFORM_ACCENT } : undefined}
           >
@@ -367,16 +367,16 @@ function DriveTabs({ value, options, onChange }: {
 function Disclosure({ label, summary, children }: { label: string; summary: string; children: ReactNode }) {
   const [open, setOpen] = useState(false)
   return (
-    <div className="border-t border-white/[0.06] px-3 py-2">
+    <div className="border-t border-[color-mix(in_srgb,var(--text)_6%,transparent)] px-3 py-2">
       <button
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((was) => !was)}
-        className="flex w-full items-center gap-1.5 text-[10px] text-white/45 hover:text-white/70"
+        className="flex w-full items-center gap-1.5 text-[10px] text-[var(--text-3)] hover:text-[var(--text-2)]"
       >
         <span className={`text-[9px] transition-transform ${open ? 'rotate-90' : ''}`}>▸</span>
         <span className="tracking-[0.14em]">{label}</span>
-        <span className="ml-auto font-mono text-[10px] text-white/55">{summary}</span>
+        <span className="ml-auto font-mono text-[10px] text-[var(--text-3)]">{summary}</span>
       </button>
       {open && <div className="pt-2.5">{children}</div>}
     </div>
@@ -447,8 +447,8 @@ export const DeformEffectUserInterfaceRenderer: UserInterfaceRendererDefinition 
 
       <div className="px-3 pb-1 pt-2.5">
         <div className="mb-1.5 flex items-baseline justify-between">
-          <span className="text-[9px] font-bold tracking-[0.22em] text-white/25">OPERATION</span>
-          <span className="text-[10px] text-white/40">{active.hint}</span>
+          <span className="text-[9px] font-bold tracking-[0.22em] text-[var(--text-muted)]">OPERATION</span>
+          <span className="text-[10px] text-[var(--text-3)]">{active.hint}</span>
         </div>
         <div role="radiogroup" aria-label="Operation" className="grid grid-cols-4 gap-1">
           {DEFORM_OPERATIONS.map((option) => {
@@ -463,7 +463,7 @@ export const DeformEffectUserInterfaceRenderer: UserInterfaceRendererDefinition 
                 title={option.hint}
                 onClick={() => operation.set(option.value)}
                 className={`flex flex-col items-center gap-[3px] rounded-[6px] border px-1 pb-[5px] pt-[6px] text-[9px] ${
-                  selected ? 'text-white' : 'border-white/[0.07] text-white/45 hover:text-white/75'
+                  selected ? 'text-[var(--text)]' : 'border-[color-mix(in_srgb,var(--text)_7%,transparent)] text-[var(--text-3)] hover:text-[var(--text-2)]'
                 }`}
                 style={selected
                   ? { borderColor: `${DEFORM_ACCENT}99`, background: `${DEFORM_ACCENT}38` }
@@ -488,7 +488,7 @@ export const DeformEffectUserInterfaceRenderer: UserInterfaceRendererDefinition 
 
       {showsAxis && (
         <div className="flex items-center gap-2 px-4 pb-3">
-          <span className="text-[9px] font-bold tracking-[0.22em] text-white/25">AXIS</span>
+          <span className="text-[9px] font-bold tracking-[0.22em] text-[var(--text-muted)]">AXIS</span>
           <Segmented b={axis} className="flex-1" />
         </div>
       )}

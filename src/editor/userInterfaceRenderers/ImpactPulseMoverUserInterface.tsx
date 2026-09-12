@@ -195,7 +195,7 @@ function PulseWindow({ settings }: { settings: ImpactPulseSettings }) {
     <div
       ref={hostRef}
       data-testid="impact-pulse-window"
-      className="relative flex h-[120px] overflow-hidden border-b border-white/[0.06]"
+      className="relative flex h-[120px] overflow-hidden border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)]"
       style={{ background: ROOM }}
     >
       {/* ── the object taking the hit ──
@@ -264,7 +264,7 @@ function PulseWindow({ settings }: { settings: ImpactPulseSettings }) {
           className="pointer-events-none absolute h-[5px] w-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full"
           style={{ left: `${PLOT_X0}%`, top: `${PLOT_BASE}%`, background: '#ffe3ec', boxShadow: `0 0 6px 1px ${withAlpha(STRIKE, 0.85)}` }}
         />
-        <span className="pointer-events-none absolute right-2 top-1.5 text-[8px] font-bold tracking-[0.16em] text-white/25">
+        <span className="pointer-events-none absolute right-2 top-1.5 text-[8px] font-bold tracking-[0.16em] text-[var(--text-muted)]">
           SIZE
         </span>
       </div>
@@ -302,7 +302,7 @@ function FalloffSegmented({ bound }: { bound: UserInterfaceParameter }) {
         role="radiogroup"
         aria-label="Decay curve"
         data-testid="impact-pulse-falloff-segmented"
-        className="flex gap-[2px] rounded-[7px] border border-white/[0.07] bg-black/30 p-[2px]"
+        className="flex gap-[2px] rounded-[7px] border border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_30%,transparent)] p-[2px]"
       >
         {FALLOFF_OPTIONS.map((option) => {
           const selected = option.value === current
@@ -315,7 +315,7 @@ function FalloffSegmented({ bound }: { bound: UserInterfaceParameter }) {
               title={option.label}
               onClick={() => bound.setValue(option.value)}
               className={`h-7 min-w-0 flex-1 cursor-pointer rounded-[5px] px-[3px] ${
-                selected ? '' : 'hover:bg-white/[0.04]'
+                selected ? '' : 'hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)]'
               }`}
               style={selected ? { background: withAlpha(STRIKE, 0.2) } : undefined}
             >
@@ -333,7 +333,7 @@ function FalloffSegmented({ bound }: { bound: UserInterfaceParameter }) {
           )
         })}
       </div>
-      <p className="mt-1 text-center text-[9px] font-semibold tracking-[0.1em] text-white/40">
+      <p className="mt-1 text-center text-[9px] font-semibold tracking-[0.1em] text-[var(--text-3)]">
         {active.label.toUpperCase()}
       </p>
     </div>
@@ -423,13 +423,13 @@ export const ImpactPulseMoverUserInterfaceRenderer: UserInterfaceRendererDefinit
             <button
               aria-expanded={showMore}
               onClick={() => setShowMore((value) => !value)}
-              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 hover:text-white/60"
+              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-[var(--text-muted)] hover:text-[var(--text-3)]"
             >
               {showMore ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
               MORE
             </button>
             {showMore && (
-              <div className="mt-1.5 rounded-md border border-white/[0.06] bg-black/25 p-2">
+              <div className="mt-1.5 rounded-md border border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] p-2">
                 <ParameterList parameters={unplaced} />
               </div>
             )}

@@ -291,7 +291,7 @@ function GeometryGrid({ b }: { b: StringBinding }) {
             onClick={() => b.set(option.id)}
             className={`flex min-w-0 flex-col items-center gap-0.5 rounded-[4px] border py-1 ${active
               ? ''
-              : 'border-white/[0.07] bg-black/20 text-white/35 hover:bg-white/[0.05] hover:text-white/65'}`}
+              : 'border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_20%,transparent)] text-[var(--text-muted)] hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)] hover:text-[var(--text-2)]'}`}
             style={active ? {
               borderColor: withAlpha(accent, 0.45),
               background: withAlpha(accent, 0.18),
@@ -328,7 +328,7 @@ function SurfaceToggle({ b, label }: {
       // Segmented's height instead of pinning their own.
       className={`h-full min-h-6 rounded-[4px] border text-[7px] font-semibold tracking-[0.12em] ${on
         ? ''
-        : 'border-white/[0.07] bg-black/25 text-white/40 hover:bg-white/[0.05] hover:text-white/65'}`}
+        : 'border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)] hover:text-[var(--text-2)]'}`}
       style={on ? {
         borderColor: withAlpha(accent, 0.45),
         background: withAlpha(accent, 0.2),

@@ -45,9 +45,9 @@ function PixelMeter({ b }: { b: NumBinding | null }) {
   return (
     <div className="mb-2.5">
       <div className="mb-1 flex items-baseline justify-between select-none">
-        <span className="text-[8px] font-semibold uppercase tracking-[0.12em] text-white/40" title={def.label}>{def.label}</span>
+        <span className="text-[8px] font-semibold uppercase tracking-[0.12em] text-[var(--text-3)]" title={def.label}>{def.label}</span>
         <KnobValue value={value} min={def.min} max={def.max} label={def.label} onChange={set}
-          className="font-mono text-[9px] tabular-nums text-white/70">{value.toFixed(decimals)}</KnobValue>
+          className="font-mono text-[9px] tabular-nums text-[var(--text-2)]">{value.toFixed(decimals)}</KnobValue>
       </div>
       <div
         role="slider"
@@ -78,7 +78,7 @@ function PixelSwitch({ b }: { b: BooleanBinding | null }) {
   const on = b.value >= 0.5
   return (
     <div className="mb-2.5 flex items-center justify-between">
-      <span className="text-[8px] font-semibold uppercase tracking-[0.12em] text-white/40 select-none">{b.def.label}</span>
+      <span className="text-[8px] font-semibold uppercase tracking-[0.12em] text-[var(--text-3)] select-none">{b.def.label}</span>
       <button
         role="switch"
         aria-checked={on}
@@ -99,7 +99,7 @@ function PixelSwitch({ b }: { b: BooleanBinding | null }) {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="px-3 pt-2">
-      <p className="mb-1.5 text-[7px] font-bold uppercase tracking-[0.22em] text-white/25 select-none">{title}</p>
+      <p className="mb-1.5 text-[7px] font-bold uppercase tracking-[0.22em] text-[var(--text-muted)] select-none">{title}</p>
       {children}
     </div>
   )
@@ -125,7 +125,7 @@ export const PixelBlastUserInterfaceRenderer: UserInterfaceRendererDefinition = 
       {/* The six baked palettes, keyed by pitch class, ARE this instrument's
           face - they stand where a preview window would. Reference, not a
           control. */}
-      <div className="border-b border-white/[0.06] bg-[#05070c] px-3 pb-2 pt-2.5">
+      <div className="border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[var(--bg-canvas-deep)] px-3 pb-2 pt-2.5">
         <div className="grid grid-cols-6 gap-1">
           {PALETTES.map((palette, index) => (
             <div key={index} className="flex flex-col gap-px" title={`Palette ${index + 1} · pitch classes ${index} and ${index + 6}`}>
@@ -135,7 +135,7 @@ export const PixelBlastUserInterfaceRenderer: UserInterfaceRendererDefinition = 
             </div>
           ))}
         </div>
-        <p className="mt-1.5 text-[8px] leading-3 text-white/30">pitch class picks the palette · octave picks the row</p>
+        <p className="mt-1.5 text-[8px] leading-3 text-[var(--text-muted)]">pitch class picks the palette · octave picks the row</p>
       </div>
 
       <Section title="Blast">
@@ -164,7 +164,7 @@ export const PixelBlastUserInterfaceRenderer: UserInterfaceRendererDefinition = 
               }}
             />
           )}
-          <span className="text-[8px] uppercase tracking-[0.1em] text-white/30 select-none">one grid cell</span>
+          <span className="text-[8px] uppercase tracking-[0.1em] text-[var(--text-muted)] select-none">one grid cell</span>
         </div>
         <PixelMeter b={pixelSize} />
         <PixelMeter b={spreadX} />

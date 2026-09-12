@@ -427,30 +427,30 @@ function ShockKnob({ b, label, format, size = KNOB, detent }: {
             background: `conic-gradient(from 225deg, transparent 0deg ${arcTo}deg, rgba(255,255,255,0.07) ${arcTo}deg 270deg, transparent 270deg)`,
           }}
         />
-        <div className="absolute inset-[3px] rounded-full border border-white/10 bg-[#0f151b]" />
+        <div className="absolute inset-[3px] rounded-full border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[#0f151b]" />
         {/* Where the knob catches: the designed limit, marked. */}
         {detentPercent != null && (
           <div className="absolute inset-0" style={{ transform: `rotate(${-135 + detentPercent * 270}deg)` }}>
             <span
-              className="absolute left-1/2 -translate-x-1/2 rounded-full bg-white/45"
+              className="absolute left-1/2 -translate-x-1/2 rounded-full bg-[color-mix(in_srgb,var(--text)_45%,transparent)]"
               style={{ top: -2, height: 4, width: 1.5 }}
             />
           </div>
         )}
         <div className="absolute inset-0" style={{ transform: `rotate(${angle}deg)` }}>
           <span
-            className="absolute left-1/2 -translate-x-1/2 rounded-full bg-white/90"
+            className="absolute left-1/2 -translate-x-1/2 rounded-full bg-[color-mix(in_srgb,var(--text)_90%,transparent)]"
             style={{ top: size * 0.12, height: size * 0.24, width: 2 }}
           />
           <span
-            className="absolute left-1/2 top-[-1px] h-1 w-1 -translate-x-1/2 rounded-full bg-white"
+            className="absolute left-1/2 top-[-1px] h-1 w-1 -translate-x-1/2 rounded-full bg-[color-mix(in_srgb,var(--text)_100%,transparent)]"
             style={{ boxShadow: `0 0 5px 1.5px ${accent}` }}
           />
         </div>
       </div>
       {/* Laser Sphere's caption scale, on fixed line heights: the knobs differ
           in size, their captions must not, or the row stops reading as a row. */}
-      <span className="mt-1 whitespace-nowrap text-[8px] font-semibold leading-[11px] tracking-[0.12em] text-white/40">
+      <span className="mt-1 whitespace-nowrap text-[8px] font-semibold leading-[11px] tracking-[0.12em] text-[var(--text-3)]">
         {label}
       </span>
       <KnobValue value={value} min={definition.min} max={definition.max} label={definition.label}
@@ -488,7 +488,7 @@ function ShapeSelector({ b }: { b: SelectBinding }) {
   const selected = Math.round(b.value)
   return (
     <div className="flex w-[58px] flex-col items-center">
-      <div className="flex overflow-hidden rounded-md border border-white/10">
+      <div className="flex overflow-hidden rounded-md border border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
         {b.def.options.map((option) => {
           const active = option.value === selected
           return (
@@ -498,7 +498,7 @@ function ShapeSelector({ b }: { b: SelectBinding }) {
               aria-pressed={active}
               title={`${option.label} recovery`}
               onClick={() => b.set(option.value)}
-              className={`px-1 pb-0.5 pt-1 ${active ? '' : 'bg-black/25 hover:bg-white/5'}`}
+              className={`px-1 pb-0.5 pt-1 ${active ? '' : 'bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)]'}`}
               style={active ? { background: SHOCK } : undefined}
             >
               <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
@@ -513,10 +513,10 @@ function ShapeSelector({ b }: { b: SelectBinding }) {
           )
         })}
       </div>
-      <span className="mt-1 whitespace-nowrap text-[8px] font-semibold leading-[11px] tracking-[0.12em] text-white/40">
+      <span className="mt-1 whitespace-nowrap text-[8px] font-semibold leading-[11px] tracking-[0.12em] text-[var(--text-3)]">
         CURVE
       </span>
-      <span className="whitespace-nowrap font-mono text-[9px] leading-[12px] text-white/70">
+      <span className="whitespace-nowrap font-mono text-[9px] leading-[12px] text-[var(--text-2)]">
         {b.def.options.find((option) => option.value === selected)?.label.toUpperCase() ?? ''}
       </span>
     </div>

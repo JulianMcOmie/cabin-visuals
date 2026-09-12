@@ -97,7 +97,7 @@ function TranscribeControl({ trackId }: { trackId: string }) {
         {working ? 'Transcribing…' : error ? 'Try again' : 'Transcribe'}
       </button>
       {(status || error) && (
-        <span className={`max-w-[240px] truncate font-mono text-[10px] select-none ${error ? 'text-[#d68383]' : ''}`} style={error ? undefined : { color: LABEL }} title={error ?? undefined}>
+        <span className={`max-w-[240px] truncate font-mono text-[10px] select-none ${error ? 'text-[var(--danger)]' : ''}`} style={error ? undefined : { color: LABEL }} title={error ?? undefined}>
           {error ?? status}
         </span>
       )}

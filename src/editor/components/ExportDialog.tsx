@@ -171,7 +171,7 @@ function MapPlayhead({ totalBeats }: { totalBeats: number }) {
   const left = Math.min(1, Math.max(0, currentBeat / totalBeats))
   return (
     <div className="pointer-events-none absolute inset-y-0 z-20" style={{ left: `${left * 100}%` }}>
-      <div className="h-full w-px bg-[var(--accent-hover)] shadow-[0_0_8px_rgba(69,198,255,0.8)]" />
+      <div className="h-full w-px bg-[var(--accent-hover)] shadow-[0_0_8px_color-mix(in_srgb,var(--accent)_80%,transparent)]" />
       <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-[var(--accent-hover)]" />
     </div>
   )
@@ -207,7 +207,7 @@ function ClipMap({
     <div
       ref={mapRef}
       onPointerDown={scrubbable ? startScrub : undefined}
-      className={`relative h-11 overflow-hidden rounded-[8px] border border-[rgba(255,255,255,0.08)] bg-[#0a0b10] ${scrubbable ? 'cursor-ew-resize' : ''}`}
+      className={`relative h-11 overflow-hidden rounded-[8px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[var(--bg-canvas)] ${scrubbable ? 'cursor-ew-resize' : ''}`}
     >
       <div className="absolute inset-1 flex flex-col gap-[3px]">
         {lanes.map((lane, i) => (
@@ -235,8 +235,8 @@ function ClipMap({
           style={{
             left: `${rangeStart * 100}%`,
             width: `${(rangeEnd - rangeStart) * progress * 100}%`,
-            background: 'rgba(69,198,255,0.28)',
-            boxShadow: 'inset -2px 0 0 rgba(127,216,255,0.9), 0 0 12px rgba(69,198,255,0.5)',
+            background: 'color-mix(in srgb,var(--accent) 28%,transparent)',
+            boxShadow: 'inset -2px 0 0 color-mix(in srgb,var(--accent-hover) 90%,transparent), 0 0 12px color-mix(in srgb,var(--accent) 50%,transparent)',
           }}
         />
       )}
@@ -244,8 +244,8 @@ function ClipMap({
       {/* Loop range: outside dimmed, boundaries barred in accent. */}
       {loop && (
         <>
-          <div className="absolute inset-y-0 left-0 z-10" style={{ width: `${loop.start * 100}%`, background: 'rgba(10,11,16,0.78)' }} />
-          <div className="absolute inset-y-0 right-0 z-10" style={{ width: `${(1 - loop.end) * 100}%`, background: 'rgba(10,11,16,0.78)' }} />
+          <div className="absolute inset-y-0 left-0 z-10" style={{ width: `${loop.start * 100}%`, background: 'color-mix(in srgb,var(--bg-canvas) 78%,transparent)' }} />
+          <div className="absolute inset-y-0 right-0 z-10" style={{ width: `${(1 - loop.end) * 100}%`, background: 'color-mix(in srgb,var(--bg-canvas) 78%,transparent)' }} />
           <div className="absolute inset-y-0 z-10 w-[2px] bg-[var(--accent)]" style={{ left: `calc(${loop.start * 100}% - 1px)` }} />
           <div className="absolute inset-y-0 z-10 w-[2px] bg-[var(--accent)]" style={{ left: `calc(${loop.end * 100}% - 1px)` }} />
         </>
@@ -278,7 +278,7 @@ function cropMattePcts(ratio: number): { side: number; band: number } {
 
 const RAIL_LABEL = 'font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] select-none'
 const CHIP_SELECT =
-  'h-8 rounded-[8px] border border-[rgba(255,255,255,0.1)] bg-[#10131c] px-2 font-mono text-[12px] text-[var(--text-2)] outline-none cursor-pointer'
+  'h-8 rounded-[8px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[var(--bg-panel-raised)] px-2 font-mono text-[12px] text-[var(--text-2)] outline-none cursor-pointer'
 
 function AspectCard({ aspect, selected, onPick }: { aspect: ExportAspect; selected: boolean; onPick: () => void }) {
   // Proportional glyph, long edge fixed - the cards then read as one family of
@@ -292,17 +292,17 @@ function AspectCard({ aspect, selected, onPick }: { aspect: ExportAspect; select
       className={`flex flex-1 flex-col items-center justify-center gap-2 rounded-[10px] border py-3 cursor-pointer ${
         selected
           ? 'border-transparent bg-[var(--accent)]'
-          : 'border-[rgba(255,255,255,0.1)] bg-[#10131c] hover:border-[rgba(255,255,255,0.2)]'
+          : 'border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[var(--bg-panel-raised)] hover:border-[color-mix(in_srgb,var(--text)_20%,transparent)]'
       }`}
     >
       {/* Fixed-height glyph slot so every card's label sits on one line. */}
       <span className="flex h-[30px] items-center justify-center">
         <span
-          className={`rounded-[3px] border-2 ${selected ? 'border-[#0c0d12]' : 'border-[var(--text-3)]'}`}
+          className={`rounded-[3px] border-2 ${selected ? 'border-[var(--on-accent)]' : 'border-[var(--text-3)]'}`}
           style={glyph}
         />
       </span>
-      <span className={`font-mono text-[11px] ${selected ? 'text-[#0c0d12] font-semibold' : 'text-[var(--text-3)]'}`}>{aspect}</span>
+      <span className={`font-mono text-[11px] ${selected ? 'text-[var(--on-accent)] font-semibold' : 'text-[var(--text-3)]'}`}>{aspect}</span>
     </button>
   )
 }
@@ -458,7 +458,7 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
         {showSettings && (
           <div className="flex gap-6">
             <div className="min-w-0 flex-1">
-              <div className={`relative overflow-hidden rounded-[10px] border ${running ? 'border-[rgba(69,198,255,0.4)]' : 'border-[rgba(255,255,255,0.08)]'}`}>
+              <div className={`relative overflow-hidden rounded-[10px] border ${running ? 'border-[color-mix(in_srgb,var(--accent)_40%,transparent)]' : 'border-[color-mix(in_srgb,var(--text)_8%,transparent)]'}`}>
                 <MonitorCanvas />
                 {/* The monitor stays 16:9 and the mattes show the live crop:
                     bright frame, dimmed surround. Narrower aspects are matted
@@ -476,7 +476,7 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
                   <motion.div
                     key={side}
                     aria-hidden
-                    className={`pointer-events-none absolute inset-y-0 ${side === 'left' ? 'left-0' : 'right-0'} overflow-hidden bg-black/60`}
+                    className={`pointer-events-none absolute inset-y-0 ${side === 'left' ? 'left-0' : 'right-0'} overflow-hidden bg-[color-mix(in_srgb,var(--bg-canvas-deep)_60%,transparent)]`}
                     initial={false}
                     animate={{ width: `${matte.side}%`, opacity: matte.side > 0 ? 1 : 0 }}
                     transition={ASPECT_GLIDE}
@@ -488,7 +488,7 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
                   <motion.div
                     key={edge}
                     aria-hidden
-                    className={`pointer-events-none absolute inset-x-0 ${edge === 'top' ? 'top-0' : 'bottom-0'} overflow-hidden bg-black/60`}
+                    className={`pointer-events-none absolute inset-x-0 ${edge === 'top' ? 'top-0' : 'bottom-0'} overflow-hidden bg-[color-mix(in_srgb,var(--bg-canvas-deep)_60%,transparent)]`}
                     initial={false}
                     animate={{ height: `${matte.band}%`, opacity: matte.band > 0 ? 1 : 0 }}
                     transition={ASPECT_GLIDE}
@@ -538,10 +538,10 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
                         onClick={() => setSettings((s) => ({ ...s, rangeMode: mode }))}
                         className={`h-[38px] flex-1 rounded-full text-[12px] font-semibold ${
                           selected
-                            ? 'bg-[var(--accent)] text-[#0c0d12]'
+                            ? 'bg-[var(--accent)] text-[var(--on-accent)]'
                             : disabled
-                              ? 'border border-[rgba(255,255,255,0.06)] text-[var(--text-muted)] cursor-default'
-                              : 'border border-[rgba(255,255,255,0.1)] bg-[#10131c] text-[var(--text-3)] hover:border-[rgba(255,255,255,0.2)] cursor-pointer'
+                              ? 'border border-[color-mix(in_srgb,var(--text)_6%,transparent)] text-[var(--text-muted)] cursor-default'
+                              : 'border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[var(--bg-panel-raised)] text-[var(--text-3)] hover:border-[color-mix(in_srgb,var(--text)_20%,transparent)] cursor-pointer'
                         }`}
                       >
                         {label}
@@ -615,11 +615,11 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
                   disabled={!audioOk}
                   onClick={() => setSettings((s) => ({ ...s, includeAudio: !s.includeAudio }))}
                   className={`relative h-[21px] w-[38px] rounded-full transition-colors duration-150 cursor-pointer ${
-                    settings.includeAudio && audioOk ? 'bg-[var(--accent)]' : 'bg-[#1a1f2c]'
+                    settings.includeAudio && audioOk ? 'bg-[var(--accent)]' : 'bg-[var(--bg-elevated)]'
                   }`}
                 >
                   <span
-                    className="absolute top-[2px] h-[17px] w-[17px] rounded-full bg-[#0c0d12] transition-[left] duration-150"
+                    className="absolute top-[2px] h-[17px] w-[17px] rounded-full bg-[var(--bg-app)] transition-[left] duration-150"
                     style={{ left: settings.includeAudio && audioOk ? 19 : 2 }}
                   />
                 </button>
@@ -632,7 +632,7 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
                   value={settings.fileName}
                   onChange={(e) => setSettings((s) => ({ ...s, fileName: e.target.value }))}
                   spellCheck={false}
-                  className="h-8 w-[160px] min-w-0 rounded-[8px] border border-[rgba(255,255,255,0.1)] bg-[#10131c] px-2 font-mono text-[12px] text-[var(--text-2)] outline-none focus:border-[var(--accent)]"
+                  className="h-8 w-[160px] min-w-0 rounded-[8px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[var(--bg-panel-raised)] px-2 font-mono text-[12px] text-[var(--text-2)] outline-none focus:border-[var(--accent)]"
                 />
               </label>
 
@@ -678,7 +678,7 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
                 letterboxed in the monitor's own 16:9 box so a 9:16 export
                 stands in its column exactly as it did while rendering. */}
             {phase.poster && (
-              <div className="overflow-hidden rounded-[10px] border border-[rgba(255,255,255,0.08)] bg-[#08090d]">
+              <div className="overflow-hidden rounded-[10px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[var(--bg-canvas-deep)]">
                 <img
                   src={phase.poster}
                   alt=""
@@ -692,7 +692,7 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
               <span className="flex min-w-0 flex-col gap-1">
                 <span className="flex min-w-0 items-center gap-2.5">
                   <span className="flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded-full bg-[var(--accent)]">
-                    <Check size={12} strokeWidth={3} className="text-[#0c0d12]" />
+                    <Check size={12} strokeWidth={3} className="text-[var(--on-accent)]" />
                   </span>
                   <span className="truncate font-mono text-[12px] text-[var(--text-2)]">
                     {phase.fileName}.mp4
@@ -787,14 +787,14 @@ function RunningView({
   return (
     <div className="flex flex-col gap-3">
       {/* The render monitor: the live canvas IS encoding these frames. */}
-      <div className="overflow-hidden rounded-[10px] border border-[rgba(69,198,255,0.4)] shadow-[0_0_30px_rgba(69,198,255,0.15)]">
+      <div className="overflow-hidden rounded-[10px] border border-[color-mix(in_srgb,var(--accent)_40%,transparent)] shadow-[0_0_30px_color-mix(in_srgb,var(--accent)_15%,transparent)]">
         <MonitorCanvas />
       </div>
 
       {vertical ? (
         // Portrait: a thin accent progress line under the monitor.
-        <div className="h-[3px] overflow-hidden rounded-full bg-[#1a1f2c]">
-          <div className="h-full bg-[var(--accent)] shadow-[0_0_8px_rgba(69,198,255,0.8)] transition-[width] duration-200" style={{ width: `${progress * 100}%` }} />
+        <div className="h-[3px] overflow-hidden rounded-full bg-[var(--bg-elevated)]">
+          <div className="h-full bg-[var(--accent)] shadow-[0_0_8px_color-mix(in_srgb,var(--accent)_80%,transparent)] transition-[width] duration-200" style={{ width: `${progress * 100}%` }} />
         </div>
       ) : (
         // 16:9: the fill sweeps the export range on the clip map itself.
@@ -810,7 +810,7 @@ function RunningView({
       </p>
       <button
         onClick={onCancel}
-        className="h-10 w-full rounded-full border border-[rgba(255,255,255,0.14)] text-xs font-semibold text-[var(--text-2)] hover:border-[rgba(255,255,255,0.3)] hover:text-[var(--text)] cursor-pointer"
+        className="h-10 w-full rounded-full border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-xs font-semibold text-[var(--text-2)] hover:border-[color-mix(in_srgb,var(--text)_30%,transparent)] hover:text-[var(--text)] cursor-pointer"
       >
         Cancel
       </button>

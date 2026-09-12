@@ -27,12 +27,8 @@ export const monoFont = DM_Mono({
 
 export const editorialFontClasses = `${displayFont.variable} ${bodyFont.variable} ${monoFont.variable}`
 
-/** Wraps a screen in the editorial look without rewriting it: the
- *  .editorial-skin class (globals.css) remaps the app-wide design tokens -
- *  surfaces, borders, text, THE accent - to the editorial palette, and reroutes
- *  the font-sans/font-mono utilities onto Manrope / DM Mono. Everything inside
- *  that was built on the global tokens follows along. Reverting a screen is
- *  removing this wrapper. */
+/** Shares the editorial font stack. Colors inherit the account's global palette,
+ *  including dialogs portaled outside this wrapper. */
 export function EditorialSkin({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <div className={`editorial-skin ${editorialFontClasses} ${className}`}>

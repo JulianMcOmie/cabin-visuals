@@ -249,7 +249,7 @@ function MomentPickerModal({
   const canArm = ready && picker.ref !== null && !atPadLimit
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[color-mix(in_srgb,var(--bg-canvas-deep)_40%,transparent)]">
       <div className="w-[560px] rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-4 shadow-2xl shadow-black/60">
         <div className="mb-3 flex items-center justify-between">
           <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-[var(--text)]">

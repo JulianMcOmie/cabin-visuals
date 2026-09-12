@@ -101,7 +101,7 @@ function StagePreview({ scene }: { scene: Scene }) {
       // it on mount, on a backdrop change and while OrbitControls damp - an
       // always-on loop here kept the whole editor's r3f loop running at display
       // rate for as long as nothing was selected.
-      className="relative h-[132px] cursor-grab overflow-clip border-b border-white/[0.06] active:cursor-grabbing"
+      className="relative h-[132px] cursor-grab overflow-clip border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] active:cursor-grabbing"
       // The checkerboard is the "nothing behind this" of the compositor - it
       // only shows when the canvas actually clears to alpha. A gradient
       // backdrop paints here in CSS while the canvas stays alpha: same stops,
@@ -181,7 +181,7 @@ function BackdropDeck({ scene }: { scene: Scene }) {
   ]
 
   return (
-    <div className="flex w-full items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.04] p-0.5">
+    <div className="flex w-full items-center gap-0.5 rounded-full border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--text)_4%,transparent)] p-0.5">
       {segments.map(({ kind, label, testId, ariaLabel, title, swatch }) => (
         <button
           key={kind}
@@ -194,11 +194,11 @@ function BackdropDeck({ scene }: { scene: Scene }) {
           // user can drag narrow - let them shrink rather than wrap a label
           // onto a second line and grow the pill.
           className={`flex h-6 min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 overflow-hidden rounded-full px-2 text-[10px] font-semibold whitespace-nowrap ${
-            mode === kind ? 'bg-[var(--bg-elevated)] text-white/85' : 'text-white/40 hover:bg-white/[0.05] hover:text-white/70'
+            mode === kind ? 'bg-[var(--bg-elevated)] text-[var(--text)]' : 'text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)] hover:text-[var(--text-2)]'
           }`}
         >
           <span
-            className={`h-3.5 w-3.5 flex-none rounded-full border border-white/20 ${mode === kind ? '' : 'opacity-50'}`}
+            className={`h-3.5 w-3.5 flex-none rounded-full border border-[color-mix(in_srgb,var(--text)_20%,transparent)] ${mode === kind ? '' : 'opacity-50'}`}
             style={swatch}
           />
           {label}
@@ -252,7 +252,7 @@ function GradientControls({ scene }: { scene: Scene }) {
         </div>
       </div>
       <div className="flex justify-center pb-3">
-        <div className="flex items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.04] p-0.5">
+        <div className="flex items-center gap-0.5 rounded-full border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--text)_4%,transparent)] p-0.5">
           {kinds.map(({ kind, label, title }) => (
             <button
               key={kind}
@@ -262,8 +262,8 @@ function GradientControls({ scene }: { scene: Scene }) {
               onClick={() => setSceneBackgroundGradient(scene.id, { kind })}
               className={`h-5 cursor-pointer rounded-full px-2.5 text-[9px] ${
                 gradient.kind === kind
-                  ? 'bg-[var(--bg-elevated)] font-semibold text-white/85'
-                  : 'font-medium text-white/40 hover:bg-white/[0.05]'
+                  ? 'bg-[var(--bg-elevated)] font-semibold text-[var(--text)]'
+                  : 'font-medium text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)]'
               }`}
             >
               {label}
@@ -316,7 +316,7 @@ export function SceneSettingsPanel({ scene }: { scene: Scene }) {
       {mode === 'gradient' && <GradientControls scene={scene} />}
       {mode === 'transparent' && (
         // The one state with no header: there is no color to name.
-        <p className="px-4 pb-4 text-center text-[11px] text-white/45 select-none">
+        <p className="px-4 pb-4 text-center text-[11px] text-[var(--text-3)] select-none">
           Rendering with transparent background
         </p>
       )}

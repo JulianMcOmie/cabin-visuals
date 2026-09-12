@@ -191,7 +191,7 @@ function RadialPreview({ settings }: { settings: RadialMotionSettings }) {
   return (
     <div
       data-testid="radial-motion-preview"
-      className="relative overflow-hidden border-b border-white/[0.06]"
+      className="relative overflow-hidden border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)]"
       style={{ height: PREVIEW_HEIGHT, background: ROOM }}
     >
       {/* Orthographic: concentric rings are the subject, and a perspective
@@ -301,7 +301,7 @@ function CountHeader({ bound, depth }: { bound: UserInterfaceParameter | undefin
       aria-label={`${direction < 0 ? 'Fewer' : 'More'} ${name} copies`}
       disabled={direction < 0 ? value <= min : value >= max}
       onClick={() => bound?.setValue(clamp(value + direction, min, max))}
-      className="flex h-[15px] w-[15px] items-center justify-center rounded-[3px] border border-white/10 bg-black/30 font-mono text-[10px] leading-none text-white/45 hover:text-white/80 disabled:opacity-25 disabled:hover:text-white/45"
+      className="flex h-[15px] w-[15px] items-center justify-center rounded-[3px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_30%,transparent)] font-mono text-[10px] leading-none text-[var(--text-3)] hover:text-[var(--text-2)] disabled:opacity-25 disabled:hover:text-[var(--text-3)]"
     >
       {direction < 0 ? '−' : '+'}
     </button>
@@ -309,10 +309,10 @@ function CountHeader({ bound, depth }: { bound: UserInterfaceParameter | undefin
 
   return (
     <div className="flex flex-col items-center gap-1">
-      <span className="text-[8px] font-semibold uppercase tracking-[0.14em] text-white/40">{name}</span>
+      <span className="text-[8px] font-semibold uppercase tracking-[0.14em] text-[var(--text-3)]">{name}</span>
       <div className="flex items-center gap-1">
         {step(-1)}
-        <span className="w-3 text-center font-mono text-[10px] tabular-nums text-white/75">{value}</span>
+        <span className="w-3 text-center font-mono text-[10px] tabular-nums text-[var(--text-2)]">{value}</span>
         {step(1)}
       </div>
     </div>
@@ -373,13 +373,13 @@ export const RadialMotionMoverUserInterfaceRenderer: UserInterfaceRendererDefini
             <button
               aria-expanded={showMore}
               onClick={() => setShowMore((v) => !v)}
-              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 hover:text-white/60"
+              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-[var(--text-muted)] hover:text-[var(--text-3)]"
             >
               {showMore ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
               MORE
             </button>
             {showMore && (
-              <div className="mt-1.5 rounded-md border border-white/[0.06] bg-black/25 p-2">
+              <div className="mt-1.5 rounded-md border border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] p-2">
                 <ParameterList parameters={unplaced} />
               </div>
             )}
@@ -400,7 +400,7 @@ function RowCells({ row, bound }: {
     <>
       {/* h-11 matches the knob face, so the rail label centres on the knob
           rather than on the knob-plus-readout column. */}
-      <span className="flex h-11 items-center justify-end pr-1 text-right text-[8px] font-semibold tracking-[0.12em] text-white/35">
+      <span className="flex h-11 items-center justify-end pr-1 text-right text-[8px] font-semibold tracking-[0.12em] text-[var(--text-muted)]">
         {row.label}
       </span>
       {DEPTHS.map((depth) => (

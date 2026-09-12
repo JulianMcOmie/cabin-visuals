@@ -702,7 +702,7 @@ function ItemGrid({ items, onItemPointerDown, onItemDoubleClick }: { items: Inst
                 a fade here reads as input lag when sweeping the list. */}
             <div className="pointer-events-none absolute inset-0 flex items-end bg-gradient-to-t from-black/90 via-black/35 to-black/5 opacity-0 group-hover:opacity-100">
               <span
-                className="min-w-0 truncate px-2 pb-1.5 text-xs font-medium text-white"
+                className="min-w-0 truncate px-2 pb-1.5 text-xs font-medium text-[var(--text)]"
                 style={{ textShadow: '0 1px 3px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.75)' }}
               >
                 {item.name}
@@ -901,7 +901,7 @@ function TemplateCard({ tpl, onApply, selected = false, label }: {
           selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
         }`}>
           <span
-            className="flex min-w-0 items-center gap-1 truncate px-2 pb-1.5 text-xs font-medium text-white"
+            className="flex min-w-0 items-center gap-1 truncate px-2 pb-1.5 text-xs font-medium text-[var(--text)]"
             style={{ textShadow: '0 1px 3px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.75)' }}
           >
             {selected && <Check size={10} strokeWidth={3} className="flex-shrink-0 text-[var(--accent)]" />}

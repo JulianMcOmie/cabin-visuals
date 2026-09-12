@@ -344,19 +344,19 @@ export function MidiEditor({
     const images: string[] = []
     const sizes: string[] = []
 
-    images.push(`repeating-linear-gradient(to right, rgba(255,255,255,0.12) 0px 1px, transparent 1px ${barWidthPx}px)`)
+    images.push(`repeating-linear-gradient(to right, color-mix(in srgb,var(--text) 12%,transparent) 0px 1px, transparent 1px ${barWidthPx}px)`)
     sizes.push(`${barWidthPx}px 100%`)
 
     // Skip beat lines when they coincide with bar lines (1 beat per bar),
     // otherwise the overlapping layers double the line opacity
     if (beatWidthPx !== barWidthPx) {
-      images.push(`repeating-linear-gradient(to right, rgba(255,255,255,0.06) 0px 1px, transparent 1px ${beatWidthPx}px)`)
+      images.push(`repeating-linear-gradient(to right, color-mix(in srgb,var(--text) 6%,transparent) 0px 1px, transparent 1px ${beatWidthPx}px)`)
       sizes.push(`${beatWidthPx}px 100%`)
     }
 
     // Same for subdivision lines when quantize is a full beat
     if (subdivWidthPx !== beatWidthPx) {
-      images.push(`repeating-linear-gradient(to right, rgba(255,255,255,0.025) 0px 1px, transparent 1px ${subdivWidthPx}px)`)
+      images.push(`repeating-linear-gradient(to right, color-mix(in srgb,var(--text) 2.5%,transparent) 0px 1px, transparent 1px ${subdivWidthPx}px)`)
       sizes.push(`${subdivWidthPx}px 100%`)
     }
 
@@ -544,7 +544,7 @@ export function MidiEditor({
     onWordEditStart, onWordEditChange, onWordEditCommit, onWordEditCancel])
 
   return (
-    <div className="relative flex-1 flex flex-col min-h-0 bg-[#1e1e21] select-none">
+    <div className="relative flex-1 flex flex-col min-h-0 bg-[var(--bg-panel)] select-none">
       {/* Resize handle along the label gutter's right edge - spans the full height
           (ruler corner + every row label). Invisible; the cursor is the affordance -
           mirrors the tracks label column exactly. */}
@@ -641,7 +641,7 @@ export function MidiEditor({
             width: labelWidth,
             height: canvasHeight,
             flexShrink: 0,
-            backgroundColor: '#202024',
+            backgroundColor: 'var(--bg-elevated)',
             position: 'sticky',
             left: 0,
             zIndex: 20,
@@ -673,8 +673,8 @@ export function MidiEditor({
                 width: labelWidth,
                 height: rl.height,
                 pointerEvents: 'none',
-                borderTop: '1px solid rgba(255,255,255,0.12)',
-                borderBottom: i === rangeLabelPositions.length - 1 ? '1px solid rgba(255,255,255,0.12)' : undefined,
+                borderTop: '1px solid color-mix(in srgb,var(--text) 12%,transparent)',
+                borderBottom: i === rangeLabelPositions.length - 1 ? '1px solid color-mix(in srgb,var(--text) 12%,transparent)' : undefined,
               }}
             >
               <span
@@ -686,7 +686,7 @@ export function MidiEditor({
                   right: 4,
                   fontSize: 11,
                   fontWeight: 600,
-                  color: 'rgba(255,255,255,0.3)',
+                  color: 'color-mix(in srgb,var(--text) 30%,transparent)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em',
                   whiteSpace: 'nowrap',
@@ -702,7 +702,7 @@ export function MidiEditor({
 
         {/* Gutter (half a triangle wide) between the labels and the grid so the
             ruler playhead triangle has room to show its left half at beat 0. */}
-        <div style={{ width: PLAYHEAD_TRIANGLE_HALF, flexShrink: 0, backgroundColor: '#18181b' }} />
+        <div style={{ width: PLAYHEAD_TRIANGLE_HALF, flexShrink: 0, backgroundColor: 'var(--bg-panel-raised)' }} />
 
         {/* Grid area */}
         <div
@@ -711,7 +711,7 @@ export function MidiEditor({
             flex: 1,
             height: canvasHeight,
             position: 'relative',
-            backgroundColor: '#18181b',
+            backgroundColor: 'var(--bg-panel-raised)',
             ...gridBackground,
           }}
           onPointerDown={(e) => {
@@ -754,8 +754,8 @@ export function MidiEditor({
                 left: 0,
                 right: 0,
                 height: rl.height,
-                backgroundColor: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                borderTop: '1px solid rgba(255,255,255,0.08)',
+                backgroundColor: i % 2 === 0 ? 'color-mix(in srgb,var(--text) 2%,transparent)' : 'transparent',
+                borderTop: '1px solid color-mix(in srgb,var(--text) 8%,transparent)',
                 pointerEvents: 'none',
               }}
             />
@@ -1040,7 +1040,7 @@ export function MidiEditor({
               left: 0,
               width: 0.5,
               height: '100%',
-              backgroundColor: '#ffffff',
+              backgroundColor: 'var(--text)',
             }} />
             {/* Hit area for scrubbing (kept narrow so it barely overlaps notes) */}
             <div
@@ -1076,7 +1076,7 @@ export function MidiEditor({
         className="pointer-events-none absolute left-0 top-0 bottom-0 z-[45]"
         style={{ visibility: 'hidden', width: 0, willChange: 'transform' }}
       >
-        <div className="absolute top-0 bottom-0 w-px bg-white/60" style={{ left: -0.5 }} />
+        <div className="absolute top-0 bottom-0 w-px bg-[color-mix(in_srgb,var(--text)_60%,transparent)]" style={{ left: -0.5 }} />
       </div>
 
       {/* The readout sits under the grid, flush with it - it belongs to the

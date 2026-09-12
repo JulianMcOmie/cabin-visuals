@@ -23,19 +23,19 @@ export function UndertaleCharacterPicker({ parameters }: { parameters: readonly 
   const selected = undertaleCharacterIndex(Number(parameter.value))
   return (
     <div className="px-3 pt-3">
-      <div className="mb-2 text-[9px] tracking-[0.15em] text-white/40">CHARACTER</div>
+      <div className="mb-2 text-[9px] tracking-[0.15em] text-[var(--text-3)]">CHARACTER</div>
       <div className="grid grid-cols-4 gap-1.5" role="group" aria-label="Undertale character">
         {UNDERTALE_CHARACTERS.map((name, index) => {
           const portrait = portraits[index]
           return (
             <button key={name} type="button" aria-label={name} aria-pressed={selected === index}
               onClick={() => parameter.setValue(index)}
-              className="flex min-w-0 cursor-pointer flex-col items-center gap-2 rounded-md border px-1 py-2 transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-red-400"
+              className="flex min-w-0 cursor-pointer flex-col items-center gap-2 rounded-md border px-1 py-2 transition-colors hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] focus-visible:outline-2 focus-visible:outline-red-400"
               style={{ borderColor: selected === index ? '#f0474c' : '#ffffff12', background: selected === index ? '#f0474c18' : '#00000030' }}>
               <svg viewBox={`0 0 ${portrait.width} ${portrait.height}`} className="h-12 w-full" shapeRendering="crispEdges" aria-hidden="true">
                 {portrait.paths.map(({d,color}) => <path key={color} d={d} fill={color} />)}
               </svg>
-              <span className="w-full truncate text-center text-[9px] text-white/75" title={name}>{name}</span>
+              <span className="w-full truncate text-center text-[9px] text-[var(--text-2)]" title={name}>{name}</span>
             </button>
           )
         })}

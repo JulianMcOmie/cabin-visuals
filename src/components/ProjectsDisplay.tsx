@@ -128,7 +128,7 @@ function ProjectCard({
             onOpenMenu(r.right, r.bottom + 4)
           }}
           aria-label={`Actions for ${project.name}`}
-          className="ml-2 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded text-[var(--text-muted)] active:bg-white/10 md:hidden"
+          className="ml-2 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded text-[var(--text-muted)] active:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] md:hidden"
         >
           <MoreHorizontal size={16} />
         </button>
@@ -503,7 +503,7 @@ function CreateProjectModal({
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[color-mix(in_srgb,var(--bg-canvas-deep)_60%,transparent)] p-4"
       onClick={onClose}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -640,7 +640,7 @@ function CreateProjectModal({
                         : <TemplatePreviewVideo id={tpl.id} />}
                   </div>
                   <div className="p-3">
-                    <h3 className="text-[13px] font-semibold text-[var(--text)] group-hover:text-white">{tpl.name}</h3>
+                    <h3 className="text-[13px] font-semibold text-[var(--text)] group-hover:text-[var(--text)]">{tpl.name}</h3>
                     <p className="mt-1 text-xs leading-snug text-[var(--text-muted)]">{tpl.description}</p>
                   </div>
                 </button>
@@ -710,7 +710,7 @@ function ProjectContextMenu({
           type="button"
           role="menuitem"
           onClick={onDelete}
-          className="flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[13px] text-[var(--text-2)] outline-none hover:bg-[var(--bg-elevated)] hover:text-[#d68383]"
+          className="flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[13px] text-[var(--text-2)] outline-none hover:bg-[var(--bg-elevated)] hover:text-[var(--danger)]"
         >
           <Trash2 size={13} />
           Delete project
@@ -774,7 +774,7 @@ function ConfirmDeletePopover({
           </button>
           <button
             onClick={onConfirm}
-            className="flex h-7 cursor-pointer items-center rounded-[5px] bg-[#d0433f] px-2.5 text-[12px] font-bold text-white hover:bg-[#e04b47]"
+            className="flex h-7 cursor-pointer items-center rounded-[5px] bg-[var(--danger)] px-2.5 text-[12px] font-bold text-[var(--text)] hover:bg-[var(--danger)]"
           >
             Delete
           </button>

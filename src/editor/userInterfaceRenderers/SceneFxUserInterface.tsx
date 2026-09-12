@@ -253,7 +253,7 @@ function GlyphChoice({ b, options, testId }: {
   return (
     <div className="px-3 pt-2.5">
       <Segmented b={b} options={options} testId={testId} />
-      <div className="pt-1 text-center text-[8px] font-semibold uppercase tracking-[0.18em] text-white/35">
+      <div className="pt-1 text-center text-[8px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
         {active?.label ?? ''}
       </div>
     </div>
@@ -287,7 +287,7 @@ function TemperatureTintPad({ temperature, tint }: { temperature: NumBinding | n
         role="application"
         aria-label="Temperature and tint"
         tabIndex={0}
-        className="relative h-[62px] w-[62px] cursor-crosshair touch-none overflow-hidden rounded-[5px] border border-white/[0.08]"
+        className="relative h-[62px] w-[62px] cursor-crosshair touch-none overflow-hidden rounded-[5px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)]"
         style={{
           background:
             'linear-gradient(to top, rgba(233,72,204,0.5), rgba(60,220,140,0.5)), linear-gradient(to right, #2f6fd0, #e8a13c)',
@@ -316,7 +316,7 @@ function TemperatureTintPad({ temperature, tint }: { temperature: NumBinding | n
         }}
       >
         <span
-          className="pointer-events-none absolute h-[9px] w-[9px] rounded-full border-[1.5px] border-white"
+          className="pointer-events-none absolute h-[9px] w-[9px] rounded-full border-[1.5px] border-[color-mix(in_srgb,var(--text)_100%,transparent)]"
           style={{
             left: `${toFraction(temperature) * 100}%`,
             top: `${(1 - toFraction(tint)) * 100}%`,
@@ -325,7 +325,7 @@ function TemperatureTintPad({ temperature, tint }: { temperature: NumBinding | n
           }}
         />
       </div>
-      <span className="text-[7px] font-semibold uppercase tracking-[0.16em] text-white/40">Temp · Tint</span>
+      <span className="text-[7px] font-semibold uppercase tracking-[0.16em] text-[var(--text-3)]">Temp · Tint</span>
     </div>
   )
 }

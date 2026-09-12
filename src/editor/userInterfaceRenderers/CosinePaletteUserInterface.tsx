@@ -55,7 +55,7 @@ const MAP_SEGMENTS = [
 
 /** A quiet caps caption over a segmented control, in the knob-label voice. */
 function SegmentCaption({ children }: { children: string }) {
-  return <div className="mb-1 text-[9px] font-semibold tracking-[0.1em] text-white/40">{children}</div>
+  return <div className="mb-1 text-[9px] font-semibold tracking-[0.1em] text-[var(--text-3)]">{children}</div>
 }
 
 /** Enough stops that the strip is visually continuous at panel widths; the
@@ -108,7 +108,7 @@ export const CosinePaletteUserInterfaceRenderer: UserInterfaceRendererDefinition
           so the headline automation target has a picture before it has notes. */}
       <div
         data-testid="cosine-palette-strip"
-        className="h-9 border-b border-white/10"
+        className="h-9 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
         style={{ background: strip }}
       />
 

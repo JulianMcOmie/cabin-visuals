@@ -4,6 +4,7 @@ import { AnalyticsGate } from "../src/analytics/AnalyticsGate";
 import { AnalyticsIdentify } from "../src/analytics/AnalyticsIdentify";
 import { NavigationOverlay } from "../src/components/instantNavigation";
 import "./globals.css";
+import { ThemeProvider } from "../src/settings/ThemeProvider";
 import { ProjectPreviewBackfill } from "../src/persistence/ProjectPreviewBackfill";
 
 // "DAW Console 1a" type stack: Hanken Grotesk for UI sans, IBM Plex Mono for
@@ -57,12 +58,14 @@ export default function RootLayout({
       className={`${uiSans.variable} ${plexMono.variable} ${displaySerif.variable} ${archivo.variable} ${plexSans.variable} ${uiSans.className}`}
     >
       <body>
+        <ThemeProvider>
         {children}
         <AnalyticsGate />
         <AnalyticsIdentify />
         {/* The instant loading screen every internal navigation paints first. */}
         <NavigationOverlay />
         <ProjectPreviewBackfill />
+        </ThemeProvider>
       </body>
     </html>
   );

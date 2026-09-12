@@ -117,12 +117,12 @@ export function LaserKnob({
             background: `conic-gradient(from 225deg, rgba(255,255,255,0.08) 0deg ${litFrom}deg, transparent ${litFrom}deg ${litTo}deg, rgba(255,255,255,0.08) ${litTo}deg 270deg, transparent 270deg)`,
           }}
         />
-        <div className="absolute inset-[3px] rounded-full border border-white/10 bg-[#14171f]" />
+        <div className="absolute inset-[3px] rounded-full border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[var(--bg-panel-raised)]" />
         <div className="absolute inset-0" style={{ transform: `rotate(${angle}deg)` }}>
-          <span className="absolute left-1/2 top-[5px] h-2.5 w-[2px] -translate-x-1/2 rounded-full bg-white/90" />
+          <span className="absolute left-1/2 top-[5px] h-2.5 w-[2px] -translate-x-1/2 rounded-full bg-[color-mix(in_srgb,var(--text)_90%,transparent)]" />
           {/* The laser terminus: a white-hot point at the arc's tip. */}
           <span
-            className="absolute left-1/2 top-[-1px] h-1 w-1 -translate-x-1/2 rounded-full bg-white"
+            className="absolute left-1/2 top-[-1px] h-1 w-1 -translate-x-1/2 rounded-full bg-[color-mix(in_srgb,var(--text)_100%,transparent)]"
             style={{ boxShadow: `0 0 5px 1.5px ${accent}` }}
           />
         </div>
@@ -131,11 +131,11 @@ export function LaserKnob({
           COLUMNS instead has nothing to say per knob, and an empty caption
           would still cost a line of height on every one of them. */}
       {label !== '' && (
-        <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-white/40">{label}</span>
+        <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">{label}</span>
       )}
       <KnobValue value={value} min={min} max={max} label={ariaLabel ?? label} disabled={disabled} integer={integer}
         codec={entry ?? numberEntry(suffix)} onChange={onExactChange ?? onChange}
-        className="font-mono text-[9px] tabular-nums text-white/70">
+        className="font-mono text-[9px] tabular-nums text-[var(--text-2)]">
         {(format ?? ((v: number) => formatKnobValue(v, step)))(value)}{suffix}
       </KnobValue>
     </div>

@@ -1,0 +1,115 @@
+/* Every route, portal and native control inherits one account palette.
+   These tokens never enter the project model or the visual renderer. */
+:root, :root[data-theme="midnight"] {
+  --bg-app: #0c0d12;
+  --bg-shell: #0c0d12;
+  --bg-page: #0c0d12;
+  --bg-panel: #0e1119;
+  --bg-panel-raised: #10131c;
+  --bg-elevated: #1a1f2c;
+  --bg-canvas: #0a0b10;
+  --bg-canvas-deep: #08090d;
+  --text: #e9edf4;
+  --accent: #45c6ff;
+  --on-accent: #0c0d12;
+}
+:root[data-theme="forest"] {
+  --bg-app: #091310;
+  --bg-shell: #08110e;
+  --bg-page: #091310;
+  --bg-panel: #0d1b15;
+  --bg-panel-raised: #12231c;
+  --bg-elevated: #1b3328;
+  --bg-canvas: #07100c;
+  --bg-canvas-deep: #050b08;
+  --text: #e5f2eb;
+  --accent: #76ddb0;
+  --on-accent: #091910;
+}
+:root[data-theme="ember"] {
+  --bg-app: #17100d;
+  --bg-shell: #130d0a;
+  --bg-page: #17100d;
+  --bg-panel: #211710;
+  --bg-panel-raised: #291d17;
+  --bg-elevated: #3c2b21;
+  --bg-canvas: #100b08;
+  --bg-canvas-deep: #0b0705;
+  --text: #f5eae1;
+  --accent: #ffb878;
+  --on-accent: #241209;
+}
+:root[data-theme="violet"] {
+  --bg-app: #120e1b;
+  --bg-shell: #0f0b16;
+  --bg-page: #120e1b;
+  --bg-panel: #1a1425;
+  --bg-panel-raised: #221a31;
+  --bg-elevated: #322744;
+  --bg-canvas: #0d0914;
+  --bg-canvas-deep: #08060e;
+  --text: #efe8f9;
+  --accent: #c3a1ff;
+  --on-accent: #190e2b;
+}
+:root[data-theme="graphite"] {
+  --bg-app: #101112;
+  --bg-shell: #0d0e0f;
+  --bg-page: #101112;
+  --bg-panel: #181a1c;
+  --bg-panel-raised: #212325;
+  --bg-elevated: #303438;
+  --bg-canvas: #0b0c0d;
+  --bg-canvas-deep: #070809;
+  --text: #eceeef;
+  --accent: #c6d0d8;
+  --on-accent: #14181b;
+}
+:root {
+  --bg-topbar: var(--bg-shell);
+  --bg-track-row: var(--bg-app);
+  --bg-timeline: var(--bg-app);
+  --border: color-mix(in srgb, var(--text) 10%, transparent);
+  --border-subtle: color-mix(in srgb, var(--text) 5%, transparent);
+  --border-strong: color-mix(in srgb, var(--text) 18%, transparent);
+  --text-2: color-mix(in srgb, var(--text) 80%, var(--bg-app));
+  --text-3: color-mix(in srgb, var(--text) 62%, var(--bg-app));
+  --text-muted: color-mix(in srgb, var(--text) 48%, var(--bg-app));
+  --text-faint: color-mix(in srgb, var(--text) 52%, var(--bg-app));
+  --accent-hover: color-mix(in srgb, var(--accent) 72%, white);
+  --accent-muted: color-mix(in srgb, var(--accent) 65%, var(--bg-panel));
+  --accent-button: color-mix(in srgb, var(--accent) 35%, var(--text));
+  --warn: #e2b76b;
+  --danger: #f29696;
+  --success: #8bd4a5;
+  --overlay: rgb(0 0 0 / 65%);
+  --hover-wash: color-mix(in srgb, var(--text) 6%, transparent);
+  --track-1: #3a7694;
+  --track-2: #3f7f7c;
+  --track-3: #76517f;
+  --track-4: #62589a;
+  --track-5: #8a4f73;
+  --highlight: var(--warn);
+  --green: var(--success);
+  --background: var(--bg-canvas);
+  --surface: var(--bg-panel-raised);
+  --lightSurface: var(--bg-elevated);
+  --lightSurfaceHover: color-mix(in srgb, var(--bg-elevated), var(--text) 5%);
+  --activeBg: var(--bg-elevated);
+  --electricBlue: var(--accent);
+  --selectedBlue: var(--accent-hover);
+  --brightGreen: var(--success);
+  --brightYellow: var(--warn);
+  --windowSelectionColor: color-mix(in srgb, var(--accent) 35%, transparent);
+  --lp-bg: var(--bg-page);
+  --lp-bg-deep: var(--bg-canvas-deep);
+  --lp-text: var(--text);
+  --lp-text-muted: var(--text-3);
+  --lp-text-faint: var(--text-faint);
+  --lp-accent: var(--accent);
+  --lp-border: var(--border);
+  --lp-border-strong: var(--border-strong);
+  accent-color: var(--accent);
+}
+::selection { background: var(--windowSelectionColor); color: var(--text); }
+:focus-visible { outline-color: var(--accent); }

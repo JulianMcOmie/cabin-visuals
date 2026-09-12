@@ -27,8 +27,8 @@ export function edgeHitPx(widthPx: number, hitPx: number): number {
 export const BLOCK_EDGE_HIT = 10
 /** Shared loop-band fills, also used by its drag-alignment guides. Enabled is
  *  the accent blue; disabled is a plain grey - off reads as off. */
-export const LOOP_REGION_ENABLED_COLOR = '#45c6ff'
-export const LOOP_REGION_DISABLED_COLOR = 'rgba(155, 155, 155, 0.3)'
+export const LOOP_REGION_ENABLED_COLOR = 'var(--accent)'
+export const LOOP_REGION_DISABLED_COLOR = 'color-mix(in srgb, var(--text-3) 30%, transparent)'
 
 /**
  * Window-resize hit area (px) of the bottom panel's top Separator. Half of it
