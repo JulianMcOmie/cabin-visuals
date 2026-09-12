@@ -5,24 +5,25 @@ import type { ResolvedNote } from '../core/visual/types'
 import { applyMaterialOpacity } from '../core/visual/animatedOpacity'
 import { createParticlePool, disposeParticlePool } from './particleCore'
 import { particleStreamInstrument } from './ParticleStream'
-import { STREAM_CAPACITY, STREAM_CROSS_AGE, STREAM_FAR_Z, STREAM_NEAR_Z, streamCount, streamNoteEvents, streamPacketAge, streamPacketsAtBeat, streamTrajectory } from './particleStreamCore'
+import { STREAM_CAPACITY, STREAM_CROSS_AGE, STREAM_FAR_Z, STREAM_NEAR_Z, streamCount, streamDensity, streamNoteEvents, streamPatternWeights, buildStreamPaths, sampleStreamPath, streamParticleFraction, streamTrajectory } from './particleStreamCore'
 
 const settings = { count: 6, twist: 0.35, spread: 4, meetX: 0, meetY: 0 }
 const point = (stream: number, t: number, pattern = 1, config = settings) => streamTrajectory({ x: 0, y: 0, z: 0, fade: 0 }, stream, t, pattern, config)
+const blank = () => ({ x: 0, y: 0, z: 0, fade: 0 })
 const near = (a: number, b: number, tolerance = 1e-9) => assert.ok(Math.abs(a - b) < tolerance, `${a} != ${b}`)
 const note = (beat: number, pitch: number): ResolvedNote => ({ beat, pitch, velocity: 100, durationBeats: 0.25, blockStartBeat: 0, blockEndBeat: 100 })
+const weights = (pattern: number) => [0, 1, 2, 3, 4].map(p => p === pattern ? 1 : 0)
 
-test('the primary control is stream count; dot density is independent and bounded', () => {
-  const count = particleStreamInstrument.params.find(p => p.key === 'count')!
-  assert.equal(count.label, 'Streams')
-  assert.equal(count.default, 6)
-  assert.ok(particleStreamInstrument.params.some(p => p.key === 'density'))
-  assert.equal(streamCount(0), 1)
-  assert.equal(streamCount(999999), 16)
-  assert.equal(streamCount(NaN), 6)
+test('streams and fixed density are independent bounded controls', () => {
+  assert.equal(particleStreamInstrument.params.find(p => p.key === 'count')?.label, 'Streams')
+  assert.equal(particleStreamInstrument.params.find(p => p.key === 'count')?.default, 6)
+  assert.equal(particleStreamInstrument.params.find(p => p.key === 'density')?.label, 'Particle density')
+  assert.equal(streamCount(0), 1); assert.equal(streamCount(99999), 16); assert.equal(streamCount(NaN), 6)
+  assert.equal(streamDensity(0), 2); assert.equal(streamDensity(99999), 48); assert.equal(streamDensity(NaN), 16)
+  assert.equal(STREAM_CAPACITY, 16 * 48)
 })
 
-test('six streams meet centrally or as three distinct adjacent pairs, including at maximum twist', () => {
+test('six paths retain central and three adjacent-pair intersections', () => {
   for (const twist of [-2, 0, 0.35, 2]) {
     const config = { ...settings, twist, meetX: 1.1, meetY: -0.7 }
     const points = Array.from({ length: 6 }, (_, i) => point(i, STREAM_CROSS_AGE, 2, config))
@@ -38,76 +39,95 @@ test('six streams meet centrally or as three distinct adjacent pairs, including 
   near(odd.x, 0); near(odd.y, 0)
 })
 
-test('paths cross with continuous nonzero velocity and positive forward acceleration', () => {
-  const h = 1e-5
+test('the flow moves away from the camera without stopping at intersections', () => {
   for (const pattern of [0, 1, 2, 3, 4]) for (const twist of [-2, 0, 2]) {
-    for (let stream = 0; stream < 6; stream++) {
-      const sample = (t: number) => point(stream, t, pattern, { ...settings, twist })
-      const a = sample(STREAM_CROSS_AGE - h), b = sample(STREAM_CROSS_AGE), c = sample(STREAM_CROSS_AGE + h)
-      for (const axis of ['x', 'y', 'z'] as const) near((b[axis] - a[axis]) / h, (c[axis] - b[axis]) / h, 0.03)
-      assert.ok((c.z - a.z) / (2 * h) > 30, 'particles shoot through the meeting plane')
-      for (let t = 0.05; t < 0.95; t += 0.05) {
-        const before = sample(t - h), at = sample(t), after = sample(t + h)
-        assert.ok(after.z > at.z && at.z > before.z)
-        near((after.z - 2 * at.z + before.z) / (h * h), 16, 0.001)
+    const paths = buildStreamPaths({ ...settings, twist }, weights(pattern))
+    for (const path of paths) {
+      near(sampleStreamPath(blank(), path, 0).z, STREAM_NEAR_Z)
+      near(sampleStreamPath(blank(), path, 1).z, STREAM_FAR_Z)
+      for (let t = 0.001; t < 1; t += 0.005) {
+        const a = sampleStreamPath(blank(), path, t - 1e-5), b = sampleStreamPath(blank(), path, t)
+        assert.ok(b.z < a.z, 'each next sample travels into the distance')
       }
+      const a = sampleStreamPath(blank(), path, 0.5 - 1e-5), b = sampleStreamPath(blank(), path, 0.5 + 1e-5)
+      assert.ok((a.z - b.z) / 2e-5 > 1, 'the crossing must not halt the flow')
     }
   }
 })
 
-test('spawn and retirement are invisible; open mode stays distinct and zero twist stays straight', () => {
-  for (let i = 0; i < 6; i++) {
-    assert.equal(point(i, 0).fade, 0)
-    assert.equal(point(i, 1).fade, 0)
-    near(point(i, 0).z, STREAM_FAR_Z)
-    near(point(i, 1).z, STREAM_NEAR_Z)
-    const config = { ...settings, twist: 0 }
-    const a = point(i, 0.2, 0, config), b = point(i, 0.8, 0, config)
-    near(a.x, b.x); near(a.y, b.y)
-  }
-  assert.equal(new Set(Array.from({ length: 6 }, (_, i) => JSON.stringify(point(i, STREAM_CROSS_AGE, 0)))).size, 6)
-})
-
-test('off-grid notes schedule exact-time crossings, chord rules and latching are deterministic', () => {
-  const events = streamNoteEvents([note(5.17, 61), note(2.33, 60), note(5.17, 62), note(1, 80), note(1, 60.5)])
-  assert.deepEqual(events, [{ crossingBeat: 2.33, pattern: 1 }, { crossingBeat: 5.17, pattern: 3 }])
-  for (const speed of [0.1, 1, 4]) for (const event of events) {
-    const { packets, lifetime } = streamPacketsAtBeat(events, event.crossingBeat, speed, 16, 0)
-    assert.equal(packets.filter(p => p.crossingBeat === event.crossingBeat).length, 1)
-    near(streamPacketAge(event.crossingBeat, event.crossingBeat, lifetime), STREAM_CROSS_AGE)
-    for (const packet of packets.filter(p => p.crossingBeat > 5.17)) assert.equal(packet.pattern, 3)
+test('particles remain evenly spaced along curved paths by distance, not depth', () => {
+  for (const twist of [0.35, 2]) {
+    const path = buildStreamPaths({ ...settings, twist }, weights(1))[0]
+    const lengths = []
+    for (let dot = 0; dot < 16; dot++) {
+      let previous = sampleStreamPath(blank(), path, dot / 16), length = 0
+      for (let i = 1; i <= 40; i++) {
+        const next = sampleStreamPath(blank(), path, (dot + i / 40) / 16)
+        length += Math.hypot(next.x - previous.x, next.y - previous.y, next.z - previous.z)
+        previous = next
+      }
+      lengths.push(length)
+    }
+    assert.ok(Math.max(...lengths) / Math.min(...lengths) < 1.005)
   }
 })
 
-test('MIDI route transitions retain packet position and velocity; backward seeks match direct samples', () => {
-  const events = streamNoteEvents([note(4.13, 61), note(6.29, 60), note(8.11, 63)])
-  const sample = (beat: number, crossing: number) => {
-    const { packets, lifetime } = streamPacketsAtBeat(events, beat, 1, 16, 1)
-    const packet = packets.find(p => p.crossingBeat === crossing)!
-    assert.ok(packet)
-    return point(0, streamPacketAge(beat, crossing, lifetime), packet.pattern)
+test('MIDI never changes the fixed slots or their spacing, including dense rolls and negative beats', () => {
+  const events = streamNoteEvents(Array.from({ length: 1000 }, (_, i) => note(i / 100, 60 + i % 5)))
+  for (const beat of [-100, 0, 0.001, 4.13, 5, 8, 10000]) for (const density of [2, 16, 48]) {
+    const phases = Array.from({ length: density }, (_, i) => streamParticleFraction(i, density, beat, 1)).sort((a, b) => a - b)
+    assert.equal(phases.length, density)
+    assert.equal(new Set(phases).size, density)
+    for (let i = 1; i < phases.length; i++) near(phases[i] - phases[i - 1], 1 / density, 1e-10)
+    near(phases[0] + 1 - phases[phases.length - 1], 1 / density, 1e-10)
+    const blend = streamPatternWeights(events, beat, 1)
+    near(blend.reduce((a, b) => a + b), 1)
+    assert.ok(blend.every(w => w >= -1e-12 && w <= 1 + 1e-12))
   }
-  const expected = sample(6.29, 8.11)
-  sample(11, 8.11); sample(4, 8.11)
-  assert.deepEqual(sample(6.29, 8.11), expected)
-  for (const crossing of [4.13, 6.29, 8.11]) {
-    const a = sample(6.29 - 1e-5, crossing), b = sample(6.29, crossing), c = sample(6.29 + 1e-5, crossing)
-    for (const axis of ['x', 'y', 'z'] as const) near((b[axis] - a[axis]) / 1e-5, (c[axis] - b[axis]) / 1e-5, 0.003)
-  }
-  const beforeZero = streamPacketsAtBeat([], -7, 1, 16, 1)
-  assert.ok(beforeZero.packets.length >= 16)
 })
 
-test('dense MIDI and maximum settings stay inside the single shared Particle pool', () => {
-  const events = streamNoteEvents(Array.from({ length: 5000 }, (_, i) => note(i / 1000, 60)))
-  const { packets } = streamPacketsAtBeat(events, 3, 0.1, 48, 1)
-  assert.ok(packets.length * 16 <= STREAM_CAPACITY)
-  const pool = createParticlePool(2, true)
-  const ordinary = createParticlePool(2)
+test('MIDI starts smooth path changes rather than scheduling new dot arrivals', () => {
+  const events = streamNoteEvents([note(2.33, 60), note(5.17, 61), note(5.17, 62), note(1, 80), note(1, 60.5)])
+  assert.deepEqual(events, [{ beat: 2.33, pattern: 1 }, { beat: 5.17, pattern: 3 }])
+  assert.deepEqual(streamPatternWeights(events, 2.33, 0), weights(0))
+  assert.deepEqual(streamPatternWeights(events, 3.33, 0), weights(1))
+  near(streamPatternWeights(events, 2.83, 0)[1], 0.5)
+  assert.deepEqual(streamPatternWeights(events, 6.17, 0), weights(3))
+})
+
+test('rapid path changes keep velocity continuous and backward seeks reproduce the same positions', () => {
+  const events = streamNoteEvents([note(4.13, 61), note(4.29, 60), note(4.51, 63)])
+  const sample = (beat: number) => {
+    const path = buildStreamPaths(settings, streamPatternWeights(events, beat, 1))[0]
+    return sampleStreamPath(blank(), path, streamParticleFraction(3, 16, beat, 1))
+  }
+  const expected = sample(4.4)
+  sample(8); sample(-2)
+  assert.deepEqual(sample(4.4), expected)
+  const h = 1e-5
+  for (const beat of [4.13, 4.29, 4.51, 5.13, 5.29, 5.51]) {
+    const a = sample(beat - h), b = sample(beat), c = sample(beat + h)
+    for (const axis of ['x', 'y', 'z'] as const) near((b[axis] - a[axis]) / h, (c[axis] - b[axis]) / h, 0.03)
+  }
+})
+
+test('arc-length lookup has no velocity jumps at table boundaries and wraps invisibly', () => {
+  const path = buildStreamPaths(settings, weights(1))[0]
+  near(sampleStreamPath(blank(), path, 0).fade, 0)
+  near(sampleStreamPath(blank(), path, 1).fade, 0)
+  const h = 1e-7
+  for (let i = 1; i < path.distances.length - 1; i++) {
+    const t = path.distances[i] / path.length
+    const a = sampleStreamPath(blank(), path, t - h), b = sampleStreamPath(blank(), path, t), c = sampleStreamPath(blank(), path, t + h)
+    for (const axis of ['x', 'y', 'z'] as const) near((b[axis] - a[axis]) / h, (c[axis] - b[axis]) / h, 0.01)
+  }
+})
+
+test('the fixed flow reuses Particle glow and composes object fades once', () => {
+  const pool = createParticlePool(STREAM_CAPACITY, true), ordinary = createParticlePool(2)
   assert.equal(pool.mesh.material.defines.PARTICLE_OBJECT_OPACITY, 1)
-  assert.equal(ordinary.mesh.material.defines.PARTICLE_OBJECT_OPACITY, undefined, 'ordinary copy fades are already packed')
-  const root = new Group().add(pool.mesh)
-  applyMaterialOpacity(root, 0.25)
+  assert.equal(ordinary.mesh.material.defines.PARTICLE_OBJECT_OPACITY, undefined)
+  applyMaterialOpacity(new Group().add(pool.mesh), 0.25)
   assert.equal(pool.mesh.material.uniforms.uOpacity.value, 0.25)
   assert.equal(pool.mesh.material.transparent, true)
   disposeParticlePool(pool); disposeParticlePool(ordinary)

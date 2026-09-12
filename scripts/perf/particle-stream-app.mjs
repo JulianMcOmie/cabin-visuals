@@ -60,31 +60,39 @@ try {
       }
       return { hash, count: mesh.count, cross, opacity: mesh.material.uniforms.uOpacity.value }
     }
-    const frames = [4.13, 8.17, 2, 8.17, 4.13].map(render)
+    const frames = [6, 10, 3, 10, 6].map(render)
+    render(6.17)
+    const beforeZ = Array.from({ length: window.__streamMesh.count }, (_, i) => window.__streamMesh.instanceMatrix.array[i * 16 + 14])
+    render(6.18)
+    const movingAway = beforeZ.every((z, i) => window.__streamMesh.instanceMatrix.array[i * 16 + 14] < z)
     stores.project.getState().setTrackParam('stream-smoke', 'tfOpacity', 0.25)
-    const faded = render(4.13)
+    const faded = render(6)
     stores.project.getState().setTrackParam('stream-smoke', 'tfOpacity', 1)
-    const restored = render(4.13)
+    const restored = render(6)
     stores.project.getState().setTrackParam('stream-smoke', 'count', 16)
     stores.project.getState().setTrackParam('stream-smoke', 'density', 48)
-    const dense = render(8.17)
+    const dense = render(10)
     stores.project.getState().setTrackParam('stream-smoke', 'count', 1)
-    const one = render(8.17)
+    const one = render(10)
     const mesh = window.__streamMesh
-    return { frames, faded, restored, dense, one, capacity: mesh.instanceMatrix.count,
+    return { frames, movingAway, faded, restored, dense, one, capacity: mesh.instanceMatrix.count,
       programs: three.gl.info.programs.map(p => p.diagnostics?.runnable ?? true) }
   })
   result.worker = worker
+  assert.equal(result.movingAway, true, 'fixed slots move into the distance')
+  assert.ok(result.frames.every(frame => frame.count === 96), 'MIDI keeps exactly 16 dots on each of six streams')
   assert.equal(result.frames[0].cross.length, 6)
   assert.ok(result.frames[0].cross.every(([x, y]) => Math.hypot(x, y) < 1e-5))
   assert.equal(result.frames[1].cross.length, 6)
-  assert.equal(new Set(result.frames[1].cross.map(([x, y]) => `${x.toFixed(4)},${y.toFixed(4)}`)).size, 3)
+  assert.equal(new Set(result.frames[1].cross.map(([x, y]) => `${Math.round(x * 10000)},${Math.round(y * 10000)}`)).size, 3)
   assert.equal(result.frames[0].hash, result.frames[4].hash)
   assert.equal(result.frames[1].hash, result.frames[3].hash)
   assert.notEqual(result.frames[0].hash, result.frames[2].hash)
   assert.equal(result.faded.opacity, 0.25)
   assert.notEqual(result.faded.hash, result.restored.hash)
   assert.equal(result.restored.hash, result.frames[0].hash)
+  assert.equal(result.dense.count, 16 * 48)
+  assert.equal(result.one.count, 48)
   assert.equal(result.dense.count, result.one.count * 16)
   assert.ok(result.dense.count <= result.capacity)
   assert.ok(result.programs.every(Boolean))

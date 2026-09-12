@@ -409,18 +409,23 @@ Note-driven state must stay a **pure function of the note stream and the beat** 
 
 Colocated `*.test.ts` here ARE run by `npm run test:visual` — the glob was widened when `KaleidoSolid.test.ts` landed, which also picked up two earlier instrument tests that had been sitting unrun. All green as of 2026-07-30; no separate command needed.
 
-## Particle Stream: MIDI specifies arrival, not emission
+## Particle Stream: fixed density along continuously steered paths
 
 `ParticleStream` reuses Particle's pool, glow shader, and billboard picking through
-`particleCore.ts`. Its primary count is **streams**; density is dots per stream.
-`particleStreamCore.ts` plans synchronized packets from the full resolved note
-stream: note onset is the crossing time and its pattern latches for later packets.
-A packet keeps that route for its whole flight, including pre-roll before the note,
-so Center → Pairs changes do not retarget in-flight dots. Forward motion has constant
-positive acceleration and never eases to a stop at a crossing. Note duration and
-velocity are intentionally ignored; highest supported pitch wins a chord. Odd pair
-counts send the leftover stream through center. MIDI is the smooth sequencing path;
-editing/automating flight geometry or speed reshapes the field at the sampled beat.
+`particleCore.ts`. Its primary count is **streams**; density fixes dots per stream,
+so the draw count is always their product, independent of MIDI. Permanent slots
+advance along local -Z, away from the default camera, with faint end fades hiding
+recycling. `particleStreamCore.ts` builds arc-length tables only when path geometry
+changes. Shape-preserving cubic lookup maintains smooth velocity and even spacing
+through curves and crossings, without per-frame integration.
+
+MIDI now steers the entire path over one beat instead of emitting timed packets.
+Quintic-smoothed step differences produce a convex pattern blend, including during
+rapid rolls, and retain continuous velocity when a transition is interrupted.
+Notes do not guarantee a particle arrives on that exact beat. Highest supported
+pitch wins a chord; note duration and velocity are ignored. Odd pair counts send
+the leftover stream through center. Geometry/count/speed automation still reshapes
+or rephases the field at the sampled beat; MIDI is the smooth sequencing path.
 
 Particle's internal pool accepts `objectOpacity: true` for instruments that own their
 arrangements: this enables multiplication by the wrapper's `uOpacity` in the shared

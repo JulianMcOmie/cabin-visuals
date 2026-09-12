@@ -1,32 +1,34 @@
 # Particle Stream
 
-Find **Particle Stream** in the library's **Instruments** folder. It starts flowing
-without notes. **Streams** chooses 1–16 trajectories; **Dots** changes how many
-particles occupy each stream. **Twist** bends the paths, with zero giving straight
-flights. Speed, spread, particle size, glow, and color shape the appearance.
+Find **Particle Stream** in the library's **Instruments** folder. It continuously
+flows away from the default camera, into the distance, without needing MIDI.
 
-Draw MIDI notes where you want the particles to meet:
+**Streams** chooses 1–16 trajectories. **Density** fixes 2–48 dots on each stream:
+six streams at density 16 always contain 96 dots. Dots are spaced evenly by distance
+along each curved path. They keep moving through crossings and recycle quietly at
+the ends. MIDI never adds extra particles or bursts.
 
-- **Meet · center:** every stream crosses one point.
-- **Meet · adjacent pairs:** neighboring streams meet in pairs. Six streams make
+**Twist** bends the paths, with zero giving straight flights. Speed, spread, particle
+size, glow, and color shape the appearance. **Meeting point X/Y** under More moves
+the intersection arrangement.
+
+Draw MIDI notes to steer the paths:
+
+- **Path · center:** every stream crosses one point.
+- **Path · adjacent pairs:** neighboring streams meet in pairs. Six streams make
   three meeting points; an odd leftover crosses the center.
-- **Meet · left / right:** every stream meets at an offset point.
-- **Open · separate streams:** streams continue without converging.
+- **Path · left / right:** every stream crosses an offset point.
+- **Path · separate streams:** streams flow without converging.
 
-A note marks the exact **meeting time**, even off-grid. Dots approach beforehand
-and shoot through the crossing; they do not stop there. The pattern stays selected
-for following particles until another note changes it. For example, put Center at
-beat 4, Pairs at beat 8, and Right at beat 12. Note length and velocity do not change
-the route. If you draw a chord, the highest supported row pitch wins.
+A note starts a smooth one-beat transition to its pattern, which then stays selected.
+Rapid notes blend continuously without snapping the dots or their velocity. Notes
+steer the existing flow; they no longer schedule a dot's exact arrival time or add
+new groups of dots. Note length and velocity do not change the route. In a chord,
+the highest supported pitch wins. The pattern buttons choose the starting pattern
+before MIDI takes over.
 
-The pattern buttons choose the starting pattern before MIDI takes over. **Meeting
-point X/Y** under More moves the arrangement. Numeric controls accept ordinary
-parameter automation, but geometry, stream-count and speed changes reshape the
-current field; use the MIDI rows for continuous pattern sequencing. Incoming dots
-anticipate future notes, so editing a future crossing can change its approach.
-
-The field flies along the track's local +Z axis toward the default camera. Track
-transforms and movers can reposition it; a custom camera does not automatically
-re-aim the field. Extremely dense rolls are capped at 128 scheduled note packets
-per flight, in addition to the background flow. Pause, backward scrubbing, and
-export all sample the same deterministic paths.
+Numeric controls accept ordinary parameter automation. Geometry, stream-count and
+speed edits reshape or rephase the current field; use MIDI for smooth pattern
+sequencing. The flow follows the track's local -Z axis. Track transforms and movers
+can reposition it; a custom camera does not automatically re-aim the field. Pause,
+backward scrubbing, and export all sample the same deterministic flow.
