@@ -1339,8 +1339,6 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
         videoPads: track.videoPads ? [...track.videoPads] : undefined,
         // Same contract for the Photo instrument's bank.
         photoPads: track.photoPads ? [...track.photoPads] : undefined,
-        // Same contract for the Mod Synth's modulator rack.
-        synthMods: track.synthMods ? [...track.synthMods] : undefined,
         scratchBase: identitySV(),
         tags,
         maskSourceIds: [],

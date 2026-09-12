@@ -21,7 +21,7 @@ import type { AudioClip } from '../editor/store/AudioStore'
 const LEGACY_SCENE_BACKGROUND = '#000000'
 
 /** Bump when the document shape changes, and append the matching step below. */
-export const CURRENT_VERSION = 21
+export const CURRENT_VERSION = 22
 
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
@@ -866,6 +866,42 @@ UPGRADES[20] = (raw) => {
     }))
   }
   return { ...raw, scenes: Object.fromEntries(Object.entries(doc.scenes).map(([id, scene]) => [id, { ...scene, tracks: migrate(scene.tracks) }])), audioTracks: migrate(doc.audioTracks ?? {}) }
+}
+
+// v21 → v22: retire Mod Synth. Keep the track and its authored arrangement as
+// a basic cube, instead of leaving an unknown instrument that renders nothing.
+// Independent voice envelopes have no equivalent on 3D Shape and are dropped.
+// Strip abandoned racks/wardrobe entries even after a prior instrument swap.
+UPGRADES[21] = (raw) => {
+  const doc = raw as unknown as ProjectDocument
+  const migrate = (tracks: Record<string, Track>) => Object.fromEntries(
+    Object.entries(tracks).map(([id, track]) => {
+      const legacy = track as Track & { synthMods?: unknown }
+      const retired = track.instrumentId === 'modSynth'
+      if (!retired && !('synthMods' in legacy) && !track.paramsByInstrument?.modSynth) return [id, track]
+      const { synthMods: _rack, ...next } = legacy
+      if (next.paramsByInstrument?.modSynth) {
+        const { modSynth: _stash, ...kept } = next.paramsByInstrument
+        if (Object.keys(kept).length) next.paramsByInstrument = kept
+        else delete next.paramsByInstrument
+      }
+      if (retired) {
+        next.instrumentId = 'cube'
+        if (next.name === 'Mod Synth') next.name = '3D Shape'
+        const { color, ...strings } = next.stringParams ?? {}
+        next.stringParams = { ...strings, geometry: 'cube', baseColor: color || '#f5b455' }
+        next.params = { ...next.params, size: next.params?.size ?? 1 }
+      }
+      return [id, next]
+    }),
+  )
+  return {
+    ...raw,
+    scenes: Object.fromEntries(Object.entries(doc.scenes).map(([id, scene]) =>
+      [id, { ...scene, tracks: migrate(scene.tracks) }],
+    )),
+    audioTracks: migrate(doc.audioTracks ?? {}),
+  }
 }
 
 /**

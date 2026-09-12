@@ -47,7 +47,7 @@ const WORKER_INSTRUMENTS = new Set([
   'filmGrain', 'scribble', 'pixelBlast', 'colorFilters', 'bassRipple',
   'impactWarp', 'strobe', 'laserSphere', 'laserLine', 'wormhole',
   'particleSphere', 'polyFx', 'radialBloom', 'flashWall', 'overlapShape',
-  'overlapSolid', 'crop', 'midiRoll', 'starfield', 'wireframe', 'modSynth', 'light',
+  'overlapSolid', 'crop', 'midiRoll', 'starfield', 'wireframe', 'light',
 ])
 export function canRenderInWorker(project: PreviewProject): boolean {
   return Object.values(project.scenes).every(scene => scene.isMain ||

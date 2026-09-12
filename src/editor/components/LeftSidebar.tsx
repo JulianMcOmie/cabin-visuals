@@ -183,13 +183,6 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <circle cx="6" cy="6" r="2.2" fill="#cffafe" />
     </svg>
   )},
-  { id: 'modSynth', name: 'Mod Synth', description: 'A synthesizer of visuals: every note spawns a copy whose size, position, color and opacity fly custom envelopes - ADSR, bezier or hand-drawn.', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12">
-      <path d="M1 10 L2.5 2.5 L4.5 7 L8 7 L11 10" fill="none" stroke="#f5b455" strokeWidth="1.1" strokeLinejoin="round" />
-      <circle cx="2.5" cy="2.5" r="1.1" fill="#ffd9a0" />
-      <circle cx="8" cy="7" r="1.1" fill="#f5b455" />
-    </svg>
-  )},
   { id: 'laserLine', name: 'Laser Line', description: 'A thin neon beam with a colored core and HDR edge bloom.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <path d="M1 6 H11" stroke="#22d3ee" strokeWidth="3" strokeLinecap="round" opacity="0.2" />
@@ -418,7 +411,7 @@ const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.
 // The Instruments folder. These are object instruments like any other; what
 // they share is that MIDI plays their hits, sustains, and releases, so they
 // belong together rather than scattered through Objects and Extras.
-const INSTRUMENT_FOLDER_IDS = new Set(['radialBloom', 'modSynth', 'flashWall', 'glassRoll'])
+const INSTRUMENT_FOLDER_IDS = new Set(['radialBloom', 'flashWall', 'glassRoll'])
 const INSTRUMENT_FOLDER_ITEMS = ALL_OBJECT_INSTRUMENTS.filter((i) => INSTRUMENT_FOLDER_IDS.has(i.id))
 
 // The in-scene Crop masks the whole scene while its rows are held - the

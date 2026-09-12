@@ -16,9 +16,9 @@ export async function createInstrumentPoster(id, bytes, version) {
   if (!/^[\w-]+$/.test(id)) throw new Error(`Invalid instrument id: ${id}`)
   const temp = await mkdtemp(join(tmpdir(), 'instrument-poster-'))
   try {
-    // Synth voices start at zero size on the exact note onset. Give its
+    // Radial Bloom starts at zero size on the exact note onset. Give its
     // attack a moment to open, and start playback at that same frame.
-    const time = (id === 'modSynth' || id === 'radialBloom') ? 0.125 : 0
+    const time = id === 'radialBloom' ? 0.125 : 0
     await writeFile(join(temp, 'clip.mp4'), bytes)
     await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', join(temp, 'clip.mp4'),
       '-ss', String(time), '-frames:v', '1', join(temp, 'poster.png')])

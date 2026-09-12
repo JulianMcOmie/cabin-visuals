@@ -199,13 +199,6 @@ const G = {
       <path d="M8 2.2v1.9M8 11.9v1.9M2.2 8h1.9M11.9 8h1.9M4 4l1.3 1.3M12 4l-1.3 1.3M4 12l1.3-1.3M12 12l-1.3-1.3" />
     </>
   ),
-  modSynth: (
-    <>
-      <path d="M2 13 L4 4 L7 9.5 L11 9.5 L14 13" strokeLinejoin="round" />
-      <circle cx="4" cy="4" r="1.4" fill="currentColor" stroke="none" />
-      <circle cx="11" cy="9.5" r="1.4" fill="currentColor" stroke="none" />
-    </>
-  ),
   laserLine: (
     <>
       <path d="M2 8h12" strokeWidth="3.4" strokeOpacity="0.25" />

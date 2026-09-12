@@ -37,7 +37,8 @@ import type { ViewAspect } from '../editor/store/ProjectStore'
  * params move onto per-track `lyricClips` + `styleLanes`, word notes revoice
  * from pitch 48 onto the style-lane band (PLAIN = 58), the 60-72 height band
  * retires, and `wordFormation` child tracks are converted to clip layouts and
- * dropped.
+ * dropped. v22 retires Mod Synth: existing tracks become 3D Shapes, retaining
+ * their arrangement, base size and color but losing custom voice envelopes.
  */
 export interface ProjectDocument {
   schemaVersion: number
@@ -82,7 +83,7 @@ export function emptyDocument(): ProjectDocument {
     // upgrade.ts imports this module - the constant would be a cycle). A stale
     // stamp is harmless today (fresh docs re-walk no-op steps on load) but
     // misleading to read.
-    schemaVersion: 21,
+    schemaVersion: 22,
     bpm: 120,
     beatsPerBar: 4,
     totalBars: 32,

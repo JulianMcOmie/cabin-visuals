@@ -608,7 +608,6 @@ export function createVisualEngine() {
           energy,
           videoPads: obj.videoPads,
           photoPads: obj.photoPads,
-          synthMods: obj.synthMods,
           world,
           meshScale,
           opacity,
@@ -632,7 +631,6 @@ export function createVisualEngine() {
       state.energy = energy
       state.videoPads = obj.videoPads
       state.photoPads = obj.photoPads
-      state.synthMods = obj.synthMods
       state.world = world
       state.meshScale = meshScale
       state.opacity = opacity
@@ -739,7 +737,7 @@ export function createVisualEngine() {
         state = {
           beat: copyBeat, secPerBeat, beatsPerBar: 4,
           params, energy,
-          videoPads: obj.videoPads, photoPads: obj.photoPads, synthMods: obj.synthMods,
+          videoPads: obj.videoPads, photoPads: obj.photoPads,
           world: new Matrix4(), meshScale: 1, opacity: 1,
           effectOverrides: undefined, blackedOut,
           stringParams: obj.stringParams, abilityEvents: obj.abilityEvents,
@@ -791,7 +789,6 @@ export function createVisualEngine() {
       state.energy = energy
       state.videoPads = obj.videoPads
       state.photoPads = obj.photoPads
-      state.synthMods = obj.synthMods
       state.meshScale = meshScale
       state.opacity = opacity
       state.effectOverrides = effectOverrides
@@ -1056,7 +1053,7 @@ export function createVisualEngine() {
       // Re-cloning unchanged notes must not regenerate text/particle geometry.
       if (sameDocument && previous) {
         for (const key of ['notes', 'automations', 'abilityEvents', 'lyricClips', 'styleLanes',
-          'videoPads', 'photoPads', 'synthMods'] as const) {
+          'videoPads', 'photoPads'] as const) {
           (state as unknown as Record<string, unknown>)[key] = previous[key]
         }
       }

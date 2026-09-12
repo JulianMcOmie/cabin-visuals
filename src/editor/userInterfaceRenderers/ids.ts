@@ -21,7 +21,6 @@ export type UserInterfaceRendererId =
   | 'neonPolar'
   | 'hopfFibration'
   | 'laserSphere'
-  | 'modSynth'
   | 'shapeFlight'
   | 'metronomeBalls'
   | 'emojiDisplay'

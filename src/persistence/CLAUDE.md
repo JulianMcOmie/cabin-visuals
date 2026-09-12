@@ -17,6 +17,11 @@ Projects persist as one JSONB blob per row (`projects.data` = `ProjectDocument`)
 ## Rules
 
 - Documents are versioned; NEVER mutate an upgrade step that shipped. Old blobs must always walk the chain.
+- v22 retires Mod Synth: `UPGRADES[21]` converts saved instances to cube/3D Shape,
+  preserving track IDs, notes, hierarchy, effects, base size and color. Its custom
+  per-note envelopes are removed, along with stale racks and instrument wardrobe
+  entries on previously swapped tracks. The retired ID survives only in migration
+  code/tests; it must not be registered in the instrument or preview-worker lists.
 - Bytes never enter the document or the stores — refs only.
 - Nothing in the edit path may depend on persistence (autosave observes; it is never awaited by edits).
 
