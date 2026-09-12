@@ -43,6 +43,8 @@ export interface InstancedCopyFrame {
    *  matrix the per-copy path's placement group wears (Scale effects arrive
    *  through InstancedScaleContext; every other effect falls back per copy). */
   composeCopyMatrix(i: number, out: Matrix4): Matrix4
+  /** Shared world × Scale-effect prefix, before copy and instrument scale. */
+  composePlacement(out: Matrix4): Matrix4
   /** `state.opacity × copy.opacity`, 0 while blacked out. Instances at ≤0.001
    *  must be hidden, not faded - the ghost-wall depth artifact. */
   copyFade(i: number): number
@@ -84,6 +86,7 @@ export function useInstancedCopyFrame(
       frame = {
         state,
         copies,
+        composePlacement(out) { return out.copy(placement) },
         composeCopyMatrix(i, out) {
           const f = frameRef.current as InstancedCopyFrame
           out.copy(placement)

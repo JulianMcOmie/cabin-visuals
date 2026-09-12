@@ -123,6 +123,9 @@ export function resolveCountLane<S extends object>(args: {
       return atCount(countAt(gates, context.beat, rest)).apply(visualCopy, context)
     },
     composition: atCount(rest).composition,
+    ...(atCount(rest).localTransforms ? {
+      localTransformsAtBeat: (beat: number) => atCount(countAt(gates, beat, rest)).localTransforms!,
+    } : {}),
     // Rank order matches resolveOwnMoverOrSplitter's automation variants:
     // maximum reach first, minimum second.
     structuralVariants: [atCount(maxCount), atCount(minCount)],

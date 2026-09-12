@@ -11,10 +11,11 @@ type StatePacket = { staticId: number; value: MovingState }
 const STRIDE = 24
 const OPTIONAL_COLOR_FLAGS = [['tintPerceptual', 22], ['huePerceptual', 23]] as const
 interface PackedCopies { values: Float64Array; tints: (string | null)[] }
-export interface PreviewFramePacket extends Omit<Frame, 'objectList' | 'states' | 'copyStatesByTrack' | 'visualCopiesByTrack'> {
+export interface PreviewFramePacket extends Omit<Frame, 'objectList' | 'states' | 'copyStatesByTrack' | 'visualCopiesByTrack' | 'particlePlans'> {
   id: number
   baseId: number | null
   objectList?: Frame['objectList']
+  particlePlans?: Frame['particlePlans']
   staticStates: Map<number, StaticState>
   states: Map<string, StatePacket>
   copyStatesByTrack: Map<string, (StatePacket | null)[]>
@@ -64,12 +65,13 @@ export class PreviewFrameEncoder {
   private lastId: number | undefined
   private revision: number | undefined
   private objectList: Frame['objectList'] | undefined
+  private particlePlans: Frame['particlePlans'] = new Map()
   private nextStaticId = 0
   private staticByNotes = new WeakMap<object, { id: number; value: StaticState }[]>()
   encode(frame: Frame, id: number, revision: number, acknowledgedId?: number): PreviewFramePacket {
     const baseId = this.lastId !== undefined && acknowledgedId === this.lastId && revision === this.revision ? this.lastId : null
     if (baseId === null) {
-      this.staticByNotes = new WeakMap(); this.nextStaticId = 0; this.objectList = undefined
+      this.staticByNotes = new WeakMap(); this.nextStaticId = 0; this.objectList = undefined; this.particlePlans = new Map()
     }
     const staticStates = new Map<number, StaticState>()
     const encodedStates = new WeakMap<ObjectState, StatePacket>()
@@ -92,13 +94,17 @@ export class PreviewFrameEncoder {
       encodedStates.set(state, encoded)
       return encoded
     }
+    const plansChanged = baseId === null || frame.particlePlans.size !== this.particlePlans.size
+      || [...frame.particlePlans].some(([key, plan]) => this.particlePlans.get(key) !== plan)
     const packet: PreviewFramePacket = {
       ...frame, id, baseId, staticStates,
+      particlePlans: plansChanged ? new Map(frame.particlePlans) : undefined,
       objectList: frame.objectList !== this.objectList ? frame.objectList : undefined,
       states: new Map([...frame.states].map(([key, state]) => [key, encodeState(state)])),
       copyStatesByTrack: new Map([...frame.copyStatesByTrack].map(([key, states]) => [key, states.map(state => state ? encodeState(state) : null)])),
       visualCopiesByTrack: new Map([...frame.visualCopiesByTrack].map(([key, copies]) => [key, packCopies(copies)])),
     }
+    if (plansChanged) this.particlePlans = new Map(frame.particlePlans)
     this.objectList = frame.objectList; this.lastId = id; this.revision = revision
     return packet
   }
@@ -107,10 +113,12 @@ export class PreviewFrameDecoder {
   id: number | undefined
   private staticStates = new Map<number, StaticState>()
   private objectList: Frame['objectList'] | undefined
+  private particlePlans: Frame['particlePlans'] = new Map()
   decode(packet: PreviewFramePacket): Frame {
-    if (packet.baseId === null) { this.staticStates.clear(); this.objectList = undefined }
+    if (packet.baseId === null) { this.staticStates.clear(); this.objectList = undefined; this.particlePlans = new Map() }
     else if (packet.baseId !== this.id) throw new Error('Preview frame metadata base was not received')
     for (const [id, state] of packet.staticStates) this.staticStates.set(id, state)
+    if (packet.particlePlans) this.particlePlans = packet.particlePlans
     if (packet.objectList) this.objectList = packet.objectList
     if (!this.objectList) throw new Error('Preview frame object metadata is missing')
     const decodedStates = new WeakMap<StatePacket, ObjectState>()
@@ -126,7 +134,7 @@ export class PreviewFrameDecoder {
     }
     const { id, baseId: _baseId, staticStates: _staticStates, ...frame } = packet
     const decoded: Frame = {
-      ...frame, objectList: this.objectList,
+      ...frame, objectList: this.objectList, particlePlans: this.particlePlans,
       states: new Map([...packet.states].map(([key, state]) => [key, decodeState(state)])),
       copyStatesByTrack: new Map([...packet.copyStatesByTrack].map(([key, states]) => [key, states.map(state => state ? decodeState(state) : null)])),
       visualCopiesByTrack: new Map([...packet.visualCopiesByTrack].map(([key, copies]) => [key, unpackCopies(copies)])),

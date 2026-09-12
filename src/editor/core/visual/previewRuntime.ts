@@ -1,6 +1,7 @@
 // The canvas governor and worker bridge coordinate without React renders per beat.
 export const previewRuntime = {
   worker: false, rendering: false, frameReady: false,
+  directParticles: false,
   beat: 0, revision: -1, duration: 0, error: '',
   ambient: null as ImageData | null,
   presentMs: 0,

@@ -45,6 +45,7 @@ function makeStage(id: string, project: ProjectSnapshot, previous?: Stage): Stag
     id, snapshot: stage.snapshot, scene, camera,
     context: { engine, tracks: stage.snapshot.tracks, renderFrame: previous?.context.renderFrame ?? { current: false } },
     objects: engine.getObjectList().filter(object => stage.targets.has(object.trackId)),
+    denseParticles: engine.getObjectList().some(object => object.proceduralCopies && engine.getVisualCopyCount(object.trackId) >= 1_000_000),
   }
 }
 interface Stage {
@@ -54,6 +55,7 @@ interface Stage {
   camera: PerspectiveCamera
   context: NonNullable<React.ContextType<typeof VisualEngineContext>>
   objects: ObjectListEntry[]
+  denseParticles: boolean
 }
 
 function sameInputs(a: ProjectSnapshot, b: ProjectSnapshot) {
@@ -145,7 +147,10 @@ export function TrackPreviewRenderer({ immediate = false }: { immediate?: boolea
     if (!surfaces.length || isExportPinned()) return
     if (runtime.busy) { runtime.pending = true; return }
     const now = performance.now() / 1000
-    const remaining = 1 / 30 - (now - runtime.lastFrame)
+    // A million-particle row still renders its complete cloud, but live atlas
+    // refreshes must leave GPU time for the 60fps primary canvas.
+    const dense = useTimeStore.getState().isPlaying && surfaces.some(surface => cache.current.get(surface.trackId)?.denseParticles)
+    const remaining = 1 / (dense ? 10 : 30) - (now - runtime.lastFrame)
     if (remaining > 0) {
       // Pointer/scroll invalidations can arrive at display refresh even paused.
       // Cap preview work too, then guarantee the final paused edit gets painted.

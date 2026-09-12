@@ -216,6 +216,13 @@ export interface MoverOrSplitter {
    * index, formation, color and incoming transforms still vary per copy.
    * Unknown entries default to fresh evaluation. */
   cachePolicy?: 'static' | 'beat'
+  /** Exact fixed local layout: output i is input.transform × localTransforms[i],
+   * with unchanged appearance and no dependence on context. Matrices are immutable.
+   * This stronger opt-in permits factored GPU expansion without calling apply. */
+  localTransforms?: readonly Matrix4[]
+  /** The same exact local-layout contract, sampled at an absolute beat. This
+   * permits layout automation/count lanes without expanding their product. */
+  localTransformsAtBeat?: (beat: number) => readonly Matrix4[]
   apply(visualCopy: VisualCopy, context: MoverOrSplitterContext): VisualCopy[]
   /**
    * OPTIONAL: the composition convention this entry's transform uses, as

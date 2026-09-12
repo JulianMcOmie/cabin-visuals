@@ -79,6 +79,7 @@ export function VisualBeatSync({ sceneId, sourceRef }: {
       clearPick()
       previewRuntime.error = error
       previewRuntime.worker = false
+      previewRuntime.directParticles = false
       worker?.terminate(); worker = undefined
       clearTimeout(watchdog)
       pending?.({ id, revision, error, duration: 0 }); pending = undefined
@@ -127,6 +128,22 @@ export function VisualBeatSync({ sceneId, sourceRef }: {
         return
       }
       const project = useProjectStore.getState()
+      if (previewRuntime.directParticles) {
+        if (syncProject.current !== project) {
+          visualEngine.setProject(project)
+          syncProject.current = project
+        }
+        if (visualEngine.isDirectParticleScene(scene.current)) {
+          previewRuntime.frameReady = true
+          get().invalidate()
+          return
+        }
+        // A scene/edit left the compact path. The worker receives a fresh
+        // document before it owns playback again.
+        previewRuntime.directParticles = false
+        previewRuntime.worker = true
+        revision++; lastSentRevision = -1
+      }
       waveformTracks = project.audioTracks
       const time = useTimeStore.getState()
       const state = get()
@@ -165,6 +182,9 @@ export function VisualBeatSync({ sceneId, sourceRef }: {
       const presentStart = performance.now()
       setPreviewRendering(!!response.pixels)
       visualEngine.applyFrame(frameDecoder.decode(response.frame), response.revision === previewRuntime.revision)
+      const directParticles = visualEngine.isDirectParticleScene(scene.current)
+      previewRuntime.directParticles = directParticles
+      previewRuntime.worker = !directParticles
       // Export must resolve its own graph after a preview replaces evaluated caches.
       syncProject.current = null
       previewRuntime.revision = response.revision
@@ -185,7 +205,7 @@ export function VisualBeatSync({ sceneId, sourceRef }: {
         camera.projectionMatrix.fromArray(response.camera.projection)
         camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert()
       }
-      if (response.pixels) {
+      if (response.pixels && !directParticles) {
         if (presentation.width !== response.pixels.width) presentation.width = response.pixels.width
         if (presentation.height !== response.pixels.height) presentation.height = response.pixels.height
         context.putImageData(response.pixels, 0, 0)
@@ -238,6 +258,7 @@ export function VisualBeatSync({ sceneId, sourceRef }: {
       pending?.({ id, revision, error: 'Disposed', duration: 0 })
       stopProject(); stopVideo(); stopTime(); stopUI(); stopSurfaces(); stopGradient(); resize.disconnect(); stopExport()
       presentation.remove(); restoreCanvas()
+      previewRuntime.directParticles = false
       previewRuntime.worker = false; previewRuntime.frameReady = false; previewRuntime.revision = -1
     }
   }, [get, sourceRef])

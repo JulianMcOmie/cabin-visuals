@@ -319,9 +319,12 @@ export function createVisualCopyEvaluator(): typeof resolveVisualCopies {
  */
 export function structuralCopyCount(
   moverAndSplitterChain: MoverOrSplitter[],
-  plainCount: number = resolveVisualCopies(moverAndSplitterChain, 0).length,
+  plainCount?: number,
 ): number {
-  let count = plainCount
+  // Structural UI queries must not expand a factored million-copy layout.
+  const localCount = (chain: MoverOrSplitter[]) => chain.every(entry => (entry.localTransforms || entry.localTransformsAtBeat) && !entry.applyFramed && !entry.emitsCopyClocks)
+    ? chain.reduce((count, entry) => count * (entry.localTransformsAtBeat?.(0) ?? entry.localTransforms!).length, 1) : undefined
+  let count = plainCount ?? localCount(moverAndSplitterChain) ?? resolveVisualCopies(moverAndSplitterChain, 0).length
   const variantRanks = Math.max(
     0,
     ...moverAndSplitterChain.map((entry) => entry.structuralVariants?.length ?? 0),
@@ -330,7 +333,7 @@ export function structuralCopyCount(
     const probeChain = moverAndSplitterChain.map(
       (entry) => entry.structuralVariants?.[rank] ?? entry,
     )
-    count = Math.max(count, resolveVisualCopies(probeChain, 0).length)
+    count = Math.max(count, localCount(probeChain) ?? resolveVisualCopies(probeChain, 0).length)
   }
   return count
 }

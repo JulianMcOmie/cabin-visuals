@@ -448,6 +448,7 @@ function resolveRadialLayout(settings: RadialSettings) {
   })
   return {
     cachePolicy: 'static' as const,
+    localTransforms: transforms,
     apply(visualCopy: VisualCopy) {
       return transforms.map((transform) => ({
         transform: visualCopy.transform.clone().multiply(transform),
@@ -559,6 +560,7 @@ function resolveLineLayout(settings: LineSettings) {
   })
   return {
     cachePolicy: 'static' as const,
+    localTransforms: slots,
     apply(visualCopy: VisualCopy) {
       return slots.map((slot) => ({
         transform: visualCopy.transform.clone().multiply(slot),
@@ -840,6 +842,7 @@ function resolveGridLayout(settings: GridSettings) {
   })
   return {
     cachePolicy: 'static' as const,
+    localTransforms: cells,
     apply(visualCopy: VisualCopy) {
       return cells.map((cell) => ({
         transform: visualCopy.transform.clone().multiply(cell),

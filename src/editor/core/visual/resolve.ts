@@ -728,6 +728,15 @@ function resolveOwnMoverOrSplitter(track: Track, p: ProjectSnapshot): MoverOrSpl
     maxResolved.structuralVariants?.[0] ?? maxResolved,
     minResolved.structuralVariants?.[1] ?? minResolved,
   ]
+  // Only definitions that explicitly guarantee a local affine layout may
+  // forward this contract through automation. Targets/frames drop it later.
+  if ((resolved.localTransforms || resolved.localTransformsAtBeat)
+    && wrapped.structuralVariants.every(entry => entry.localTransforms || entry.localTransformsAtBeat)) {
+    wrapped.localTransformsAtBeat = beat => {
+      const entry = resolveAtBeat(beat)
+      return entry.localTransformsAtBeat?.(beat) ?? entry.localTransforms!
+    }
+  }
   return wrapped
 }
 

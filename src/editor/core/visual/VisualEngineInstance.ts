@@ -8,6 +8,7 @@ import { composeMatrix, identitySV, localTransformToSV } from './stateVector'
 import { isIdentityTransform, readTrackTransform, trackOpacity } from '../transform'
 import { identityVisualCopy } from '../visualCopies/identityVisualCopy'
 import { chainEmitsCopyClocks, copyClockShift, createVisualCopyEvaluator, resolveVisualCopies, structuralCopyCount, warpChainBeat, type CopyClocks } from '../visualCopies/resolveVisualCopies'
+import { compileParticlePlan, particlePlanCopy, type ParticlePlan } from '../visualCopies/particlePlan'
 import { withCopyEvaluation } from '../visualCopies/evaluationMemo'
 import type { MoverOrSplitter, VisualCopy } from '../visualCopies/types'
 import type { ResolvedGraph, ResolvedGroup, ObjectState, ResolvedNote } from './types'
@@ -30,7 +31,8 @@ function hasUniqueOrderedOffsets(offsets: readonly number[] | null): boolean {
 }
 
 
-/** One structural render-list entry per VisualCopy occurrence. The renderer
+/** One structural render-list entry per reference VisualCopy occurrence, or
+ *  one entry for an entire compact particle population. The renderer
  *  mounts one ObjectRenderer per entry; each pulls exactly its copy per frame.
  *  Entry count changes only on resolve (chain/config edits), NEVER from MIDI
  *  gates - hidden copies stay mounted at opacity zero. */
@@ -39,6 +41,8 @@ export interface ObjectListEntry {
   trackId: string
   instrumentId: string
   visualCopyIndex: number
+  /** One structural mount represents a factored particle population. */
+  proceduralCopies?: true
   /** Crop tracks masking this object (see ResolvedObject.maskSourceIds).
    *  Structural: changes only on resolve, like everything else here. */
   maskSourceIds: readonly string[]
@@ -127,6 +131,8 @@ export function createVisualEngine() {
   const visualCopiesByTrack = new Map<string, VisualCopy[]>()
   const copyEvaluators = new Map<string, ReturnType<typeof createVisualCopyEvaluator>>()
   const visualCopyCounts = new Map<string, number>()
+  const particlePlans = new Map<string, ParticlePlan>()
+  let particlePlanVersion = 0
   // The chain each track's count was probed from. The count is a function of
   // the chain's entries alone, so a track whose chain still holds the same
   // entries keeps its pool without re-probing (setProject).
@@ -192,11 +198,12 @@ export function createVisualEngine() {
     const next: ObjectListEntry[] = []
     let changed = false
     for (const [sceneId, graph] of graphs) for (const o of graph.objects) {
-      const count = Math.max(1, visualCopyCounts.get(o.trackId) ?? 1)
+      const count = particlePlans.has(o.trackId) ? 1 : Math.max(1, visualCopyCounts.get(o.trackId) ?? 1)
       for (let visualCopyIndex = 0; visualCopyIndex < count; visualCopyIndex++) {
         const was = prev[next.length]
         if (was && was.sceneId === sceneId && was.trackId === o.trackId && was.instrumentId === o.instrumentId
           && was.visualCopyIndex === visualCopyIndex && was.masksTargets === o.masksTargets
+          && !!was.proceduralCopies === particlePlans.has(o.trackId)
           && sameEntries(was.maskSourceIds, o.maskSourceIds)) {
           next.push(was)
           continue
@@ -209,6 +216,7 @@ export function createVisualEngine() {
           visualCopyIndex,
           maskSourceIds: o.maskSourceIds,
           masksTargets: o.masksTargets,
+          ...(particlePlans.has(o.trackId) ? { proceduralCopies: true as const } : {}),
         })
       }
     }
@@ -306,6 +314,7 @@ export function createVisualEngine() {
     for (const id of worldMatrices.keys()) if (!live.has(id)) worldMatrices.delete(id)
     for (const id of inheritedOpacities.keys()) if (!live.has(id)) inheritedOpacities.delete(id)
     for (const id of visualCopiesByTrack.keys()) if (!live.has(id)) visualCopiesByTrack.delete(id)
+    for (const id of particlePlans.keys()) if (!live.has(id)) particlePlans.delete(id)
     for (const id of copyEvaluators.keys()) if (!live.has(id)) copyEvaluators.delete(id)
     for (const id of visualCopyCounts.keys()) if (!live.has(id)) visualCopyCounts.delete(id)
     for (const id of copyChainByTrack.keys()) if (!live.has(id)) copyChainByTrack.delete(id)
@@ -328,10 +337,28 @@ export function createVisualEngine() {
     // count" test, and everything it passes keeps its pool. Entries the
     // resolver re-stamps per resolve (clock routing below an emitter) simply
     // fail the compare and re-probe, as every object did before.
-    for (const graph of graphs.values()) for (const obj of graph.objects) {
+    for (const [sceneId, graph] of graphs) for (const obj of graph.objects) {
       const chain = obj.moverAndSplitterChain
+      const tracks = graphInputs.get(sceneId)!.tracks
+      let eligible = obj.instrumentId === 'particle' && obj.maskSourceIds.length === 0
+        && !tracks[obj.trackId]?.effects?.some(effect => effect.pluginId !== 'scale')
+      for (let parent = tracks[obj.trackId]?.parentId; eligible && parent; parent = tracks[parent]?.parentId) {
+        if (tracks[parent]?.type === 'group' && tracks[parent]?.effects?.length) eligible = false
+      }
+      const candidate = eligible ? compileParticlePlan(chain, particlePlanVersion + 1) : undefined
+      const capacity = candidate ? structuralCopyCount(chain, candidate.count) : 0
+      const plan = candidate && capacity >= 16384 && capacity <= 0x7fffffff ? candidate : undefined
       if (chainEmitsCopyClocks(chain)) staggeredTracks.add(obj.trackId)
-      if (sameEntries(copyChainByTrack.get(obj.trackId), chain)) continue
+      if (sameEntries(copyChainByTrack.get(obj.trackId), chain) && !!plan === particlePlans.has(obj.trackId)) continue
+      if (plan) {
+        particlePlanVersion++
+        particlePlans.set(obj.trackId, plan)
+        visualCopyCounts.set(obj.trackId, capacity)
+        visualCopiesByTrack.set(obj.trackId, [])
+        copyChainByTrack.set(obj.trackId, chain)
+        continue
+      }
+      particlePlans.delete(obj.trackId)
       const copies = resolveVisualCopies(chain, 0)
       const structuralCount = structuralCopyCount(chain, copies.length)
       while (copies.length < structuralCount) copies.push(hiddenCopy(copies.length))
@@ -680,6 +707,15 @@ export function createVisualEngine() {
       // OVERFLOWING the pool is still a contract violation - a definition varying
       // its count with the beat, or one non-monotonic in an automated param - so
       // warn and truncate rather than render copies that have no mount.
+      const particlePlan = particlePlans.get(obj.trackId)
+      if (particlePlan) {
+        if (particlePlan.beat !== objBeat && obj.moverAndSplitterChain.some(entry => entry.localTransformsAtBeat)) {
+          const sampled = compileParticlePlan(obj.moverAndSplitterChain, ++particlePlanVersion, objBeat)
+          if (!sampled) throw new Error('A compact particle layout violated its local-transform contract')
+          particlePlans.set(obj.trackId, sampled)
+        }
+        continue
+      }
       const staggered = staggeredTracks.has(obj.trackId)
       let evaluateCopies = copyEvaluators.get(obj.trackId)
       if (!evaluateCopies) { evaluateCopies = createVisualCopyEvaluator(); copyEvaluators.set(obj.trackId, evaluateCopies) }
@@ -1062,7 +1098,8 @@ export function createVisualEngine() {
 
   // ── VisualCopy pull API (separate cache, never part of ObjectState) ──
 
-  /** All of a track's copies at the last computed beat ([] for unknown tracks). */
+  /** Expanded copies at the last beat. Compact particles return []: inspect
+   * their plan, logical count, or a single occurrence with getVisualCopy. */
   function getVisualCopies(trackId: string): VisualCopy[] {
     return visualCopiesByTrack.get(trackId) ?? []
   }
@@ -1083,13 +1120,28 @@ export function createVisualEngine() {
 
   /** One occurrence's copy - what an ObjectRenderer pulls per frame. */
   function getVisualCopy(trackId: string, visualCopyIndex: number): VisualCopy | undefined {
-    return visualCopiesByTrack.get(trackId)?.[visualCopyIndex]
+    const plan = particlePlans.get(trackId)
+    if (!plan) return visualCopiesByTrack.get(trackId)?.[visualCopyIndex]
+    return particlePlanCopy(plan, visualCopyIndex)
+      ?? (Number.isInteger(visualCopyIndex) && visualCopyIndex >= 0 && visualCopyIndex < getVisualCopyCount(trackId) ? hiddenCopy(visualCopyIndex) : undefined)
   }
 
   /** The STRUCTURAL copy count (fixed per resolve; ≥1 for every live object).
    *  Zero only for tracks that resolve to no object. */
   function getVisualCopyCount(trackId: string): number {
     return visualCopyCounts.get(trackId) ?? 0
+  }
+
+  function getParticlePlan(trackId: string): ParticlePlan | undefined { return particlePlans.get(trackId) }
+
+  /** Direct presentation is reserved for scenes whose entire rendered
+   * population has a compact GPU plan. Other scenes keep the worker policy. */
+  function isDirectParticleScene(sceneId: string): boolean {
+    const entries = objectList.filter(entry => entry.sceneId === sceneId)
+    // Main has composition tracks rather than object-list entries. Require
+    // every potential source scene to be compact so later cuts stay safe.
+    const population = entries.length ? entries : objectList
+    return population.length > 0 && population.every(entry => particlePlans.has(entry.trackId))
   }
 
   // ── Object-list subscription (VisualScene via useSyncExternalStore) ──
@@ -1106,7 +1158,7 @@ export function createVisualEngine() {
    * functions and stay in the evaluator. Structured clone retains Maps/Sets but
    * drops Matrix4 prototypes, restored at this single receiving seam. */
   function captureFrame() {
-    return { objectList, states, copyStatesByTrack, visualCopiesByTrack, visualCopyCounts,
+    return { objectList, states, copyStatesByTrack, visualCopiesByTrack, visualCopyCounts, particlePlans,
       activeTrackIds, staggeredTracks, compositionLayers, sceneBackdrops, sceneFxOverrides }
   }
   function applyFrame(frame: ReturnType<typeof captureFrame>, sameDocument = false) {
@@ -1136,6 +1188,7 @@ export function createVisualEngine() {
     replace(copyStatesByTrack, frame.copyStatesByTrack)
     replace(visualCopiesByTrack, frame.visualCopiesByTrack)
     replace(visualCopyCounts, frame.visualCopyCounts)
+    replace(particlePlans, frame.particlePlans ?? new Map())
     replace(sceneBackdrops, frame.sceneBackdrops)
     replace(sceneFxOverrides, frame.sceneFxOverrides)
     activeTrackIds = frame.activeTrackIds
@@ -1145,11 +1198,12 @@ export function createVisualEngine() {
       const next = frame.objectList[i]
       return o.trackId !== next.trackId || o.sceneId !== next.sceneId || o.instrumentId !== next.instrumentId
         || o.visualCopyIndex !== next.visualCopyIndex || o.masksTargets !== next.masksTargets
+        || o.proceduralCopies !== next.proceduralCopies
         || o.maskSourceIds.join('\0') !== next.maskSourceIds.join('\0')
     })
     if (changed) { objectList = frame.objectList; listeners.forEach(listener => listener()) }
   }
-  return { captureFrame, applyFrame, setProject, syncParams, computeAtBeat, getSceneBackdrop, getSceneFxOverrides, setPreviewObjectState, getObjectState, isTrackStaggered, getCompositionLayers, setMainCompositionOverride, setMainPreviewEnabled, setEditorPreviewSceneId, setMountedRenderScenes, getMountedRenderScenes, getVisualCopies, getPeakVisualCopyOpacity, getVisualCopy, getVisualCopyCount, subscribeObjects, getObjectList }
+  return { captureFrame, applyFrame, setProject, syncParams, computeAtBeat, getSceneBackdrop, getSceneFxOverrides, setPreviewObjectState, getObjectState, isTrackStaggered, getCompositionLayers, setMainCompositionOverride, setMainPreviewEnabled, setEditorPreviewSceneId, setMountedRenderScenes, getMountedRenderScenes, getVisualCopies, getPeakVisualCopyOpacity, getVisualCopy, getVisualCopyCount, getParticlePlan, isDirectParticleScene, subscribeObjects, getObjectList }
 }
 
 export type VisualEngineInstance = ReturnType<typeof createVisualEngine>
