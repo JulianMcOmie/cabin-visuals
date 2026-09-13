@@ -30,6 +30,7 @@ import { noteRateEntry } from './knobValueParsing'
 import { useRef } from 'react'
 import { gradeScenePlugin } from '../effects/scene/grade'
 import { lensScenePlugin } from '../effects/scene/lens'
+import { liquidGlassScenePlugin } from '../effects/scene/liquidGlass'
 import { blurScenePlugin } from '../effects/scene/blur'
 import { grainScenePlugin } from '../effects/scene/grain'
 import { crushScenePlugin } from '../effects/scene/crush'
@@ -400,6 +401,32 @@ const LensPanel: UserInterfaceRendererDefinition = ({ parameters }) => {
   )
 }
 
+const LiquidGlassPanel: UserInterfaceRendererDefinition = ({ parameters }) => {
+  const b = bindPanel(parameters)
+  const amount = b.num('amount')
+  const refraction = b.num('refraction')
+  const frost = b.num('frost')
+  const width = b.num('width')
+  const height = b.num('height')
+  const corners = b.num('corners')
+  const rest = b.rest()
+  if (b.missing) return <ParameterList parameters={parameters} />
+  return (
+    <SceneFxShell plugin={liquidGlassScenePlugin} parameters={parameters} rest={rest}>
+      <ControlRow spill>
+        <Knob b={amount} label="AMOUNT" large />
+        <Knob b={refraction} label="REFRACT" />
+        <Knob b={frost} label="FROST" />
+      </ControlRow>
+      <GutterRow label="PANEL">
+        <Knob b={width} label="WIDTH" />
+        <Knob b={height} label="HEIGHT" />
+        <Knob b={corners} label="CORNERS" />
+      </GutterRow>
+    </SceneFxShell>
+  )
+}
+
 const BlurPanel: UserInterfaceRendererDefinition = ({ parameters }) => {
   const b = bindPanel(parameters)
   const mode = b.select('mode')
@@ -524,6 +551,7 @@ export const SCENE_FX_USER_INTERFACES: Record<string, UserInterfaceRendererDefin
   }),
   [gradeScenePlugin.id]: GradePanel,
   [lensScenePlugin.id]: LensPanel,
+  [liquidGlassScenePlugin.id]: LiquidGlassPanel,
   [blurScenePlugin.id]: BlurPanel,
   [grainScenePlugin.id]: GrainPanel,
   [crushScenePlugin.id]: CrushPanel,

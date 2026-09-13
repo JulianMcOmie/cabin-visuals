@@ -2,6 +2,7 @@ import type { UserInterfaceRendererDefinition } from './types'
 import { lazyPanel } from './lazyPanel'
 import { gradeScenePlugin } from '../effects/scene/grade'
 import { lensScenePlugin } from '../effects/scene/lens'
+import { liquidGlassScenePlugin } from '../effects/scene/liquidGlass'
 import { blurScenePlugin } from '../effects/scene/blur'
 import { grainScenePlugin } from '../effects/scene/grain'
 import { crushScenePlugin } from '../effects/scene/crush'
@@ -69,6 +70,7 @@ export const EFFECT_USER_INTERFACES: Partial<Record<string, UserInterfaceRendere
   [gradeScenePlugin.id]: sceneFxPanel(gradeScenePlugin.id),
   [fogScenePlugin.id]: sceneFxPanel(fogScenePlugin.id),
   [lensScenePlugin.id]: sceneFxPanel(lensScenePlugin.id),
+  [liquidGlassScenePlugin.id]: sceneFxPanel(liquidGlassScenePlugin.id),
   [blurScenePlugin.id]: sceneFxPanel(blurScenePlugin.id),
   [grainScenePlugin.id]: sceneFxPanel(grainScenePlugin.id),
   [crushScenePlugin.id]: sceneFxPanel(crushScenePlugin.id),

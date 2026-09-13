@@ -15,6 +15,7 @@ import { opacityPlugin } from './shaders/opacity'
 import { deformPlugin } from './deform/deform'
 import { gradeScenePlugin } from './scene/grade'
 import { lensScenePlugin } from './scene/lens'
+import { liquidGlassScenePlugin } from './scene/liquidGlass'
 import { blurScenePlugin } from './scene/blur'
 import { grainScenePlugin } from './scene/grain'
 import { crushScenePlugin } from './scene/crush'
@@ -43,6 +44,7 @@ export const EFFECTS: Record<string, VisualEffect> = {
   [gradeScenePlugin.id]: gradeScenePlugin,
   [fogScenePlugin.id]: fogScenePlugin,
   [lensScenePlugin.id]: lensScenePlugin,
+  [liquidGlassScenePlugin.id]: liquidGlassScenePlugin,
   [blurScenePlugin.id]: blurScenePlugin,
   [grainScenePlugin.id]: grainScenePlugin,
   [crushScenePlugin.id]: crushScenePlugin,

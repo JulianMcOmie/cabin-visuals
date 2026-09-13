@@ -84,6 +84,25 @@ kinds=glyphs · size=compact). Four things are load-bearing:
   Rate knobs on the two re-seeding devices step the shared musical ladder in
   `scene/rate.ts` and read out in note values (`1/16`), not raw multipliers.
 
+## Liquid Glass
+
+`scene/liquidGlass.ts` adds a rounded, screen-positioned glass panel over the
+finished scene through the ordinary Scene FX chain. Width/height are fractions
+of the frame; position ±1 reaches the frame edges, positive Y is up, and rotation
+is in degrees. The signed-distance field uses frame-height units so corners,
+bevels and frost stay circular at every aspect ratio. Refraction includes a
+beveled rim, a mild lens magnification and beat-driven waves; Flow 0 freezes the
+waves. More exposes placement, rotation, waves, sheen and fringe. Multiple
+instances compose in rack order, and every numeric control supports scene FX
+automation. The scene alpha is preserved, including transparent holes.
+
+`node scripts/perf/liquid-glass-smoke.mjs` checks production WebGL pixels and
+the WebGL1 inspector shader, including bypass, control liveness, exterior/alpha
+preservation, direct/backward seeks and portrait framing. Its source texture
+must use LinearFilter without mipmaps, matching the compositor render targets:
+mipmapped texture reads after spatial shader branches have undefined implicit
+derivatives and can make an otherwise deterministic shader fail seek checks.
+
 ## Atmospheric Fog
 
 `scene/fog.ts` is a scene device with `sceneStage: 'atmosphere'`. Unlike image
