@@ -750,6 +750,24 @@ function resolveOwnMoverOrSplitter(track: Track, p: ProjectSnapshot): MoverOrSpl
       return entry.rootTransformAtBeat?.(beat) ?? entry.rootTransform!
     }
   }
+  if ((resolved.localLayout || resolved.localLayoutAtBeat)
+    && wrapped.structuralVariants.every(entry => entry.localLayout || entry.localLayoutAtBeat)) {
+    wrapped.localLayoutAtBeat = (beat, placementTransform) => {
+      const entry = resolveAtBeat(beat)
+      return entry.localLayoutAtBeat?.(beat, placementTransform) ?? entry.localLayout!
+    }
+    wrapped.localLayoutUsesPlacement = !!resolved.localLayoutUsesPlacement
+      || wrapped.structuralVariants.some(entry => entry.localLayoutUsesPlacement)
+    const fixedCount = (entry: MoverOrSplitter) => entry.localLayoutAtBeat
+      ? entry.localLayoutCount : entry.localLayout?.transforms.length
+    const count = fixedCount(resolved)
+    if (count !== undefined && wrapped.structuralVariants.every(entry => fixedCount(entry) === count)) {
+      wrapped.localLayoutCount = count
+    }
+  }
+  if (resolved.localSlotMotion && wrapped.structuralVariants.every(entry => entry.localSlotMotion)) {
+    wrapped.localSlotMotion = true
+  }
   return wrapped
 }
 

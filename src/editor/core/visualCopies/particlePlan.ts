@@ -1,6 +1,6 @@
 import { Matrix4 } from 'three'
 import { identityVisualCopy } from './identityVisualCopy'
-import type { MoverOrSplitter, VisualCopy } from './types'
+import type { MoverOrSplitter, SharedLocalLayout, VisualCopy } from './types'
 
 /** A factored Cartesian product, never an array of its expanded occurrences.
  * Float64 retains the CPU reference; rendering uploads Float32 when edited or
@@ -14,6 +14,13 @@ export interface ParticlePlan {
   matrices: Float64Array
   /** Conservative linear scale bound, used only to select a GPU primitive. */
   scaleBound: number
+  /** Scalar offsets of (opacity multiplier, additive HSL hue) pairs, one per
+   * slot. -1 means identity appearance. Bare pairs follow the framed guard. */
+  appearanceOffsets?: number[]
+  bareAppearanceOffsets?: number[]
+  /** Snapshot, never the mutable ObjectState matrix. A placement-dependent
+   * table must be resampled even when the playhead stays at the same beat. */
+  placementElements?: number[]
   /** Framed stages carry their motion separately until every layout has run.
    * Each frame/internal pair uses the SAME mixed-radix slot. Guard offsets
    * address scalar flags in matrices; -1 means always active, -2 always bare.
@@ -31,13 +38,28 @@ export interface ParticlePlan {
 /** The three metadata families are exclusive proofs, not inferred from cache
  * policy or composition. Only the framed proof can accompany applyFramed. */
 export function particlePlanEntryKind(entry: MoverOrSplitter): 0 | 1 | 2 | undefined {
-  const local = !!(entry.localTransforms || entry.localTransformsAtBeat)
+  const legacyLocal = !!(entry.localTransforms || entry.localTransformsAtBeat)
+  const sharedLocal = !!(entry.localLayout || entry.localLayoutAtBeat)
+  if (legacyLocal && sharedLocal) return undefined
+  const local = legacyLocal || sharedLocal
   const root = !!(entry.rootTransform || entry.rootTransformAtBeat)
   const framed = !!entry.framedLocalTransformsAtBeat
   if (Number(local) + Number(root) + Number(framed) !== 1 || entry.emitsCopyClocks) return undefined
   if (framed) return entry.applyFramed ? 2 : undefined
   if (entry.applyFramed) return undefined
   return root ? 1 : 0
+}
+
+export function particleLocalLayout(entry: MoverOrSplitter, beat: number, placement?: Matrix4): SharedLocalLayout | undefined {
+  return entry.localLayoutAtBeat?.(beat, placement) ?? entry.localLayout
+    ?? ((entry.localTransformsAtBeat || entry.localTransforms)
+      ? { transforms: entry.localTransformsAtBeat?.(beat) ?? entry.localTransforms! } : undefined)
+}
+
+export function particlePlanNeedsUpdate(plan: ParticlePlan, chain: readonly MoverOrSplitter[], beat: number, placement: Matrix4): boolean {
+  if (plan.placementElements?.some((value, i) => value !== placement.elements[i])) return true
+  return plan.beat !== beat && chain.some(entry => entry.localTransformsAtBeat || entry.localLayoutAtBeat
+    || entry.rootTransformAtBeat || entry.framedLocalTransformsAtBeat)
 }
 
 export function matrixScaleBound(matrix: Matrix4): number {
@@ -66,15 +88,43 @@ export function matrixScaleBound(matrix: Matrix4): number {
   return scale * Math.sqrt(Math.max(aa + ab + ac, bb + ab + bc, cc + ac + bc)) * (1 + 8 * Number.EPSILON)
 }
 
+interface PackedLocalLayout {
+  matrices: Float64Array
+  scaleBound: number
+}
+const packedLocalLayouts = new WeakMap<readonly Matrix4[], PackedLocalLayout>()
+
+/** Declared tables are immutable, including their matrices. Validate and pack
+ * a static Fractal once, rather than visiting all 781 matrices whenever an
+ * unrelated Rotate advances. The weak key does not retain old edited layouts;
+ * each plan receives its own storage, never this cached backing array. */
+function packLocalLayout(layout: readonly Matrix4[]): PackedLocalLayout | undefined {
+  const cached = packedLocalLayouts.get(layout)
+  if (cached) return cached
+  const matrices = new Float64Array(layout.length * 16)
+  let scaleBound = 0
+  for (let i = 0; i < layout.length; i++) {
+    const matrix = layout[i]
+    if (!matrix.elements.every(Number.isFinite)) return undefined
+    matrices.set(matrix.elements, i * 16)
+    scaleBound = Math.max(scaleBound, matrixScaleBound(matrix))
+  }
+  const packed = { matrices, scaleBound }
+  packedLocalLayouts.set(layout, packed)
+  return packed
+}
+
 /** Only explicit, appearance-preserving layouts and uniform root motions can
  * use this path. Static alone does not imply independence from index, formation
  * or placement. Root deltas collect on the left; their count-one prefix never
  * changes the local layouts' input-major slot order. */
-export function compileParticlePlan(chain: readonly MoverOrSplitter[], version = 0, beat = 0): ParticlePlan | undefined {
+export function compileParticlePlan(chain: readonly MoverOrSplitter[], version = 0, beat = 0, placement?: Matrix4): ParticlePlan | undefined {
   if (!chain.length) return undefined
-  if (chain.some(entry => entry.framedLocalTransformsAtBeat)) return compileFramedPlan(chain, version, beat)
+  if (chain.some(entry => entry.framedLocalTransformsAtBeat || entry.localLayout || entry.localLayoutAtBeat)) {
+    return compileFramedPlan(chain, version, beat, placement)
+  }
   const counts: number[] = [], offsets: number[] = []
-  const layouts: (readonly Matrix4[])[] = []
+  const layouts: PackedLocalLayout[] = []
   let count = 1, length = 0
   let scaleBound = 1
   let root: Matrix4 | undefined
@@ -93,27 +143,30 @@ export function compileParticlePlan(chain: readonly MoverOrSplitter[], version =
     }
     const layout = entry.localTransformsAtBeat?.(beat) ?? entry.localTransforms
     if (!layout?.length) return undefined
+    const packed = packLocalLayout(layout)
+    if (!packed) return undefined
     count *= layout.length
     if (!Number.isSafeInteger(count) || count > 0x7fffffff) return undefined
     counts.push(layout.length); offsets.push(length)
-    layouts.push(layout)
-    scaleBound *= layout.reduce((max, matrix) => Math.max(max, matrixScaleBound(matrix)), 0)
+    layouts.push(packed)
+    scaleBound *= packed.scaleBound
     length += layout.length
   }
   if (root) {
-    layouts.unshift([root])
+    const packed = packLocalLayout([root])
+    if (!packed) return undefined
+    layouts.unshift(packed)
     counts.unshift(1)
     for (let i = 0; i < offsets.length; i++) offsets[i]++
     offsets.unshift(0)
     length++
-    scaleBound *= matrixScaleBound(root)
+    scaleBound *= packed.scaleBound
   }
   if (layouts.length > 16) return undefined
   const matrices = new Float64Array(length * 16)
   let offset = 0
-  for (const layout of layouts) for (const matrix of layout) {
-    if (!matrix.elements.every(Number.isFinite)) return undefined
-    matrices.set(matrix.elements, offset); offset += 16
+  for (const layout of layouts) {
+    matrices.set(layout.matrices, offset); offset += layout.matrices.length
   }
   return { version, beat, count, counts, offsets, matrices, scaleBound }
 }
@@ -125,6 +178,10 @@ interface FrameStage {
   bare?: readonly Matrix4[]
   inputCount: number
   guard: boolean | readonly number[]
+  opacities?: readonly number[]
+  hueShifts?: readonly number[]
+  bareOpacities?: readonly number[]
+  bareHueShifts?: readonly number[]
 }
 
 /** Evaluate only the reference frame of a prefix. This is needed solely when
@@ -146,7 +203,7 @@ function prefixFrame(stages: readonly FrameStage[], count: number, index: number
   return out
 }
 
-function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, beat: number): ParticlePlan | undefined {
+function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, beat: number, placement?: Matrix4): ParticlePlan | undefined {
   if (chain.length > 16) return undefined
   const stages: FrameStage[] = []
   const identity = new Matrix4(), scratch = new Matrix4()
@@ -157,13 +214,18 @@ function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, b
   for (const entry of chain) {
     const kind = particlePlanEntryKind(entry)
     if (kind === undefined || entry.structuralVariants?.some(variant => particlePlanEntryKind(variant) === undefined)) return undefined
-    const framed = kind === 2 ? entry.framedLocalTransformsAtBeat!(beat) : undefined
+    const framed = kind === 2 ? entry.framedLocalTransformsAtBeat!(beat, placement) : undefined
+    const layout = kind === 0 ? particleLocalLayout(entry, beat, placement) : undefined
     const frames = framed?.frames ?? (kind === 1
       ? [entry.rootTransformAtBeat?.(beat) ?? entry.rootTransform!]
-      : entry.localTransformsAtBeat?.(beat) ?? entry.localTransforms!)
+      : layout!.transforms)
     if (!frames?.length || frames.some(matrix => !affine(matrix))) return undefined
     if (framed && (framed.internals.length !== frames.length || framed.bareFrames.length !== frames.length
       || framed.internals.some(matrix => matrix && !affine(matrix)) || framed.bareFrames.some(matrix => !affine(matrix)))) return undefined
+    const appearance = framed ?? layout
+    const validChannel = (values: readonly number[] | undefined) => !values
+      || (values.length === frames.length && values.every(Number.isFinite))
+    if (![appearance?.opacities, appearance?.hueShifts, framed?.bareOpacities, framed?.bareHueShifts].every(validChannel)) return undefined
 
     let guard: FrameStage['guard'] = true
     if (framed) {
@@ -186,7 +248,9 @@ function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, b
         guard = flags.every(flag => flag === flags[0]) ? flags[0] === 1 : flags
       }
     }
-    const stage: FrameStage = { kind, frames, internals: framed?.internals, bare: framed?.bareFrames, inputCount: count, guard }
+    const stage: FrameStage = { kind, frames, internals: framed?.internals, bare: framed?.bareFrames, inputCount: count, guard,
+      opacities: appearance?.opacities, hueShifts: appearance?.hueShifts,
+      bareOpacities: framed?.bareOpacities, bareHueShifts: framed?.bareHueShifts }
     count *= frames.length
     if (!Number.isSafeInteger(count) || count > 0x7fffffff) return undefined
     stages.push(stage)
@@ -227,6 +291,20 @@ function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, b
   stages.forEach((stage, i) => {
     if (typeof stage.guard !== 'boolean') { program.guardOffsets[i] = length; length += stage.guard.length }
   })
+  const appearanceOffsets: number[] = [], bareAppearanceOffsets: number[] = []
+  const appearanceValues: { offset: number; values: number[] }[] = []
+  const packAppearance = (count: number, opacities?: readonly number[], hues?: readonly number[]) => {
+    if (!opacities && !hues) return -1
+    const offset = length
+    const values = new Array<number>(count * 2)
+    for (let i = 0; i < count; i++) { values[i * 2] = opacities?.[i] ?? 1; values[i * 2 + 1] = hues?.[i] ?? 0 }
+    appearanceValues.push({ offset, values }); length += values.length
+    return offset
+  }
+  for (const stage of stages) {
+    appearanceOffsets.push(packAppearance(stage.frames.length, stage.opacities, stage.hueShifts))
+    bareAppearanceOffsets.push(packAppearance(stage.frames.length, stage.bareOpacities, stage.bareHueShifts))
+  }
   // Scalar guard flags share the layout texture; pad to whole matrices so the
   // existing allocation/upload path stays valid, including texture growth.
   const matrices = new Float64Array(Math.ceil(length / 16) * 16)
@@ -234,7 +312,11 @@ function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, b
   stages.forEach((stage, i) => {
     if (typeof stage.guard !== 'boolean') matrices.set(stage.guard, program.guardOffsets[i])
   })
-  return { version, beat, count, counts, offsets, matrices, scaleBound, program }
+  for (const { offset, values } of appearanceValues) matrices.set(values, offset)
+  const usesPlacement = chain.some(entry => entry.localLayoutUsesPlacement || entry.framedLayoutUsesPlacement)
+  return { version, beat, count, counts, offsets, matrices, scaleBound, program,
+    ...(appearanceValues.length ? { appearanceOffsets, bareAppearanceOffsets } : {}),
+    ...(usesPlacement ? { placementElements: (placement ?? identity).elements.slice() } : {}) }
 }
 
 /** Random access for inspection/picking: O(chain depth), with no expansion. */
@@ -265,5 +347,18 @@ export function particlePlanCopy(plan: ParticlePlan, index: number): VisualCopy 
   if (!Number.isInteger(index) || index < 0 || index >= plan.count) return undefined
   const copy = identityVisualCopy()
   particlePlanMatrix(plan, index, copy.transform)
+  let stride = plan.count
+  for (let stage = 0; stage < plan.counts.length; stage++) {
+    stride /= plan.counts[stage]
+    const slot = Math.floor(index / stride) % plan.counts[stage]
+    const guard = plan.program?.guardOffsets[stage] ?? -1
+    const active = guard === -1 || (guard >= 0 && plan.matrices[guard + Math.floor(index / plan.program!.guardStrides[stage])] === 1)
+    const offset = (plan.program?.kinds[stage] === 2 && !active
+      ? plan.bareAppearanceOffsets?.[stage] : plan.appearanceOffsets?.[stage]) ?? -1
+    if (offset >= 0) {
+      copy.opacity *= plan.matrices[offset + slot * 2]
+      copy.colorShift.hue += plan.matrices[offset + slot * 2 + 1]
+    }
+  }
   return copy
 }

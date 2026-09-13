@@ -21,7 +21,7 @@ import type { MidiRowDef } from '../../instruments/types'
 import { countLaneRows, resolveCountLane } from './countLane'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { SYMMETRY_COLOR } from './identityColors'
-import type { VisualCopy } from './types'
+import { sharedLocalLayout } from './sharedLocalLayout'
 import { applySplitterSize, splitterSize, SPLITTER_SIZE_PARAM } from './splitterSize'
 
 export interface SymmetrySettings {
@@ -213,13 +213,5 @@ function resolveSymmetryLayout(settings: SymmetrySettings) {
   // genuine mirror images.
   const size = splitterSize(settings.size)
   const transforms = symmetryTransforms(settings).map((slot) => applySplitterSize(slot, size))
-  return {
-    apply(visualCopy: VisualCopy) {
-      return transforms.map((transform) => ({
-        transform: visualCopy.transform.clone().multiply(transform),
-        opacity: visualCopy.opacity,
-        colorShift: { ...visualCopy.colorShift },
-      }))
-    },
-  }
+  return sharedLocalLayout({ transforms })
 }

@@ -40,6 +40,8 @@ export function createParticlePlanMesh(plan: ParticlePlan, points = false) {
     uBareOffsets: { value: stageValues(plan.program?.bareOffsets) },
     uGuardOffsets: { value: stageValues(plan.program?.guardOffsets, -1) },
     uGuardStrides: { value: stageValues(plan.program?.guardStrides, 1) },
+    uAppearanceOffsets: { value: stageValues(plan.appearanceOffsets, -1) },
+    uBareAppearanceOffsets: { value: stageValues(plan.bareAppearanceOffsets, -1) },
     uPlacement: { value: new Matrix4() }, uMeshScale: { value: 1 },
     uViewportHeight: { value: 1 },
   })
@@ -49,6 +51,7 @@ export function createParticlePlanMesh(plan: ParticlePlan, points = false) {
     uniform int uCounts[16], uOffsets[16];
     uniform int uProgram, uKinds[16], uInternalOffsets[16], uBareOffsets[16];
     uniform int uGuardOffsets[16], uGuardStrides[16];
+    uniform int uAppearanceOffsets[16], uBareAppearanceOffsets[16];
     uniform mat4 uPlacement;
     uniform float uMeshScale, uMinRadiusNdc, uOpacity, uViewportHeight;
     uniform vec3 uColor;
@@ -62,10 +65,38 @@ export function createParticlePlanMesh(plan: ParticlePlan, points = false) {
       int p = index * 4;
       return mat4(layoutColumn(p), layoutColumn(p+1), layoutColumn(p+2), layoutColumn(p+3));
     }
+    float layoutScalar(int index) {
+      return layoutColumn(index / 4)[index % 4];
+    }
+    // Match Color.offsetHSL on the source's linear RGB values. Copies add hue
+    // along the chain; convert only once, after every contribution is known.
+    float hueChannel(float p, float q, float h) {
+      h = fract(h);
+      if (h < 1.0 / 6.0) return p + (q - p) * 6.0 * h;
+      if (h < 0.5) return q;
+      if (h < 2.0 / 3.0) return p + (q - p) * 6.0 * (2.0 / 3.0 - h);
+      return p;
+    }
+    vec3 shiftHue(vec3 rgb, float shift) {
+      if (shift == 0.0) return rgb;
+      float high = max(rgb.r, max(rgb.g, rgb.b));
+      float low = min(rgb.r, min(rgb.g, rgb.b));
+      float delta = high - low;
+      if (delta == 0.0) return rgb;
+      float lightness = (low + high) * 0.5;
+      float saturation = lightness <= 0.5 ? delta / (high + low) : delta / (2.0 - high - low);
+      float hue = high == rgb.r ? (rgb.g - rgb.b) / delta + (rgb.g < rgb.b ? 6.0 : 0.0)
+        : high == rgb.g ? (rgb.b - rgb.r) / delta + 2.0 : (rgb.r - rgb.g) / delta + 4.0;
+      hue = fract(hue / 6.0 + shift);
+      float q = lightness <= 0.5 ? lightness * (1.0 + saturation) : lightness + saturation - lightness * saturation;
+      float p = 2.0 * lightness - q;
+      return vec3(hueChannel(p, q, hue + 1.0 / 3.0), hueChannel(p, q, hue), hueChannel(p, q, hue - 1.0 / 3.0));
+    }
     void main() {
       mat4 world = uProgram == 0 ? uPlacement : mat4(1.0);
       mat4 internal = mat4(1.0);
       int stride = uTotal;
+      float opacity = 1.0, hue = 0.0;
       #ifdef PARTICLE_POINTS
         int index = gl_VertexID;
       #else
@@ -76,9 +107,10 @@ export function createParticlePlanMesh(plan: ParticlePlan, points = false) {
         stride /= uCounts[stage];
         int slot = (index / stride) % uCounts[stage];
         int kind = uProgram == 0 ? 0 : uKinds[stage];
+        bool applyMotion = true;
         if (kind == 2) {
           int guard = uGuardOffsets[stage];
-          bool applyMotion = guard == -1;
+          applyMotion = guard == -1;
           if (guard >= 0) {
             int flag = guard + index / uGuardStrides[stage];
             applyMotion = layoutColumn(flag / 4)[flag % 4] > 0.5;
@@ -90,6 +122,20 @@ export function createParticlePlanMesh(plan: ParticlePlan, points = false) {
         } else {
           world *= layoutMatrix(uOffsets[stage] + slot);
         }
+        int appearance = applyMotion ? uAppearanceOffsets[stage] : uBareAppearanceOffsets[stage];
+        if (appearance >= 0) {
+          opacity *= layoutScalar(appearance + slot * 2);
+          hue += layoutScalar(appearance + slot * 2 + 1);
+        }
+      }
+      float fade = min(1.0, uOpacity * opacity);
+      if (fade <= 0.001) {
+        // MIDI gates and unborn trail slots keep their stable indices, but
+        // should consume no fragments, just like the CPU's live-instance pack.
+        gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+        gl_PointSize = 1.0;
+        vPointSize = 0.0; vUv = vec2(0.0); vColor = vec4(0.0);
+        return;
       }
       if (uProgram != 0) world = uPlacement * world * internal;
       float diameter = max(length(world[0].xyz), max(length(world[1].xyz), length(world[2].xyz))) * abs(uMeshScale);
@@ -104,10 +150,11 @@ export function createParticlePlanMesh(plan: ParticlePlan, points = false) {
         vUv = uv;
       #endif
       gl_Position = projectionMatrix * center;
-      vColor = vec4(uColor, uOpacity);
+      vColor = vec4(shiftHue(uColor, hue), fade);
     }
   `
   material.fragmentShader = 'out vec4 outColor;\n' + material.fragmentShader.replaceAll('varying ', 'in ').replaceAll('gl_FragColor', 'outColor')
+  material.fragmentShader = material.fragmentShader.replace('void main() {', 'void main() {\nif (vColor.a <= 0.001) discard;')
   if (points) {
     material.defines.PARTICLE_POINTS = 1
     material.fragmentShader = material.fragmentShader.replace('in vec2 vUv;', 'in float vPointSize;\n#define vUv ((gl_PointCoord - 0.5) * max(1.0, vPointSize) / max(0.00001, vPointSize) + 0.5)')
@@ -141,6 +188,10 @@ export function createParticlePlanMesh(plan: ParticlePlan, points = false) {
       material.uniforms.uCounts.value.set(next.counts)
       material.uniforms.uOffsets.value.set(next.offsets)
       material.uniforms.uProgram.value = next.program ? 1 : 0
+      material.uniforms.uAppearanceOffsets.value.fill(-1)
+      material.uniforms.uBareAppearanceOffsets.value.fill(-1)
+      if (next.appearanceOffsets) material.uniforms.uAppearanceOffsets.value.set(next.appearanceOffsets)
+      if (next.bareAppearanceOffsets) material.uniforms.uBareAppearanceOffsets.value.set(next.bareAppearanceOffsets)
       if (next.program) {
         material.uniforms.uKinds.value.set(next.program.kinds)
         material.uniforms.uInternalOffsets.value.set(next.program.internalOffsets)

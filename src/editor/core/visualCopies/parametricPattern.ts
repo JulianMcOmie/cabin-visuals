@@ -4,7 +4,7 @@ import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { midiVelocity } from '../../utils/midiVelocity'
 import { applySplitterSize, splitterSize, SPLITTER_SIZE_PARAM } from './splitterSize'
-import type { VisualCopy } from './types'
+import { sharedLocalLayout } from './sharedLocalLayout'
 import { PARAMETRIC_PATTERN_COLOR } from './identityColors'
 
 export const PARAMETRIC_PATTERNS = [
@@ -240,14 +240,6 @@ function transformsForPattern(
   })
 }
 
-function nextCopy(visualCopy: VisualCopy, transform: Matrix4): VisualCopy {
-  return {
-    transform: visualCopy.transform.clone().multiply(transform),
-    opacity: visualCopy.opacity,
-    colorShift: { ...visualCopy.colorShift },
-  }
-}
-
 export const parametricPatternSplitter: MoverOrSplitterDefinition<ParametricPatternSettings> = {
   id: 'parametricPattern',
   label: 'Parametric Pattern',
@@ -298,11 +290,8 @@ export const parametricPatternSplitter: MoverOrSplitterDefinition<ParametricPatt
   strictMidiRows: true,
   resolve({ settings, notes }) {
     const count = Math.max(1, Math.min(MAX_COPIES, Math.round(settings.copies)))
-    return {
-      apply(visualCopy, { beat }) {
-        const midi = evaluatePatternMidi(notes, settings, beat)
-        return transformsForPattern(settings, midi, count).map((transform) => nextCopy(visualCopy, transform))
-      },
-    }
+    return sharedLocalLayout(beat => ({
+      transforms: transformsForPattern(settings, evaluatePatternMidi(notes, settings, beat), count),
+    }), { count })
   },
 }

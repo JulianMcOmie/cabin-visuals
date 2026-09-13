@@ -10,7 +10,7 @@ import { composeMatrix, identitySV, localTransformToSV } from './stateVector'
 import { isIdentityTransform, readTrackTransform, trackOpacity } from '../transform'
 import { identityVisualCopy } from '../visualCopies/identityVisualCopy'
 import { chainEmitsCopyClocks, copyClockShift, createVisualCopyEvaluator, resolveVisualCopies, structuralCopyCount, warpChainBeat, type CopyClocks } from '../visualCopies/resolveVisualCopies'
-import { compileParticlePlan, particlePlanCopy, type ParticlePlan } from '../visualCopies/particlePlan'
+import { compileParticlePlan, particlePlanCopy, particlePlanNeedsUpdate, type ParticlePlan } from '../visualCopies/particlePlan'
 import { withCopyEvaluation } from '../visualCopies/evaluationMemo'
 import type { MoverOrSplitter, VisualCopy } from '../visualCopies/types'
 import type { ResolvedGraph, ResolvedGroup, ObjectState, ResolvedNote } from './types'
@@ -708,8 +708,8 @@ export function createVisualEngine() {
       // warn and truncate rather than render copies that have no mount.
       const particlePlan = particlePlans.get(obj.trackId)
       if (particlePlan) {
-        if (particlePlan.beat !== objBeat && obj.moverAndSplitterChain.some(entry => entry.localTransformsAtBeat || entry.rootTransformAtBeat || entry.framedLocalTransformsAtBeat)) {
-          const sampled = compileParticlePlan(obj.moverAndSplitterChain, ++particlePlanVersion, objBeat)
+        if (particlePlanNeedsUpdate(particlePlan, obj.moverAndSplitterChain, objBeat, world)) {
+          const sampled = compileParticlePlan(obj.moverAndSplitterChain, ++particlePlanVersion, objBeat, world)
           if (!sampled) throw new Error('A compact particle layout violated its shared-transform contract')
           particlePlans.set(obj.trackId, sampled)
         }

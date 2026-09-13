@@ -41,7 +41,7 @@ import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { midiVelocity } from '../../utils/midiVelocity'
 import { placementAxisScale } from './tunnel'
-import type { VisualCopy } from './types'
+import { sharedLocalLayout } from './sharedLocalLayout'
 import { APPROACH_COLOR } from './identityColors'
 import { approachPathPosition, approachSmoothstep, approachTrajectory, type ApproachPoint } from './approachTrajectory'
 
@@ -496,25 +496,21 @@ export const approachSplitter: MoverOrSplitterDefinition<ApproachSettings> = {
     // so it is computed once here rather than rebuilt on every frame.
     const allocation = noteMode ? allocateApproachFlights(settings, notes) : []
     const count = approachAllocatedCount(settings, allocation)
-    return {
-      apply(visualCopy, { beat, placementTransform }) {
-        const placementScale = placementAxisScale(placementTransform)
-        const flights = noteMode
-          ? approachFlightsAt(settings, allocation, beat, count)
-          : Array.from({ length: count }, (_, slot) => approachStreamFlight(slot, settings, beat))
-        return flights.map((flight) => {
-          const { transform, opacity } = approachFlightTransform(flight, settings, placementScale)
-          // LOCAL composition (previous * delta), the chain default: each copy's
-          // transform re-frames the movers below it, so a Rotate under an
-          // Approach spins each incoming copy about its own axis.
-          const next: VisualCopy = {
-            transform: visualCopy.transform.clone().multiply(transform),
-            opacity: visualCopy.opacity * opacity,
-            colorShift: { ...visualCopy.colorShift },
-          }
-          return next
-        })
-      },
-    }
+    return sharedLocalLayout((beat, placementTransform) => {
+      const placementScale = placementAxisScale(placementTransform)
+      const flights = noteMode
+        ? approachFlightsAt(settings, allocation, beat, count)
+        : Array.from({ length: count }, (_, slot) => approachStreamFlight(slot, settings, beat))
+      const transforms: Matrix4[] = [], opacities: number[] = []
+      for (const flight of flights) {
+        const { transform, opacity } = approachFlightTransform(flight, settings, placementScale)
+        // LOCAL composition (previous * delta), the chain default: each copy's
+        // transform re-frames the movers below it, so a Rotate under an
+        // Approach spins each incoming copy about its own axis.
+        transforms.push(transform)
+        opacities.push(opacity)
+      }
+      return { transforms, opacities }
+    }, { count, usesPlacement: true })
   },
 }

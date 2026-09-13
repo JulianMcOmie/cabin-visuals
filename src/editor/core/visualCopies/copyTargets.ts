@@ -113,6 +113,9 @@ export function gatedMoverOrSplitter(
     },
   }
   if (entry.composition) gated.composition = entry.composition
+  // Targeting only selects the existing count-one motion or identity. Its
+  // index predicate remains local to the containing splitter's formation.
+  if (entry.localSlotMotion) gated.localSlotMotion = true
   if (entry.emitsCopyClocks) gated.emitsCopyClocks = true
   if (entry.applyFramed) {
     const applyFramed = entry.applyFramed.bind(entry)

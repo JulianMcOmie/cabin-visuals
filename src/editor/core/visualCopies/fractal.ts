@@ -1,5 +1,5 @@
 import { Matrix4, Vector3 } from 'three'
-import type { VisualCopy } from './types'
+import { sharedLocalLayout } from './sharedLocalLayout'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { FRACTAL_COLOR } from './identityColors'
 import { applySplitterSize, splitterSize, SPLITTER_SIZE_PARAM } from './splitterSize'
@@ -52,14 +52,7 @@ export function fractalTransforms(settings: FractalSettings): Matrix4[] {
 
 function resolveFractal(settings: FractalSettings) {
   const transforms = fractalTransforms(settings)
-  return {
-    apply(copy: VisualCopy) {
-      return transforms.map(transform => ({
-        ...copy,
-        transform: copy.transform.clone().multiply(transform), colorShift: { ...copy.colorShift },
-      }))
-    }
-  }
+  return sharedLocalLayout({ transforms })
 }
 
 export const fractalSplitter: MoverOrSplitterDefinition<FractalSettings> = {

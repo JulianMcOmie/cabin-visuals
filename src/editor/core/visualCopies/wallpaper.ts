@@ -1,5 +1,5 @@
 import { Matrix4, Vector3 } from 'three'
-import type { VisualCopy } from './types'
+import { sharedLocalLayout } from './sharedLocalLayout'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { WALLPAPER_COLOR } from './identityColors'
 import { applySplitterSize, splitterSize, SPLITTER_SIZE_PARAM } from './splitterSize'
@@ -48,11 +48,7 @@ export function wallpaperTransforms(settings: WallpaperSettings): Matrix4[] {
 }
 function resolveWallpaper(settings: WallpaperSettings) {
   const transforms = wallpaperTransforms(settings)
-  return {    
-apply(copy: VisualCopy) {
-      return transforms.map(transform => ({ ...copy, transform: copy.transform.clone().multiply(transform), colorShift: { ...copy.colorShift } }))
-    }  
-}
+  return sharedLocalLayout({ transforms })
 }
 export const wallpaperSplitter: MoverOrSplitterDefinition<WallpaperSettings> = {
   id: 'wallpaper', label: 'Wallpaper', kind: 'splitter', identityColor: WALLPAPER_COLOR,

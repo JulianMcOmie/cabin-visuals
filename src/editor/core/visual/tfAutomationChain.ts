@@ -72,6 +72,7 @@ export function tfAutomationChainEntry(input: ResolvedAutomation | ResolvedAutom
   })
   return {
     cachePolicy: 'beat',
+    localSlotMotion: true,
     localTransformCount: 1,
     localTransformsAtBeat: beat => [deltaAtBeat(beat)],
     apply(visualCopy, context) {

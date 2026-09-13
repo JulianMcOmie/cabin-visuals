@@ -86,7 +86,9 @@ function ParticleProcedural({ trackId }: { trackId: string }) {
     uniforms.uViewportHeight.value = physicalHeight
     uniforms.uMeshScale.value = frame.state.meshScale
     uniforms.uColor.value.set(frame.state.stringParams.color ?? PARTICLE_COLOR)
-    uniforms.uOpacity.value = frame.state.blackedOut ? 0 : Math.min(1, frame.state.opacity)
+    // Clamp after the per-slot fade, as the CPU instance path does. An object
+    // opacity above one must still brighten a partially faded trail slot.
+    uniforms.uOpacity.value = frame.state.blackedOut ? 0 : frame.state.opacity
     uniforms.uGlow.value = frame.state.params.glow ?? PARTICLE_GLOW
     // Keep the cloud's density in thumbnails; enlarging every particle to
     // eight pixels would turn a million-point cloud into solid overdraw.

@@ -143,7 +143,7 @@ test('worker frame codec preserves correlated program offsets and mixed-prefix g
   assert.deepEqual(receiver.getParticlePlan('p')!.program, engine.getParticlePlan('p')!.program)
 })
 
-test('editing a nested chain through color and target fallbacks restores its compact representation', () => {
+test('nested color edits switch representation while count-one targeting keeps its compact object list', () => {
   const document = fixture('b')
   const engine = createVisualEngine()
   engine.setProject(document); engine.computeAtBeat(.7)
@@ -154,21 +154,30 @@ test('editing a nested chain through color and target fallbacks restores its com
   colored.tracks.b.childIds.push('color')
   colored.tracks.color = { ...colored.tracks.motion, id: 'color', moverId: 'gradient',
     inputValues: { mode: 1, amount: 1 }, stringParams: { colorA: '#ff0000', colorB: '#0000ff' } }
-  const targeted = structuredClone(document)
-  targeted.tracks.motion.copyTargets = { rule: 'every', slices: 2, on: [0] }
-  for (const edit of [colored, targeted]) {
-    engine.setProject(edit); engine.computeAtBeat(.7)
-    assert.equal(engine.getParticlePlan('p'), undefined)
-    assert.equal(engine.getVisualCopyCount('p'), COPIES)
-    assert.equal(engine.getVisualCopies('p').length, COPIES)
-    assert.equal(engine.getObjectList().length, COPIES)
-    assert.ok(engine.getObjectList().every(entry => !entry.proceduralCopies))
-    if (edit === colored) assert.ok(engine.getVisualCopy('p', 12345)!.colorShift.tint)
-    engine.setProject(document); engine.computeAtBeat(.7)
+  engine.setProject(colored); engine.computeAtBeat(.7)
+  assert.equal(engine.getParticlePlan('p'), undefined)
+  assert.equal(engine.getVisualCopyCount('p'), COPIES)
+  assert.equal(engine.getVisualCopies('p').length, COPIES)
+  assert.equal(engine.getObjectList().length, COPIES)
+  assert.ok(engine.getObjectList().every(entry => !entry.proceduralCopies))
+  assert.ok(engine.getVisualCopy('p', 12345)!.colorShift.tint)
+  engine.setProject(document); engine.computeAtBeat(.7)
+  assert.equal(publications, 2, 'representation changes publish the expanded and restored object lists')
+  const compactObjects = engine.getObjectList()
+  for (const rule of ['every', 'runs'] as const) {
+    const targeted = structuredClone(document)
+    targeted.tracks.motion.copyTargets = { rule, slices: 2, on: [0] }
+    engine.setProject(targeted); engine.computeAtBeat(.7)
     assert.ok(engine.getParticlePlan('p')!.program)
     assert.equal(engine.getObjectList().length, 1)
     assert.equal(engine.getVisualCopies('p').length, 0)
-    assert.deepEqual(engine.getVisualCopy('p', 12345)!.transform.elements, original)
+    assert.equal(engine.getObjectList(), compactObjects)
+    const reference = resolveVisualCopies(resolveProject(targeted).objects[0].moverAndSplitterChain, .7)
+    for (const index of [0, 31, 32, 63, 512, 1023, 12345, COPIES - 1]) {
+      assertMatrixNear(engine.getVisualCopy('p', index)!.transform, reference[index].transform)
+    }
   }
-  assert.equal(publications, 4, 'each representation transition publishes the new render object list')
+  engine.setProject(document); engine.computeAtBeat(.7)
+  assert.deepEqual(engine.getVisualCopy('p', 12345)!.transform.elements, original)
+  assert.equal(publications, 2, 'targeting changes motion without republishing identical compact object lists')
 })

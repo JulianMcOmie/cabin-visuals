@@ -56,7 +56,7 @@ The final integration on main passed **1,740 tests**, TypeScript validation, and
 
 ## Remaining limits
 
-Mover-parent frames and splitter children without a proven count-one shared transform still use the reference evaluator. Copy targets, independent copy clocks, appearance-changing modifiers, masks, and unsupported effects likewise retain the fallback. This change does not make every possible device chain compact. Pixel coverage, glow, canvas size, other GPU work, and browser visibility still affect frame rate.
+The subsequent [shared splitter program](shared-splitter-program.md) extends this path to all twelve spatial splitters, slot opacity/hue, and more nested count-one movements, including their local copy targets. Mover-parent frames, independent copy clocks, unproven child operations, masks and unsupported effects still retain the reference evaluator. Pixel coverage, glow, canvas size, other GPU work and browser visibility affect frame rate.
 
 ## Reproduce
 

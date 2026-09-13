@@ -370,6 +370,7 @@ export const symmetricRotationMover: MoverOrSplitterDefinition<SymmetricRotation
     // part below is the falloff weight and the pivot, which read the tuple.
     const channelsAt = memoByBeat((beat) => evaluateSymmetricRotationChannels(notes, settings, beat))
     return {
+      localSlotMotion: true,
       // Declared so a splitter's child chain takes this delta as-is: it is
       // already anchored on the chain frame's fixed axes (see the header).
       composition: 'chainRoot',

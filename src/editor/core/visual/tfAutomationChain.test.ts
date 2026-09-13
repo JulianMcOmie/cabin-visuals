@@ -163,6 +163,7 @@ test('spatial automation declares one immutable local transform with exact apply
     const obj = resolveObj([lane, gridChild('split', 2, 2)])
     const entry = obj.moverAndSplitterChain.find(item => item.localTransformCount === 1)!
     assert.ok(entry)
+    assert.equal(entry.localSlotMotion, true)
     const input = identityVisualCopy()
     input.transform.makeRotationZ(.4).setPosition(3, -4, 2)
     for (const beat of [0, 2, 4, -1, 2, 0]) {
@@ -171,6 +172,42 @@ test('spatial automation declares one immutable local transform with exact apply
       const expected = entry.apply(input, { beat, index: 10, count: 20 })[0].transform
       assert.deepEqual(input.transform.clone().multiply(local).elements, expected.elements)
       assert.deepEqual(local.elements, before)
+    }
+  }
+})
+
+test('automated shared parent appearance and slot-dependent child motion forward compact proofs', () => {
+  const obj = track({ id: 'obj', instrumentId: 'particle', childIds: ['split'] })
+  const split = track({ id: 'split', type: 'splitter', splitterId: 'approach', parentId: 'obj',
+    childIds: ['size', 'mover'], inputValues: { density: 4, speed: 3, size: 2 } })
+  const size = track({ id: 'size', type: 'automation', parentId: 'split', targetParam: 'size',
+    blocks: [keyframeBlock([{ pitch: 36, startBeat: 0 }, { pitch: 48, startBeat: 4 }])] })
+  for (const moverId of ['symmetricMotion', 'symmetricRotation']) {
+    const mover = track({ id: 'mover', type: 'mover', moverId, parentId: 'split', childIds: ['angle'],
+      inputValues: { mode: 2, motion: 1, twist: 31, fold: 21, angle: 1 } })
+    const angle = track({ id: 'angle', type: 'automation', parentId: 'mover', targetParam: 'angle',
+      blocks: [keyframeBlock([{ pitch: 40, startBeat: 0 }, { pitch: 50, startBeat: 4 }])] })
+    const graph = resolveProject({ tracks: { obj, split, size, mover, angle }, rootTrackIds: ['obj'], bpm: 120, beatsPerBar: 4 })
+    const [entry] = graph.objects[0].moverAndSplitterChain
+    assert.ok(entry.framedLocalTransformsAtBeat)
+    assert.equal(entry.framedLayoutUsesPlacement, true)
+    assert.ok(entry.structuralVariants!.every(variant => variant.framedLocalTransformsAtBeat))
+    const placement = new Matrix4().makeScale(2, 3, 4).setPosition(2, -3, 1)
+    for (const beat of [.7, 2, 4, -1, .7]) {
+      const compact = entry.framedLocalTransformsAtBeat(beat, placement)
+      const input = identityVisualCopy()
+      input.transform.makeRotationX(.3).setPosition(2, 1, -3)
+      input.opacity = .7; input.colorShift.hue = .2
+      const reference = entry.applyFramed!(input, { beat, index: 300, count: 1000, placementTransform: placement })
+      assert.equal(reference.length, compact.frames.length)
+      reference.forEach((copy, i) => {
+        const matrix = input.transform.clone().multiply(compact.frames[i])
+        matrix.elements.forEach((value, j) => assert.ok(Math.abs(value - copy.visualCopy.transform.elements[j]) < 1e-9))
+        assert.equal(copy.visualCopy.opacity, .7 * (compact.opacities?.[i] ?? 1))
+        assert.equal(copy.visualCopy.colorShift.hue, .2)
+        if (copy.internalTransform) compact.internals[i]!.elements.forEach((value, j) =>
+          assert.ok(Math.abs(value - copy.internalTransform!.elements[j]) < 1e-9))
+      })
     }
   }
 })

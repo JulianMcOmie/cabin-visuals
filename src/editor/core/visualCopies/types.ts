@@ -190,7 +190,7 @@ export interface FramedVisualCopy {
   birthBeat?: number
 }
 
-/** Correlated local frame/internal slots for an appearance-preserving framed
+/** Correlated local frame/internal slots with optional shared appearance for a framed
  * entry. Arrays have equal length and immutable matrices in output-slot order.
  * For an incoming chain frame P with finite determinant and |det(P)| >= 1e-12,
  * output i has frame P × frames[i] and the optional internals[i] contribution.
@@ -198,11 +198,26 @@ export interface FramedVisualCopy {
  * The guard excludes object placement and any inherited internal motion.
  * Internal contributions accumulate separately in chain order and are folded
  * only after every downstream frame factor; frames and internals use the SAME
- * slot index, never independent Cartesian dimensions. */
+ * slot index, never independent Cartesian dimensions. Opacities multiply the
+ * input and hue shifts add to it; bare channels apply only on the skipped path.
+ * Every optional channel has the same length as frames. */
 export interface FramedLocalTransforms {
   frames: readonly Matrix4[]
   internals: readonly (Matrix4 | null)[]
   bareFrames: readonly Matrix4[]
+  opacities?: readonly number[]
+  hueShifts?: readonly number[]
+  bareOpacities?: readonly number[]
+  bareHueShifts?: readonly number[]
+}
+
+/** Immutable local slot table. Optional channels have exactly one value per
+ * transform: opacity multiplies the input; hue adds to its existing shift.
+ * All other appearance fields are preserved. */
+export interface SharedLocalLayout {
+  transforms: readonly Matrix4[]
+  opacities?: readonly number[]
+  hueShifts?: readonly number[]
 }
 
 /**
@@ -242,6 +257,19 @@ export interface MoverOrSplitter {
    * A static localTransforms array already declares its length. Used to prove
    * that a dynamic child is count-neutral without probing arbitrary beats. */
   localTransformCount?: number
+  /** The richer local family, exclusive with legacy localTransforms fields.
+   * Each output is input.transform × transforms[i], with the declared slot
+   * appearance operations and no dependence on incoming index or formation. */
+  localLayout?: SharedLocalLayout
+  localLayoutAtBeat?: (beat: number, placementTransform?: Matrix4) => SharedLocalLayout
+  /** The sampler may additionally depend on the placement matrix's contents. */
+  localLayoutUsesPlacement?: boolean
+  /** Exact cardinality at every beat and placement, when explicitly known. */
+  localLayoutCount?: number
+  /** Exactly one appearance-preserving result at every beat. Its transform may
+   * read beat, incoming transform, index/count and formation transforms only;
+   * independent of placement, appearance, birth and per-copy clocks. */
+  localSlotMotion?: true
   /** Exact uniform chain-root motion: output.transform is rootTransform ×
    * input.transform, with unchanged appearance/count and no context dependence.
    * The matrix is immutable. Mutually exclusive with localTransforms[AtBeat];
@@ -251,8 +279,10 @@ export interface MoverOrSplitter {
   rootTransformAtBeat?: (beat: number) => Matrix4
   /** Exact guarded frame/internal layout, sampled at an absolute beat. Mutually
    * exclusive with local/root transforms, and only for applyFramed entries with
-   * unchanged appearance and no other input/context dependence or copy clocks. */
-  framedLocalTransformsAtBeat?: (beat: number) => FramedLocalTransforms
+   * declared slot appearance and no other input/context dependence or copy clocks.
+   * Placement dependence must be declared by framedLayoutUsesPlacement. */
+  framedLocalTransformsAtBeat?: (beat: number, placementTransform?: Matrix4) => FramedLocalTransforms
+  framedLayoutUsesPlacement?: boolean
   apply(visualCopy: VisualCopy, context: MoverOrSplitterContext): VisualCopy[]
   /**
    * OPTIONAL: the composition convention this entry's transform uses, as

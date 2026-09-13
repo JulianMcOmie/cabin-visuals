@@ -39,7 +39,7 @@ import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { midiVelocity } from '../../utils/midiVelocity'
 import { applySplitterSize, splitterSize, SPLITTER_SIZE_PARAM } from './splitterSize'
-import type { VisualCopy } from './types'
+import { sharedLocalLayout } from './sharedLocalLayout'
 import { TUNNEL_COLOR } from './identityColors'
 
 export interface TunnelSettings {
@@ -492,30 +492,26 @@ export const tunnelSplitter: MoverOrSplitterDefinition<TunnelSettings> = {
     // Beat-independent (each event is keyed by the travel it fired at), so the
     // origin timeline is built once per resolve rather than per copy.
     const originAt = tunnelOriginLookup(notes, settings)
-    return {
-      apply(visualCopy, { beat, placementTransform }) {
-        const travel = evaluateTunnelTravel(notes, settings, beat)
-        const placementScale = placementAxisScale(placementTransform)
-        // 'Mute at camera': a pure opacity gate over the copies that would hit
-        // the lens while the note is held - positions are untouched, so the
-        // corridor keeps flowing underneath and nothing snaps on release.
-        const cameraMuted = isTunnelCameraMuteActive(notes, beat)
-        const muteZone = tunnelCameraMuteZone(settings)
-        return Array.from({ length: count }, (_, slot) => {
-          const { transform, opacity, depthIntoTunnel } = slotTransform(slot, settings, travel, placementScale, originAt)
-          const gate = cameraMuted && depthIntoTunnel <= muteZone ? 0 : 1
-          // LOCAL composition (previous * delta), the chain default: each slot's
-          // transform becomes the reference frame for movers BELOW it, so a
-          // Burst 'Forward (+Z)' under a Tunnel pushes every copy along its own
-          // orientation rather than in world Z.
-          const next: VisualCopy = {
-            transform: visualCopy.transform.clone().multiply(transform),
-            opacity: visualCopy.opacity * opacity * gate,
-            colorShift: { ...visualCopy.colorShift },
-          }
-          return next
-        })
-      },
-    }
+    return sharedLocalLayout((beat, placementTransform) => {
+      const travel = evaluateTunnelTravel(notes, settings, beat)
+      const placementScale = placementAxisScale(placementTransform)
+      // 'Mute at camera': a pure opacity gate over the copies that would hit
+      // the lens while the note is held - positions are untouched, so the
+      // corridor keeps flowing underneath and nothing snaps on release.
+      const cameraMuted = isTunnelCameraMuteActive(notes, beat)
+      const muteZone = tunnelCameraMuteZone(settings)
+      const transforms: Matrix4[] = [], opacities: number[] = []
+      for (let slot = 0; slot < count; slot++) {
+        const { transform, opacity, depthIntoTunnel } = slotTransform(slot, settings, travel, placementScale, originAt)
+        const gate = cameraMuted && depthIntoTunnel <= muteZone ? 0 : 1
+        // LOCAL composition (previous * delta), the chain default: each slot's
+        // transform becomes the reference frame for movers BELOW it, so a
+        // Burst 'Forward (+Z)' under a Tunnel pushes every copy along its own
+        // orientation rather than in world Z.
+        transforms.push(transform)
+        opacities.push(opacity * gate)
+      }
+      return { transforms, opacities }
+    }, { count, usesPlacement: true })
   },
 }

@@ -1,0 +1,38 @@
+<!doctype html><title>Shared splitter editor check</title><style>body{background:#111;color:#eee;font:14px system-ui}button{padding:8px;margin:5px}iframe{width:100%;height:850px;border:0}pre{white-space:pre-wrap;max-height:180px;overflow:auto}</style>
+<label>Fixture <select id="fixture"><option value="fractal">Rotating Fractal × Radial (24,992)</option><option value="million">Rotating Fractal × Radial × Radial × Line (1,047,552)</option></select></label><button id="setup">Load Particle chain</button><button id="run">Measure editor playback</button><pre id="result">Waiting for the local editor. A constant Mover rotates Fractal itself inside a mixed splitter chain. This is an isolated in-memory fixture; keep the tab visible while measuring.</pre><iframe src="/editor"></iframe>
+<script>
+const w=()=>document.querySelector('iframe').contentWindow, output=document.querySelector('pre');let loadedFixture;
+document.querySelector('#setup').onclick=()=>{
+ const win=w(),{project,ui,time}=win.__cabinStores,p=project.getState(),sceneId=p.sceneOrder.find(id=>!p.scenes[id].isMain),mainId=p.sceneOrder.find(id=>p.scenes[id].isMain);
+ const million=document.querySelector('#fixture').value==='million';
+ const children=million?['fractal','r1','r2','line']:['fractal','r1'];
+ const root=['particle'],base={id:'particle',name:'Particle',instrumentId:'particle',type:'base',color:'#7dd3fc',muted:false,solo:false,childIds:children,params:{size:.007},blocks:[]};
+ const device=(id,splitterId,inputValues,childIds=[])=>({...base,id,parentId:'particle',name:splitterId,type:'splitter',splitterId,instrumentId:'',childIds,params:{},inputValues});
+ const tracks={particle:base,
+  fractal:device('fractal','fractal',{branches:million?4:5,depth:4,shrink:.45,spread:1.5,angle:31},['move']),
+  r1:device('r1','radial',{copies:32,radius:.8,plane:1}),
+  ...(million?{r2:device('r2','radial',{copies:32,radius:.15,plane:2}),line:device('line','line',{copies:3,spacing:.04})}:{}),
+  move:{...base,id:'move',parentId:'fractal',name:'Constant Rotate',type:'mover',moverId:'mover',instrumentId:'',childIds:[],params:{},inputValues:{motion:1,mode:1,angleX:17,angleY:29,angleZ:45}}};
+ const lighting=Object.fromEntries(Object.entries(p.scenes[sceneId].tracks).filter(([id,t])=>t.instrumentId==='light'||t.type==='group'&&t.name==='Lighting'));
+ Object.assign(tracks,lighting);root.push(...Object.values(lighting).filter(t=>!t.parentId).map(t=>t.id));
+ const scene={...p.scenes[sceneId],tracks,rootTrackIds:root,backgroundColor:'#000000'};
+ project.setState({activeSceneId:sceneId,scenes:{[sceneId]:scene,[mainId]:p.scenes[mainId]},tracks,rootTrackIds:root});ui.getState().setCanvasView('scene');time.setState({currentBeat:2,isPlaying:false});
+ loadedFixture={copies:million?341*32*32*3:781*32,splitters:children,placement:'Mover nested under Fractal'};
+ output.textContent='Loaded '+loadedFixture.copies.toLocaleString()+' particles with a rotating Fractal. Keep this tab visible while measuring.';
+};
+document.querySelector('#run').onclick=async()=>{
+ if(!loadedFixture){output.textContent='Load a Particle chain before measuring.';return}
+ const visibilityAtStart=document.visibilityState;
+ const win=w(),state=win.__r3fState(),time=win.__cabinStores.time,original=state.advance;
+ const profile = [],modes=new Map();
+ const originalRender=state.gl.render.bind(state.gl);state.gl.render=(scene,camera)=>{const s=performance.now();const value=originalRender(scene,camera);const ms=performance.now()-s;if(ms>2)profile.push({kind:'render',ms,objects:scene.children.length});scene.traverse(o=>{if(o.name==='Factored Particle instances'){const key=scene.uuid,old=modes.get(key);modes.set(key,{count:o.isPoints?o.geometry.drawRange.count:o.geometry.instanceCount,uuid:o.uuid,points:!!o.isPoints,changes:(old?.changes??0)+(old&&old.uuid!==o.uuid?1:0),near:camera.near,projectionY:camera.projectionMatrix.elements[5]})}});return value};
+ const callbacks=[];const subscribers=state.internal.subscribers.map((sub,index)=>{const original=sub.ref.current,record={index,priority:sub.priority,source:original.toString().slice(0,650),ms:0,max:0,calls:0};callbacks.push(record);sub.ref.current=(...args)=>{const s=performance.now();const v=original(...args);const ms=performance.now()-s;record.ms+=ms;record.max=Math.max(record.max,ms);record.calls++;if(ms>2)profile.push({kind:'callback',index,priority:sub.priority,ms});return v};return {sub,original}});
+ const renders=[],cpu=[],workerDurations=[],beats=[],ticks=[];const start=performance.now();let animation;
+ state.set({advance:(...args)=>{const s=performance.now();original(...args);if(s>start+2000){renders.push(s);cpu.push(performance.now()-s)}}});
+ const tick=now=>{if(now>start+2000)ticks.push(now);time.setState({currentBeat:2+(now-start)/500,isPlaying:true});const runtime=win.__previewRuntime;if(beats.at(-1)!==runtime.beat){beats.push(runtime.beat);workerDurations.push(runtime.duration)}animation=requestAnimationFrame(tick)};animation=requestAnimationFrame(tick);
+ await new Promise(r=>setTimeout(r,7000));cancelAnimationFrame(animation);time.setState({isPlaying:false});state.set({advance:original}); state.gl.render=originalRender;subscribers.forEach(({sub,original})=>sub.ref.current=original);
+ const meshes=[];for(const scene of win.__cabinVisual.getMountedRenderScenes().values())scene.traverse(o=>{if(o.name==='Factored Particle instances')meshes.push({name:o.name,particles:o.isPoints?o.geometry.drawRange.count:o.geometry.instanceCount,points:!!o.isPoints,matrixSlots:o.material.uniforms.uLayouts.value.image.data.length/16})});
+ const sorted=cpu.toSorted((a,b)=>a-b);const result={fixture:loadedFixture,visibilityAtStart,visibilityAtEnd:document.visibilityState,maxPointSize:state.gl.getContext().getParameter(state.gl.getContext().ALIASED_POINT_SIZE_RANGE)[1],modes:[...modes.values()],rafFps:(ticks.length-1)*1000/(ticks.at(-1)-ticks[0]),callbacks:callbacks.toSorted((a,b)=>b.ms-a.ms).slice(0,6),profile:profile.slice(-40),renders:renders.length,renderedFps:(renders.length-1)*1000/(renders.at(-1)-renders[0]),cpuMedianMs:sorted[Math.floor(sorted.length*.5)],cpuP95Ms:sorted[Math.floor(sorted.length*.95)],runtime:win.__previewRuntime,workerResponses:beats.length,meshes,canvas:[state.gl.domElement.width,state.gl.domElement.height]};
+ result.pass=meshes.length>0&&meshes[0].particles===result.fixture.copies;output.textContent=JSON.stringify(result,(k,v)=>k==='ambient'?undefined:v,2);
+};
+</script>

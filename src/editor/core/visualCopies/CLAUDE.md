@@ -34,11 +34,28 @@ entries declaring `cachePolicy` participate: `beat` allows same-beat reuse;
 `static` additionally promises independence from beat and birth. Resolved registered
 definitions receive `beat` by default; unknown hand-built entries remain uncached.
 Entry identity, apply functions, clock routing, and placement values invalidate the
-cache. Fixed Radial/Grid/Line layouts opt into `static`. An ordinary static prefix
+cache. Fixed spatial layouts opt into `static`. An ordinary static prefix
 can be retained before an animated suffix; framed/time-emitting entries terminate
 that prefix so internal motion and clock propagation never fold prematurely.
 Returned arrays, copies, and matrices are immutable views. Slice the array before
 structural padding/truncation; never mutate a cached copy or matrix.
+
+Spatial splitters use `sharedLocalLayout` to derive BOTH `apply` and compact
+metadata from one immutable transform/opacity/hue table. Declare placement
+dependence explicitly; placement contents can change at a held beat. Static
+transform-only tables keep the lightweight `localTransforms` proof. Dynamic or
+appearance-bearing tables use `localLayout[AtBeat]`. Count lanes and parameter
+automation must forward their metadata and structural variants together.
+
+`localSlotMotion` is a stronger proof than caching: exactly one output, unchanged
+appearance, and no placement/birth dependency. It may read local transforms,
+index/count and formation transforms. A splitter can therefore sample such
+children once over its own slots, preserving correlated frame/internal motion.
+It does NOT make that mover a uniform sibling stage or authorize fanout. Shared
+count-one children with opacity/hue have their own local-layout contract; their
+active appearance must remain separate from bare parent factors when a singular
+incoming frame skips child evaluation. See `particlePlan.ts` and
+`docs/performance/shared-splitter-program.md` for compilation and limits.
 
 ## Structure
 

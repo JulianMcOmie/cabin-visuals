@@ -50,7 +50,7 @@ import { warpChainBeat } from './resolveVisualCopies'
 import { identityVisualCopy } from './identityVisualCopy'
 import { memoByBeat } from './beatMemo'
 import { withCopyEvaluation } from './evaluationMemo'
-import type { FramedVisualCopy, MoverOrSplitter, MoverOrSplitterContext, VisualCopy } from './types'
+import type { FramedLocalTransforms, FramedVisualCopy, MoverOrSplitter, MoverOrSplitterContext, SharedLocalLayout, VisualCopy } from './types'
 
 /** A child result still tied to the parent slot whose frame it moves: `copy`'s
  *  transform is the slot's transform in the splitter's frame with every child
@@ -70,19 +70,30 @@ function isDegenerate(transform: Matrix4): boolean {
 /** These are semantic guarantees, not single-beat probes. In particular a
  * count lane that happens to have one slot now is not a count-neutral child. */
 function plainLocalLayout(entry: MoverOrSplitter): boolean {
-  return !!(entry.localTransforms || entry.localTransformsAtBeat)
+  const legacy = !!(entry.localTransforms || entry.localTransformsAtBeat)
+  const shared = !!(entry.localLayout || entry.localLayoutAtBeat)
+  return legacy !== shared
     && !entry.rootTransform && !entry.rootTransformAtBeat && !entry.framedLocalTransformsAtBeat
     && !entry.applyFramed && !entry.emitsCopyClocks
     && (entry.structuralVariants?.every(plainLocalLayout) ?? true)
 }
 
-function uniformCountOne(entry: MoverOrSplitter): boolean {
+function localSlotCountOne(entry: MoverOrSplitter): boolean {
   if (entry.applyFramed || entry.emitsCopyClocks || entry.framedLocalTransformsAtBeat) return false
+  if (entry.localSlotMotion) return entry.structuralVariants?.every(localSlotCountOne) ?? true
   const root = !!(entry.rootTransform || entry.rootTransformAtBeat)
   const local = !!(entry.localTransforms || entry.localTransformsAtBeat)
+  const shared = !!(entry.localLayout || entry.localLayoutAtBeat)
   const count = entry.localTransformsAtBeat ? entry.localTransformCount : entry.localTransforms?.length
-  return root !== local && (root || count === 1)
-    && (entry.structuralVariants?.every(uniformCountOne) ?? true)
+  const sharedCount = entry.localLayoutAtBeat ? entry.localLayoutCount : entry.localLayout?.transforms.length
+  return Number(root) + Number(local) + Number(shared) === 1
+    && (root || (local && count === 1) || (shared && sharedCount === 1 && !entry.localLayoutUsesPlacement))
+    && (entry.structuralVariants?.every(localSlotCountOne) ?? true)
+}
+
+function parentLayout(entry: MoverOrSplitter, beat: number, placement?: Matrix4): SharedLocalLayout {
+  return entry.localLayoutAtBeat?.(beat, placement) ?? entry.localLayout
+    ?? { transforms: entry.localTransformsAtBeat?.(beat) ?? entry.localTransforms! }
 }
 
 /**
@@ -129,7 +140,7 @@ export function splitterWithChildChain(
     const previous = visualCopy.transform
     if (isDegenerate(previous)) return { slots, slotTimes, outputs: null, slotInverses: null }
     const declaredLocals = hasLocalParent
-      ? splitter.localTransformsAtBeat?.(context.beat) ?? splitter.localTransforms : undefined
+      ? parentLayout(splitter, context.beat, context.placementTransform).transforms : undefined
     const exactLocals = declaredLocals?.length === slots.length ? declaredLocals : undefined
     // A proven local layout already owns S_i. Reconstructing it as P^-1(P S_i)
     // introduces cancellation and can flip the singular-slot guard near 1e-12
@@ -269,13 +280,13 @@ export function splitterWithChildChain(
       ),
     )
   }
-  if (hasLocalParent && children.every(uniformCountOne)) {
+  if (hasLocalParent && children.every(localSlotCountOne)) {
     // Identity sampling is bounded by this splitter's own slots. It deliberately
     // uses the reference anchoring path: a child Orbit's root-transform proof
     // does not change its existing composition declaration or nested semantics.
-    wrapper.framedLocalTransformsAtBeat = memoByBeat(beat => withCopyEvaluation(() => {
-      const bareFrames = splitter.localTransformsAtBeat?.(beat) ?? splitter.localTransforms!
-      const framed = wrapper.applyFramed!(identityVisualCopy(), { beat, index: 0, count: 1 })
+    const sample = (beat: number, placementTransform?: Matrix4) => withCopyEvaluation(() => {
+      const bare = parentLayout(splitter, beat, placementTransform)
+      const framed = wrapper.applyFramed!(identityVisualCopy(), { beat, index: 0, count: 1, placementTransform })
       // Matrix4.invert can round the homogeneous identity to 1 +/- epsilon.
       // These declared layouts/motions are affine; canonicalize only that
       // inversion noise in the sampled metadata, leaving the reference path
@@ -288,12 +299,39 @@ export function splitterWithChildChain(
         result.elements[15] = 1
         return result
       }
+      const opacities = framed.map(copy => copy.visualCopy.opacity)
+      const hueShifts = framed.map(copy => copy.visualCopy.colorShift.hue)
       return {
         frames: framed.map(copy => affineSample(copy.visualCopy.transform)),
         internals: framed.map(copy => copy.internalTransform ? affineSample(copy.internalTransform) : null),
-        bareFrames,
+        bareFrames: bare.transforms,
+        // Shared count-one children may multiply opacity or add hue. Those
+        // operations compose immediately; a degenerate incoming frame keeps
+        // only the parent's original appearance and skips every child.
+        ...(opacities.some(value => value !== 1) ? { opacities } : {}),
+        ...(hueShifts.some(value => value !== 0) ? { hueShifts } : {}),
+        ...(bare.opacities ? { bareOpacities: bare.opacities } : {}),
+        ...(bare.hueShifts ? { bareHueShifts: bare.hueShifts } : {}),
       }
-    }))
+    })
+    if (splitter.localLayoutUsesPlacement) {
+      wrapper.framedLayoutUsesPlacement = true
+      // A camera-facing local layout may change when object placement changes
+      // at a paused beat. Keep one immutable sample and compare matrix values,
+      // because callers may edit the same Matrix4 instance in place.
+      let cached: { beat: number; placement?: number[]; layout: FramedLocalTransforms } | undefined
+      wrapper.framedLocalTransformsAtBeat = (beat, placement) => {
+        const elements = placement?.elements
+        if (!cached || !Object.is(cached.beat, beat)
+          || (elements ? !cached.placement || elements.some((value, i) => !Object.is(value, cached!.placement![i]))
+            : cached.placement !== undefined)) {
+          cached = { beat, placement: elements?.slice(), layout: sample(beat, placement) }
+        }
+        return cached.layout
+      }
+    } else {
+      wrapper.framedLocalTransformsAtBeat = memoByBeat(sample)
+    }
   }
   return wrapper
 }

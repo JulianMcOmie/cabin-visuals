@@ -578,6 +578,7 @@ export const physicsMover: MoverOrSplitterDefinition<PhysicsSettings> = {
   resolve({ settings, notes }) {
     const pieces = buildPhysicsPieces(notes, settings)
     return {
+      localSlotMotion: true,
       apply(visualCopy, { beat }) {
         const value = evaluatePhysicsValue(pieces, beat)
         return [{

@@ -8,6 +8,7 @@ import type { MidiRowDef } from '../../instruments/types'
 import { countLaneRows, resolveCountLane } from './countLane'
 import type { MoverOrSplitterDefinition } from './definitions'
 import type { VisualCopy } from './types'
+import { sharedLocalLayout } from './sharedLocalLayout'
 import { moverDefinition } from './mover'
 import { staggerSplitter } from './stagger'
 import { noteColorizer } from './colorizer'
@@ -446,17 +447,7 @@ function resolveRadialLayout(settings: RadialSettings) {
     if (slot.faceFix) transform.multiply(slot.faceFix)
     return applySplitterSize(transform, slot.size)
   })
-  return {
-    cachePolicy: 'static' as const,
-    localTransforms: transforms,
-    apply(visualCopy: VisualCopy) {
-      return transforms.map((transform) => ({
-        transform: visualCopy.transform.clone().multiply(transform),
-        opacity: visualCopy.opacity,
-        colorShift: { ...visualCopy.colorShift },
-      }))
-    },
-  }
+  return sharedLocalLayout({ transforms })
 }
 
 // ── Line ─────────────────────────────────────────────────────────────────────
@@ -558,17 +549,7 @@ function resolveLineLayout(settings: LineSettings) {
       .multiply(new Matrix4().makeTranslation(0, 0, -spacing * index))
     return applySplitterSize(slot, size)
   })
-  return {
-    cachePolicy: 'static' as const,
-    localTransforms: slots,
-    apply(visualCopy: VisualCopy) {
-      return slots.map((slot) => ({
-        transform: visualCopy.transform.clone().multiply(slot),
-        opacity: visualCopy.opacity,
-        colorShift: { ...visualCopy.colorShift },
-      }))
-    },
-  }
+  return sharedLocalLayout({ transforms: slots })
 }
 
 // ── Grid ────────────────────────────────────────────────────────────────────
@@ -840,17 +821,7 @@ function resolveGridLayout(settings: GridSettings) {
     return new Matrix4().makeTranslation(unit.x * spacing, unit.y * spacing, unit.z * spacing)
       .multiply(applySplitterSize(tail, size))
   })
-  return {
-    cachePolicy: 'static' as const,
-    localTransforms: cells,
-    apply(visualCopy: VisualCopy) {
-      return cells.map((cell) => ({
-        transform: visualCopy.transform.clone().multiply(cell),
-        opacity: visualCopy.opacity,
-        colorShift: { ...visualCopy.colorShift },
-      }))
-    },
-  }
+  return sharedLocalLayout({ transforms: cells })
 }
 
 export { evaluateVisibilityOpacity, visibilityMover, type VisibilitySettings } from './visibility'

@@ -24,6 +24,7 @@
 import type { MidiRowDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import { AUTOMATION_PITCH_MIN, automationIntegerGrid } from '../trackTypes'
+import type { Matrix4 } from 'three'
 import type { MoverOrSplitter } from './types'
 
 export interface CountGate {
@@ -119,12 +120,20 @@ export function resolveCountLane<S extends object>(args: {
     if (gate.value < minCount) minCount = gate.value
   }
   return {
+    cachePolicy: 'beat',
     apply(visualCopy, context) {
       return atCount(countAt(gates, context.beat, rest)).apply(visualCopy, context)
     },
     composition: atCount(rest).composition,
     ...(atCount(rest).localTransforms ? {
       localTransformsAtBeat: (beat: number) => atCount(countAt(gates, beat, rest)).localTransforms!,
+    } : {}),
+    ...(atCount(rest).localLayout || atCount(rest).localLayoutAtBeat ? {
+      localLayoutAtBeat: (beat: number, placementTransform?: Matrix4) => {
+        const entry = atCount(countAt(gates, beat, rest))
+        return entry.localLayoutAtBeat?.(beat, placementTransform) ?? entry.localLayout!
+      },
+      localLayoutUsesPlacement: atCount(rest).localLayoutUsesPlacement,
     } : {}),
     // Rank order matches resolveOwnMoverOrSplitter's automation variants:
     // maximum reach first, minimum second.

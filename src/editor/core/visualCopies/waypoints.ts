@@ -385,6 +385,7 @@ export const waypointsMover: MoverOrSplitterDefinition<WaypointsSettings> = {
   resolve({ settings, notes }) {
     const segments = buildWaypointSegments(notes, settings)
     return {
+      localSlotMotion: true,
       apply(visualCopy, { beat }) {
         const [x, y] = evaluateWaypointOffset(segments, settings, beat)
         return [nextCopy(
