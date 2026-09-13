@@ -18,6 +18,7 @@ import { fogScenePlugin } from '../effects/scene/fog'
 
 export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRendererDefinition>> = {
   mover: lazyPanel(() => import('./MoverUserInterface'), 'MoverUserInterfaceRenderer'),
+  dance: lazyPanel(() => import('./DanceMoverUserInterface'), 'DanceMoverUserInterfaceRenderer'),
   waypoints: lazyPanel(() => import('./WaypointsUserInterface'), 'WaypointsUserInterfaceRenderer'),
   visibility: lazyPanel(() => import('./VisibilityMoverUserInterface'), 'VisibilityMoverUserInterfaceRenderer'),
   bypass: lazyPanel(() => import('./BypassUserInterface'), 'BypassUserInterfaceRenderer'),

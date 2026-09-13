@@ -10,6 +10,7 @@ import type { MoverOrSplitterDefinition } from './definitions'
 import type { VisualCopy } from './types'
 import { sharedLocalLayout } from './sharedLocalLayout'
 import { moverDefinition } from './mover'
+import { danceMover } from './dance'
 import { staggerSplitter } from './stagger'
 import { noteColorizer } from './colorizer'
 import { gradientColorizer } from './gradientColorizer'
@@ -839,6 +840,7 @@ export { bypassGated, bypassMover, evaluateBypassed, BYPASS_ID, type BypassSetti
  *  All Movers' banks and the parity tests. */
 export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   moverDefinition,
+  danceMover,
   waypointsMover,
   physicsMover,
   consolidatedMover,

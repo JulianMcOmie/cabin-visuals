@@ -21,6 +21,18 @@ One instrument track produces ONE opaque visual output; an ordered chain of move
 
 ## Calculation caching
 
+**Dance (`dance.ts` / `danceCurve.ts`) is a crossing score, not keyframes.**
+Pitches 60/62/64 select X/Y/Z; each axis alternates direction at note onsets,
+with zero position, nonzero speed and zero acceleration there. Integrated
+cubic velocity ramps share their turnaround distance, so both crossings and
+turns are C2 even with uneven spacing; travel shrinks when necessary. Its
+unit curves cache by immutable note-array identity independently of amplitude
+knobs, and apply uses binary searches plus the evaluation memo. Notes form one
+lane-wide phrase across clip edges; up to one beat of anticipation/settling
+is intentional (hard-gating at an onset would contradict a fast crossing).
+Duplicate onsets within 1e-6 beat coalesce. Note length/velocity are ignored.
+See `docs/dance-mover.md` for the boundary and automation limits.
+
 `evaluationMemo.ts` owns synchronous evaluation scopes. The engine opens one per
 frame; nested kernel/frame calls reuse it, and `finally` clears it. A memo's key
 must contain every varying input; resolved immutable settings belong in its
