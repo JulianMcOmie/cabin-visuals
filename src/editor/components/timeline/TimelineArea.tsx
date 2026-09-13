@@ -30,7 +30,7 @@ import { updateMidiActivityAtBeat } from './midiActivityRegistry'
 import { scrollLeftAroundBeat } from '../../utils/zoomAroundBeat'
 import { audioPickupBars } from '../../utils/audioPickup'
 import { isSceneTrackId } from '../../core/sceneTrack'
-import { isLightingOnlyTrack } from '../../core/defaultLighting'
+import { isLightingOnlyTrack } from '../../core/lightingTracks'
 
 const MIN_OUTSIDE_PROJECT_BARS = 8
 const OUTSIDE_PROJECT_OVERSCAN_BARS = 2

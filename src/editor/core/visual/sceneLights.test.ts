@@ -102,11 +102,29 @@ test('flat drops every mirrored light for one albedo ambient, and comes back', (
   }
 })
 
-test('a scene with no light tracks still gets the flat ambient', () => {
+test('a scene with no light tracks stays unlit at every preview budget', () => {
   const scene = new Scene()
   const pool = new PassLightPool(scene)
-  pool.sync('nobody', false, 'flat')
-  assert.equal(lightsIn(scene).ambient.length, 1)
+  for (const budget of ['full', 'trimmed', 'flat'] as const) {
+    pool.sync('nobody', false, budget)
+    assert.equal(lightsIn(scene).ambient.length, 0)
+  }
   pool.dispose()
   assert.equal(lightsIn(scene).ambient.length, 0)
+})
+
+test('removing the last authored light also removes the flat preview substitute', () => {
+  const done = rig('removed-light')
+  const scene = new Scene()
+  const pool = new PassLightPool(scene)
+  try {
+    pool.sync('removed-light', false, 'flat')
+    assert.equal(lightsIn(scene).ambient.length, 1)
+    done()
+    pool.sync('removed-light', false, 'flat')
+    assert.equal(lightsIn(scene).ambient.length, 0)
+  } finally {
+    done()
+    pool.dispose()
+  }
 })

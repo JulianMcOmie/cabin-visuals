@@ -12,7 +12,6 @@ import { seedSceneBindings } from '../core/directors/sceneBindings'
 import { seedSwitcherBindings } from '../core/switcherBindings'
 import { SWITCHER_MODE_PARAM } from '../core/visualCopies/switcher'
 import { canBeSceneTrackChild, dematerializeSceneTrack, isSceneTrackId, sceneTrackId, sceneTrackView } from '../core/sceneTrack'
-import { defaultLightingTracks } from '../core/defaultLighting'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { AUTOMATION_AMOUNT_MAX, DEFAULT_PHYSICS, DEFAULT_BURST, DEFAULT_CYCLE, DEFAULT_FORCE, DEFAULT_NOISE, DEFAULT_SPLINE_TENSION, SPLINE_TENSION_MAX } from '../core/visual/automation'
 import type { ImportedMidiTrack } from '../core/midiImport'
@@ -639,14 +638,10 @@ const INVERT_FILTER_PITCH = 72
 function makeInitialScenes(): { scenes: Record<string, Scene>; sceneOrder: string[]; activeSceneId: string } {
   const mainId = crypto.randomUUID()
   const firstId = crypto.randomUUID()
-  // Every visual scene is born with the default "Lighting" group (the old
-  // hardcoded rig as editable tracks); Composite composes scenes and holds no
-  // objects, so it gets none.
-  const lighting = defaultLightingTracks()
   return {
     scenes: {
       [mainId]: { id: mainId, name: 'Composite', isMain: true, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: {}, rootTrackIds: [] },
-      [firstId]: { id: firstId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: lighting.tracks, rootTrackIds: [lighting.rootId] },
+      [firstId]: { id: firstId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: {}, rootTrackIds: [] },
     },
     sceneOrder: [mainId, firstId],
     activeSceneId: firstId,
@@ -808,9 +803,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
   activeSceneId: initial.activeSceneId,
   audioTracks: {},
   audioRootTrackIds: [],
-  // The flattened view must start as the active scene's view - the seeded
-  // Lighting group is born in the scene, and `{}` here would hide it until
-  // the first scene switch or hydrate.
+  // Include the active scene's virtual scene track from the first render.
   ...viewForScene(initial.scenes, initial.activeSceneId, {}, []),
   bpm: 120,
   beatsPerBar: 4,
@@ -827,8 +820,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     const id = crypto.randomUUID()
     rawSet((s) => {
       const visualCount = s.sceneOrder.filter((sid) => !s.scenes[sid]?.isMain).length
-      const lighting = defaultLightingTracks()
-      const scene: Scene = { id, name: `Scene ${visualCount + 1}`, isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: lighting.tracks, rootTrackIds: [lighting.rootId] }
+      const scene: Scene = { id, name: `Scene ${visualCount + 1}`, isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: {}, rootTrackIds: [] }
       const scenes = { ...s.scenes, [id]: scene }
       const mainId = s.sceneOrder.find((sid) => s.scenes[sid]?.isMain)
       if (mainId) {

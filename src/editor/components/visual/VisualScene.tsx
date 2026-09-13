@@ -25,7 +25,6 @@ import {
   OneMinusSrcAlphaFactor,
   PlaneGeometry,
   ShaderMaterial,
-  PMREMGenerator,
   NoToneMapping,
   Vector2,
   Vector3,
@@ -35,7 +34,6 @@ import {
   type Object3D,
   type Texture,
 } from 'three'
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js'
 import { BloomEffect } from 'postprocessing'
 import { getCompositionLayers, getObjectState, getSceneBackdrop, getSceneFxOverrides, setMountedRenderScenes, subscribeObjects, getObjectList, type ObjectListEntry } from '../../core/visual/VisualEngine'
@@ -52,7 +50,7 @@ import { DEFAULT_SCENE_BACKGROUND, type Scene, type SceneGradient } from '../../
 import { ObjectRenderer } from './ObjectRenderer'
 import { InstancedObjectRenderer } from './InstancedObjectRenderer'
 import { FinalInvertMaskContext } from '../../core/visual/finalInvertMask'
-import { PassLightPool, refreshPosterLightDir, type LightingBudget } from '../../core/visual/sceneLights'
+import { PassLightPool, refreshPosterLightDir } from '../../core/visual/sceneLights'
 import { hoverGlowColor, hoverTargetsForTrack, rootSceneOf } from '../../core/visual/hoverTargets'
 import { isExportPinned } from '../../core/export/frameDriver'
 import { useUIStore } from '../../store/UIStore'
@@ -603,41 +601,6 @@ function applyCompositorLayer(
   mesh.renderOrder = index
 }
 
-/** The per-pass light rig. `shadows` = give the key light a shadow map (see
- *  shadowScenes in VisualScene): only a scene with a casting instrument pays
- *  for the shadow pass. `budget` is the preview level's allowance: 'trimmed'
- *  drops the shadow pass, the area fill and the point lights; 'flat' renders
- *  nothing here at all - the pass's PassLightPool supplies the flat ambient
- *  (it syncs for every mounted scene, track-lit or not). */
-function lights(shadows: boolean, budget: LightingBudget) {
-  if (budget === 'flat') return null
-  const full = budget === 'full'
-  return (
-    <>
-      <ambientLight intensity={0.12} />
-      <hemisphereLight color="#dbeafe" groundColor="#170921" intensity={0.55} />
-      {full && <rectAreaLight position={[4, 4, 5]} rotation={[-0.62, 0.62, 0]} color="#fff7ed" intensity={6} width={5} height={5} />}
-      <directionalLight
-        position={[4, 7, 5]}
-        intensity={2.4}
-        castShadow={shadows && full}
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
-        shadow-camera-left={-10}
-        shadow-camera-right={10}
-        shadow-camera-top={10}
-        shadow-camera-bottom={-10}
-        shadow-camera-near={0.1}
-        shadow-camera-far={30}
-        shadow-bias={-0.0004}
-        shadow-normalBias={0.035}
-      />
-      {full && <pointLight position={[-4, 2, -3]} color="#60a5fa" intensity={7} distance={20} decay={2} />}
-      {full && <pointLight position={[3, -1, 3]} color="#fb7185" intensity={3.5} distance={16} decay={2} />}
-    </>
-  )
-}
-
 /**
  * Scene id → the track ids of every object using `instrumentId`, in resolve
  * order. The scene-wide post-process instruments (Bass Ripple, Color Filters,
@@ -688,24 +651,8 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
   // the targets and invalidates on the change).
   const targetScale = useRenderTargetScale()
   // Fast levels also spend lighting (see previewLighting); read here so the
-  // frame loop's pool syncs and the legacy rigs below agree on one budget.
+  // frame loop's light pools share one budget.
   const lighting = usePreviewLighting()
-  const environment = useRef<WebGLRenderTarget | null>(null)
-  useEffect(() => {
-    // PMREM has GPU-only pixels. React StrictMode's setup/cleanup/setup cycle
-    // must regenerate them: disposing a useMemo target leaves a valid-looking
-    // texture object whose regenerated allocation is empty (dark gloss exports).
-    const room = new RoomEnvironment()
-    const pmrem = new PMREMGenerator(gl)
-    const target = pmrem.fromScene(room, 0.04)
-    room.dispose()
-    pmrem.dispose()
-    environment.current = target
-    return () => {
-      target.dispose()
-      if (environment.current === target) environment.current = null
-    }
-  }, [gl])
   const atmosphereSceneKey = useProjectStore((s) => Object.values(s.scenes)
     .filter((scene) => scene.effects?.some((fx) => getEffect(fx.pluginId)?.sceneStage === 'atmosphere'))
     .map((scene) => scene.id).sort().join(','))
@@ -960,8 +907,6 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
 
   useEffect(() => {
     for (const runtime of mounted.values()) {
-      runtime.base.environment = environment.current?.texture ?? null
-      runtime.front.environment = environment.current?.texture ?? null
     }
     invalidate()
   }, [gl, mounted, invalidate])
@@ -1090,30 +1035,6 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
     }
     return m
   }, [objects, placementKey])
-
-  // Which scenes hold Light TRACKS in the document. Those scenes are lit by
-  // their tracks (mirrored per pass from the sceneLights registry) and the
-  // hardcoded legacy rig stands down; a scene with none - old fixtures,
-  // hand-built test documents - keeps the baked rig, so nothing ever renders
-  // unlit. A muted/faded light track still counts (going dark is what muting
-  // your lights means). String fingerprint, per the render-budget rule.
-  const lightTrackSceneKey = useProjectStore((s) => {
-    let out = ''
-    for (const [sceneId, scene] of Object.entries(s.scenes)) {
-      for (const trackId of Object.keys(scene.tracks)) {
-        const t = scene.tracks[trackId]
-        if (t.type === 'base' && t.instrumentId === 'light') {
-          out += sceneId + ','
-          break
-        }
-      }
-    }
-    return out
-  })
-  const lightTrackScenes = useMemo(
-    () => new Set(lightTrackSceneKey.split(',').filter(Boolean)),
-    [lightTrackSceneKey],
-  )
 
   // Which scenes hold a shadow-CASTING instrument (`castsShadows` on the def).
   // Only those get a shadow-mapped key light: three's shadow pass runs on
@@ -1639,26 +1560,21 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
         })
         return (
           <Fragment key={sceneId}>
-            {/* The legacy baked rig only lights scenes with NO Light tracks;
-                a scene that has them is lit by its tracks' mirrored pools
-                (see MountedScene.lightPools and the sync in the frame loop). */}
+            {/* Light tracks reach every pass through the mirrored light pools. */}
             {createPortal(
             <>
-              {lightTrackScenes.has(sceneId) ? null : lights(shadowScenes.has(sceneId), lighting)}
               {mountObjects(base, '')}
             </>,
             runtime.base,
             )}
             {createPortal(
             <>
-              {lightTrackScenes.has(sceneId) ? null : lights(shadowScenes.has(sceneId), lighting)}
               {mountObjects(front, ':front')}
             </>,
             runtime.front,
             )}
             {createPortal(
             <FinalInvertMaskContext.Provider value>
-              {lightTrackScenes.has(sceneId) ? null : lights(shadowScenes.has(sceneId), lighting)}
               {mountObjects(invert, ':invert')}
             </FinalInvertMaskContext.Provider>,
             runtime.invert,

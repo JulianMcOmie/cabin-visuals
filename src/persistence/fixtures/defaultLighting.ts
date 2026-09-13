@@ -1,17 +1,5 @@
-import type { Scene, Track } from '../types'
-
-// The default light rig as TRACKS: every visual scene is born with a
-// "Lighting" group of five Light-instrument tracks wearing the exact values of
-// the old hardcoded rig in VisualScene.tsx, so a fresh scene looks pixel-
-// identical to before - but the lights are now visible rows you can move,
-// automate, re-color or delete. Persistence UPGRADES[17] gives existing saves
-// the same group (with its own frozen copy of these values - a shipped
-// upgrade step must not chase this module).
-//
-// Positions live in the canonical tf* transform params; the old JSX rig's
-// rectAreaLight rotation was radians, tfRot* is degrees (same XYZ Euler
-// order), hence the ±35.52. `bulb: 0` keeps the default rig invisible in the
-// frame - user-added lights default the bulb ON instead.
+// Frozen pre-v23 lighting fixture for migration tests.
+import type { Track } from '../../editor/types'
 
 interface SeedLight {
   name: string
@@ -97,15 +85,4 @@ export function defaultLightingTracks(): { tracks: Record<string, Track>; rootId
     childIds,
   }
   return { tracks, rootId: groupId }
-}
-
-/** True for a track that belongs to the (possibly renamed) lighting rig: a
- *  light itself, or a group holding only lights. The timeline's empty-scene
- *  helper treats a scene wearing nothing else as still empty. */
-export function isLightingOnlyTrack(track: Track | undefined, tracks: Record<string, Track>): boolean {
-  if (!track) return false
-  if (track.type === 'base' && track.instrumentId === 'light') return true
-  return track.type === 'group'
-    && track.childIds.length > 0
-    && track.childIds.every((id) => isLightingOnlyTrack(tracks[id], tracks))
 }

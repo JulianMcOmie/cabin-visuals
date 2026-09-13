@@ -336,9 +336,9 @@ reference port. Facts that cost time to establish:
   the per-scene poster key-light direction (`posterLightDir` hands out a shared
   Vector3 that `refreshPosterLightDir` re-aims at the first live directional
   light; poster materials hold it by reference). `LightingBudget` is the fast-preview
-  allowance every pass pool and legacy rig honours (`previewLighting` in UIStore maps
+  allowance every pass pool honours (`previewLighting` in UIStore maps
   Fast → 'trimmed': no shadow pass, ambient + directional only; Fastest → 'flat': one
-  white ambient at π so surfaces show bare albedo; export pins 'full' via
+  white ambient at π while an authored light shines, so surfaces show bare albedo; export pins 'full' via
   `usePreviewLighting`). Switching budgets recompiles the lit programs once - fewer
   lights in the scene IS the saving, the resolution scale never touched them.
   `sceneContext.ts` is the SceneIdContext instruments read to find their scene.

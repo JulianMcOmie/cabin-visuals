@@ -2,14 +2,14 @@ import { previewRuntime } from '../../core/visual/previewRuntime'
 import { useMemo, useRef, useEffect, type ReactNode } from 'react'
 import { useThree, createPortal } from '@react-three/fiber'
 import {
-  Scene, Group, AmbientLight, DirectionalLight, PointLight, Matrix4, Mesh,
+  Scene, Group, Matrix4, Mesh,
   ShaderMaterial, WebGLRenderTarget, OrthographicCamera, PlaneGeometry, Vector2, LinearFilter,
   type IUniform, type Texture,
 } from 'three'
 import { useTimeStore } from '../../store/TimeStore'
 import { getBeatOverride } from '../../core/visual/beatOverride'
 import { useVisualEngine, useVisualFrame as useFrame } from '../../core/visual/VisualEngineContext'
-import { FLAT_LIGHT_INTENSITY, PassLightPool, refreshPosterLightDir, sceneHasLightAnchors } from '../../core/visual/sceneLights'
+import { PassLightPool, refreshPosterLightDir } from '../../core/visual/sceneLights'
 import { registerHoverTarget } from '../../core/visual/hoverTargets'
 import { applyMaterialOpacity } from '../../core/visual/animatedOpacity'
 import { getEffect } from '../../effects'
@@ -79,10 +79,7 @@ export function ShaderWrapper({
   children,
 }: {
   trackId: string
-  /** The project scene this occurrence belongs to. When that scene has Light
-   *  tracks, the offscreen rig mirrors THEM (sceneLights registry) instead of
-   *  its legacy hand-built light set, so an effect-chained object is lit the
-   *  same as its unwrapped neighbors. Absent = always the legacy set. */
+  /** The project scene whose Light tracks illuminate this offscreen pass. */
   sceneId?: string
   /** Which VisualCopy occurrence this wrapper renders (composed into the holder).
    *  Full-frame occurrences OMIT it: their placement group inside the offscreen
@@ -108,24 +105,6 @@ export function ShaderWrapper({
   // a fullscreen-quad pass rig, and the shared output uniform.
   const rig = useMemo(() => {
     const scene = new Scene()
-    // The legacy hand-built light set, kept for scenes with no Light tracks
-    // (and for callers with no sceneId). Grouped so the track-light path can
-    // stand it down with one visibility flip.
-    // The point lights sit in their own sub-group: the 'trimmed' lighting
-    // budget (Fast preview) stands them down and keeps ambient + directional.
-    const legacyLights = new Group()
-    legacyLights.add(new AmbientLight(0xffffff, 0.5))
-    const dir = new DirectionalLight(0xffffff, 1.2); dir.position.set(4, 4, 4); legacyLights.add(dir)
-    const legacyFills = new Group()
-    const key = new PointLight(0x818cf8, 3); key.position.set(-4, -2, 3); legacyFills.add(key)
-    const rim = new PointLight(0xf0abfc, 1.5); rim.position.set(3, 3, -4); legacyFills.add(rim)
-    legacyLights.add(legacyFills)
-    scene.add(legacyLights)
-    // The 'flat' budget's ambient for callers with no sceneId (no pool sync
-    // runs for them); sceneId callers get the pool's own.
-    const flatLight = new AmbientLight(0xffffff, FLAT_LIGHT_INTENSITY)
-    flatLight.visible = false
-    scene.add(flatLight)
     const holder = new Group(); holder.matrixAutoUpdate = false; scene.add(holder)
 
     // `own` holds the chain's final output; when no pass is active this frame
@@ -141,11 +120,10 @@ export function ShaderWrapper({
 
     const outUniforms: Record<string, IUniform> = { tDiffuse: { value: null as Texture | null }, tDepth: { value: null }, tOriginal: { value: null }, delta: { value: 0 } }
     const haloUniforms = { tDiffuse: { value: null }, tCore: { value: null } }
-    return { scene, legacyLights, legacyFills, flatLight, holder, own, quadScene, quadCam, quad, outUniforms, haloUniforms }
+    return { scene, holder, own, quadScene, quadCam, quad, outUniforms, haloUniforms }
   }, [])
 
-  // Mirrored Light-track set for the offscreen scene (no shadows, matching the
-  // legacy set). Slots empty until the scene actually has light anchors.
+  // Mirror authored Light tracks into the offscreen scene, without shadows.
   const lightPool = useMemo(() => new PassLightPool(rig.scene), [rig])
   useEffect(() => () => lightPool.dispose(), [lightPool])
   const lighting = usePreviewLighting()
@@ -267,14 +245,8 @@ export function ShaderWrapper({
       rig.scene.environment = parentScene.environment
     }
 
-    // Scenes with Light tracks light this pass with THOSE; the legacy
-    // hand-built set only serves scenes that have none.
-    const trackLit = !!sceneId && sceneHasLightAnchors(sceneId)
-    rig.legacyLights.visible = !trackLit && lighting !== 'flat'
-    rig.legacyFills.visible = lighting === 'full'
-    rig.flatLight.visible = !sceneId && lighting === 'flat'
     if (sceneId) {
-      if (trackLit) refreshPosterLightDir(sceneId)
+      refreshPosterLightDir(sceneId)
       lightPool.sync(sceneId, false, lighting)
     }
 

@@ -245,13 +245,16 @@ export class PassLightPool {
    *  types stay lit. Switching budgets recompiles the pass's lit materials
    *  once, like a light-type edit would. */
   sync(sceneId: string, allowShadows: boolean, budget: LightingBudget = 'full') {
-    const flat = budget === 'flat'
+    const sceneAnchors = sortedAnchors(sceneId)
+    const flat = budget === 'flat' && sceneAnchors.some((anchor) =>
+      anchor.desc.on && !anchorHidden(anchor.object) && (anchor.desc.intensity > 0 || anchor.desc.flat > 0),
+    )
     if (flat && !this.flat) {
       this.flat = new AmbientLight(0xffffff, FLAT_LIGHT_INTENSITY)
       this.scene.add(this.flat)
     }
     if (this.flat) this.flat.visible = flat
-    const anchors = flat ? [] : sortedAnchors(sceneId)
+    const anchors = budget === 'flat' ? [] : sceneAnchors
     const trimmed = budget === 'trimmed'
     const shadows = allowShadows && budget === 'full'
     const seen = new Set<string>()

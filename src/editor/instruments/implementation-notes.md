@@ -206,13 +206,9 @@ the def file:
   is how one light reaches every pass - the same reason the old hardcoded rig
   was replicated per portal. Fades and mutes reach the light via `desc.on` /
   `desc.intensity`, both written in the frame callback.
-- **Every visual scene is SEEDED with a "Lighting" group** wearing the old
-  hardcoded rig's exact values (`core/defaultLighting.ts`; persistence
-  UPGRADES[17] for old saves; `emptyDocument()` and both scene-creation paths
-  for new ones). A scene with NO light tracks still gets the legacy baked
-  `lights()` rig in VisualScene - the fallback that keeps hand-built fixtures
-  and unseeded documents rendering. Deleting all light tracks therefore
-  restores the stock look rather than going black; muting them goes dark.
+- **Scenes start without lights.** Only authored Light tracks illuminate the
+  render passes; no fallback rig or generated room environment is mounted.
+  Persistence v23 removes unchanged legacy default rigs, preserving custom ones.
 - **`SceneIdContext`** (`core/visual/sceneContext.ts`, provided by
   ObjectRenderer and InstancedObjectRenderer) is how an instrument learns its
   scene. The Light registers with it; the 3D Shape's Matte finish reads it to

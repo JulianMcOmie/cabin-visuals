@@ -2,7 +2,9 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { Track } from '../editor/types'
 import { CURRENT_VERSION, upgradeDocument } from './upgrade'
-import { defaultLightingTracks, isLightingOnlyTrack } from '../editor/core/defaultLighting'
+import { defaultLightingTracks } from './fixtures/defaultLighting'
+import { isLightingOnlyTrack } from '../editor/core/lightingTracks'
+import { emptyDocument } from './types'
 
 const cube: Track = { id: 'visual', name: 'Cube', type: 'base', instrumentId: 'cube', color: '#fff', muted: false, solo: false, blocks: [], childIds: [] }
 
@@ -24,37 +26,12 @@ function v17Doc(sceneTracks: Record<string, Track>, rootTrackIds: string[]) {
   }
 }
 
-test('v18 upgrade seeds the default Lighting group into pre-lighting scenes', () => {
+test('pre-lighting documents finish upgrading without a default rig', () => {
   const doc = upgradeDocument(v17Doc({ visual: cube }, ['visual']))
   assert.equal(doc.schemaVersion, CURRENT_VERSION)
-
-  // Main composes scenes and gets no lights.
   assert.deepEqual(doc.scenes.main.rootTrackIds, [])
-
-  const scene = doc.scenes.one
-  assert.equal(scene.rootTrackIds.length, 2)
-  const [groupId, contentId] = scene.rootTrackIds
-  assert.equal(contentId, 'visual')
-  const group = scene.tracks[groupId]
-  assert.equal(group.type, 'group')
-  assert.equal(group.name, 'Lighting')
-  assert.equal(group.childIds.length, 5)
-
-  const lights = group.childIds.map((id) => scene.tracks[id])
-  for (const light of lights) {
-    assert.equal(light.type, 'base')
-    assert.equal(light.instrumentId, 'light')
-    assert.equal(light.parentId, groupId)
-    assert.equal(light.params?.bulb, 0)
-  }
-  // The seeded values are the old hardcoded rig's - spot-check the key light.
-  const key = lights.find((t) => t.name === 'Key Light')!
-  assert.equal(key.params?.type, 2)
-  assert.equal(key.params?.intensity, 2.4)
-  assert.equal(key.params?.castShadow, 1)
-  assert.deepEqual([key.params?.tfX, key.params?.tfY, key.params?.tfZ], [4, 7, 5])
-  // The group qualifies as lighting-only, so the empty-scene helper stays.
-  assert.ok(isLightingOnlyTrack(group, scene.tracks))
+  assert.deepEqual(doc.scenes.one.rootTrackIds, ['visual'])
+  assert.deepEqual(doc.scenes.one.tracks, { visual: cube })
 })
 
 test('v18 upgrade leaves scenes that already have a light track alone', () => {
@@ -79,4 +56,51 @@ test('defaultLightingTracks builds a consistent, freshly-idd rig', () => {
   assert.ok(!(a.rootId in b.tracks))
   assert.ok(isLightingOnlyTrack(group, a.tracks))
   assert.ok(!isLightingOnlyTrack(a.tracks[group.childIds[0]] && { ...cube }, a.tracks))
+})
+
+function seededDocument() {
+  const rig = defaultLightingTracks()
+  const doc = { ...v17Doc({ ...rig.tracks, visual: cube }, [rig.rootId, 'visual']), schemaVersion: 22 }
+  return { doc, rig }
+}
+
+test('saved default rigs are removed without mutating the source or visual content', () => {
+  const { doc, rig } = seededDocument()
+  const before = structuredClone(doc)
+  const upgraded = upgradeDocument(doc)
+  assert.deepEqual(upgraded.scenes.one.tracks, { visual: cube })
+  assert.deepEqual(upgraded.scenes.one.rootTrackIds, ['visual'])
+  assert.deepEqual(doc, before)
+  assert.ok(doc.scenes.one.tracks[rig.rootId])
+  assert.deepEqual(upgradeDocument(upgraded), upgraded)
+})
+
+test('customized rigs and manually added lights survive upgrading', () => {
+  const changes: Array<(tracks: Record<string, Track>, groupId: string, lightId: string) => void> = [
+    (tracks, _group, light) => { tracks[light].params!.intensity = 8 },
+    (tracks, group) => { tracks[group].name = 'My Lighting' },
+    (tracks, group) => { tracks[group].params = { tfX: 2 } },
+    (tracks, _group, light) => { tracks[light].muted = true },
+    (tracks, group, light) => {
+      tracks[light].childIds = ['automation']
+      tracks.automation = { ...cube, id: 'automation', type: 'automation', parentId: light }
+    },
+    (tracks, group) => {
+      tracks.visual.targets = [{ port: 'transform', amount: 1, scope: { kind: 'track', id: group } }]
+    },
+  ]
+  for (const change of changes) {
+    const { doc, rig } = seededDocument()
+    change(doc.scenes.one.tracks, rig.rootId, rig.tracks[rig.rootId].childIds[0])
+    assert.deepEqual(upgradeDocument(doc).scenes, doc.scenes)
+  }
+})
+
+test('fresh documents have no lights and remain empty after upgrading', () => {
+  const doc = emptyDocument()
+  assert.equal(doc.schemaVersion, CURRENT_VERSION)
+  for (const scene of Object.values(upgradeDocument(doc).scenes)) {
+    assert.deepEqual(scene.tracks, {})
+    assert.deepEqual(scene.rootTrackIds, [])
+  }
 })

@@ -174,19 +174,13 @@ A tracker grammar over the roll: a cursor with a size, modes (ground → `Tab` �
 
 ## visual/ — the 3D viewport pipeline
 
-- **Scene lighting is TRACKS** (2026-08-29): the hardcoded `lights()` rig in
-  VisualScene only serves scenes with NO Light-instrument tracks (the fallback
-  for hand-built fixtures); every seeded scene carries a "Lighting" group of
-  Light tracks instead, mirrored into each pass by `MountedScene.lightPools`
-  (one `PassLightPool` per base/front/invert scene, synced in the frame loop
-  before the passes render - the BASE pool syncs unconditionally so deleted
-  lights are removed, front/invert only when `passPresence` says the pass
-  runs). ShaderWrapper's divergent hand-built rig now also stands down for
-  track-lit scenes and mirrors the same registry, so effect-chained objects
-  finally match their neighbors' lighting. See `core/visual/sceneLights.ts`
-  and instruments/CLAUDE.md's Light section. `EmptySceneActions` treats a
-  scene wearing only the Lighting group (and/or the scene track) as still
-  empty, parked BELOW those rows via its `topOffset` prop.
+- **Scene lighting is TRACKS**: scenes start empty, with no fallback rig or
+  generated room environment. `MountedScene.lightPools` mirrors authored Light
+  tracks into base/front/invert passes; ShaderWrapper mirrors the same registry
+  for effects. The base pool syncs unconditionally to remove deleted lights;
+  front/invert sync when their passes render. Fastest preview substitutes flat
+  ambient only while an authored light is shining. `EmptySceneActions` still
+  treats scenes containing only lights and the scene track as empty.
 
 - `VisualScene.tsx` — mounts one `ObjectRenderer` per `ObjectListEntry` from the engine (structural list; per-frame values are pulled imperatively). Renders scenes to render targets and composites the composition instruments' `CompositionLayer`s (partitions/flash/blur/bloom) into the final frame. Backdrop gradients are painted by `paintBackdropGradient` right after each backdrop clear (per-scene targets + the main composite) — a fullscreen no-depth pass, so filters/bloom/directors/export inherit them exactly like a flat clear color. The shader mixes stops in sRGB to match the panel's CSS previews pixel-for-pixel; keep it and `cssGradient` in SceneSettingsPanel in step.
 - **Shift-hover / Shift+double-click in the visualizer** (`CanvasHoverPicker.tsx`, mounted

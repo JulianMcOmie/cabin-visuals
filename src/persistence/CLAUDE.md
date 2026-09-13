@@ -16,6 +16,9 @@ Projects persist as one JSONB blob per row (`projects.data` = `ProjectDocument`)
 
 ## Rules
 
+- v23 removes complete, unchanged default Lighting groups from saved visual scenes.
+  Custom settings, child tracks, and incoming routing preserve the whole rig. New
+  documents and scenes start empty; the historical v18 seeding step stays frozen.
 - Documents are versioned; NEVER mutate an upgrade step that shipped. Old blobs must always walk the chain.
 - v22 retires Mod Synth: `UPGRADES[21]` converts saved instances to cube/3D Shape,
   preserving track IDs, notes, hierarchy, effects, base size and color. Its custom
