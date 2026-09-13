@@ -161,6 +161,7 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
       const w = state.world.elements
       for (let k = 0; k < 16; k++) put(sig, w[k])
       const cam = root.camera
+      put(sig, cam.projectionMatrix.elements[0]); put(sig, cam.projectionMatrix.elements[5])
       put(sig, cam.position.x); put(sig, cam.position.y); put(sig, cam.position.z)
       put(sig, cam.quaternion.x); put(sig, cam.quaternion.y); put(sig, cam.quaternion.z); put(sig, cam.quaternion.w)
       // The active-note array is per-object scratch the engine refills in place,

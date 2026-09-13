@@ -35,6 +35,10 @@ Stores → `store/CLAUDE.md` · engines → `core/*/CLAUDE.md` · UI → `compon
 - `uiSettings.ts` — localStorage-backed pane open/closed defaults.
 - **Panel-toggle motion (App.tsx)**: sidebar toggles glide by putting `.panel-toggle-anim` (globals.css, M3 emphasized-decelerate 400ms on `flex-grow`) on the panel's GROUP for the toggle's duration. Two traps: react-resizable-panels v4's `onResize` tracks the DOM *through* the CSS transition, so open/closed state is set from INTENT at click and `onResize` writes are suppressed for the glide window (`suppressResizeUntilRef`) — otherwise the header icon re-blues mid-close; and the WebGL canvas must not resize DURING a glide (per-frame buffer resizes stretch the picture — the buffer lags the element), so the toggle also freezes the r3f root (`.canvas-glide-freeze`), centered, at a width ≥ its landing size (current + the toggled panel's width) — the glide is horizontal-only and the camera's FOV is vertical, so the wider render center-crops pixel-identically and the panel edge just reveals/covers a fully-rendered scene; the start/settle resizes are invisible. `.visual-canvas-smooth canvas` pins the canvas to 100% of its root with `!important` (bridges the inline-px lag at the snap), and the letterbox box is pure CSS (`cqh` contain-fit, no ResizeObserver).
 - **Aspect-switch motion (App.tsx `VisualPanel`)**: Fill plus every export shape
+  (framing update: the oversize pins described below now apply only to wide
+  frames. Narrower-than-16:9 transitions resize live to preserve composition
+  width; sidebar toggles likewise skip the freeze for narrow shapes and Fill.
+  Cropping an oversized buffer would otherwise jump at the final resize.)
   (`core/aspectRatios.ts` — 16:9, 2:1, 4:3, 1:1, 9:16, 4:5) glide instead of
   snapping — the framed box travels between the two contain-fit rects on M3 emphasized
   400ms (`.aspect-glide-anim` in globals.css; keep it in step with `ASPECT_GLIDE_MS`), and

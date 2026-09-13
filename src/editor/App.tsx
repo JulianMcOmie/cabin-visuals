@@ -126,6 +126,10 @@ function glidePanelToggle(panelDomId: string) {
   const panel = document.querySelector<HTMLElement>('.visual-canvas-smooth')
   const root = panel?.querySelector<HTMLElement>('.visual-canvas-root')
   if (panel && root) {
+    // Narrow frames preserve width, so an oversized horizontal crop no
+    // longer has the same composition. Let those canvases follow layout.
+    const aspect = useProjectStore.getState().viewAspect
+    if (aspect === 'fill' || aspectRatioValue(aspect) < 16 / 9) return
     const bound = root.getBoundingClientRect().width + toggled.getBoundingClientRect().width
     panel.style.setProperty('--glide-canvas-w', `${bound}px`)
     holdClassForGlide(panel, 'canvas-glide-freeze')
@@ -683,7 +687,7 @@ function VisualPanel({
   // destination to the origin) and the rAF retarget swallows the glide whole.
   // Pin the old rect untransitioned, let it paint, then move.
   //
-  // `pin` is the canvas half, and it is not optional: an element that GROWS
+  // For wide frames, `pin` is the canvas half: an element that GROWS
   // ahead of the GL buffer is exactly the case object-fit: cover resolves by
   // scaling the frame UP, so a glide out to Fill visibly zoomed the picture
   // for its duration (shrinking only crops, which is why the artifact was
@@ -704,12 +708,14 @@ function VisualPanel({
   // anything at all in a pane taller than it is wide - does over-render the
   // height for the glide's duration: bounded and uniform, the same trade the
   // sidebar freeze documents.) It also spares the instrument tree
-  // ~24 re-renders per switch.
+  // ~24 re-renders per wide-frame switch. Narrow frames instead keep their
+  // horizontal coverage and extend vertically; they must resize through the
+  // glide, since center-cropping an oversized canvas would change that framing.
   const [glide, setGlide] = useState<{
     width: number
     height: number
     moving: boolean
-    pin: { width: number; height: number }
+    pin: { width: number; height: number } | null
   } | null>(null)
   const prevAspectRef = useRef(aspect)
   const boxRef = useRef<HTMLDivElement>(null)
@@ -727,7 +733,10 @@ function VisualPanel({
     const end = fitAspectBox(cw, ch, aspect)
     // The box is borderless, so its inner box - what the r3f root fills at
     // rest - is the box itself.
-    const pin = {
+    // Width-preserving framing must track the animated box; freezing a wide
+    // render would crop its sides and then jump to the extended view at settle.
+    const extendsVertically = Math.min(start.width / start.height, end.width / end.height) < 16 / 9 - 0.005
+    const pin = extendsVertically ? null : {
       width: Math.max(0, Math.max(start.width, end.width)),
       height: Math.max(0, Math.max(start.height, end.height)),
     }
@@ -759,8 +768,8 @@ function VisualPanel({
       onPointerMove={isMobile ? undefined : revealFullscreenControl}
       onPointerLeave={isMobile ? undefined : hideFullscreenControl}
       onClick={onCanvasTap}
-      className={`visual-canvas-smooth relative flex h-full items-center justify-center bg-[var(--bg-canvas-deep)] [container-type:size] ${glide ? 'aspect-canvas-pin' : ''}`}
-      style={glide
+      className={`visual-canvas-smooth relative flex h-full items-center justify-center bg-[var(--bg-canvas-deep)] [container-type:size] ${glide?.pin ? 'aspect-canvas-pin' : ''}`}
+      style={glide?.pin
         ? ({ '--aspect-canvas-w': `${glide.pin.width}px`, '--aspect-canvas-h': `${glide.pin.height}px` } as CSSProperties)
         : undefined}
     >

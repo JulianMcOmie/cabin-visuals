@@ -3,6 +3,7 @@ import { useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import { PerspectiveCamera, Vector3 } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
+import { setSceneCameraFov } from '../core/visual/cameraFraming'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 import { clamp } from '../utils/math'
 
@@ -17,7 +18,7 @@ import { clamp } from '../utils/math'
 // and a look-mode select round it out.
 //
 // NOTE: our scene has no OrbitControls (Canvas uses a default camera at [0,0,5],
-// fov 55 - dead-centered so a 16:9 frame cropped to 9:16 stays symmetric), so
+// fov 55 - dead-centered as narrower frames extend above and below), so
 // nothing else writes the camera each frame - this instrument owns it while
 // active. It's opt-in; if a user later adds orbit controls the two would conflict, which
 // is acceptable. Guarded against a non-perspective camera so it never crashes.
@@ -124,10 +125,7 @@ function CameraControlVisual({ trackId }: { trackId: string }) {
 
     if (camera instanceof PerspectiveCamera) {
       const targetFov = clamp(fov + scalePort * 20, 1, 179)
-      if (camera.fov !== targetFov) {
-        camera.fov = targetFov
-        camera.updateProjectionMatrix()
-      }
+      setSceneCameraFov(camera, targetFov)
     }
   })
 

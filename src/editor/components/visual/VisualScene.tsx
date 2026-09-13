@@ -1,5 +1,6 @@
 import { previewRuntime } from '../../core/visual/previewRuntime'
 import { TrackPreviewRenderer } from './TrackPreviewRenderer'
+import { useCameraFraming } from './useCameraFraming'
 
 import { hasSceneGlow, setSceneGlowHalo, renderSceneWithGlow } from './glowScene'
 import { Fragment, memo, useEffect, useMemo, useRef, useSyncExternalStore, type ReactElement } from 'react'
@@ -675,6 +676,7 @@ function postProcessTracksByScene(objects: readonly ObjectListEntry[], instrumen
 // project opens, the fullscreen control's hover state) no longer re-runs
 // mountObjects over every copy; only its own subscriptions re-render it.
 export const VisualScene = memo(function VisualScene({ trackPreviews = true }: { trackPreviews?: boolean } = {}) {
+  useCameraFraming()
   const objects = useSyncExternalStore(subscribeObjects, getObjectList, getObjectList)
   const { gl, camera, size, invalidate } = useThree()
   // Fast Preview: every offscreen target shrinks by the level's factor and the
