@@ -69,8 +69,10 @@ active appearance must remain separate from bare parent factors when a singular
 incoming frame skips child evaluation. See `particlePlan.ts` and
 `docs/performance/shared-splitter-program.md` for compilation and limits.
 
-`gpuOperations.ts` owns the serializable position-operation vocabulary and its
-CPU/GLSL implementations. `maxOutputCount.ts` reads explicit cardinality proofs
+`gpuOperations.ts` owns the serializable copy-operation vocabulary;
+`gpuAppearance.ts` supplies ordered color/opacity operations and their CPU/GLSL
+interpreters. Define new count-one devices with `sharedGpuOperation` so reference
+evaluation and GPU data derive from one sampler. `maxOutputCount.ts` reads explicit cardinality proofs
 for bounded CPU prefixes. See [automation and mixed mover chains](../../../../docs/performance/automation-mover-program.md)
 for integration, measurements and fallback limits; the contracts live in `types.ts`.
 

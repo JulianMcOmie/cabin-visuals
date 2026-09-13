@@ -44,7 +44,10 @@ document.querySelector('#setup').onclick=()=>{
  loadedFixture={name:fixture,copies:32**radialIds.length,radials:radialIds.length,quality,all,colorStages:all?5:1,expectedOperation:5,worldPrefix:false,
    automation:'Cosine scroll; Particle X/Y around Radials; Fluid Impact center X/Y',notes:tracks.fluid.blocks[0].notes.length,
    placement:'Fluid Impact and every colorizer run after all splitters'};
- output.textContent='Loaded '+loadedFixture.copies.toLocaleString()+' particles: '+fixture+'. Wait for compilation and scene mount, then measure with this tab visible.';
+ const context=win.__r3fState().gl.getContext(), debug=context.getExtension('WEBGL_debug_renderer_info');
+ loadedFixture.renderer=context.getParameter(debug?debug.UNMASKED_RENDERER_WEBGL:context.RENDERER);
+ loadedFixture.userAgent=win.navigator.userAgent;
+ output.textContent='Renderer: '+loadedFixture.renderer+' · Loaded '+loadedFixture.copies.toLocaleString()+' particles: '+fixture+'. Wait for compilation and scene mount, then measure with this tab visible.';
  }catch(error){output.textContent=String(error.stack??error)}
 };
 document.querySelector('#run').onclick=async()=>{

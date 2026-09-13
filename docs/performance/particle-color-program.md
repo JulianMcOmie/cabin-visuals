@@ -64,6 +64,67 @@ segments; it has a separate 32K timing case, and the harness submits the million
 case only if the measured GPU time predicts a 16.67 ms budget. A skipped case is
 reported explicitly rather than counted as a successful million-particle timing.
 
+The final browser run passed all 96 image comparisons with no shader or WebGL
+errors. The worst mean channel error was 0.000118 on a 0–255 scale; a few pixels
+at discrete lookup boundaries had larger differences, with a maximum channel
+error of 21. These are tolerance-based image comparisons, not bit-exact images.
+
+## Standalone GPU measurements
+
+Measured on an Apple M1 Max in Chrome 152 through ANGLE Metal, with a 1024×576
+canvas. Each row below has 150 delivered GPU timer queries after 30 warmup frames,
+no disjoint results, and one draw call for the full population. These measure the
+production Particle renderer in isolation, not whole-editor playback.
+
+| Chain after Radial splitters | Copies | GPU median | GPU p95 |
+| --- | ---: | ---: | ---: |
+| Cosine Palette | 32,768 | 0.56 ms | 1.39 ms |
+| Cosine Palette | 1,048,576 | 4.27 ms | 7.77 ms |
+| Gradient | 1,048,576 | 4.43 ms | 8.17 ms |
+| Riso Duotone | 1,048,576 | 4.26 ms | 6.58 ms |
+| Hue Rotate | 1,048,576 | 4.31 ms | 6.64 ms |
+| Note Colorizer | 1,048,576 | 4.43 ms | 6.29 ms |
+| Fluid Impact → Cosine Palette | 1,048,576 | 4.44 ms | 7.31 ms |
+| Cosine Palette → Hue Rotate | 1,048,576 | 4.21 ms | 7.27 ms |
+
+The separate maximum-complexity Gradient curve test is more expensive. At 32,768
+copies, its 4,032-segment path returned only 123 of 150 GPU queries before the
+bounded drain ended. That incomplete sample had an 11.88 ms median and 18.41 ms
+p95; 27 queries remained undelivered. The harness skipped the million-copy curve
+draw because even scaling that partial median exceeded the frame budget. No
+million-copy GPU timing was measured for this curve, and the result does not
+establish 60 FPS for arbitrary curve complexity.
+
+## Full-editor playback
+
+The full-editor fixture verifies live Cosine scroll, Particle X/Y and Fluid
+Impact center automation in the textures submitted for main-scene draws. All
+six runs below retained the exact requested population in one compact Points
+mesh, changed both motion and color data during playback, avoided CPU seed
+expansion, and reused the main mesh throughout the run.
+
+The measured editor cadence was lower than the standalone renderer. These runs
+used Final quality; the main render target was 1212×562 in the in-app browser
+and 1379×562 in Chrome. Both browsers reported the Apple M1 Max through ANGLE
+Metal; the Chrome result was not a software-renderer measurement. The CPU
+columns time the editor's complete `advance`
+call, including WebGL submission and any waits in that call; they are not the
+CPU-only preparation measurements above.
+
+| Browser | Chain after Radial splitters | Copies | Rendered FPS | Advance median | Advance p95 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| In-app | Cosine Palette + Fluid Impact | 1,048,576 | 29.95 | 1.3 ms | 7.6 ms |
+| In-app | All five colorizers + Fluid Impact | 1,048,576 | 30.00 | 1.5 ms | 7.0 ms |
+| In-app | All five colorizers + Fluid Impact | 32,768 | 30.00 | 3.7 ms | 6.7 ms |
+| Chrome | All five colorizers + Fluid Impact | 1,048,576 | 13.18 | 19.5 ms | 88.0 ms |
+| Chrome | All five colorizers + Fluid Impact | 32,768 | 10.58 | 37.6 ms | 85.3 ms |
+| Chrome | Cosine Palette + Fluid Impact | 1,048,576 | 9.19 | 51.1 ms | 145.0 ms |
+
+The browser difference and the similar or slower 32K controls were not isolated
+to a specific cause. The editor checks establish compact rendering and live
+automation, but do **not** establish end-to-end 60 FPS. The standalone GPU
+timings cannot be substituted for these editor playback measurements.
+
 ## Reproduction
 
 Run from the repository root:
@@ -74,6 +135,10 @@ node --expose-gc --import tsx scripts/perf/particle-color-program-benchmark.ts e
 node --expose-gc --import tsx scripts/perf/particle-color-program-benchmark.ts compact compact-cpu
 node scripts/perf/particle-color-program-gpu.mjs
 ```
+
+The published original CPU baseline was captured from a clean `fffa4212`
+checkout with the benchmark harness copied into it. Running `expanded` on the
+updated tree measures the updated reference evaluator instead.
 
 Open the printed localhost URL in a normal visible browser and select **Run
 validation**. Disable timing for image-only checks. The standalone measurements
