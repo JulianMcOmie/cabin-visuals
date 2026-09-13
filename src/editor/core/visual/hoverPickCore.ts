@@ -5,6 +5,8 @@
 /** The slice of a CompositionLayer the picker needs. */
 export interface PickLayer {
   sceneId: string
+  motion?: { scale: number; x: number; y: number; rotation: number }
+  crossfade?: { sceneId: string; mix: number }
   /** Normalized viewport in final-frame coordinates, y up from the bottom. */
   viewport: { x: number; y: number; width: number; height: number }
 }
@@ -28,15 +30,25 @@ export interface LayerCandidate {
  * Partitioned (Cut) layers report a full-frame viewport, so all of them
  * qualify and the topmost wins; the mask itself is not evaluated (v1).
  */
-export function layersUnderPoint(layers: readonly PickLayer[], nx: number, ny: number): LayerCandidate[] {
+export function layersUnderPoint(layers: readonly PickLayer[], nx: number, ny: number, aspect = 1): LayerCandidate[] {
   const out: LayerCandidate[] = []
   for (let i = layers.length - 1; i >= 0; i--) {
     const { sceneId, viewport: vp } = layers[i]
     if (vp.width <= 0 || vp.height <= 0) continue
     if (nx < vp.x || nx > vp.x + vp.width || ny < vp.y || ny > vp.y + vp.height) continue
-    const u = (nx - vp.x) / vp.width
-    const v = (ny - vp.y) / vp.height
-    out.push({ sceneId, ndcX: u * 2 - 1, ndcY: v * 2 - 1 })
+    let u = (nx - vp.x) / vp.width
+    let v = (ny - vp.y) / vp.height
+    const motion = layers[i].motion
+    if (motion) {
+      const x = (u - 0.5 - motion.x) * aspect
+      const y = v - 0.5 - motion.y
+      const c = Math.cos(motion.rotation), s = Math.sin(motion.rotation)
+      u = (c * x + s * y) / motion.scale / aspect + 0.5
+      v = (-s * x + c * y) / motion.scale + 0.5
+      if (u < 0 || u > 1 || v < 0 || v > 1) continue
+    }
+    const fade = layers[i].crossfade
+    out.push({ sceneId: fade && fade.mix < 0.5 ? fade.sceneId : sceneId, ndcX: u * 2 - 1, ndcY: v * 2 - 1 })
   }
   return out
 }

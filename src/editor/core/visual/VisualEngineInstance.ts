@@ -537,7 +537,7 @@ export function createVisualEngine() {
     // renders anything into the scene's target.
     computeSceneBackdrops(beat)
     computeSceneFxOverrides(beat)
-    const activeSceneIds = new Set(compositionLayers.map((layer) => layer.sceneId))
+    const activeSceneIds = new Set(compositionLayers.flatMap((layer) => layer.crossfade ? [layer.sceneId, layer.crossfade.sceneId] : [layer.sceneId]))
     activeTrackIds = new Set()
     const activeGraphs = [...activeSceneIds].map((id) => graphs.get(id)).filter((graph): graph is ResolvedGraph => !!graph)
     for (const graph of activeGraphs) {

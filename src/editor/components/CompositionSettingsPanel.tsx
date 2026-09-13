@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, Check } from 'lucide-react'
 import { useProjectStore } from '../store/ProjectStore'
 import { compositionDef } from '../core/directors'
+import { sceneTransitionParamVisible, transitionMode } from '../core/directors/sceneTransition'
 import { COMPOSITION_OPACITY_PARAM } from '../core/directors/types'
 import { orderedSceneBindings } from '../core/directors/sceneBindings'
 import { ParamControl } from '../userInterfaceRenderers'
@@ -61,13 +62,13 @@ export function CompositionSettingsPanel({ track }: { track: Track }) {
         strValue={undefined}
         onNum={(v) => setTrackParam(track.id, 'opacity', v)}
       />
-      {(def?.params.length ?? 0) > 0 && def!.params.map((p) => (
+      {(def?.params.length ?? 0) > 0 && def!.params.filter((p) => defId !== 'sceneSwitcher' || sceneTransitionParamVisible(track, p)).map((p) => (
         // A composition def's choices are KINDS, not amounts - which way a cut
         // slants, whether a switcher holds or latches - so they get the console
         // kit's segmented control instead of ParamControl's dropdown: the
         // alternatives stay visible, and picking one is a single click. Numeric
         // params keep the stock controls.
-        p.type === 'select' ? (
+        p.type === 'select' && (defId !== 'sceneSwitcher' || p.options.length <= 3) ? (
           <div key={p.key} className="mb-[13px] grid grid-cols-[100px_1fr] items-center gap-2.5">
             <span className="text-[11px] text-[var(--text-3)] truncate" title={p.label}>{p.label}</span>
             <Segmented
@@ -89,6 +90,14 @@ export function CompositionSettingsPanel({ track }: { track: Track }) {
           />
         )
       ))}
+      {defId === 'sceneSwitcher' && transitionMode(track) !== 0 && (
+        <p className="mb-4 text-[11px] leading-relaxed text-[var(--text-muted)]">
+          {transitionMode(track) === 2
+            ? 'Motion begins before the scene change and continues through it, then settles. Scale, position, and rotation share one curve with continuous velocity and acceleration. This moves the whole scene, including its backdrop; it adds to existing object motion.'
+            : 'Blend smoothly between scenes, centered on each scene change.'}
+          {' '}Length is in beats. Closely spaced changes shorten the transition; gaps stay empty. Preview from Main to see transitions.
+        </p>
+      )}
       {def?.targetsSingleScene && (() => {
         const visualSceneIds = sceneOrder.filter((id) => scenes[id] && !scenes[id].isMain)
         const targetSceneId = bindings[0]?.sceneId

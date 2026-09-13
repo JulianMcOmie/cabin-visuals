@@ -2,7 +2,7 @@ import { flattenTrackNotesMemo } from '../visual/noteFlatten'
 import type { SelectParamDef } from '../../instruments/types'
 import type { Track } from '../../types'
 import type { CompositionInstrumentDef } from './types'
-import { FULL_FRAME } from './types'
+import { SCENE_TRANSITION_PARAMS, applySceneTransition, transitionMode, type SceneChange } from './sceneTransition'
 import { orderedSceneBindings } from './sceneBindings'
 import { sceneRowColor } from './sceneRowColor'
 
@@ -40,7 +40,7 @@ export const sceneSwitcherDirector: CompositionInstrumentDef = {
   id: 'sceneSwitcher',
   mainOnly: true,
   name: 'Scene Switcher',
-  params: [SCENE_SWITCHER_MODE_PARAM],
+  params: [SCENE_SWITCHER_MODE_PARAM, ...SCENE_TRANSITION_PARAMS],
   panelSummary:
     'Scene Switcher plays your scenes from one MIDI lane - one row per scene. On HOLD a scene shows only while its note is held; on LATCH the last scene played stays on screen until the next note.',
   midiRows: (track, scenes, sceneOrder) => {
@@ -81,8 +81,48 @@ export const sceneSwitcherDirector: CompositionInstrumentDef = {
       selected = sceneId
       latestBeat = note.beat
     }
-    return selected
-      ? [{ directorTrackId: track.id, sceneId: selected, opacity: 1, viewport: { ...FULL_FRAME } }]
-      : []
+    const changes = transitionMode(track) ? sceneChanges(notes, byPitch, latching) : []
+    return applySceneTransition(track, context.beat, changes, selected)
   },
+}
+
+// Cache the ownership timeline by flattened notes and bindings, not the sampled
+// track: automation may supply a fresh params object on every frame.
+const changeCache = new WeakMap<object, { key: string; changes: SceneChange[] }>()
+function sceneChanges(notes: ReturnType<typeof flattenTrackNotesMemo>, byPitch: Map<number, string>, latch: boolean): SceneChange[] {
+  const key = JSON.stringify([latch, [...byPitch]])
+  const hit = changeCache.get(notes)
+  if (hit?.key === key) return hit.changes
+  const events: { beat: number; index: number; start: boolean }[] = []
+  notes.forEach((note, index) => {
+    if (!byPitch.has(note.pitch) || !Number.isFinite(note.beat) || (!latch && !(note.durationBeats > 0))) return
+    events.push({ beat: note.beat, index, start: true })
+    if (!latch) events.push({ beat: note.beat + note.durationBeats, index, start: false })
+  })
+  events.sort((a, b) => a.beat - b.beat)
+  const active = new Set<number>()
+  const changes: SceneChange[] = []
+  let selected: string | null = null
+  let latched = -1
+  for (let i = 0; i < events.length;) {
+    const beat = events[i].beat
+    do {
+      const event = events[i++]
+      if (latch) {
+        if (latched < 0 || notes[event.index].beat > notes[latched].beat ||
+          (notes[event.index].beat === notes[latched].beat && event.index > latched)) latched = event.index
+      } else if (event.start) active.add(event.index)
+      else active.delete(event.index)
+    } while (i < events.length && events[i].beat === beat)
+    let winner = latched
+    if (!latch) for (const index of active) {
+      if (winner < 0 || notes[index].beat > notes[winner].beat ||
+        (notes[index].beat === notes[winner].beat && index > winner)) winner = index
+    }
+    const next = winner < 0 ? null : byPitch.get(notes[winner].pitch) ?? null
+    if (next !== selected) changes.push({ beat, sceneId: next })
+    selected = next
+  }
+  changeCache.set(notes, { key, changes })
+  return changes
 }

@@ -8,6 +8,10 @@ export interface CompositionLayer {
   directorTrackId: string
   sceneId: string
   opacity: number
+  /** Blend two scene textures in premultiplied space before layer compositing. */
+  crossfade?: { sceneId: string; mix: number }
+  /** Shared screen-space motion: position in frame fractions, rotation in radians. */
+  motion?: { scale: number; x: number; y: number; rotation: number }
   /** Normalized viewport in final-frame coordinates. */
   viewport: { x: number; y: number; width: number; height: number }
   /** Optional full-frame partition mask. Linear layers share straight or

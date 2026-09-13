@@ -226,6 +226,7 @@ export function ParamControl({ param, numValue, strValue, onNum, onStr }: {
       <div className="grid grid-cols-[100px_1fr] items-center gap-2.5 mb-[13px]">
         <span className="text-[11px] text-[var(--text-3)] truncate" title={param.label}>{param.label}</span>
         <select
+          aria-label={param.label}
           value={numValue ?? param.default}
           onChange={(e) => onNum(Number(e.target.value))}
           className="w-full h-6 px-1.5 rounded bg-[var(--bg-app)] text-[11px] text-[var(--text-2)] border border-[var(--border)] outline-none cursor-pointer"

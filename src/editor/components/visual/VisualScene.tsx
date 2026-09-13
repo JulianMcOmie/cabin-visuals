@@ -95,6 +95,11 @@ interface PartitionUniforms {
   index: { value: number }
   count: { value: number }
   aspect: { value: number }
+  motion: { value: Vector4 }
+  motionRotation: { value: number }
+  crossfadeTexture: { value: Texture | null }
+  crossfadeMix: { value: number }
+  crossfadeAlpha: { value: Vector2 }
 }
 
 function disposeMountedScene(runtime: MountedScene) {
@@ -410,6 +415,11 @@ function makeCompositorMaterial(invertBehind = false) {
     index: { value: 0 },
     count: { value: 1 },
     aspect: { value: 1 },
+    motion: { value: new Vector4(0, 0, 1, 1) },
+    motionRotation: { value: 0 },
+    crossfadeTexture: { value: null },
+    crossfadeMix: { value: 1 },
+    crossfadeAlpha: { value: new Vector2(1, 1) },
   }
   const material = new MeshBasicMaterial({ transparent: true, depthTest: false, depthWrite: false })
   if (invertBehind) {
@@ -435,6 +445,11 @@ function makeCompositorMaterial(invertBehind = false) {
       partitionIndex: uniforms.index,
       partitionCount: uniforms.count,
       partitionAspect: uniforms.aspect,
+      sceneMotion: uniforms.motion,
+      sceneMotionRotation: uniforms.motionRotation,
+      crossfadeTexture: uniforms.crossfadeTexture,
+      crossfadeMix: uniforms.crossfadeMix,
+      crossfadeAlpha: uniforms.crossfadeAlpha,
     })
     shader.vertexShader = shader.vertexShader
       .replace('void main() {', 'varying vec2 vPartitionUv;\nvoid main() {')
@@ -451,9 +466,22 @@ uniform float partitionBlur;
 uniform float partitionIndex;
 uniform float partitionCount;
 uniform float partitionAspect;
+uniform vec4 sceneMotion;
+uniform float sceneMotionRotation;
+uniform sampler2D crossfadeTexture;
+uniform float crossfadeMix;
+uniform vec2 crossfadeAlpha;
 void main() {`)
       .replace('#include <map_fragment>', `
 #ifdef USE_MAP
+vec2 sceneUv = vPartitionUv - vec2(0.5) - sceneMotion.xy;
+sceneUv.x *= partitionAspect;
+float motionCos = cos(sceneMotionRotation), motionSin = sin(sceneMotionRotation);
+sceneUv = vec2(motionCos * sceneUv.x + motionSin * sceneUv.y,
+  -motionSin * sceneUv.x + motionCos * sceneUv.y) / sceneMotion.zw;
+sceneUv.x /= partitionAspect;
+sceneUv += vec2(0.5);
+if (any(lessThan(sceneUv, vec2(0.0))) || any(greaterThan(sceneUv, vec2(1.0)))) discard;
 vec4 partitionSampled;
 if (partitionBlur > 0.0) {
   vec2 pb = vPartitionUv - vec2(0.5);
@@ -467,11 +495,19 @@ if (partitionBlur > 0.0) {
   vec2 step = vec2(dir.x / partitionAspect, dir.y) * partitionBlur;
   partitionSampled = vec4(0.0);
   for (int i = 0; i < 9; i++) {
-    partitionSampled += texture2D(map, vPartitionUv + step * (float(i) / 8.0 - 0.5));
+    partitionSampled += texture2D(map, sceneUv + step * (float(i) / 8.0 - 0.5));
   }
   partitionSampled /= 9.0;
 } else {
-  partitionSampled = texture2D(map, vPartitionUv);
+  partitionSampled = texture2D(map, sceneUv);
+}
+if (crossfadeMix < 1.0) {
+  vec4 outgoing = texture2D(crossfadeTexture, sceneUv);
+  outgoing.a *= crossfadeAlpha.x;
+  partitionSampled.a *= crossfadeAlpha.y;
+  vec4 blended = mix(vec4(outgoing.rgb * outgoing.a, outgoing.a),
+    vec4(partitionSampled.rgb * partitionSampled.a, partitionSampled.a), crossfadeMix);
+  partitionSampled = vec4(blended.a > 0.00001 ? blended.rgb / blended.a : vec3(0.0), blended.a);
 }
 diffuseColor *= partitionSampled;
 #endif
@@ -524,7 +560,7 @@ if (partitionSlice > 0.5) {
       )
     }
   }
-  material.customProgramCacheKey = () => invertBehind ? 'scene-partition-invert-v3' : 'scene-partition-v3'
+  material.customProgramCacheKey = () => invertBehind ? 'scene-partition-invert-v4' : 'scene-partition-v4'
   return material
 }
 
@@ -540,6 +576,8 @@ function applyCompositorLayer(
   index: number,
   texture: Texture,
   aspect: number,
+  sourceTexture?: Texture,
+  targetPresent = true,
 ) {
   const material = mesh.material as MeshBasicMaterial
   if (material.map !== texture) {
@@ -562,6 +600,12 @@ function applyCompositorLayer(
   uniforms.wedge.value = slice?.radial ? 1 : 0
   uniforms.flash.value = layer.flash ?? 0
   uniforms.blur.value = layer.blur ?? 0
+  const motion = layer.motion
+  uniforms.motion.value.set(motion?.x ?? 0, motion?.y ?? 0, motion?.scale ?? 1, motion?.scale ?? 1)
+  uniforms.motionRotation.value = motion?.rotation ?? 0
+  uniforms.crossfadeTexture.value = sourceTexture ?? texture
+  uniforms.crossfadeMix.value = layer.crossfade?.mix ?? 1
+  uniforms.crossfadeAlpha.value.set(sourceTexture ? 1 : 0, targetPresent ? 1 : 0)
   if (layer.partition) {
     mesh.position.set(0, 0, -index * 0.001)
     mesh.scale.set(1, 1, 1)
@@ -1196,7 +1240,7 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
     }
     try {
       const layers = getCompositionLayers()
-      const requested = new Set(layers.map((layer) => layer.sceneId))
+      const requested = new Set(layers.flatMap((layer) => layer.crossfade ? [layer.sceneId, layer.crossfade.sceneId] : [layer.sceneId]))
 
       // Backdrop-only targets track exactly the requested-but-unmounted set:
       // an entry whose scene mounted (first track landed) or fell out of the
@@ -1478,7 +1522,9 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
           const texture = runtime?.outputTexture ?? emptyBackdrops.get(layer.sceneId)?.texture
           mesh.visible = !!texture
           if (!texture) return
-          applyCompositorLayer(mesh, layer, i, texture, layerAspect)
+          applyCompositorLayer(mesh, layer, i, texture, layerAspect, layer.crossfade
+            ? mounted.get(layer.crossfade.sceneId)?.outputTexture ?? emptyBackdrops.get(layer.crossfade.sceneId)?.texture
+            : undefined)
         })
 
         const project = useProjectStore.getState()
@@ -1519,7 +1565,7 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
         // The invert overlay is a fullscreen pass per layer over the finished
         // frame; with no invert objects anywhere it composites blank textures,
         // so skip it outright (the common case).
-        const anyInvert = layers.some((layer) => passPresence.get(layer.sceneId)?.invert)
+        const anyInvert = layers.some((layer) => passPresence.get(layer.sceneId)?.invert || (layer.crossfade && passPresence.get(layer.crossfade.sceneId)?.invert))
         if (anyInvert) {
           while (compositor.invertMeshes.length < layers.length) {
             const material = makeCompositorMaterial(true)
@@ -1535,9 +1581,11 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
             mesh.visible = !!layer
             if (!layer) return
             const runtime = mounted.get(layer.sceneId)
-            mesh.visible = !!runtime
-            if (!runtime) return
-            applyCompositorLayer(mesh, layer, i, runtime.invertTarget.texture, layerAspect)
+            const source = layer.crossfade ? mounted.get(layer.crossfade.sceneId) : undefined
+            const texture = runtime?.invertTarget.texture ?? source?.invertTarget.texture
+            mesh.visible = !!texture
+            if (!texture) return
+            applyCompositorLayer(mesh, layer, i, texture, layerAspect, source?.invertTarget.texture, !!runtime)
           })
           gl.render(compositor.invertScene, compositor.cam)
         }
@@ -1554,7 +1602,7 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
           const roots = hoverTargetsForTrack(hover.trackId).filter((t) => t.sceneId === hover.sceneId)
           const track = useProjectStore.getState().scenes[hover.sceneId]?.tracks[hover.trackId]
           const layer = layers.find((l) => l.sceneId === hover.sceneId)
-          if (roots.length > 0 && track && layer) {
+          if (roots.length > 0 && track && layer && !layer.motion && !layer.crossfade) {
             const maskScenes = new Set<ThreeScene>()
             for (const root of roots) {
               const scene = rootSceneOf(root.object)
