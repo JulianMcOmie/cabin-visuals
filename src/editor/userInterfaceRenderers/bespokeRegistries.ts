@@ -7,6 +7,7 @@ import { grainScenePlugin } from '../effects/scene/grain'
 import { crushScenePlugin } from '../effects/scene/crush'
 import { glitchScenePlugin } from '../effects/scene/glitch'
 import { mirrorScenePlugin } from '../effects/scene/mirror'
+import { fogScenePlugin } from '../effects/scene/fog'
 
 // Bespoke settings surfaces for the non-object tracks, mirroring the object
 // registry in index.ts: movers/splitters are keyed by their definition id,
@@ -66,6 +67,7 @@ export const EFFECT_USER_INTERFACES: Partial<Record<string, UserInterfaceRendere
   opacity: lazyPanel(() => import('./OpacityEffectUserInterface'), 'OpacityEffectUserInterfaceRenderer'),
   deform: lazyPanel(() => import('./DeformEffectUserInterface'), 'DeformEffectUserInterfaceRenderer'),
   [gradeScenePlugin.id]: sceneFxPanel(gradeScenePlugin.id),
+  [fogScenePlugin.id]: sceneFxPanel(fogScenePlugin.id),
   [lensScenePlugin.id]: sceneFxPanel(lensScenePlugin.id),
   [blurScenePlugin.id]: sceneFxPanel(blurScenePlugin.id),
   [grainScenePlugin.id]: sceneFxPanel(grainScenePlugin.id),

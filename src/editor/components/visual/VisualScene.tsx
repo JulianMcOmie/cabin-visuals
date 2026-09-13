@@ -12,6 +12,9 @@ import {
   Float32BufferAttribute,
   Scene as ThreeScene,
   WebGLRenderTarget,
+  DepthTexture,
+  DepthStencilFormat,
+  UnsignedInt248Type,
   HalfFloatType,
   LinearFilter,
   AddEquation,
@@ -37,6 +40,7 @@ import { BloomEffect } from 'postprocessing'
 import { getCompositionLayers, getObjectState, getSceneBackdrop, getSceneFxOverrides, setMountedRenderScenes, subscribeObjects, getObjectList, type ObjectListEntry } from '../../core/visual/VisualEngine'
 import { getEffect, PLUGIN_LIST } from '../../effects'
 import { effectiveEffectState } from '../../effects/automation'
+import { createFogUniforms, syncFogUniforms } from '../../effects/scene/fogRuntime'
 import type { CompositionLayer } from '../../core/directors'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
@@ -674,7 +678,10 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
       if (environment.current === target) environment.current = null
     }
   }, [gl])
-  const sceneKey = [...new Set(objects.map((o) => o.sceneId))].sort().join(',')
+  const atmosphereSceneKey = useProjectStore((s) => Object.values(s.scenes)
+    .filter((scene) => scene.effects?.some((fx) => getEffect(fx.pluginId)?.sceneStage === 'atmosphere'))
+    .map((scene) => scene.id).sort().join(','))
+  const sceneKey = [...new Set([...objects.map((o) => o.sceneId), ...atmosphereSceneKey.split(',').filter(Boolean)])].sort().join(',')
   // Incremental scene mounting: runtimes are keyed by scene id and REUSED when
   // the scene set changes. Rebuilding the whole map on every add/remove would
   // remount every scene's object portals and dispose their render targets
@@ -823,6 +830,7 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
       for (const p of plugin.params) {
         uniforms[p.key] = { value: typeof p.default === 'number' ? p.default : 0 }
       }
+      if (plugin.sceneStage === 'atmosphere') Object.assign(uniforms, createFogUniforms())
       sceneFxMaterials.set(plugin.id, new ShaderMaterial({
         vertexShader: COLOR_FILTER_VERTEX,
         fragmentShader: plugin.fragmentShader,
@@ -831,6 +839,13 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
         depthWrite: false,
       }))
     }
+    const atmosphereCopy = new ShaderMaterial({
+      vertexShader: COLOR_FILTER_VERTEX,
+      fragmentShader: 'uniform sampler2D tDiffuse; varying vec2 vUv; void main() { gl_FragColor = texture2D(tDiffuse, vUv); }',
+      uniforms: { tDiffuse: { value: null } },
+      depthTest: false,
+      depthWrite: false,
+    })
     const hdrOptions = { minFilter: LinearFilter, magFilter: LinearFilter, type: HalfFloatType }
     const compositeTarget = new WebGLRenderTarget(1, 1, hdrOptions)
     // Production mip-chain bloom from `postprocessing`. It extracts luminance
@@ -885,6 +900,7 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
       scene, invertScene, cam, meshes, invertMeshes,
       filterScene, filterCam, filterMesh, filterMaterial, warpMaterial, impactWarpMaterial, cropMaskMaterial, gradientMaterial,
       sceneFxMaterials,
+      atmosphereCopy,
       compositeTarget, bloomEffect, finalMaterial,
       hoverMaskTarget, hoverGlowMaterial,
     }
@@ -981,6 +997,7 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
     compositor.cropMaskMaterial.dispose()
     compositor.gradientMaterial.dispose()
     for (const material of compositor.sceneFxMaterials.values()) material.dispose()
+    compositor.atmosphereCopy.dispose()
     compositor.bloomEffect.dispose()
     compositor.finalMaterial.dispose()
     compositor.compositeTarget.dispose()
@@ -1240,6 +1257,21 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
           runtime.lightPools[0].sync(sceneId, allowShadows, lighting)
           if (presence?.front) runtime.lightPools[1].sync(sceneId, allowShadows, lighting)
           if (presence?.invert) runtime.lightPools[2].sync(sceneId, allowShadows, lighting)
+          const atmosphere = (projectScene?.effects ?? []).flatMap((inst) => {
+            const plugin = getEffect(inst.pluginId)
+            if (plugin?.sceneStage !== 'atmosphere') return []
+            const state = effectiveEffectState(inst, getSceneFxOverrides(sceneId))
+            const param = (key: string) => state.settings[key] ?? Number(plugin.params.find((p) => p.key === key)?.default ?? 0)
+            return state.enabled && param('amount') > 0 && param('density') > 0
+              ? [{ inst, settings: state.settings }] : []
+          })
+          // Allocate sampleable depth only for a scene that uses atmosphere.
+          // Depth-stencil preserves Overlap Shape's existing stencil contract.
+          if (atmosphere.length && !runtime.target.depthTexture) {
+            runtime.target.dispose()
+            runtime.target.depthTexture = new DepthTexture(runtime.target.width, runtime.target.height, UnsignedInt248Type)
+            runtime.target.depthTexture.format = DepthStencilFormat
+          }
           gl.setRenderTarget(runtime.target)
           gl.setClearColor(
             backdrop?.color ?? projectScene?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND,
@@ -1253,6 +1285,25 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
             if (presence?.front) precompilePass(runtime.front)
           }
           renderSceneWithGlow(gl, runtime.base, camera)
+          // Atmosphere sees pristine world depth, before on-top objects clear it
+          // and image warps move pixels. Copy only color back; preserve both depth
+          // and stencil. Sampling an attachment while writing it is illegal in GL.
+          for (const { inst, settings } of atmosphere) {
+            const plugin = getEffect(inst.pluginId)!
+            const material = compositor.sceneFxMaterials.get(plugin.id)!
+            syncFogUniforms(material, runtime.base, camera, runtime.target.depthTexture!)
+            material.uniforms.time.value = getBeatOverride() ?? (previewRuntime.worker ? previewRuntime.beat : useTimeStore.getState().currentBeat)
+            for (const p of plugin.params) material.uniforms[p.key].value = settings[p.key] ?? p.default
+            material.uniforms.tDiffuse.value = runtime.target.texture
+            compositor.filterMesh.material = material
+            gl.setRenderTarget(runtime.filterTargets[0])
+            gl.clear(true, true, true)
+            gl.render(compositor.filterScene, compositor.filterCam)
+            compositor.atmosphereCopy.uniforms.tDiffuse.value = runtime.filterTargets[0].texture
+            compositor.filterMesh.material = compositor.atmosphereCopy
+            gl.setRenderTarget(runtime.target)
+            gl.render(compositor.filterScene, compositor.filterCam)
+          }
           if (presence?.front) {
             gl.clearDepth()
             renderSceneWithGlow(gl, runtime.front, camera)
@@ -1334,6 +1385,7 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
             const fxBeat = getBeatOverride() ?? (previewRuntime.worker ? previewRuntime.beat : useTimeStore.getState().currentBeat)
             for (const inst of sceneChain) {
               const plugin = getEffect(inst.pluginId)
+              if (plugin?.sceneStage === 'atmosphere') continue
               const material = plugin ? compositor.sceneFxMaterials.get(plugin.id) : undefined
               if (!plugin || !material) continue
               const { enabled, settings } = effectiveEffectState(inst, fxOverrides)

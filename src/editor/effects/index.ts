@@ -20,6 +20,7 @@ import { grainScenePlugin } from './scene/grain'
 import { crushScenePlugin } from './scene/crush'
 import { glitchScenePlugin } from './scene/glitch'
 import { mirrorScenePlugin } from './scene/mirror'
+import { fogScenePlugin } from './scene/fog'
 import type { VisualEffect } from './types'
 
 export type { VisualEffect, EffectCategory } from './types'
@@ -40,6 +41,7 @@ export const EFFECTS: Record<string, VisualEffect> = {
   // Scene-category devices, in the add menu's order: the grade first (the
   // foundation), then lens/blur (optics), then texture and destruction.
   [gradeScenePlugin.id]: gradeScenePlugin,
+  [fogScenePlugin.id]: fogScenePlugin,
   [lensScenePlugin.id]: lensScenePlugin,
   [blurScenePlugin.id]: blurScenePlugin,
   [grainScenePlugin.id]: grainScenePlugin,

@@ -40,6 +40,9 @@ export interface VisualEffect {
   id: string
   name: string
   category: EffectCategory
+  /** Atmosphere needs unwarped geometry depth: run before front overlays and
+   * screen effects. Relative order within this stage follows the effect rack. */
+  sceneStage?: 'atmosphere'
   /** Hidden from the add-effect menu (existing instances keep rendering). The
    *  base transform effects are deprecated in favor of the canonical track
    *  transform panel (core/transform.ts). */

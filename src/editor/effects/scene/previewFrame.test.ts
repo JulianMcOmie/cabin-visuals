@@ -10,7 +10,8 @@ import { SCENE_FX_RATES, SCENE_FX_RATE_DETENTS, formatSceneFxRate } from './rate
 // preview as a black window with no error anywhere - these tests are that
 // tripwire (GLSL cannot be compiled here, so they assert the source).
 
-const scenePlugins = PLUGIN_LIST.filter((plugin) => plugin.category === 'scene')
+// Atmosphere uses real camera depth and lights, not the 2D reference preview.
+const scenePlugins = PLUGIN_LIST.filter((plugin) => plugin.category === 'scene' && !plugin.sceneStage)
 
 test('every scene device rewires onto the reference frame, leaving no scene-texture reads', () => {
   for (const plugin of scenePlugins) {

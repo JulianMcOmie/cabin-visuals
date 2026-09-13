@@ -84,6 +84,31 @@ kinds=glyphs · size=compact). Four things are load-bearing:
   Rate knobs on the two re-seeding devices step the shared musical ladder in
   `scene/rate.ts` and read out in note values (`1/16`), not raw multipliers.
 
+## Atmospheric Fog
+
+`scene/fog.ts` is a scene device with `sceneStage: 'atmosphere'`. Unlike image
+filters it runs after base geometry, before on-top overlays and all screen
+warps/grades. It needs original camera depth, so moving it within the rack only
+changes its order relative to other atmosphere devices. VisualScene lazily
+attaches a depth-stencil texture, renders into a spare filter target, then copies
+COLOR back without clearing depth/stencil (Overlap Shape depends on stencil).
+Never sample the depth attachment while writing to that same render target.
+
+`fogRuntime.ts` samples the actual base-pass light rig after `PassLightPool.sync`:
+placement, note flashes, mute, preview lighting budgets and legacy rigs therefore
+agree with the surface lighting. It uses 32 deterministic ray samples and at most
+eight non-ambient lights; ambient is accumulated separately. Spot cones and range
+falloff are supported; area lights use a finite-area approximation. Geometry depth
+terminates camera rays, but the volume does not sample light shadow maps (no
+occluder-cast volumetric shadows). Drift uses the beat only. The console uses the
+main viewport instead of the 2D SceneFxPreview, which has no depth or light rig.
+`node scripts/perf/fog-smoke.mjs` verifies the production GLSL with real depth on
+WebGL: colors/motion/mute, exact dry bypass, seek-back and foreground occlusion.
+For an editor smoke test with worker rendering active, inspect
+`window.__previewRuntime.ambient` after its beat/revision updates. Advancing
+`window.__three` manually can clear the main canvas while the actual VisualScene
+lives in the worker; that blank capture is not the worker's rendered frame.
+
 ## Writing a `deform` effect
 
 `deform/` holds the one shipped device (Deformer: 12 operations × 4 drives × 4 falloffs

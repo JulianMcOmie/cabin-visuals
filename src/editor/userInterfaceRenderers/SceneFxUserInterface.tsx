@@ -35,6 +35,7 @@ import { grainScenePlugin } from '../effects/scene/grain'
 import { crushScenePlugin } from '../effects/scene/crush'
 import { glitchScenePlugin } from '../effects/scene/glitch'
 import { mirrorScenePlugin } from '../effects/scene/mirror'
+import { fogScenePlugin } from '../effects/scene/fog'
 import { SCENE_FX_RATE_DETENTS } from '../effects/scene/rate'
 import type { VisualEffect } from '../effects/types'
 import {
@@ -46,6 +47,7 @@ import {
   ParameterList,
   Segmented,
   bindPanel,
+  consolePanel,
   type NumBinding,
   type SegmentOption,
 } from './console'
@@ -511,6 +513,15 @@ const MirrorPanel: UserInterfaceRendererDefinition = ({ parameters }) => {
 
 /** Keyed by plugin id, spread into EFFECT_USER_INTERFACES. */
 export const SCENE_FX_USER_INTERFACES: Record<string, UserInterfaceRendererDefinition> = {
+  [fogScenePlugin.id]: consolePanel({
+    accent: fogScenePlugin.accent!,
+    testId: 'scene-fx-sceneFog',
+    rows: [
+      { custom: () => <p className="px-3 pt-3 text-[11px] leading-relaxed text-[var(--text-muted)]">Haze catches your scene’s lights. Try a colored Spot light for beams. Fog sits behind on-top overlays, before color and lens effects.</p> },
+      { row: ['amount*:AMOUNT', 'density:DENSITY', 'scattering:SCATTER'] },
+      { row: ['detail:TEXTURE', 'scale:SIZE', 'drift:DRIFT'], gutter: 'CLOUDS' },
+    ],
+  }),
   [gradeScenePlugin.id]: GradePanel,
   [lensScenePlugin.id]: LensPanel,
   [blurScenePlugin.id]: BlurPanel,
