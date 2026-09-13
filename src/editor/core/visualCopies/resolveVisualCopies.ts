@@ -2,6 +2,7 @@ import type { Matrix4 } from 'three'
 import { identityVisualCopy } from './identityVisualCopy'
 import type { MoverOrSplitter, MoverOrSplitterContext, VisualCopy } from './types'
 import { withCopyEvaluation } from './evaluationMemo'
+import { particlePlanEntryKind } from './particlePlan'
 
 /**
  * Evaluates an ordered mover-and-splitter chain at one beat.
@@ -322,12 +323,10 @@ export function structuralCopyCount(
   plainCount?: number,
 ): number {
   // Structural UI queries must not expand a factored million-copy layout.
-  const factoredCount = (chain: MoverOrSplitter[]) => chain.every(entry => {
-    const local = !!(entry.localTransforms || entry.localTransformsAtBeat)
-    const root = !!(entry.rootTransform || entry.rootTransformAtBeat)
-    return local !== root && !entry.applyFramed && !entry.emitsCopyClocks
-  }) ? chain.reduce((count, entry) => count * (entry.rootTransform || entry.rootTransformAtBeat
-    ? 1 : (entry.localTransformsAtBeat?.(0) ?? entry.localTransforms!).length), 1) : undefined
+  const factoredCount = (chain: MoverOrSplitter[]) => chain.every(entry => particlePlanEntryKind(entry) !== undefined)
+    ? chain.reduce((count, entry) => count * (entry.rootTransform || entry.rootTransformAtBeat
+      ? 1 : entry.framedLocalTransformsAtBeat ? entry.framedLocalTransformsAtBeat(0).frames.length
+        : (entry.localTransformsAtBeat?.(0) ?? entry.localTransforms!).length), 1) : undefined
   let count = plainCount ?? factoredCount(moverAndSplitterChain) ?? resolveVisualCopies(moverAndSplitterChain, 0).length
   const variantRanks = Math.max(
     0,

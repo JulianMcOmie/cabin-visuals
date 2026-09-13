@@ -47,6 +47,9 @@
 
 import { Matrix4 } from 'three'
 import { warpChainBeat } from './resolveVisualCopies'
+import { identityVisualCopy } from './identityVisualCopy'
+import { memoByBeat } from './beatMemo'
+import { withCopyEvaluation } from './evaluationMemo'
 import type { FramedVisualCopy, MoverOrSplitter, MoverOrSplitterContext, VisualCopy } from './types'
 
 /** A child result still tied to the parent slot whose frame it moves: `copy`'s
@@ -64,6 +67,24 @@ function isDegenerate(transform: Matrix4): boolean {
   return !Number.isFinite(determinant) || Math.abs(determinant) < DEGENERATE_DETERMINANT
 }
 
+/** These are semantic guarantees, not single-beat probes. In particular a
+ * count lane that happens to have one slot now is not a count-neutral child. */
+function plainLocalLayout(entry: MoverOrSplitter): boolean {
+  return !!(entry.localTransforms || entry.localTransformsAtBeat)
+    && !entry.rootTransform && !entry.rootTransformAtBeat && !entry.framedLocalTransformsAtBeat
+    && !entry.applyFramed && !entry.emitsCopyClocks
+    && (entry.structuralVariants?.every(plainLocalLayout) ?? true)
+}
+
+function uniformCountOne(entry: MoverOrSplitter): boolean {
+  if (entry.applyFramed || entry.emitsCopyClocks || entry.framedLocalTransformsAtBeat) return false
+  const root = !!(entry.rootTransform || entry.rootTransformAtBeat)
+  const local = !!(entry.localTransforms || entry.localTransformsAtBeat)
+  const count = entry.localTransformsAtBeat ? entry.localTransformCount : entry.localTransforms?.length
+  return root !== local && (root || count === 1)
+    && (entry.structuralVariants?.every(uniformCountOne) ?? true)
+}
+
 /**
  * Wraps `splitter` so the mover/splitter `children` move its copies in its
  * reference frame, as INTERNAL motion (see the header). Empty children return
@@ -74,6 +95,7 @@ export function splitterWithChildChain(
   children: MoverOrSplitter[],
 ): MoverOrSplitter {
   if (children.length === 0) return splitter
+  const hasLocalParent = plainLocalLayout(splitter)
 
   /** The shared evaluation: the splitter's slots, and per output the slot's
    *  transform in the splitter's frame with the child chain's deltas
@@ -106,7 +128,14 @@ export function splitterWithChildChain(
     if (slots.length === 0) return { slots, slotTimes, outputs: [], slotInverses: null }
     const previous = visualCopy.transform
     if (isDegenerate(previous)) return { slots, slotTimes, outputs: null, slotInverses: null }
-    const previousInverse = previous.clone().invert()
+    const declaredLocals = hasLocalParent
+      ? splitter.localTransformsAtBeat?.(context.beat) ?? splitter.localTransforms : undefined
+    const exactLocals = declaredLocals?.length === slots.length ? declaredLocals : undefined
+    // A proven local layout already owns S_i. Reconstructing it as P^-1(P S_i)
+    // introduces cancellation and can flip the singular-slot guard near 1e-12
+    // as an unrelated upstream frame rotates. Use its exact declared matrix;
+    // unproven parents keep the generic extraction and its existing semantics.
+    const previousInverse = exactLocals ? null : previous.clone().invert()
     // The splitter's frame in the world: the object's placement composed with
     // everything above the splitter in the chain. World-placed children
     // conjugate their world deltas through it, so the motion they add lands
@@ -119,7 +148,7 @@ export function splitterWithChildChain(
     // The immediate-fold path does not need this separate frame at all.
     const slotInverses = framed ? new Array<Matrix4 | null>(slots.length) : null
     let locals: SlotLocalCopy[] = slots.map((slot, index) => {
-      const transform = previousInverse.clone().multiply(slot.transform)
+      const transform = exactLocals ? exactLocals[index].clone() : previousInverse!.clone().multiply(slot.transform)
       if (slotInverses) slotInverses[index] = isDegenerate(transform) ? null : transform.clone().invert()
       return {
         copy: { transform, opacity: slot.opacity, colorShift: { ...slot.colorShift } },
@@ -239,6 +268,32 @@ export function splitterWithChildChain(
         children.map((child) => child.structuralVariants?.[rank] ?? child),
       ),
     )
+  }
+  if (hasLocalParent && children.every(uniformCountOne)) {
+    // Identity sampling is bounded by this splitter's own slots. It deliberately
+    // uses the reference anchoring path: a child Orbit's root-transform proof
+    // does not change its existing composition declaration or nested semantics.
+    wrapper.framedLocalTransformsAtBeat = memoByBeat(beat => withCopyEvaluation(() => {
+      const bareFrames = splitter.localTransformsAtBeat?.(beat) ?? splitter.localTransforms!
+      const framed = wrapper.applyFramed!(identityVisualCopy(), { beat, index: 0, count: 1 })
+      // Matrix4.invert can round the homogeneous identity to 1 +/- epsilon.
+      // These declared layouts/motions are affine; canonicalize only that
+      // inversion noise in the sampled metadata, leaving the reference path
+      // and any genuinely non-affine matrix untouched.
+      const affineSample = (matrix: Matrix4) => {
+        const e = matrix.elements
+        if (e[3] !== 0 || e[7] !== 0 || e[11] !== 0 || Math.abs(e[15] - 1) > 64 * Number.EPSILON) return matrix
+        if (e[15] === 1) return matrix
+        const result = matrix.clone()
+        result.elements[15] = 1
+        return result
+      }
+      return {
+        frames: framed.map(copy => affineSample(copy.visualCopy.transform)),
+        internals: framed.map(copy => copy.internalTransform ? affineSample(copy.internalTransform) : null),
+        bareFrames,
+      }
+    }))
   }
   return wrapper
 }

@@ -16,7 +16,8 @@ const html = `<!doctype html><html lang="en"><meta charset="utf-8">
 <title>Radial transform GPU validation</title>
 <style>body{margin:24px;background:#10141a;color:#e9f0f7;font:16px system-ui}button{font:inherit;padding:12px 18px}pre{white-space:pre-wrap;font:13px ui-monospace,monospace}canvas{display:block;max-width:100%;margin-top:20px}p{max-width:850px;line-height:1.5}</style>
 <h1>Radial transform GPU validation</h1>
-<p>Compares expanded Particle quads with compact Particle quads across rotating and orbiting Radial chains, then checks picking and measures 32,768 and 1,048,576 particles. Keep this tab visible during the run. The benchmark measures the production renderer in isolation; it does not measure whole-editor FPS.</p>
+<p>Compares expanded Particle quads with compact Particle quads across rotating and orbiting Radial chains. Nested mode places the Mover inside the first, middle or last Radial, preserving that Radial's separate reference frame. Then checks picking and measures 32,768 and 1,048,576 particles. Keep this tab visible during the run. The benchmark measures the production renderer in isolation; it does not measure whole-editor FPS.</p>
+<label>Placement family <select id="scope"><option value="nested">Mover nested under a Radial</option><option value="siblings">Mover above, between or below Radials</option></select></label>
 <button>Run validation</button><pre>Ready. Results will be saved to artifacts/radial-transforms/gpu.json.</pre>
 <script type="module" src="/fixture.js"></script></html>`
 createServer(async (req, res) => {

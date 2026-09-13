@@ -72,6 +72,8 @@ export function tfAutomationChainEntry(input: ResolvedAutomation | ResolvedAutom
   })
   return {
     cachePolicy: 'beat',
+    localTransformCount: 1,
+    localTransformsAtBeat: beat => [deltaAtBeat(beat)],
     apply(visualCopy, context) {
       const delta = deltaAtBeat(context.beat)
       return [{ ...visualCopy, transform: visualCopy.transform.clone().multiply(delta) }]

@@ -9,10 +9,11 @@ import { compileParticlePlan, matrixScaleBound } from '../../src/editor/core/vis
 import { getMoverOrSplitterDefinition } from '../../src/editor/core/visualCopies/registry'
 import { mergeDefinitionSettings } from '../../src/editor/core/visualCopies/definitions'
 import { resolveVisualCopies } from '../../src/editor/core/visualCopies/resolveVisualCopies'
+import { splitterWithChildChain } from '../../src/editor/core/visualCopies/splitterChildChain'
 import type { MoverOrSplitter } from '../../src/editor/core/visualCopies/types'
 
 type Motion = 'rotate' | 'orbit'
-type Placement = 'above' | 'between' | 'below'
+type Placement = 'above' | 'between' | 'below' | 'nested-first' | 'nested-middle' | 'nested-last'
 const output = document.querySelector('pre')!
 const button = document.querySelector('button')!
 const width = 1280, height = 720
@@ -25,12 +26,56 @@ function chainFor(motion: Motion, position: Placement, stages = 3, copies = 32):
   const chain = Array.from({ length: stages }, (_, index) => radial.resolve({
     settings: mergeDefinitionSettings(radial, { copies, radius: [4, 1.2, .25, .07][index], plane: index % 3, size: 1 }), notes: [],
   }))
-  chain.splice(position === 'above' ? 0 : position === 'between' ? 1 : chain.length, 0, mover.resolve({
+  const motionEntry = mover.resolve({
     settings: mergeDefinitionSettings(mover, { motion: motion === 'rotate' ? 1 : 2,
       mode: 1, drive: 0, angleX: 17, angleY: 29, angleZ: 45, angle: 1,
       pivotX: .3, pivotY: -.2, pivotZ: .1 }), notes: [],
-  }))
+  })
+  const nestedIndex = position === 'nested-first' ? 0 : position === 'nested-middle' ? 1 : position === 'nested-last' ? stages - 1 : -1
+  if (nestedIndex >= 0) chain[nestedIndex] = splitterWithChildChain(chain[nestedIndex], [motionEntry])
+  else chain.splice(position === 'above' ? 0 : position === 'between' ? 1 : chain.length, 0, motionEntry)
   return chain
+}
+
+/** Near-singular prefixes deliberately mix active/bare framed branches. The
+ * five-slot pattern spans RGBA channels, texels and rows of the guard texture;
+ * y/z stay full size so both outcomes remain visible for image comparison. */
+function mixedGuardChain(): MoverOrSplitter[] {
+  const radial = getMoverOrSplitterDefinition('radial')!, mover = getMoverOrSplitterDefinition('mover')!
+  const ring = (copies: number, radius: number, plane: number) => radial.resolve({
+    settings: mergeDefinitionSettings(radial, { copies, radius, plane, size: 1 }), notes: [],
+  })
+  const spin = (angleX: number, angleZ: number) => mover.resolve({
+    settings: mergeDefinitionSettings(mover, { motion: 1, mode: 1, drive: 0, angleX, angleY: 0, angleZ, angle: 1 }), notes: [],
+  })
+  const matrices = [1, 1e-13, 1, 1e-13, 1].map((scale, index) => new Matrix4().makeScale(scale, 1, 1).setPosition((index - 2) * .5, 0, 0))
+  const choices: MoverOrSplitter = { cachePolicy: 'static', localTransforms: matrices,
+    apply(copy) { return matrices.map(matrix => ({ ...copy, transform: copy.transform.clone().multiply(matrix), colorShift: { ...copy.colorShift } })) },
+  }
+  return [splitterWithChildChain(ring(32, 3, 0), [spin(11, 17)]), ring(32, .8, 1), choices,
+    splitterWithChildChain(ring(2, .5, 2), [spin(0, 70)]), ring(2, .2, 0)]
+}
+
+function pixelDifference(expected: Uint8Array, actual: Uint8Array, previous?: Uint8Array) {
+  let maxDifference = 0, sumDifference = 0, channelsOver4 = 0, litChannels = 0
+  let expectedIntensity = 0, actualIntensity = 0, seekDifference = 0
+  for (let i = 0; i < actual.length; i++) {
+    if (i % 4 === 3) continue
+    const difference = Math.abs(actual[i] - expected[i])
+    maxDifference = Math.max(maxDifference, difference); sumDifference += difference
+    if (difference > 4) channelsOver4++
+    if (expected[i]) litChannels++
+    expectedIntensity += expected[i]; actualIntensity += actual[i]
+    if (previous) seekDifference = Math.max(seekDifference, Math.abs(actual[i] - previous[i]))
+  }
+  const channels = actual.length / 4 * 3
+  const meanDifference = sumDifference / channels
+  const relativeIntensityDifference = Math.abs(actualIntensity - expectedIntensity) / Math.max(1, expectedIntensity)
+  // GPU factor multiplication rounds earlier than uploading one CPU-composed
+  // matrix. Allow rare edge-rasterization changes, but reject image drift.
+  return { maxDifference, meanDifference, channelsOver4, litChannels, relativeIntensityDifference, seekDifference,
+    pass: litChannels > 1000 && meanDifference < .1 && channelsOver4 / channels < .002
+      && relativeIntensityDifference < .001 && seekDifference === 0 }
 }
 
 function summary(values: number[]) {
@@ -44,6 +89,10 @@ const animationFrame = () => new Promise<number>(resolve => requestAnimationFram
 
 button.onclick = async () => {
   button.disabled = true
+  const scope = (document.querySelector('#scope') as HTMLSelectElement).value
+  const positions: Placement[] = scope === 'nested' ? ['nested-first', 'nested-middle', 'nested-last'] : ['above', 'between', 'below']
+  const benchmarkPosition: Placement = scope === 'nested' ? 'nested-middle' : 'between'
+  const pickingPosition: Placement = scope === 'nested' ? 'nested-last' : 'below'
   const errors: string[] = []
   const originalError = console.error
   console.error = (...args) => { errors.push(args.map(String).join(' ')); originalError(...args) }
@@ -51,7 +100,7 @@ button.onclick = async () => {
   const cleanup: (() => void)[] = []
   const result: Record<string, unknown> = {
     description: 'Production Particle renderer parity, picking and isolated GPU timing; not whole-editor FPS.',
-    timestamp: new Date().toISOString(), initialVisibility: document.visibilityState,
+    timestamp: new Date().toISOString(), initialVisibility: document.visibilityState, scope,
     parity: [], picking: [], benchmarks: [], errors, pass: false,
   }
   const visibilityChanges: string[] = []
@@ -104,7 +153,7 @@ button.onclick = async () => {
 
     const parity: Record<string, unknown>[] = []
     result.parity = parity
-    for (const motion of ['rotate', 'orbit'] as const) for (const position of ['above', 'between', 'below'] as const) {
+    for (const motion of ['rotate', 'orbit'] as const) for (const position of positions) {
       output.textContent = `Comparing ${motion}, mover ${position}, 32,768 quads…`
       await animationFrame()
       const chain = chainFor(motion, position), initial = compileParticlePlan(chain, 0, 0)!
@@ -116,41 +165,64 @@ button.onclick = async () => {
         const plan = compileParticlePlan(chain, 1, beat)!
         compact.update(plan); fillReference(chain, beat, .035)
         const expected = read(referenceScene), actual = read(compactScene)
-        let maxDifference = 0, sumDifference = 0, channelsOver4 = 0, litChannels = 0
-        let expectedIntensity = 0, actualIntensity = 0, seekDifference = 0
-        for (let i = 0; i < actual.length; i++) {
-          if (i % 4 === 3) continue
-          const difference = Math.abs(actual[i] - expected[i])
-          maxDifference = Math.max(maxDifference, difference); sumDifference += difference
-          if (difference > 4) channelsOver4++
-          if (expected[i]) litChannels++
-          expectedIntensity += expected[i]; actualIntensity += actual[i]
-          if (beat === 0 && firstPixels) seekDifference = Math.max(seekDifference, Math.abs(actual[i] - firstPixels[i]))
-        }
+        const difference = pixelDifference(expected, actual, beat === 0 ? firstPixels : undefined)
         if (beat === 0 && !firstPixels) firstPixels = actual
-        const meanDifference = sumDifference / (512 * 288 * 3)
-        const relativeIntensityDifference = Math.abs(actualIntensity - expectedIntensity) / Math.max(1, expectedIntensity)
-        // GPU factor multiplication rounds earlier than uploading one CPU-composed
-        // matrix. Allow rare edge-rasterization changes, but reject image drift.
-        const pass = litChannels > 1000 && meanDifference < .1
-          && channelsOver4 / (512 * 288 * 3) < .002 && relativeIntensityDifference < .001
-          && seekDifference === 0
-        parity.push({ motion, position, beat, count: plan.count, maxDifference,
-          meanDifference, channelsOver4, litChannels, relativeIntensityDifference, seekDifference, pass })
+        parity.push({ motion, position, beat, count: plan.count, ...difference })
       }
       compact.dispose()
     }
 
+    output.textContent = 'Checking mixed guard flags and program → plain → program mesh updates…'
+    await animationFrame()
+    const guarded = mixedGuardChain(), plain = chainFor('orbit', 'below', 2, 3)
+    const transitionPool = createParticlePlanMesh(compileParticlePlan(plain, 0, .7)!, false)
+    const transitionScene = new Scene().add(transitionPool.mesh), transitions: Record<string, unknown>[] = []
+    cleanup.push(() => transitionPool.dispose())
+    result.transitions = transitions
+    let guardPixels: Uint8Array | undefined
+    for (const [index, step] of [
+      { name: 'mixed-program', chain: guarded, beat: .7, size: .035 },
+      { name: 'plain', chain: plain, beat: .7, size: .3 },
+      { name: 'uniform-program', chain: chainFor('rotate', 'nested-first', 3, 4), beat: .7, size: .15 },
+      { name: 'mixed-program-later', chain: guarded, beat: 2.1, size: .035 },
+      { name: 'mixed-program-seek', chain: guarded, beat: .7, size: .035 },
+    ].entries()) {
+      const plan = compileParticlePlan(step.chain, index + 1, step.beat)!
+      transitionPool.update(plan); configure(transitionPool, step.size)
+      fillReference(step.chain, step.beat, step.size)
+      const expected = read(referenceScene), actual = read(transitionScene)
+      const difference = pixelDifference(expected, actual, step.name === 'mixed-program-seek' ? guardPixels : undefined)
+      if (step.name === 'mixed-program') guardPixels = actual
+      const guards = plan.program?.guardOffsets.flatMap((offset, stage) => {
+        if (offset < 0) return []
+        const length = plan.count / plan.program!.guardStrides[stage]
+        const flags = plan.matrices.slice(offset, offset + length)
+        return [{ stage, offset, length, enabled: flags.reduce((sum, value) => sum + value, 0),
+          correctPattern: flags.every((flag, i) => flag === ([1, 0, 1, 0, 1][i % 5])) }]
+      }) ?? []
+      const expectedGuard = step.chain !== guarded || guards.some(guard => guard.length === 5120 && guard.enabled === 3072 && guard.correctPattern)
+      transitions.push({ name: step.name, count: plan.count, beat: step.beat, program: !!plan.program,
+        guards, texture: [transitionPool.texture.image.width, transitionPool.texture.image.height],
+        ...difference, pass: difference.pass && expectedGuard })
+    }
+
     output.textContent = 'Checking growth, shrink, picking and renderer-state restoration…'
     await animationFrame()
-    const pickPool = createParticlePlanMesh(compileParticlePlan(chainFor('orbit', 'below', 3, 2), 0, .5)!, true)
+    const pickPool = createParticlePlanMesh(compileParticlePlan(chainFor('orbit', pickingPosition, 3, 2), 0, .5)!, true)
     cleanup.push(() => pickPool.dispose())
     const pickScene = new Scene().add(pickPool.mesh)
     configure(pickPool, .035)
     const ray = new Raycaster(), point = new Vector3(), picking: Record<string, unknown>[] = []
     result.picking = picking
-    for (const copiesPerRadial of [2, 32, 4, 2]) {
-      const chain = chainFor('orbit', 'below', 3, copiesPerRadial), plan = compileParticlePlan(chain, 1, .5)!
+    const pickingSteps: { position: Placement; copiesPerRadial: number; stages: number }[] = [
+      { position: pickingPosition, copiesPerRadial: 2, stages: 3 },
+      { position: pickingPosition, copiesPerRadial: 32, stages: 3 },
+      { position: 'below', copiesPerRadial: 3, stages: 2 },
+      { position: pickingPosition, copiesPerRadial: 4, stages: 3 },
+      { position: pickingPosition, copiesPerRadial: 2, stages: 3 },
+    ]
+    for (const { position, copiesPerRadial, stages } of pickingSteps) {
+      const chain = chainFor('orbit', position, stages, copiesPerRadial), plan = compileParticlePlan(chain, 1, .5)!
       pickPool.update(plan)
       const copies = fillReference(chain, .5, .035)
       render.setRenderTarget(null); render.setViewport(0, 0, width, height); render.setScissorTest(false)
@@ -181,7 +253,7 @@ button.onclick = async () => {
       const hidden: Intersection[] = []; pickPool.mesh.raycast(ray, hidden); pickPool.mesh.visible = true
       const distanceError = Math.abs((hits[0]?.distance ?? Infinity) - (expected[0]?.distance ?? 0))
       const glError = gl.getError()
-      picking.push({ copiesPerRadial, count: plan.count, drawCount: pickPool.mesh.geometry.drawRange.count,
+      picking.push({ position, copiesPerRadial, stages, program: !!plan.program, count: plan.count, drawCount: pickPool.mesh.geometry.drawRange.count,
         textureBytes: pickPool.texture.image.data.byteLength, expectedHits: expected.length,
         hits: hits.length, distanceError, misses: misses.length, hidden: hidden.length, restored, glError,
         pass: hits.length === 1 && expected.length > 0 && distanceError < .005 && !misses.length && !hidden.length && restored && glError === 0 })
@@ -192,7 +264,7 @@ button.onclick = async () => {
     const benchmarks: Record<string, unknown>[] = []
     result.benchmarks = benchmarks
     for (const motion of ['rotate', 'orbit'] as const) for (const stages of [3, 4]) {
-      const chain = chainFor(motion, 'between', stages), initial = compileParticlePlan(chain, 0, 0)!
+      const chain = chainFor(motion, benchmarkPosition, stages), initial = compileParticlePlan(chain, 0, 0)!
       const size = .007
       const sizeBound = initial.scaleBound * matrixScaleBound(placement) * size * camera.projectionMatrix.elements[5] * height / camera.near
       const usePoints = sizeBound <= maxPointSize
@@ -229,7 +301,7 @@ button.onclick = async () => {
       const renderedCount = compact.mesh.geometry instanceof InstancedBufferGeometry
         ? compact.mesh.geometry.instanceCount : compact.mesh.geometry.drawRange.count
       const glError = gl.getError()
-      benchmarks.push({ motion, stages, particles: initial.count, primitive: usePoints ? 'points' : 'quads', sizeBound,
+      benchmarks.push({ motion, position: benchmarkPosition, stages, particles: initial.count, primitive: usePoints ? 'points' : 'quads', sizeBound,
         planMatrixCount: initial.matrices.length / 16, uploadBytesPerFrame: compact.texture.image.data.byteLength,
         cpuUpdateAndRender: summary(cpu), gpu: summary(gpu), callbackIntervals: summary(intervals),
         callbackFps: 1000 / (intervals.reduce((a, b) => a + b, 0) / intervals.length),
@@ -240,7 +312,7 @@ button.onclick = async () => {
     result.visibilityChanges = visibilityChanges
     result.finalVisibility = document.visibilityState
     result.glError = gl.getError()
-    result.pass = parity.every(check => check.pass) && picking.every(check => check.pass)
+    result.pass = parity.every(check => check.pass) && transitions.every(check => check.pass) && picking.every(check => check.pass)
       && benchmarks.every(check => check.pass) && errors.length === 0 && result.glError === 0
   } catch (error) {
     result.fatalError = error instanceof Error ? error.stack : String(error)

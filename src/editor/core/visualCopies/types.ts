@@ -190,6 +190,21 @@ export interface FramedVisualCopy {
   birthBeat?: number
 }
 
+/** Correlated local frame/internal slots for an appearance-preserving framed
+ * entry. Arrays have equal length and immutable matrices in output-slot order.
+ * For an incoming chain frame P with finite determinant and |det(P)| >= 1e-12,
+ * output i has frame P × frames[i] and the optional internals[i] contribution.
+ * For a degenerate P it has frame P × bareFrames[i] and NO internal contribution.
+ * The guard excludes object placement and any inherited internal motion.
+ * Internal contributions accumulate separately in chain order and are folded
+ * only after every downstream frame factor; frames and internals use the SAME
+ * slot index, never independent Cartesian dimensions. */
+export interface FramedLocalTransforms {
+  frames: readonly Matrix4[]
+  internals: readonly (Matrix4 | null)[]
+  bareFrames: readonly Matrix4[]
+}
+
 /**
  * One resolved chain entry: receives one copy, returns one or more copies. A
  * mover normally returns a one-item array; a splitter returns multiple items.
@@ -223,6 +238,10 @@ export interface MoverOrSplitter {
   /** The same exact local-layout contract, sampled at an absolute beat. This
    * permits layout automation/count lanes without expanding their product. */
   localTransformsAtBeat?: (beat: number) => readonly Matrix4[]
+  /** Optional exact constant cardinality of localTransformsAtBeat at EVERY beat.
+   * A static localTransforms array already declares its length. Used to prove
+   * that a dynamic child is count-neutral without probing arbitrary beats. */
+  localTransformCount?: number
   /** Exact uniform chain-root motion: output.transform is rootTransform ×
    * input.transform, with unchanged appearance/count and no context dependence.
    * The matrix is immutable. Mutually exclusive with localTransforms[AtBeat];
@@ -230,6 +249,10 @@ export interface MoverOrSplitter {
   rootTransform?: Matrix4
   /** The same uniform chain-root contract, sampled at an absolute beat. */
   rootTransformAtBeat?: (beat: number) => Matrix4
+  /** Exact guarded frame/internal layout, sampled at an absolute beat. Mutually
+   * exclusive with local/root transforms, and only for applyFramed entries with
+   * unchanged appearance and no other input/context dependence or copy clocks. */
+  framedLocalTransformsAtBeat?: (beat: number) => FramedLocalTransforms
   apply(visualCopy: VisualCopy, context: MoverOrSplitterContext): VisualCopy[]
   /**
    * OPTIONAL: the composition convention this entry's transform uses, as

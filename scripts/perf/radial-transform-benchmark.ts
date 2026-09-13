@@ -4,6 +4,9 @@
  * Add --compare artifacts/radial-transforms/baseline.json to check sampled
  * transform parity and report speed ratios. This does not measure rendering,
  * uploads, GPU time, or presented FPS; it isolates document/copy evaluation.
+ * Focus a nested-device investigation with --particle-only --placements
+ * nested-first,nested-middle,nested-last. --stages 4 raises the population to
+ * 1,048,576; capture a baseline only when the expanded cost is intentional.
  */
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
@@ -18,16 +21,22 @@ import { getInstrument } from '../../src/editor/instruments'
 import type { Track } from '../../src/editor/types'
 
 type Instrument = 'particle' | 'particleStream'
-type Placement = 'none' | 'above' | 'between' | 'below' | 'nested'
-const placements: Placement[] = ['none', 'above', 'between', 'below', 'nested']
-const copyCount = 32 ** 3
-const sampleIndices = [0, 1, 31, 32, 1023, 1024, copyCount - 1]
+type Placement = 'none' | 'above' | 'between' | 'below' | 'nested' | 'nested-first' | 'nested-middle' | 'nested-last'
 const sampleBeats = [.5, 1.25, 4.5, -1, .5]
 const args = process.argv.slice(2)
 const option = (name: string, fallback: string) => {
   const index = args.indexOf(name)
   return index < 0 ? fallback : args[index + 1] ?? fallback
 }
+const stages = Number(option('--stages', '3'))
+assert(stages === 3 || stages === 4)
+const copyCount = 32 ** stages
+const sampleIndices = [0, 1, 31, 32, 1023, 1024, copyCount - 1]
+const placements = option('--placements', 'none,above,between,below,nested').split(',') as Placement[]
+assert(placements.length > 0 && placements.every(value => ['none', 'above', 'between', 'below', 'nested', 'nested-first', 'nested-middle', 'nested-last'].includes(value)))
+const instruments: Instrument[] = args.includes('--particle-only') ? ['particle'] : ['particle', 'particleStream']
+const nestedIndex = (placement: Placement) => placement === 'nested-first' ? 0
+  : placement === 'nested-last' ? stages - 1 : placement === 'nested' || placement === 'nested-middle' ? 1 : -1
 const samples = Number(option('--samples', '180'))
 const warmup = Number(option('--warmup', '30'))
 assert(Number.isInteger(samples) && samples > 0)
@@ -47,7 +56,7 @@ function track(id: string, fields: Partial<Track>): Track {
 }
 
 function fixture(instrument: Instrument, placement: Placement): ProjectSnapshot {
-  const radialIds = ['radial0', 'radial1', 'radial2']
+  const radialIds = Array.from({ length: stages }, (_, index) => `radial${index}`)
   const children = [...radialIds]
   if (placement === 'above') children.unshift('mover')
   if (placement === 'between') children.splice(1, 0, 'mover')
@@ -59,13 +68,13 @@ function fixture(instrument: Instrument, placement: Placement): ProjectSnapshot 
   radialIds.forEach((id, index) => {
     tracks[id] = track(id, { type: 'splitter', splitterId: 'radial', parentId: 'particles',
       // Distinct planes/radii avoid a degenerate coincident-ring benchmark.
-      inputValues: { copies: 32, radius: [4, 1.2, .25][index], plane: index, size: 1 },
-      childIds: placement === 'nested' && index === 1 ? ['mover'] : [],
+      inputValues: { copies: 32, radius: [4, 1.2, .25, .07][index], plane: index % 3, size: 1 },
+      childIds: index === nestedIndex(placement) ? ['mover'] : [],
     })
   })
   if (placement !== 'none') {
     tracks.mover = track('mover', { type: 'mover', moverId: 'mover',
-      parentId: placement === 'nested' ? 'radial1' : 'particles',
+      parentId: nestedIndex(placement) >= 0 ? radialIds[nestedIndex(placement)] : 'particles',
       // Rotate/Orbit + Constant + Auto spin. An empty MIDI lane is deliberately
       // active: these modes' authored baseline rotation runs at all beats.
       inputValues: { motion: motion === 'rotate' ? 1 : 2, mode: 1, drive: 0,
@@ -133,7 +142,7 @@ function run(instrument: Instrument, placement: Placement) {
 assert(getInstrument('particle') && getInstrument('particleStream'))
 assert(getMoverOrSplitterDefinition('radial') && getMoverOrSplitterDefinition('mover'))
 const fixtures = []
-for (const instrument of ['particle', 'particleStream'] as const) {
+for (const instrument of instruments) {
   for (const placement of placements) {
     const result = run(instrument, placement)
     fixtures.push(result)
@@ -166,7 +175,7 @@ const result = {
   sourceStatus: gitInfo(['status', '--short'], '(archive without .git)'),
   environment: { node: process.version, platform: platform(), release: release(), arch: process.arch,
     cpu: cpus()[0]?.model, nodeEnv: process.env.NODE_ENV ?? '(unset)', explicitGc: !!globalThis.gc },
-  settings: { samples, warmup, motion, copiesPerRadial: 32, radials: 3, bpm: 120,
+  settings: { samples, warmup, motion, instruments, placements, copiesPerRadial: 32, radials: stages, bpm: 120,
     frameBeatStep: 1 / 30, note: 'At 120 BPM the beat step corresponds to 60 frames/second; timings are unpaced.' },
   fixtures, ...(comparison ? { comparison } : {}),
 }

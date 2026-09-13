@@ -4,11 +4,13 @@ import { Matrix4, Vector3 } from 'three'
 import type { ResolvedNote } from '../visual/types'
 import { mergeDefinitionSettings } from './definitions'
 import { identityVisualCopy } from './identityVisualCopy'
-import { gridSplitter, type GridSettings } from './library'
+import { gridSplitter, radialSplitter, type GridSettings } from './library'
 import { resolveVisualCopies, structuralCopyCount } from './resolveVisualCopies'
 import { splitterWithChildChain } from './splitterChildChain'
 import { symmetricMotionMover, type SymmetricMotionSettings } from './symmetricMotion'
 import type { MoverOrSplitter, MoverOrSplitterContext, VisualCopy } from './types'
+import { moverDefinition, type MoverSettings } from './mover'
+import { gatedMoverOrSplitter } from './copyTargets'
 
 // The semantics under test: a mover child of a splitter moves the splitter's
 // copies in the SPLITTER'S reference frame - its origin is the origin the
@@ -326,4 +328,130 @@ test('descendants retain their own singular or mirrored slot frame and clock', (
   framed[0].visualCopy.transform.makeScale(9, 9, 9)
   assert.deepEqual(framed[1].visualCopy.transform.elements, untouched.elements, 'descendants own their frames')
   assert.equal(wrapper.cachePolicy, undefined, 'clock emitters are never declared static')
+})
+
+function uniformMover(motion: number, mode = 1): MoverOrSplitter {
+  return moverDefinition.resolve({
+    settings: mergeDefinitionSettings(moverDefinition, { motion, mode,
+      angleX: 27, angleY: 41, angleZ: 63, pivotX: 1.2, pivotY: -.8, pivotZ: .3,
+      distanceX: 2, distanceY: .3, distanceZ: .7 }) as unknown as MoverSettings,
+    notes: [{ beat: .2, durationBeats: 2, blockStartBeat: 0, blockEndBeat: 8, pitch: 60, velocity: .7 },
+      { beat: 1, durationBeats: 2, blockStartBeat: 0, blockEndBeat: 8, pitch: 63, velocity: 100 }],
+  })
+}
+
+function assertMatrixNear(actual: Matrix4, expected: Matrix4) {
+  actual.elements.forEach((value, i) => assert.ok(Math.abs(value - expected.elements[i]) < 1e-8,
+    `matrix element ${i}: ${value} != ${expected.elements[i]}`))
+}
+
+test('compact child metadata reproduces Rotate, Translate and Orbit frames and internals across seeks', () => {
+  const parent = radialSplitter.resolve({ settings: mergeDefinitionSettings(radialSplitter,
+    { copies: 5, radius: 2, tilt: 31, size: .7 }) as never, notes: [] })
+  const poses = [new Matrix4(), new Matrix4().makeRotationY(.3).setPosition(3, -4, 7)
+    .scale(new Vector3(.7, 1.3, -2.1)), new Matrix4().makeScale(0, 1, 1).setPosition(2, 3, 4),
+  new Matrix4().makeScale(1e-5, 1e-5, 1e-5).setPosition(3, 2, 1)]
+  for (const motion of [0, 1, 2]) for (const mode of [0, 1, 2]) {
+    const wrapper = splitterWithChildChain(parent, [uniformMover(motion, mode), uniformMover(1, 2)])
+    const seen = new Map<number, number[][]>()
+    for (const beat of [0, .7, 2.4, -1, .7, 0]) {
+      const compact = wrapper.framedLocalTransformsAtBeat!(beat)
+      assert.equal(compact.frames.length, 5)
+      assert.equal(compact.internals.length, 5)
+      assert.equal(compact.bareFrames.length, 5)
+      const saved = [...compact.frames, ...compact.internals.filter((m): m is Matrix4 => m !== null),
+        ...compact.bareFrames].map(matrix => matrix.elements.slice())
+      if (seen.has(beat)) assert.deepEqual(saved, seen.get(beat))
+      seen.set(beat, saved)
+      for (const pose of poses) {
+        const input = identityVisualCopy()
+        input.transform.copy(pose)
+        input.opacity = .31
+        input.colorShift.hue = .27
+        const reference = wrapper.applyFramed!(input, { beat, index: 5, count: 10,
+          placementTransform: new Matrix4().makeScale(0, 1, 1) })
+        const determinant = pose.determinant()
+        const degenerate = !Number.isFinite(determinant) || Math.abs(determinant) < 1e-12
+        reference.forEach((copy, index) => {
+          const frame = pose.clone().multiply((degenerate ? compact.bareFrames : compact.frames)[index])
+          assertMatrixNear(frame, copy.visualCopy.transform)
+          const internal = degenerate ? null : compact.internals[index]
+          assert.equal(!!internal, !!copy.internalTransform)
+          if (internal) assertMatrixNear(internal, copy.internalTransform!)
+          assert.equal(copy.visualCopy.opacity, input.opacity)
+          assert.deepEqual(copy.visualCopy.colorShift, input.colorShift)
+          // A downstream splitter composes before the retained internal; this
+          // must not collapse to simply using an animated local frame.
+          const downstream = new Matrix4().makeRotationX(.6).setPosition(.4, -.5, .2)
+          const expected = copy.visualCopy.transform.clone().multiply(downstream)
+          if (copy.internalTransform) expected.multiply(copy.internalTransform)
+          frame.multiply(downstream)
+          if (internal) frame.multiply(internal)
+          assertMatrixNear(frame, expected)
+        })
+      }
+      assert.equal(wrapper.framedLocalTransformsAtBeat!(beat), compact)
+      assert.deepEqual([...compact.frames, ...compact.internals.filter((m): m is Matrix4 => m !== null),
+        ...compact.bareFrames].map(matrix => matrix.elements), saved)
+    }
+  }
+})
+
+test('compact own-slot singular fallback retains bare slots for a degenerate incoming frame', () => {
+  const local = [new Matrix4().makeScale(0, 1, 1).setPosition(2, 3, 1),
+    new Matrix4().makeScale(-.8, 1.2, .7).setPosition(-2, 1, 3)]
+  const parent: MoverOrSplitter = { localTransforms: local, apply(copy) {
+    return local.map(matrix => ({ ...copy, transform: copy.transform.clone().multiply(matrix) }))
+  } }
+  const wrapper = splitterWithChildChain(parent, [uniformMover(2)])
+  const compact = wrapper.framedLocalTransformsAtBeat!(1.7)
+  assert.equal(compact.internals[0], null)
+  assert.ok(compact.internals[1])
+  assert.notDeepEqual(compact.frames[0].elements, compact.bareFrames[0].elements)
+  for (const pose of [new Matrix4().makeRotationX(.3).setPosition(2, -3, 4),
+    new Matrix4().makeScale(0, 1, 1).setPosition(5, 6, 7)]) {
+    const input = identityVisualCopy(); input.transform.copy(pose)
+    const degenerate = Math.abs(pose.determinant()) < 1e-12
+    const reference = wrapper.applyFramed!(input, { ...ctx, beat: 1.7 })
+    reference.forEach((copy, index) => {
+      assertMatrixNear(pose.clone().multiply((degenerate ? compact.bareFrames : compact.frames)[index]), copy.visualCopy.transform)
+      assert.equal(!!copy.internalTransform, !degenerate && !!compact.internals[index])
+    })
+  }
+})
+
+test('framed metadata requires count-one proof and declines context-dependent or clocked children', () => {
+  const parent = gridRow(4)
+  const proven = uniformMover(1)
+  assert.ok(splitterWithChildChain(parent, [proven]).framedLocalTransformsAtBeat)
+  const unknownCardinality = { ...proven, localTransformCount: undefined }
+  assert.equal(splitterWithChildChain(parent, [unknownCardinality]).framedLocalTransformsAtBeat, undefined)
+  assert.equal(splitterWithChildChain(parent, [gridRow(2)]).framedLocalTransformsAtBeat, undefined)
+  assert.equal(splitterWithChildChain(parent, [shiftX(1, true)]).framedLocalTransformsAtBeat, undefined)
+  assert.equal(splitterWithChildChain(parent, [{ ...proven, emitsCopyClocks: true }]).framedLocalTransformsAtBeat, undefined)
+  assert.equal(splitterWithChildChain(parent, [{ ...proven, structuralVariants: [gridRow(2)] }]).framedLocalTransformsAtBeat, undefined)
+  assert.equal(splitterWithChildChain(parent, [gatedMoverOrSplitter(proven,
+    { rule: 'every', slices: 2, on: [0] })]).framedLocalTransformsAtBeat, undefined)
+})
+
+test('declared tiny local slots keep their singularity classification as upstream frames rotate', () => {
+  const scales = [0, 1e-5, 1e-4 * (1 - 1e-6), 1e-4, 1e-4 * (1 + 1e-6), -.7]
+  const locals = scales.map(scale => new Matrix4().makeScale(scale, scale, scale).setPosition(2, 3, 1))
+  const parent: MoverOrSplitter = { localTransforms: locals, apply(copy) {
+    return locals.map(local => ({ ...copy, transform: copy.transform.clone().multiply(local) }))
+  } }
+  const wrapper = splitterWithChildChain(parent, [uniformMover(1)])
+  const compact = wrapper.framedLocalTransformsAtBeat!(1.7)
+  for (let step = 0; step < 40; step++) {
+    const input = identityVisualCopy()
+    input.transform.makeRotationX(step * .37).multiply(new Matrix4().makeRotationY(step * .11))
+      .scale(new Vector3(.7, 1.3, 2.1)).setPosition(3, -4, 7)
+    const reference = wrapper.applyFramed!(input, { ...ctx, beat: 1.7 })
+    reference.forEach((copy, index) => {
+      assert.equal(!!copy.internalTransform, Math.abs(locals[index].determinant()) >= 1e-12,
+        `slot ${index} must classify its declared scale without inverse cancellation`)
+      assertMatrixNear(input.transform.clone().multiply(compact.frames[index]), copy.visualCopy.transform)
+      if (copy.internalTransform) assertMatrixNear(compact.internals[index]!, copy.internalTransform)
+    })
+  }
 })

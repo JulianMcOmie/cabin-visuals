@@ -112,10 +112,12 @@ test('interleaved root motions retain noncommuting order without expanding the l
   assert.equal(structuralCopyCount(large), 1048576)
 })
 
-test('root contracts preserve reference fallback for targeted, framed and ambiguous entries', () => {
+test('root contracts preserve reference fallback for targeted, unproven framed and ambiguous entries', () => {
   const root = motion(2, 1)
   assert.equal(compileParticlePlan([gatedMoverOrSplitter(root, { rule: 'every', slices: 2, on: [0] })]), undefined)
-  assert.equal(compileParticlePlan([splitterWithChildChain(layout(radialSplitter, { copies: 5 }), [root])]), undefined)
+  const nested = splitterWithChildChain(layout(radialSplitter, { copies: 5 }), [root])
+  assert.ok(compileParticlePlan([nested])?.program, 'proven nested root motion has a framed plan')
+  assert.equal(compileParticlePlan([{ ...root, applyFramed: () => [] }]), undefined)
   assert.equal(compileParticlePlan([{ ...root, localTransforms: [new Matrix4()] }]), undefined)
   assert.equal(compileParticlePlan([{ ...root, emitsCopyClocks: true }]), undefined)
   const immutable = root.rootTransformAtBeat!(2).elements.slice()

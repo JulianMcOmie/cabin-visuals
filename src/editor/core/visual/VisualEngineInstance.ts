@@ -708,7 +708,7 @@ export function createVisualEngine() {
       // warn and truncate rather than render copies that have no mount.
       const particlePlan = particlePlans.get(obj.trackId)
       if (particlePlan) {
-        if (particlePlan.beat !== objBeat && obj.moverAndSplitterChain.some(entry => entry.localTransformsAtBeat || entry.rootTransformAtBeat)) {
+        if (particlePlan.beat !== objBeat && obj.moverAndSplitterChain.some(entry => entry.localTransformsAtBeat || entry.rootTransformAtBeat || entry.framedLocalTransformsAtBeat)) {
           const sampled = compileParticlePlan(obj.moverAndSplitterChain, ++particlePlanVersion, objBeat)
           if (!sampled) throw new Error('A compact particle layout violated its shared-transform contract')
           particlePlans.set(obj.trackId, sampled)

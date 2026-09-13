@@ -320,6 +320,7 @@ export const moverDefinition: MoverOrSplitterDefinition<MoverSettings> = {
         return [new Matrix4().makeTranslation(offset.x, offset.y, offset.z)]
       })
       return {
+        localTransformCount: 1,
         localTransformsAtBeat: layoutAt,
         apply(visualCopy, { beat }) {
           return [nextCopy(
@@ -338,7 +339,7 @@ export const moverDefinition: MoverOrSplitterDefinition<MoverSettings> = {
     const layoutAt = memoByBeat((beat) => [rotationAt(beat)])
     const orbitAt = memoByBeat((beat) => pivotedRotation(rotationAt(beat), pivot))
     return {
-      ...(orbit ? { rootTransformAtBeat: orbitAt } : { localTransformsAtBeat: layoutAt }),
+      ...(orbit ? { rootTransformAtBeat: orbitAt } : { localTransformCount: 1, localTransformsAtBeat: layoutAt }),
       apply(visualCopy, { beat }) {
         if (!orbit) {
           return [nextCopy(visualCopy, visualCopy.transform.clone().multiply(layoutAt(beat)[0]))]

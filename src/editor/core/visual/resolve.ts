@@ -736,6 +736,12 @@ function resolveOwnMoverOrSplitter(track: Track, p: ProjectSnapshot): MoverOrSpl
       const entry = resolveAtBeat(beat)
       return entry.localTransformsAtBeat?.(beat) ?? entry.localTransforms!
     }
+    const fixedCount = (entry: MoverOrSplitter) => entry.localTransformsAtBeat
+      ? entry.localTransformCount : entry.localTransforms?.length
+    const count = fixedCount(resolved)
+    if (count !== undefined && wrapped.structuralVariants.every(entry => fixedCount(entry) === count)) {
+      wrapped.localTransformCount = count
+    }
   }
   if ((resolved.rootTransform || resolved.rootTransformAtBeat)
     && wrapped.structuralVariants.every(entry => entry.rootTransform || entry.rootTransformAtBeat)) {
