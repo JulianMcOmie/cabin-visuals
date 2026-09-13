@@ -42,14 +42,14 @@ function SceneTabMenu({ x, y, canDelete, onDuplicate, onDelete, onClose }: {
       >
         <button
           onClick={() => { onDuplicate(); onClose() }}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[var(--text)] hover:bg-[var(--bg-elevated)]/60 cursor-pointer"
+          className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[var(--text)] hover:bg-[var(--menu-hover)] focus-visible:bg-[var(--menu-hover)] cursor-pointer"
         >
           <Copy size={12} /> Duplicate
         </button>
         <button
           onClick={() => { if (canDelete) { onDelete(); onClose() } }}
           disabled={!canDelete}
-          className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${canDelete ? 'text-red-400 hover:bg-red-500/15 cursor-pointer' : 'text-red-400/40 cursor-default'}`}
+          className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${canDelete ? 'text-red-400 hover:bg-red-500/15 focus-visible:bg-red-500/15 cursor-pointer' : 'text-red-400/40 cursor-default'}`}
         >
           <Trash2 size={12} /> Delete
         </button>

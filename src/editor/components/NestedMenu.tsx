@@ -137,7 +137,7 @@ export function NestedMenu({
           onMouseEnter={() => setOpenSub(group.key)}
           onMouseLeave={() => setOpenSub(null)}
         >
-          <div className="flex items-center justify-between gap-4 px-3 py-1.5 text-[var(--text)] hover:bg-[var(--bg-elevated)]/60 cursor-default">
+          <div data-state={openSub === group.key ? 'open' : 'closed'} className="data-[state=open]:bg-[var(--menu-hover)] flex items-center justify-between gap-4 px-3 py-1.5 text-[var(--text)] hover:bg-[var(--menu-hover)] focus-visible:bg-[var(--menu-hover)] cursor-default">
             <span className="flex items-center gap-2">
               {group.icon && <span aria-hidden="true" className="flex h-4 w-4 shrink-0 items-center justify-center text-[var(--text-3)]">{group.icon}</span>}
               <span>{group.label}</span>
@@ -152,7 +152,7 @@ export function NestedMenu({
                   disabled={item.disabled}
                   onClick={() => { onPick(group.key, item.id); onClose() }}
                   className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 text-left ${
-                    item.disabled ? 'text-[var(--text-muted)] cursor-default' : 'text-[var(--text)] hover:bg-[var(--bg-elevated)]/60'
+                    item.disabled ? 'text-[var(--text-muted)] cursor-default' : 'text-[var(--text)] hover:bg-[var(--menu-hover)] focus-visible:bg-[var(--menu-hover)]'
                   }`}
                 >
                   <span className="flex items-center gap-1.5 min-w-0">

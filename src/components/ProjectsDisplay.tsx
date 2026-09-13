@@ -701,7 +701,7 @@ function ProjectContextMenu({
           role="menuitem"
           disabled={createBlocked}
           onClick={onDuplicate}
-          className="flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[13px] text-[var(--text-2)] outline-none hover:bg-[var(--bg-elevated)] hover:text-[var(--text)] disabled:cursor-default disabled:opacity-50"
+          className="flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[13px] text-[var(--text-2)] outline-none enabled:hover:bg-[var(--menu-hover)] enabled:hover:text-[var(--text)] focus-visible:bg-[var(--menu-hover)] focus-visible:text-[var(--text)] disabled:cursor-default disabled:opacity-50"
         >
           <Copy size={13} />
           {createBlocked ? 'Copy project (limit reached)' : 'Copy project'}
@@ -710,7 +710,7 @@ function ProjectContextMenu({
           type="button"
           role="menuitem"
           onClick={onDelete}
-          className="flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[13px] text-[var(--text-2)] outline-none hover:bg-[var(--bg-elevated)] hover:text-[var(--danger)]"
+          className="flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[13px] text-[var(--text-2)] outline-none hover:bg-[var(--menu-hover)] hover:text-[var(--danger)] focus-visible:bg-[var(--menu-hover)] focus-visible:text-[var(--danger)]"
         >
           <Trash2 size={13} />
           Delete project
