@@ -315,12 +315,16 @@ export const moverDefinition: MoverOrSplitterDefinition<MoverSettings> = {
           .addScaledVector(basis[1], amounts[1])
           .addScaledVector(basis[2], amounts[2])
       })
+      const layoutAt = memoByBeat((beat) => {
+        const offset = offsetAt(beat)
+        return [new Matrix4().makeTranslation(offset.x, offset.y, offset.z)]
+      })
       return {
+        localTransformsAtBeat: layoutAt,
         apply(visualCopy, { beat }) {
-          const offset = offsetAt(beat)
           return [nextCopy(
             visualCopy,
-            visualCopy.transform.clone().multiply(new Matrix4().makeTranslation(offset.x, offset.y, offset.z)),
+            visualCopy.transform.clone().multiply(layoutAt(beat)[0]),
           )]
         },
       }
@@ -331,13 +335,15 @@ export const moverDefinition: MoverOrSplitterDefinition<MoverSettings> = {
     // Per beat, not per copy (beatMemo.ts): shared read-only, only ever
     // composed into fresh matrices below.
     const rotationAt = memoByBeat((beat) => basisRotation(basis, evaluateMoverAngles(notes, settings, beat)))
+    const layoutAt = memoByBeat((beat) => [rotationAt(beat)])
+    const orbitAt = memoByBeat((beat) => pivotedRotation(rotationAt(beat), pivot))
     return {
+      ...(orbit ? { rootTransformAtBeat: orbitAt } : { localTransformsAtBeat: layoutAt }),
       apply(visualCopy, { beat }) {
-        const rotation = rotationAt(beat)
         if (!orbit) {
-          return [nextCopy(visualCopy, visualCopy.transform.clone().multiply(rotation))]
+          return [nextCopy(visualCopy, visualCopy.transform.clone().multiply(layoutAt(beat)[0]))]
         }
-        return [nextCopy(visualCopy, pivotedRotation(rotation, pivot).multiply(visualCopy.transform.clone()))]
+        return [nextCopy(visualCopy, orbitAt(beat).clone().multiply(visualCopy.transform))]
       },
     }
   },

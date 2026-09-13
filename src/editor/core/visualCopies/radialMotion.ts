@@ -4,6 +4,7 @@ import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import type { VisualCopy } from './types'
 import { RADIAL_MOTION_COLOR } from './identityColors'
+import { memoByBeat } from './beatMemo'
 
 export interface RadialMotionSettings {
   /** Copies per nesting depth, outermost first. Powers of two nest cleanly. */
@@ -319,28 +320,31 @@ export const radialMotionMover: MoverOrSplitterDefinition<RadialMotionSettings> 
   midiRows: radialMotionMidiRows,
   strictMidiRows: true,
   resolve({ settings, notes }) {
-    return {
-      apply(visualCopy, { beat }) {
-        // Resolved once per frame, not once per copy: the 64 copies at the
-        // default counts all read the same 14 depth matrices.
-        const depths = Array.from(
-          { length: RADIAL_MOTION_DEPTHS },
-          (_, depth) => depthMatrices(settings, notes, beat, depth),
-        )
-        const copies: VisualCopy[] = []
-        for (const outer of depths[0]) {
-          for (const middle of depths[1]) {
-            for (const inner of depths[2]) {
-              copies.push({
-                transform: visualCopy.transform.clone()
-                  .multiply(outer).multiply(middle).multiply(inner),
-                opacity: visualCopy.opacity,
-                colorShift: { ...visualCopy.colorShift },
-              })
-            }
-          }
+    // Every incoming copy receives the same live local arrangement. Keep one
+    // immutable layout for the sampled beat, not another three-depth note walk
+    // and matrix product for each upstream splitter copy.
+    const layoutAt = memoByBeat((beat) => {
+      const depths = Array.from(
+        { length: RADIAL_MOTION_DEPTHS },
+        (_, depth) => depthMatrices(settings, notes, beat, depth),
+      )
+      const layout: Matrix4[] = []
+      for (const outer of depths[0]) {
+        for (const middle of depths[1]) {
+          const parent = outer.clone().multiply(middle)
+          for (const inner of depths[2]) layout.push(parent.clone().multiply(inner))
         }
-        return copies
+      }
+      return layout
+    })
+    return {
+      localTransformsAtBeat: layoutAt,
+      apply(visualCopy, { beat }) {
+        return layoutAt(beat).map((local): VisualCopy => ({
+          transform: visualCopy.transform.clone().multiply(local),
+          opacity: visualCopy.opacity,
+          colorShift: { ...visualCopy.colorShift },
+        }))
       },
     }
   },

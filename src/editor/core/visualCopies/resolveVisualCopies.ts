@@ -322,9 +322,13 @@ export function structuralCopyCount(
   plainCount?: number,
 ): number {
   // Structural UI queries must not expand a factored million-copy layout.
-  const localCount = (chain: MoverOrSplitter[]) => chain.every(entry => (entry.localTransforms || entry.localTransformsAtBeat) && !entry.applyFramed && !entry.emitsCopyClocks)
-    ? chain.reduce((count, entry) => count * (entry.localTransformsAtBeat?.(0) ?? entry.localTransforms!).length, 1) : undefined
-  let count = plainCount ?? localCount(moverAndSplitterChain) ?? resolveVisualCopies(moverAndSplitterChain, 0).length
+  const factoredCount = (chain: MoverOrSplitter[]) => chain.every(entry => {
+    const local = !!(entry.localTransforms || entry.localTransformsAtBeat)
+    const root = !!(entry.rootTransform || entry.rootTransformAtBeat)
+    return local !== root && !entry.applyFramed && !entry.emitsCopyClocks
+  }) ? chain.reduce((count, entry) => count * (entry.rootTransform || entry.rootTransformAtBeat
+    ? 1 : (entry.localTransformsAtBeat?.(0) ?? entry.localTransforms!).length), 1) : undefined
+  let count = plainCount ?? factoredCount(moverAndSplitterChain) ?? resolveVisualCopies(moverAndSplitterChain, 0).length
   const variantRanks = Math.max(
     0,
     ...moverAndSplitterChain.map((entry) => entry.structuralVariants?.length ?? 0),
@@ -333,7 +337,7 @@ export function structuralCopyCount(
     const probeChain = moverAndSplitterChain.map(
       (entry) => entry.structuralVariants?.[rank] ?? entry,
     )
-    count = Math.max(count, localCount(probeChain) ?? resolveVisualCopies(probeChain, 0).length)
+    count = Math.max(count, factoredCount(probeChain) ?? resolveVisualCopies(probeChain, 0).length)
   }
   return count
 }

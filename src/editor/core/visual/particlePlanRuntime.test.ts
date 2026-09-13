@@ -63,3 +63,40 @@ test('million-particle layout automation and count MIDI stay compact during play
   }
   assert.notDeepEqual(matrices.get(0), matrices.get(4), 'layout spacing changes with automation')
 })
+
+test('uniform motion updates compact worker frames and survives seeks and representation changes', () => {
+  for (const motion of [0, 1, 2]) {
+    const p = project()
+    const mover: Track = { ...p.tracks.a, id: 'm', type: 'mover', moverId: 'mover',
+      inputValues: { motion, mode: 1, drive: 0, angleX: 17, angleY: 29, angleZ: 45,
+        distanceX: 1, distanceY: 2, distanceZ: 3, pivotX: 1, pivotY: -.4 },
+      blocks: [{ id: 'move', startBar: 0, durationBars: 8, loop: false,
+        notes: [{ id: 'x', pitch: 60, velocity: 100, startBeat: 0, durationBeats: 4 }] }] }
+    const document = { ...p, tracks: { ...p.tracks, m: mover } }
+    document.tracks.p.childIds = ['a', 'm', 'b']
+    const engine = createVisualEngine(), receiver = createVisualEngine()
+    const encoder = new PreviewFrameEncoder(), decoder = new PreviewFrameDecoder()
+    engine.setProject(document)
+    const seen = new Map<number, number[]>()
+    for (const [id, beat] of [0, 2, -.5, 2, 0].entries()) {
+      engine.computeAtBeat(beat)
+      const plan = engine.getParticlePlan('p')!
+      assert.equal(plan.beat, beat, `motion ${motion} samples the requested beat`)
+      assert.equal(plan.count, 1048576)
+      assert.equal(engine.getVisualCopies('p').length, 0)
+      const packet = encoder.encode(engine.captureFrame(), id, 0, decoder.id)
+      assert.ok(packet.particlePlans, 'changed motion matrices cross the worker boundary')
+      receiver.applyFrame(decoder.decode(structuredClone(packet)))
+      const matrix = [...engine.getVisualCopy('p', 1000)!.transform.elements]
+      assert.deepEqual(receiver.getVisualCopy('p', 1000), engine.getVisualCopy('p', 1000))
+      if (seen.has(beat)) assert.deepEqual(matrix, seen.get(beat))
+      seen.set(beat, matrix)
+    }
+    assert.notDeepEqual(seen.get(0), seen.get(2), `motion ${motion} must animate`)
+    engine.setProject(project(false))
+    assert.equal(engine.getParticlePlan('p'), undefined)
+    engine.setProject(document)
+    engine.computeAtBeat(2)
+    assert.deepEqual(engine.getVisualCopy('p', 1000)!.transform.elements, seen.get(2))
+  }
+})

@@ -223,6 +223,13 @@ export interface MoverOrSplitter {
   /** The same exact local-layout contract, sampled at an absolute beat. This
    * permits layout automation/count lanes without expanding their product. */
   localTransformsAtBeat?: (beat: number) => readonly Matrix4[]
+  /** Exact uniform chain-root motion: output.transform is rootTransform ×
+   * input.transform, with unchanged appearance/count and no context dependence.
+   * The matrix is immutable. Mutually exclusive with localTransforms[AtBeat];
+   * unlike composition, this is a proof that every copy receives the SAME delta. */
+  rootTransform?: Matrix4
+  /** The same uniform chain-root contract, sampled at an absolute beat. */
+  rootTransformAtBeat?: (beat: number) => Matrix4
   apply(visualCopy: VisualCopy, context: MoverOrSplitterContext): VisualCopy[]
   /**
    * OPTIONAL: the composition convention this entry's transform uses, as

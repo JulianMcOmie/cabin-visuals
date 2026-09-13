@@ -14,9 +14,9 @@ Setting the second Grid's Depth to `4` produces **4,194,304 particles**. Small p
 
 ## Supported scope
 
-The compact path activates automatically at a structural count of 16,384 or more, for up to 16 sibling Grid, Radial, and Line stages. It supports their layout settings, layout automation, count MIDI, Particle appearance, object placement, and the existing compatible Scale effect. Logical counts remain available, and inspection can reconstruct any single copy without expanding its neighbors. Count reductions preserve hidden structural slots when inspecting them.
+The compact path activates automatically at a structural count of 16,384 or more, for up to 16 packed stages. Grid, Radial, Line, Mover (Translate/Rotate/Orbit), and Radial Motion can participate. It supports their layout settings, layout automation, count MIDI, Particle appearance, object placement, and the existing compatible Scale effect. Logical counts remain available, and inspection can reconstruct any single copy without expanding its neighbors. Count reductions preserve hidden structural slots when inspecting them. See [moving-particle measurements](radial-transforms.md) for the three-Radial case.
 
-Nested splitter children, arbitrary movers, per-copy clocks, targeted entries, masks, and other effects retain the reference evaluator. They are not accelerated by this implementation and can still be expensive at large counts. This is not a general GPU compiler for every device combination.
+Nested splitter children, movers without an explicit shared-transform contract, per-copy clocks, targeted entries, masks, and other effects retain the reference evaluator. They can still be expensive at large counts. This is not a general GPU compiler for every device combination.
 
 Small particles use a buffer-free point draw indexed by `gl_VertexID`. A conservative scale bound chooses the original instanced-quad shader when points could exceed the GPU's supported size. Point sprites retain the same radial color/glow shader, with minor rasterization differences from quads, including clipping at the viewport edge. Neither path drops particles to meet a frame budget.
 

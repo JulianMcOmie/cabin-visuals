@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { Matrix4, Vector3 } from 'three'
 import type { ResolvedNote } from '../visual/types'
 import { mergeDefinitionSettings } from './definitions'
 import {
@@ -7,6 +8,9 @@ import {
   evaluateRadialMotionRadiusScale,
   evaluateRadialMotionSpinBeats,
   radialMotionMover,
+  radialMotionCopies,
+  radialMotionRadius,
+  radialMotionSpinRates,
   radialMotionRadiusPitch,
   radialMotionSpinDetentIndex,
   radialMotionSpinDetentLabel,
@@ -14,8 +18,11 @@ import {
   type RadialMotionSettings,
 } from './radialMotion'
 import { getMoverOrSplitterDefinition } from './registry'
-import { resolveVisualCopies } from './resolveVisualCopies'
+import { resolveVisualCopies, structuralCopyCount } from './resolveVisualCopies'
 import type { VisualCopy } from './types'
+import { identityVisualCopy } from './identityVisualCopy'
+import { compileParticlePlan, particlePlanMatrix } from './particlePlan'
+import { radialSplitter } from './library'
 
 const DEFAULTS = mergeDefinitionSettings(radialMotionMover, undefined) as unknown as RadialMotionSettings
 
@@ -219,4 +226,78 @@ test('structural output count comes only from settings and stays fixed across MI
     assert.equal(resolveVisualCopies([empty], beat).length, 24)
     assert.equal(resolveVisualCopies([active], beat).length, 24)
   }
+})
+
+/** The pre-batching composition, starting at the incoming transform and
+ * multiplying each depth separately, so regrouping cannot hide an order bug. */
+function referenceMatrices(s: RadialMotionSettings, notes: ResolvedNote[], beat: number, input: Matrix4) {
+  const radians = Math.PI / 180
+  const depths = [0, 1, 2].map(depth => {
+    const count = radialMotionCopies(s, depth)
+    const radius = radialMotionRadius(s, depth) * evaluateRadialMotionRadiusScale(notes, s, beat, depth)
+    const phase = evaluateRadialMotionSpinBeats(notes, beat, depth)
+    const rates = radialMotionSpinRates(s, depth)
+    const spin = new Matrix4().makeRotationZ(rates.z * phase * radians)
+      .multiply(new Matrix4().makeRotationY(rates.y * phase * radians))
+      .multiply(new Matrix4().makeRotationX(rates.x * phase * radians))
+    return Array.from({ length: count }, (_, index) => spin.clone()
+      .multiply(new Matrix4().makeRotationZ(index / count * 2 * Math.PI))
+      .multiply(new Matrix4().makeTranslation(radius, 0, 0)))
+  })
+  const matrices: Matrix4[] = []
+  for (const outer of depths[0]) for (const middle of depths[1]) for (const inner of depths[2]) {
+    matrices.push(input.clone().multiply(outer).multiply(middle).multiply(inner))
+  }
+  return matrices
+}
+
+test('compact Radial Motion matches the original depth composition and appearance across seeks', () => {
+  const s = settings({ copies0: 3, copies1: 4, copies2: 2,
+    spinX0: 22.5, spinY1: -45, spinX2: 90, spinY2: 11.25 })
+  const notes = [note(.5, radialMotionRadiusPitch(0, 0)), note(.7, radialMotionRadiusPitch(0, 3)),
+    note(1, radialMotionSpinPitch(1, 0)), note(2, radialMotionSpinPitch(2, 1)),
+    note(3, radialMotionRadiusPitch(2, 1)), note(4, radialMotionSpinPitch(2, 4))]
+  const entry = radialMotionMover.resolve({ settings: s, notes })
+  const input = identityVisualCopy()
+  input.transform.makeRotationY(.37).setPosition(2, -3, 4).scale(new Vector3(1.2, .7, -.8))
+  input.opacity = .31
+  input.colorShift = { hue: .2, saturation: -.1, lightness: .05, tint: '#ab143f', tintAmount: .7, tintPerceptual: true }
+  const seen = new Map<number, number[][]>()
+  for (const beat of [0, .6, 1.7, 3, 5, -2, 1.7, 0]) {
+    const reference = referenceMatrices(s, notes, beat, input.transform)
+    const actual = entry.apply(input, { beat, index: 7, count: 100,
+      placementTransform: new Matrix4().makeTranslation(8, 9, 10) })
+    const plan = compileParticlePlan([entry], 0, beat)!
+    assert.equal(plan.count, 24)
+    actual.forEach((copy, index) => {
+      assert.equal(copy.opacity, input.opacity)
+      assert.deepEqual(copy.colorShift, input.colorShift)
+      assert.notEqual(copy.colorShift, input.colorShift)
+      const planned = input.transform.clone().multiply(particlePlanMatrix(plan, index, new Matrix4()))
+      copy.transform.elements.forEach((value, i) => {
+        assert.ok(Math.abs(value - reference[index].elements[i]) < 1e-9)
+        assert.ok(Math.abs(planned.elements[i] - reference[index].elements[i]) < 1e-9)
+      })
+    })
+    const matrices = actual.map(copy => copy.transform.elements)
+    if (seen.has(beat)) assert.deepEqual(matrices, seen.get(beat))
+    seen.set(beat, matrices)
+    const shared = entry.localTransformsAtBeat!(beat)
+    const snapshot = shared.map(matrix => matrix.elements.slice())
+    entry.apply(input, { beat, index: 99, count: 100 })
+    assert.equal(entry.localTransformsAtBeat!(beat), shared)
+    assert.deepEqual(shared.map(matrix => matrix.elements), snapshot, 'applying copies leaves shared layouts immutable')
+  }
+})
+
+test('three 32-copy Radials plus Radial Motion stay compact without per-copy evaluation', () => {
+  const chain = Array.from({ length: 3 }, () => radialSplitter.resolve({
+    settings: mergeDefinitionSettings(radialSplitter, { copies: 32 }) as never, notes: [],
+  }))
+  chain.push(radialMotionMover.resolve({ settings: settings(), notes: [] }))
+  chain.forEach(entry => { entry.apply = () => { throw new Error('expanded upstream copies') } })
+  const plan = compileParticlePlan(chain, 0, 2)!
+  assert.equal(plan.count, 32 ** 3 * 64)
+  assert.equal(plan.matrices.length, (3 * 32 + 64) * 16)
+  assert.equal(structuralCopyCount(chain), plan.count)
 })

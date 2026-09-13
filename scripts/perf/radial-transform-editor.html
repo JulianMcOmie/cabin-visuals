@@ -1,0 +1,31 @@
+<!doctype html><title>Radial transform editor check</title><style>body{background:#111;color:#eee;font:14px system-ui}button{padding:8px;margin:5px}iframe{width:100%;height:850px;border:0}pre{white-space:pre-wrap;max-height:180px;overflow:auto}</style>
+<label>Radial stages <select id="stages"><option value="3">3 × 32 copies (32,768)</option><option value="4">4 × 32 copies (1,048,576)</option></select></label><label>Motion <select id="motion"><option value="1">Rotate</option><option value="2">Orbit</option></select></label><button id="setup">Load Particle chain</button><button id="run">Measure editor playback</button><pre id="result">Waiting for the local editor. Loads Particle → Radial → Mover → Radial → Radial with distinct planes and constant rotation. This is an isolated in-memory fixture.</pre><iframe src="/editor"></iframe>
+<script>
+const w=()=>document.querySelector('iframe').contentWindow, output=document.querySelector('pre');
+document.querySelector('#setup').onclick=()=>{
+ const win=w(),{project,ui,time}=win.__cabinStores,p=project.getState(),sceneId=p.sceneOrder.find(id=>!p.scenes[id].isMain),mainId=p.sceneOrder.find(id=>p.scenes[id].isMain);
+ const count=32, stages=Number(document.querySelector('#stages').value), motion=Number(document.querySelector('#motion').value);
+ const root=['particle'],base={id:'particle',name:'Particle',instrumentId:'particle',type:'base',color:'#7dd3fc',muted:false,solo:false,childIds:['r0','move',...Array.from({length:stages-1},(_,i)=>'r'+(i+1))],params:{size:.007},blocks:[]};
+ const tracks={particle:base};
+ for(let i=0;i<stages;i++) tracks['r'+i]={...base,id:'r'+i,parentId:'particle',name:'Radial '+(i+1),type:'splitter',splitterId:'radial',instrumentId:'',childIds:[],params:{},inputValues:{copies:count,radius:[4,1.2,.25,.04][i],plane:i%3,size:1}};
+ tracks.move={...base,id:'move',parentId:'particle',name:'Constant '+(motion===1?'Rotate':'Orbit'),type:'mover',moverId:'mover',instrumentId:'',childIds:[],params:{},inputValues:{motion,mode:1,drive:0,angleX:17,angleY:29,angleZ:45,angle:1,pivotX:.3,pivotY:-.2,pivotZ:.1}};
+ const lighting=Object.fromEntries(Object.entries(p.scenes[sceneId].tracks).filter(([id,t])=>t.instrumentId==='light'||t.type==='group'&&t.name==='Lighting'));
+ Object.assign(tracks,lighting);root.push(...Object.values(lighting).filter(t=>!t.parentId).map(t=>t.id));
+ const scene={...p.scenes[sceneId],tracks,rootTrackIds:root,backgroundColor:'#000000'};
+ project.setState({activeSceneId:sceneId,scenes:{[sceneId]:scene,[mainId]:p.scenes[mainId]},tracks,rootTrackIds:root}); ui.getState().setCanvasView('scene');time.setState({currentBeat:2,isPlaying:false});
+ output.textContent='Fixture loaded: '+count+'^'+stages+' = '+count**stages+' Particle copies, with constant '+(motion===1?'Rotate':'Orbit')+'.';
+};
+document.querySelector('#run').onclick=async()=>{
+ const win=w(),state=win.__r3fState(),time=win.__cabinStores.time,original=state.advance;
+ const profile = [],modes=new Map();
+ const originalRender=state.gl.render.bind(state.gl);state.gl.render=(scene,camera)=>{const s=performance.now();const value=originalRender(scene,camera);const ms=performance.now()-s;if(ms>2)profile.push({kind:'render',ms,objects:scene.children.length});scene.traverse(o=>{if(o.name==='Factored Particle instances'){const key=scene.uuid,old=modes.get(key);modes.set(key,{count:o.isPoints?o.geometry.drawRange.count:o.geometry.instanceCount,uuid:o.uuid,points:!!o.isPoints,changes:(old?.changes??0)+(old&&old.uuid!==o.uuid?1:0),near:camera.near,projectionY:camera.projectionMatrix.elements[5]})}});return value};
+ const callbacks=[];const subscribers=state.internal.subscribers.map((sub,index)=>{const original=sub.ref.current,record={index,priority:sub.priority,source:original.toString().slice(0,650),ms:0,max:0,calls:0};callbacks.push(record);sub.ref.current=(...args)=>{const s=performance.now();const v=original(...args);const ms=performance.now()-s;record.ms+=ms;record.max=Math.max(record.max,ms);record.calls++;if(ms>2)profile.push({kind:'callback',index,priority:sub.priority,ms});return v};return {sub,original}});
+ const renders=[],cpu=[],workerDurations=[],beats=[],ticks=[];const start=performance.now();let animation;
+ state.set({advance:(...args)=>{const s=performance.now();original(...args);if(s>start+2000){renders.push(s);cpu.push(performance.now()-s)}}});
+ const tick=now=>{if(now>start+2000)ticks.push(now);time.setState({currentBeat:2+(now-start)/500,isPlaying:true});const runtime=win.__previewRuntime;if(beats.at(-1)!==runtime.beat){beats.push(runtime.beat);workerDurations.push(runtime.duration)}animation=requestAnimationFrame(tick)};animation=requestAnimationFrame(tick);
+ await new Promise(r=>setTimeout(r,7000));cancelAnimationFrame(animation);time.setState({isPlaying:false});state.set({advance:original}); state.gl.render=originalRender;subscribers.forEach(({sub,original})=>sub.ref.current=original);
+ const meshes=[];for(const scene of win.__cabinVisual.getMountedRenderScenes().values())scene.traverse(o=>{if(o.name==='Factored Particle instances')meshes.push({name:o.name,particles:o.isPoints?o.geometry.drawRange.count:o.geometry.instanceCount,points:!!o.isPoints,matrixSlots:o.material.uniforms.uLayouts.value.image.data.length/16})});
+ const sorted=cpu.toSorted((a,b)=>a-b);const result={fixture:{copies:32**Number(document.querySelector('#stages').value),motion:document.querySelector('#motion').value},maxPointSize:state.gl.getContext().getParameter(state.gl.getContext().ALIASED_POINT_SIZE_RANGE)[1],modes:[...modes.values()],rafFps:(ticks.length-1)*1000/(ticks.at(-1)-ticks[0]),callbacks:callbacks.toSorted((a,b)=>b.ms-a.ms).slice(0,6),profile:profile.slice(-40),renders:renders.length,renderedFps:(renders.length-1)*1000/(renders.at(-1)-renders[0]),cpuMedianMs:sorted[Math.floor(sorted.length*.5)],cpuP95Ms:sorted[Math.floor(sorted.length*.95)],runtime:win.__previewRuntime,workerResponses:beats.length,meshes,canvas:[state.gl.domElement.width,state.gl.domElement.height]};
+ result.pass=meshes.length>0&&meshes[0].particles===result.fixture.copies;output.textContent=JSON.stringify(result,(k,v)=>k==='ambient'?undefined:v,2);
+};
+</script>
