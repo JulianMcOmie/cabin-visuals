@@ -3,6 +3,7 @@ import { useAudioStore } from '../store/AudioStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { firstAudioBlock } from './transcribeSong'
 import { placeDrumMidi } from './drumMidi'
+import type { AudioBlock } from '../types'
 import type { DrumAnalysis, DrumPart } from './drumDetection'
 
 export type DrumPhase = { label: string; progress?: number }
@@ -67,9 +68,16 @@ async function analyseSong(clipRef: string, report: Listener): Promise<DrumAnaly
   return analyseInWorker(samples, decoded.sampleRate, report)
 }
 
-export async function extractDrumMidi(part: DrumPart, report: Listener, signal: AbortSignal): Promise<number> {
+/** The audio panel supplies its own clip getter so upload/decode waits always
+ * re-read that track's latest trim, never another song in the project. */
+export async function extractDrumMidi(
+  part: DrumPart,
+  report: Listener,
+  signal: AbortSignal,
+  getBlock: () => AudioBlock | undefined = firstAudioBlock,
+): Promise<number> {
   signal.throwIfAborted()
-  const initial = firstAudioBlock()
+  const initial = getBlock()
   const sceneId = useProjectStore.getState().activeSceneId
   if (!initial) throw new Error('Add a song to the timeline first.')
   if (!isUploadedRef(initial.clipRef)) throw new Error('Sign in and save the project so the song uploads, then try again.')
@@ -97,12 +105,12 @@ export async function extractDrumMidi(part: DrumPart, report: Listener, signal: 
     // Decode writes the detected grid and trims asynchronously. Require a
     // settled clip rather than guessing placement when it failed to decode.
     const deadline = Date.now() + 30_000
-    while (!signal.aborted && firstAudioBlock()?.id === initial.id && firstAudioBlock()!.trimEnd <= 0 && Date.now() < deadline) {
+    while (!signal.aborted && getBlock()?.id === initial.id && getBlock()!.trimEnd <= 0 && Date.now() < deadline) {
       report({ label: 'Waiting for the song’s beat grid…' })
       await new Promise((r) => setTimeout(r, 200))
     }
     signal.throwIfAborted()
-    const block = firstAudioBlock()
+    const block = getBlock()
     const state = useProjectStore.getState()
     if (!block || block.id !== initial.id || block.clipRef !== initial.clipRef || state.activeSceneId !== sceneId) {
       throw new Error('The song or scene changed while processing. Select the intended scene and try again.')

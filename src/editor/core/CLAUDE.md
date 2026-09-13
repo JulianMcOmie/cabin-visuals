@@ -83,7 +83,7 @@ Export video frame-exactness comes from a registered frame preparer (see export/
 
 `utils/drumDetection.ts` is heuristic band-onset detection, run in a browser
 worker. `utils/extractDrumMidi.ts` shares upload/separation/analysis across the
-three Text Display buttons. `utils/drumMidi.ts` owns seconds-to-beats placement
+three audio track buttons. `utils/drumMidi.ts` owns seconds-to-beats placement
 and tempo rescaling of edited blocks. Track's optional `drumMidi` metadata must
 survive import/serialization: BPM changes rescale current notes in all scenes,
 never recreate them from detections. Audio trims are applied at insertion only.

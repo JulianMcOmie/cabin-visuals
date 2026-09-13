@@ -81,3 +81,27 @@ test('failed uploads and an already-cancelled action never call the provider', a
   await assert.rejects(extractDrumMidi('kick', () => {}, cancelled.signal))
   assert.equal(fetch.mock.callCount(), 0)
 })
+
+test('audio settings use their own clip and trims even when another song is first', async (t) => {
+  browserMocks(t); setup('u/p/first-song')
+  const selectedRef = 'u/p/selected-song'
+  useAudioStore.getState().addClip({ ref: selectedRef, fileName: 'selected.mp3', duration: 4 })
+  // Append a second audio track explicitly: the old firstAudioBlock fallback
+  // must never win over the panel's selected source getter.
+  const s = useProjectStore.getState()
+  const selected = { ...s.audioTracks['u/p/first-song'], id: selectedRef, audioBlocks: [{ id: selectedRef, clipRef: selectedRef, startBar: 5, trimStart: 0.75, trimEnd: 4 }] }
+  useProjectStore.setState({ audioTracks: { ...s.audioTracks, [selectedRef]: selected }, audioRootTrackIds: [...s.audioRootTrackIds, selectedRef], tracks: { ...s.tracks, [selectedRef]: selected }, rootTrackIds: [...s.rootTrackIds, selectedRef] })
+  const refs: string[] = []
+  t.mock.method(globalThis, 'fetch', async (url: string, init?: RequestInit) => {
+    if (url !== '/api/drum-stem') return new Response(new Uint8Array(4))
+    refs.push(JSON.parse(String(init?.body)).clipRef)
+    return Response.json({ url: 'https://test.invalid/drum' })
+  })
+  await extractDrumMidi('kick', () => {}, new AbortController().signal, () => useProjectStore.getState().audioTracks[selectedRef]?.audioBlocks?.[0])
+  assert.deepEqual(refs, [selectedRef])
+  const state = useProjectStore.getState()
+  const track = Object.values(state.tracks).find((t) => t.drumMidi)!
+  const block = track.blocks[0]
+  assert.equal(track.drumMidi?.audioBlockId, selectedRef)
+  assert.equal(block.startBar * state.beatsPerBar + block.notes[0].startBeat, 5 * state.beatsPerBar + 0.25 * state.bpm / 60)
+})

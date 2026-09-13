@@ -1,7 +1,5 @@
 'use client'
 
-import { DrumMidiButtons } from './DrumMidiButtons'
-
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Mic, Plus, X } from 'lucide-react'
 import { track as trackEvent } from '../../analytics/analytics'
@@ -565,7 +563,6 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
   return (
     <section data-testid="text-display-user-interface" className="mb-3 px-2">
       <TranscribeButton trackId={targetId} />
-      <DrumMidiButtons />
 
       {/* --- Type: the glyph sliders (fonts live on the style lanes) --- */}
       <BoundSlider bound={findParam(parameters, 'fontSize')} />

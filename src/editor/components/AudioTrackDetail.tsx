@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Mic } from 'lucide-react'
+import { DrumMidiButtons } from './DrumMidiButtons'
 import { getAudioEngine } from '../core/audio/AudioEngine'
 import { transcribeActiveSong, type TranscribePhase } from '../utils/transcribeSong'
 import { placeTranscription } from '../utils/lyricPlacement'
@@ -81,7 +82,7 @@ function TranscribeControl({ trackId }: { trackId: string }) {
         : null
 
   return (
-    <div className="absolute bottom-2 left-3 flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <button
         onClick={() => void run()}
         disabled={working}
@@ -444,7 +445,10 @@ export function AudioTrackDetail({ track }: { track: Track }) {
             {Math.round(volume * 100)}%
           </span>
         </div>
-        <TranscribeControl trackId={track.id} />
+        <div className="absolute bottom-2 left-3 right-3 flex items-start gap-2" aria-label="Audio transcription">
+          <TranscribeControl trackId={track.id} />
+          <DrumMidiButtons key={track.id} trackId={track.id} />
+        </div>
       </div>
 
       <div className="h-px flex-shrink-0 bg-[var(--border)]" />

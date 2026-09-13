@@ -1,8 +1,9 @@
 # Drum MIDI extraction (first version)
 
-Text Display's Lyrics panel has **Get kick MIDI**, **Get snare MIDI**, and
-**Get hi-hat MIDI** below **Transcribe song**. Each adds a new editable MIDI
+The audio track settings have **Get kick MIDI**, **Get snare MIDI**, and
+**Get hi-hat MIDI** beside **Transcribe**. Each adds a new editable MIDI
 Roll track to the current scene. Existing tracks and lyrics are not replaced.
+Extraction uses the selected audio track’s first clip, matching Transcribe.
 Save the song to an authenticated account before extracting.
 
 The server needs the existing `ELEVENLABS_API_KEY`, Supabase URL and anon key.
@@ -76,5 +77,5 @@ be treated as experimental until those checks are completed.
 Integration onto current main was revalidated September 12, 2026: all 1,719
 combined repository tests passed, TypeScript passed, and the browser diagnostic
 repeated the same hit counts/cache/trim/lyrics checks with zero page errors.
-The controls follow main's current Text Display layout directly below its
-Transcribe song button.
+The controls were subsequently moved to the audio track settings beside
+Transcribe, with extraction scoped to that audio track.
