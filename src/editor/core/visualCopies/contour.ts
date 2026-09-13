@@ -49,6 +49,7 @@ export function contourHeight(settings: ContourSettings, x: number, y: number): 
 
 export const contourMover: MoverOrSplitterDefinition<ContourSettings> = {
   id: 'contour',
+  particleExecution: { fallback: 'unported', reason: 'The world-space relief surface and placement conjugation have not been expressed as a shared GPU operation.' },
   label: 'Contour',
   kind: 'mover',
   identityColor: CONTOUR_COLOR,

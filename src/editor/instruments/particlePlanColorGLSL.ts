@@ -1,6 +1,6 @@
 /** The Particle copy-color path in linear RGB, matching colorShift.ts and the
- * render helpers in utils/oklch.ts. Rich color data belongs to the CPU prefix's
- * seed slot; suffix hue contributions are accumulated before this runs. */
+ * render helpers in utils/oklch.ts. Every program stage mutates a shared color
+ * state; tint mixing and relative shifts are applied exactly once at the end. */
 export const PARTICLE_PLAN_COLOR_GLSL = `
   float hueChannel(float p, float q, float h) {
     h = fract(h);
@@ -55,21 +55,17 @@ export const PARTICLE_PLAN_COLOR_GLSL = `
       dot(lms, vec3(-1.2684380046, 2.6097574011, -0.3413193965)),
       dot(lms, vec3(-0.0041960863, -0.7034186147, 1.7076147010))), 0.0, 1.0);
   }
-  vec3 particleCopyColor(vec3 rgb, float hue, int seedSlot, int seedColorOffset) {
-    // Ordinary shared layouts keep their inexpensive hue-only path.
-    if (seedColorOffset < 0) return shiftHue(rgb, hue);
-    int p = seedColorOffset + seedSlot * 8;
-    float saturation = layoutScalar(p), lightness = layoutScalar(p + 1);
-    float tintAmount = clamp(layoutScalar(p + 5), 0.0, 1.0);
+  vec3 particleCopyColor(vec3 rgb, float hue, float saturation, float lightness,
+    vec3 tint, float tintAmount, float tintPerceptual, float huePerceptual) {
+    tintAmount = clamp(tintAmount, 0.0, 1.0);
     if (tintAmount > 0.0) {
-      vec3 tint = vec3(layoutScalar(p + 2), layoutScalar(p + 3), layoutScalar(p + 4));
       if (tintAmount >= 1.0) rgb = tint;
-      else if (layoutScalar(p + 6) > 0.5) {
+      else if (tintPerceptual > 0.5) {
         vec3 from = particleLinearRgbToOklab(rgb), to = particleLinearRgbToOklab(tint);
         rgb = particleOklabToLinearRgb(from + (to - from) * tintAmount);
       } else rgb += (tint - rgb) * tintAmount;
     }
-    if (layoutScalar(p + 7) > 0.5) {
+    if (huePerceptual > 0.5) {
       if (hue != 0.0) {
         vec3 lab = particleLinearRgbToOklab(rgb);
         float angle = hue * 6.283185307179586, c = cos(angle), s = sin(angle);
@@ -77,6 +73,7 @@ export const PARTICLE_PLAN_COLOR_GLSL = `
       }
       hue = 0.0;
     }
+    if (saturation == 0.0 && lightness == 0.0) return shiftHue(rgb, hue);
     return particleOffsetHsl(rgb, vec3(hue, saturation, lightness));
   }
 `

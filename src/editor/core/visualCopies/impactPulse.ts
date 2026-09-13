@@ -193,6 +193,7 @@ export function impactPulseScale(
 
 export const impactPulseMover: MoverOrSplitterDefinition<ImpactPulseSettings> = {
   id: 'impactPulse',
+  particleExecution: { fallback: 'unported', reason: 'The legacy per-copy impact size and squash response has not been expressed as a shared GPU operation.' },
   label: 'Impact Pulse',
   extras: true,
   kind: 'mover',

@@ -2,6 +2,8 @@ import type { MidiRowDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { VISIBILITY_COLOR } from './identityColors'
+import { sparseOpacityAppearance } from './gpuAppearance'
+import { sharedGpuOperation } from './sharedGpuOperation'
 
 export interface VisibilitySettings {
   /** -1 = one row gates ALL copies; 0 = one note per index; positive = each
@@ -102,15 +104,29 @@ export const visibilityMover: MoverOrSplitterDefinition<VisibilitySettings> = {
   midiRows: visibilityMidiRows,
   strictMidiRows: true,
   resolve({ settings, notes }) {
-    return {
-      maxOutputCount: 1,
-      apply(visualCopy, { beat, index, count }) {
-        return [{
-          transform: visualCopy.transform.clone(),
-          opacity: visualCopy.opacity * evaluateVisibilityOpacity(notes, beat, index, count, settings),
-          colorShift: { ...visualCopy.colorShift },
-        }]
-      },
+    const attack = Math.max(0, settings.attackBeats), decay = Math.max(0, settings.decayBeats)
+    const release = Math.max(0, settings.releaseBeats), sustain = Math.max(0, Math.min(1, settings.sustainLevel))
+    const heldValue = (age: number): number => {
+      if (attack > 0 && age < attack) return age / attack
+      if (decay > 0 && age < attack + decay) return 1 - (1 - sustain) * ((age - attack) / decay)
+      return sustain
     }
+    const rows = notes.map(note => ({ note, index: VISIBILITY_TOP_PITCH - note.pitch }))
+      .filter(({ index }) => Number.isSafeInteger(index) && index >= 0 && (settings.grouping >= 0 || index === 0))
+    return sharedGpuOperation(beat => {
+      const gains = new Map<number, number>()
+      // Reduce the score once per beat. Even Each index retains at most one
+      // record per authored note row, independent of the splitter population.
+      for (const { note, index } of rows) {
+        const age = beat - note.beat
+        if (age < 0) continue
+        const hold = Math.max(note.durationBeats || 0, attack)
+        let gain = 0
+        if (age < hold) gain = heldValue(age)
+        else if (release > 0 && age < hold + release) gain = heldValue(hold) * (1 - (age - hold) / release)
+        gains.set(index, Math.max(gains.get(index) ?? 0, gain))
+      }
+      return sparseOpacityAppearance(settings.grouping, gains)
+    }, { appearanceOnly: true })
   },
 }

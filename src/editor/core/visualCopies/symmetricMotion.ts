@@ -30,15 +30,15 @@
 // center or the axis plane and hold it there rather than pushing copies out
 // the far side, which would silently turn a collapse into a crossing.
 
-import { Matrix4, Vector3 } from 'three'
+import { Vector3 } from 'three'
 import type { MidiRowDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { BURST_EASINGS } from './burstEasings'
 import { midiVelocity } from '../../utils/midiVelocity'
 import { SYMMETRIC_MOTION_COLOR } from './identityColors'
-import { memoByBeat } from './beatMemo'
-import { applyGpuOperation, mirrorDisplacementOperation, radialDisplacementOperation } from './gpuOperations'
+import { sharedGpuOperation } from './sharedGpuOperation'
+import { mirrorDisplacementOperation, radialDisplacementOperation } from './gpuOperations'
 
 export interface SymmetricMotionSettings {
   /** 0 = Radial (out/in/turn about the center), 1 = Mirror (apart/together per axis). */
@@ -232,25 +232,11 @@ export const symmetricMotionMover: MoverOrSplitterDefinition<SymmetricMotionSett
     const mirror = settings.symmetry === 1
     const plane = settings.plane >= 1 && settings.plane <= 3 ? settings.plane : 0
     const normal = PLANE_NORMALS[plane]
-    const operationAt = memoByBeat(beat => {
+    const operationAt = (beat: number) => {
       const channels = evaluateSymmetricMotionChannels(notes, settings, beat)
       return mirror ? mirrorDisplacementOperation(channels.axes)
         : radialDisplacementOperation([normal.x, normal.y, normal.z], plane === 3, channels.out, channels.turn)
-    })
-    return {
-      maxOutputCount: 1,
-      localSlotMotion: true,
-      gpuOperationAtBeat: operationAt,
-      // Both the CPU path and GPU program read the incoming chain-frame
-      // position. Only the shared channels are sampled once per beat.
-      composition: 'chainRoot',
-      apply(visualCopy, { beat }) {
-        return [{
-          transform: applyGpuOperation(operationAt(beat), visualCopy.transform, new Matrix4()),
-          opacity: visualCopy.opacity,
-          colorShift: { ...visualCopy.colorShift },
-        }]
-      },
     }
+    return sharedGpuOperation(operationAt, { localSlotMotion: true, preservesDeterminant: true, composition: 'chainRoot' })
   },
 }

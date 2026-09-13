@@ -30,11 +30,11 @@
 // takes the color over, and relative hue sweeps ride on top.
 
 import { midiVelocity } from '../../utils/midiVelocity'
-import { Vector3 } from 'three'
 import type { MidiRowDef, ParamDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
-import type { VisualCopy } from './types'
+import { sharedGpuOperation } from './sharedGpuOperation'
+import { paletteAppearance } from './gpuAppearance'
 import { COSINE_PALETTE_COLOR } from './identityColors'
 import { clamp01 } from '../../utils/math'
 
@@ -256,49 +256,11 @@ export const cosinePaletteColorizer: MoverOrSplitterDefinition<CosinePaletteSett
   midiRows: () => COSINE_ROWS,
   strictMidiRows: true,
   resolve({ settings, notes }) {
-    // The period is fixed per resolve (settings changes - automation included -
-    // re-resolve), so per-frame work is one t, one phase sum, and an index into
-    // precomputed hex strings: no trig and no string building per copy.
     const lut = cosinePaletteLut(settings, LUT_SIZE)
-    const amount = clamp01(settings.amount)
-    const cycles = Math.max(0, settings.cycles)
-    const perceptual = settings.blend !== COSINE_BLEND_LINEAR
-    const scratchPosition = new Vector3()
-    return {
-      maxOutputCount: 1,
-      apply(visualCopy, { beat, index, count, placementTransform }) {
-        // AMOUNT zero leaves upstream color state alone entirely - "no
-        // palette" must not clear a tint another colorizer asked for.
-        if (amount <= 0) {
-          const passthrough: VisualCopy = {
-            transform: visualCopy.transform.clone(),
-            opacity: visualCopy.opacity,
-            colorShift: { ...visualCopy.colorShift },
-          }
-          return [passthrough]
-        }
-        // World position, the same read as the Colorizer's rainbow: the
-        // chained transform's translation pushed through the track placement.
-        scratchPosition.setFromMatrixPosition(visualCopy.transform)
-        if (placementTransform) scratchPosition.applyMatrix4(placementTransform)
-        const t = cosinePalettePosition(
-          settings, index, count, scratchPosition.x, scratchPosition.y, scratchPosition.z,
-        )
-        const u = cycles * t + settings.scroll + cosineKickPhase(notes, beat, settings.kick, settings.kickDecay)
-        const wrapped = ((u % 1) + 1) % 1
-        return [{
-          transform: visualCopy.transform.clone(),
-          opacity: visualCopy.opacity,
-          colorShift: {
-            ...visualCopy.colorShift,
-            // Tint REPLACES upstream (the chain rule): the palette owns the
-            // color; relative hue/sat/lightness continue to ride on top.
-            tint: lut[Math.floor(wrapped * LUT_SIZE) % LUT_SIZE],
-            tintAmount: amount,
-            tintPerceptual: perceptual,
-          },
-        }]
-      },
-    }
+    return sharedGpuOperation(beat => paletteAppearance({ mode: [0,1,2,3,4,5].includes(settings.mode) ? settings.mode : COSINE_MAP_RADIAL,
+      span: settings.span, offset: settings.offset, single: .5 }, lut, settings.amount, {
+      scale: Math.max(0, settings.cycles), phase: settings.scroll, phaseExtra: cosineKickPhase(notes, beat, settings.kick, settings.kickDecay),
+      wrap: true, perceptual: settings.blend !== COSINE_BLEND_LINEAR,
+    }), { appearanceOnly: true, usesPlacement: settings.mode !== COSINE_MAP_INDEX })
   },
 }

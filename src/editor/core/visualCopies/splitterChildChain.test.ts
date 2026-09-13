@@ -437,16 +437,19 @@ test('compact own-slot singular fallback retains bare slots for a degenerate inc
   }
 })
 
-test('framed metadata requires count-one proof and declines context-dependent or clocked children', () => {
+test('framed metadata requires bounded local children and declines context-dependent or clocked children', () => {
   const parent = gridRow(4)
   const proven = uniformMover(1)
   assert.ok(splitterWithChildChain(parent, [proven]).framedLocalTransformsAtBeat)
-  const unknownCardinality = { ...proven, localTransformCount: undefined, localSlotMotion: undefined }
+  const unknownCardinality = { ...proven, maxOutputCount: undefined, localTransformCount: undefined, localSlotMotion: undefined }
   assert.equal(splitterWithChildChain(parent, [unknownCardinality]).framedLocalTransformsAtBeat, undefined)
-  assert.equal(splitterWithChildChain(parent, [gridRow(2)]).framedLocalTransformsAtBeat, undefined)
+  const recursive = splitterWithChildChain(parent, [gridRow(2)]).framedLocalTransformsAtBeat!(0)
+  assert.equal(recursive.requiresInvertibleInput, true)
+  assert.equal(recursive.frames.length, 8)
+  assert.equal(recursive.bareFrames.length, 4)
   assert.equal(splitterWithChildChain(parent, [shiftX(1, true)]).framedLocalTransformsAtBeat, undefined)
   assert.equal(splitterWithChildChain(parent, [{ ...proven, emitsCopyClocks: true }]).framedLocalTransformsAtBeat, undefined)
-  assert.equal(splitterWithChildChain(parent, [{ ...proven, structuralVariants: [gridRow(2)] }]).framedLocalTransformsAtBeat, undefined)
+  assert.ok(splitterWithChildChain(parent, [{ ...proven, structuralVariants: [gridRow(2)] }]).framedLocalTransformsAtBeat)
   assert.ok(splitterWithChildChain(parent, [gatedMoverOrSplitter(proven,
     { rule: 'every', slices: 2, on: [0] })]).framedLocalTransformsAtBeat)
 })

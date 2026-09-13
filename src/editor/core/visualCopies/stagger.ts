@@ -129,6 +129,7 @@ function lastBirthAt(births: readonly number[], beat: number): number {
 
 export const staggerSplitter: MoverOrSplitterDefinition<StaggerSettings> = {
   id: 'stagger',
+  particleExecution: { fallback: 'copy-clocks', reason: 'Stagger assigns per-copy beat offsets and birth clocks, requiring separate instrument and downstream automation evaluations.' },
   label: 'Stagger',
   kind: 'splitter',
   identityColor: STAGGER_COLOR,

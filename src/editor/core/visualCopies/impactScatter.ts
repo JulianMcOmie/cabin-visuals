@@ -425,6 +425,7 @@ interface Strike {
 
 export const impactScatterMover: MoverOrSplitterDefinition<ImpactScatterSettings> = {
   id: 'impactScatter',
+  particleExecution: { fallback: 'unported', reason: 'The legacy scatter field samples per-copy physical response tables and appearance channels that have not been ported to a GPU operation.' },
   label: 'Impact Scatter',
   extras: true,
   kind: 'mover',

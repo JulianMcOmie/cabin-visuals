@@ -32,11 +32,11 @@
 // colorizers: "be this ink" is not something relative HSL can say. Chain rule as
 // ever - a later tint (a note Colorizer's flash) takes the colour over.
 
-import { Vector3 } from 'three'
 import type { ParamDef } from '../../instruments/types'
 import type { MoverOrSplitterDefinition } from './definitions'
+import { sharedGpuOperation } from './sharedGpuOperation'
+import { printAppearance } from './gpuAppearance'
 import { RISO_DUOTONE_COLOR } from './identityColors'
-import type { VisualCopy } from './types'
 import { clamp01 } from '../../utils/math'
 
 /** Which scalar of the copy's placement becomes the tone ramp. Deliberately the
@@ -273,76 +273,11 @@ export const risoDuotoneColorizer: MoverOrSplitterDefinition<RisoDuotoneSettings
   midiRows: () => [],
   strictMidiRows: true,
   resolve({ settings }) {
-    // Only four colors can come out of this, and they are fixed per resolve -
-    // so the per-frame work per copy is one tone, two thresholds and an index.
-    // No color math and no string building while a 32x32 grid animates.
-    const inks = risoInks(settings)
-    const amount = clamp01(settings.amount)
-    const perceptual = settings.blend !== RISO_BLEND_LINEAR
-    const grain = Math.max(0.001, settings.grain)
-    const scratchPosition = new Vector3()
-    return {
-      maxOutputCount: 1,
-      apply(visualCopy, { index, count, placementTransform }) {
-        // AMOUNT zero leaves upstream color state alone entirely - "no print"
-        // must not clear a tint another colorizer asked for.
-        if (amount <= 0) {
-          const passthrough: VisualCopy = {
-            transform: visualCopy.transform.clone(),
-            opacity: visualCopy.opacity,
-            colorShift: { ...visualCopy.colorShift },
-          }
-          return [passthrough]
-        }
-        // World position, the same read as the other colorizers: the chained
-        // transform's translation pushed through the track placement.
-        scratchPosition.setFromMatrixPosition(visualCopy.transform)
-        if (placementTransform) scratchPosition.applyMatrix4(placementTransform)
-        const tone = risoTone(
-          settings, index, count, scratchPosition.x, scratchPosition.y, scratchPosition.z,
-        )
-        const [coverageA, coverageB] = risoCoverage(tone, settings.ink)
-
-        // The two screens must not agree, or the inks would land on exactly the
-        // same copies and the overprint would be the only thing you ever see.
-        // A real press turns the second screen to a different angle; here the
-        // second read is offset within the matrix, which decorrelates the two
-        // the same way. Grid dithers by WHERE the copy is (a lattice gets a real
-        // stipple across it); Sequence dithers by the copy's index, which is the
-        // only handle a ring or a trail gives you; Off thresholds at the middle,
-        // for a hard two-tone poster.
-        let thresholdA = 0.5
-        let thresholdB = 0.5
-        if (settings.dither === RISO_DITHER_GRID) {
-          const cellX = scratchPosition.x / grain
-          const cellY = scratchPosition.y / grain
-          thresholdA = screenThreshold(cellX, cellY)
-          thresholdB = screenThreshold(cellX + 3, cellY + 5)
-        } else if (settings.dither === RISO_DITHER_SEQUENCE) {
-          thresholdA = screenThreshold(index, Math.floor(index / 8))
-          thresholdB = screenThreshold(index + 3, Math.floor(index / 8) + 5)
-        }
-
-        // A ties on >=, B on >, so a copy landing EXACTLY on its threshold takes
-        // one ink rather than none. Not pedantry: at INK zero the coverages are
-        // complements, so the middle of any odd-numbered copy run sits at
-        // exactly 0.5 against the unscreened 0.5 - and a symmetric comparison
-        // leaves that one copy bare paper (or, with >=, a lone overprint) in the
-        // middle of an otherwise clean two-tone split.
-        const printed = inks[(coverageA >= thresholdA ? 1 : 0) | (coverageB > thresholdB ? 2 : 0)]
-        return [{
-          transform: visualCopy.transform.clone(),
-          opacity: visualCopy.opacity,
-          colorShift: {
-            ...visualCopy.colorShift,
-            // Tint REPLACES upstream (the chain rule): the press owns the
-            // color; relative hue/sat/lightness continue to ride on top.
-            tint: printed,
-            tintAmount: amount,
-            tintPerceptual: perceptual,
-          },
-        }]
-      },
-    }
+    const mode = [0,1,2,3,4,5].includes(settings.mode) ? settings.mode : RISO_MAP_RADIAL
+    const operation = printAppearance({ mode, span: settings.span, offset: settings.offset, single: .5,
+      bias: mode === RISO_MAP_X || mode === RISO_MAP_Y || mode === RISO_MAP_DEPTH ? .5 : 0,
+      flip: settings.flip >= .5 }, risoInks(settings), settings.amount, settings.tone, settings.ink,
+      settings.dither, settings.grain, settings.blend !== RISO_BLEND_LINEAR)
+    return sharedGpuOperation(() => operation, { appearanceOnly: true, usesPlacement: mode !== RISO_MAP_INDEX || settings.dither === RISO_DITHER_GRID })
   },
 }

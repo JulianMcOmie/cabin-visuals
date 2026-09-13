@@ -1,9 +1,11 @@
 import { Color, Matrix4 } from 'three'
 import { identityVisualCopy } from './identityVisualCopy'
-import { applyGpuOperation, gpuOperationParameterCount, isGpuOperationSupported, type GpuOperation } from './gpuOperations'
+import { applyGpuOperation, gpuOperationParameterCount, isGpuOperationSupported, GPU_OPERATION_APPEARANCE, GPU_OPERATION_IDENTITY, type GpuOperation } from './gpuOperations'
+import { applyGpuAppearance } from './gpuAppearance'
+import { copyIsTargeted } from './copyTargets'
 import { entryMaxOutputCount } from './maxOutputCount'
 import { resolveVisualCopyFrames } from './resolveVisualCopies'
-import type { MoverOrSplitter, SharedLocalLayout, VisualCopy } from './types'
+import type { FramedLocalTransforms, MoverOrSplitter, SharedLocalLayout, VisualCopy } from './types'
 
 /** A factored Cartesian product, never an array of its expanded occurrences.
  * Float64 retains the CPU reference; rendering uploads Float32 when edited or
@@ -39,13 +41,20 @@ export interface ParticlePlan {
    * The flags are evaluated on the CPU so GPU float rounding cannot change a
    * near-singular frame's branch. Ordinary plans omit this program. */
   program?: {
-    kinds: number[] // 0 local, 1 root, 2 frame/internal, 3 position operation
+    kinds: number[] // 0 local, 1 root, 2 frame/internal, 3 copy operation
     internalOffsets: number[]
     bareOffsets: number[]
     guardOffsets: number[]
     guardStrides: number[]
     operationKinds?: number[]
     operationOffsets?: number[]
+    /** Scalar offset of count + (rule, requested slices, selected mask) triples. */
+    operationGuardOffsets?: number[]
+    operationPlacementOffsets?: number[]
+    /** Nested appearance programs sample the parent's incoming frame and the
+     * child's own local slot. Header count, then seven-scalar descriptors:
+     * kind, data, frames, guards, input indices, input count, active flags. */
+    nestedAppearanceOffsets?: number[]
   }
 }
 
@@ -258,6 +267,7 @@ interface FrameStage {
   hueShifts?: readonly number[]
   bareOpacities?: readonly number[]
   bareHueShifts?: readonly number[]
+  appearanceStages?: FramedLocalTransforms['appearanceStages']
 }
 
 /** Evaluate only the reference frame of a prefix. This is needed solely when
@@ -269,7 +279,12 @@ function prefixFrame(stages: readonly FrameStage[], count: number, index: number
   for (const stage of stages) {
     stride /= stage.frames.length
     const slot = Math.floor(index / stride) % stage.frames.length
-    if (stage.kind === 3) applyGpuOperation(stage.operation!, out, out)
+    if (stage.kind === 3) {
+      const inputIndex = Math.floor(index / (count / stage.inputCount))
+      if (stage.operation!.indexGuards?.every(guard => copyIsTargeted(inputIndex, stage.inputCount, guard)) ?? true) {
+        applyGpuOperation(stage.operation!, out, out)
+      }
+    }
     else if (stage.kind === 1) out.premultiply(stage.frames[slot])
     else {
       const active = typeof stage.guard === 'boolean' ? stage.guard
@@ -285,6 +300,9 @@ function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, b
   const stages: FrameStage[] = []
   const identity = new Matrix4(), scratch = new Matrix4()
   let generalSeed = false
+  // Recursive fanout has a different singular fallback cardinality. Admission
+  // must remain valid through playback, including an animated scale crossing 0.
+  let stablePrefixDeterminant = true
   let count = 1, scaleBound = 1, frameBound = 1, fullFrameBound = 1, determinantMin = 1, determinantMax = 1
   const affine = (matrix: Matrix4) => matrix.elements.every(Number.isFinite)
     && matrix.elements[3] === 0 && matrix.elements[7] === 0
@@ -295,18 +313,26 @@ function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, b
     if (kind === 3) {
       const operation = entry.gpuOperationAtBeat!(beat, placement)
       if (!isGpuOperationSupported(operation)) return undefined
+      stablePrefixDeterminant &&= !!entry.gpuOperationPreservesDeterminant || !!entry.gpuAppearanceOnly
       stages.push({ kind, operation, frames: [identity], inputCount: count, guard: true })
-      scaleBound *= operation.scaleBound
-      frameBound *= operation.scaleBound
-      fullFrameBound = generalSeed
+      if (operation.kind === GPU_OPERATION_IDENTITY || operation.kind === GPU_OPERATION_APPEARANCE) continue
+      const selectable = !!operation.indexGuards?.length
+      scaleBound *= selectable ? Math.max(1, operation.scaleBound) : operation.scaleBound
+      frameBound *= selectable ? Math.max(1, operation.scaleBound) : operation.scaleBound
+      fullFrameBound = operation.frameScaleBound !== undefined
+        ? fullFrameBound * (selectable ? Math.max(1, operation.frameScaleBound) : operation.frameScaleBound) * (1 + 16 * Number.EPSILON)
+        : generalSeed
         ? 4 * Math.max(1, operation.positionScaleBound ?? 1, operation.scaleBound, operation.translationBound)
           * fullFrameBound * Math.max(1, fullFrameBound)
         : 4 * Math.max(1, operation.positionScaleBound ?? 1, operation.scaleBound) * fullFrameBound + operation.translationBound
       // Position operations preserve exact determinants mathematically. Widen
       // the floating interval; near-singular decisions still use prefixFrame.
       const error = 1e-10 * (generalSeed ? fullFrameBound ** 4 : frameBound ** 3)
-      determinantMin = operation.determinantPreserving ? Math.max(0, determinantMin - error) : 0
-      determinantMax = operation.determinantPreserving ? determinantMax + error : Infinity
+      const determinantScale = operation.determinantScale ?? (operation.determinantPreserving ? 1 : undefined)
+      determinantMin = determinantScale !== undefined
+        ? Math.max(0, determinantMin * (selectable ? Math.min(1, determinantScale) : determinantScale) - error) : 0
+      determinantMax = determinantScale !== undefined
+        ? determinantMax * (selectable ? Math.max(1, determinantScale) : determinantScale) + error : Infinity
       continue
     }
     const framed = kind === 2 ? entry.framedLocalTransformsAtBeat!(beat, placement) : undefined
@@ -316,7 +342,7 @@ function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, b
       : layout!.transforms)
     const isSeed = seeded && stages.length === 0
     if (!frames?.length || (!isSeed && frames.some(matrix => !affine(matrix)))) return undefined
-    if (framed && (framed.internals.length !== frames.length || framed.bareFrames.length !== frames.length
+    if (framed && (framed.internals.length !== frames.length || (framed.bareFrames.length !== frames.length && !framed.requiresInvertibleInput)
       || (!isSeed && (framed.internals.some(matrix => matrix && !affine(matrix)) || framed.bareFrames.some(matrix => !affine(matrix)))))) return undefined
     if (isSeed) {
       // CPU entries promise a count bound, not an affine transform contract.
@@ -328,9 +354,18 @@ function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, b
         && (matrix.elements[3] !== 0 || matrix.elements[7] !== 0 || matrix.elements[11] !== 0))) scaleBound = Infinity
     }
     const appearance = framed ?? layout
-    const validChannel = (values: readonly number[] | undefined) => !values
-      || (values.length === frames.length && values.every(Number.isFinite))
-    if (!isSeed && ![appearance?.opacities, appearance?.hueShifts, framed?.bareOpacities, framed?.bareHueShifts].every(validChannel)) return undefined
+    const validChannel = (values: readonly number[] | undefined, count = frames.length) => !values
+      || (values.length === count && values.every(Number.isFinite))
+    if (!isSeed && (!validChannel(appearance?.opacities) || !validChannel(appearance?.hueShifts)
+      || !validChannel(framed?.bareOpacities, framed?.bareFrames.length) || !validChannel(framed?.bareHueShifts, framed?.bareFrames.length))) return undefined
+    if (framed?.appearanceStages?.some(stage => stage.sampleFrames.length !== frames.length
+      || stage.sampleFrames.some(matrix => !affine(matrix)) || !isGpuOperationSupported(stage.operation)
+      || ![GPU_OPERATION_IDENTITY, GPU_OPERATION_APPEARANCE].includes(stage.operation.kind)
+      || stage.operation.appearancePlacement
+      || stage.inputCount !== undefined && (!Number.isSafeInteger(stage.inputCount) || stage.inputCount < 1)
+      || stage.inputIndices && (stage.inputIndices.length !== frames.length
+        || stage.inputIndices.some(index => !Number.isInteger(index) || index < 0 || index >= (stage.inputCount ?? frames.length)))
+      || stage.active && (stage.active.length !== frames.length || stage.active.some(value => value !== 0 && value !== 1)))) return undefined
 
     let guard: FrameStage['guard'] = true
     if (framed) {
@@ -342,6 +377,12 @@ function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, b
       // for affine matrices. Enormous translations can overflow those terms
       // (then 0 * Infinity becomes NaN), so certify only finite full bounds.
       const certifiable = Number.isFinite(margin) && Number.isFinite(fullFrameBound ** 3)
+      // A recursive splitter may emit fewer bare slots than active slots.
+      // This product representation is exact only when the whole incoming
+      // population takes the active branch; never pad a variable fanout into
+      // hidden slots and thereby change downstream color/index semantics.
+      if ((entry.framedRequiresInvertibleInput || entry.structuralVariants?.some(variant => variant.framedRequiresInvertibleInput)
+        || framed.requiresInvertibleInput) && !(stablePrefixDeterminant && certifiable && determinantMin - margin > 1e-12)) return undefined
       if (certifiable && determinantMin - margin > 1e-12) guard = true
       else if (certifiable && determinantMax + margin < 1e-12) guard = false
       else {
@@ -353,9 +394,13 @@ function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, b
         guard = flags.every(flag => flag === flags[0]) ? flags[0] === 1 : flags
       }
     }
+    stablePrefixDeterminant &&= !isSeed && (kind === 0
+      ? !!(entry.localTransforms || entry.localLayout) && !entry.localTransformsAtBeat && !entry.localLayoutAtBeat && !entry.localLayoutUsesPlacement
+      : kind === 1 ? !!entry.rootTransform && !entry.rootTransformAtBeat : false)
     const stage: FrameStage = { kind, frames, internals: framed?.internals, bare: framed?.bareFrames, inputCount: count, guard,
       opacities: appearance?.opacities, hueShifts: appearance?.hueShifts,
-      bareOpacities: framed?.bareOpacities, bareHueShifts: framed?.bareHueShifts }
+      bareOpacities: framed?.bareOpacities, bareHueShifts: framed?.bareHueShifts,
+      appearanceStages: framed?.appearanceStages }
     count *= frames.length
     if (!Number.isSafeInteger(count) || count > 0x7fffffff) return undefined
     stages.push(stage)
@@ -384,6 +429,11 @@ function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, b
   const counts: number[] = [], offsets: number[] = [], packed: Matrix4[] = []
   const program: NonNullable<ParticlePlan['program']> = { kinds: [], internalOffsets: [], bareOffsets: [], guardOffsets: [], guardStrides: [] }
   if (stages.some(stage => stage.operation)) { program.operationKinds = []; program.operationOffsets = [] }
+  if (stages.some(stage => stage.operation?.indexGuards?.length)) program.operationGuardOffsets = []
+  if (stages.some(stage => stage.operation?.appearancePlacement)) program.operationPlacementOffsets = []
+  if (stages.some(stage => stage.appearanceStages?.length)) program.nestedAppearanceOffsets = []
+  const nestedPrograms: { operation: GpuOperation; framesOffset: number; dataOffset: number; guardOffset: number;
+    inputIndices?: readonly number[]; inputCount: number; active?: readonly number[]; indexOffset: number; activeOffset: number }[][] = []
   for (const stage of stages) {
     counts.push(stage.frames.length); offsets.push(packed.length)
     for (const matrix of stage.frames) packed.push(matrix)
@@ -396,11 +446,35 @@ function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, b
     program.guardStrides.push(count / stage.inputCount)
     program.operationKinds?.push(stage.operation?.kind ?? 0)
     program.operationOffsets?.push(-1)
+    program.operationGuardOffsets?.push(-1)
+    program.operationPlacementOffsets?.push(-1)
+    program.nestedAppearanceOffsets?.push(-1)
+    const nested = []
+    for (const appearance of stage.appearanceStages ?? []) {
+      nested.push({ operation: appearance.operation, framesOffset: packed.length, dataOffset: -1, guardOffset: -1,
+        inputIndices: appearance.inputIndices, inputCount: appearance.inputCount ?? stage.frames.length, active: appearance.active,
+        indexOffset: -1, activeOffset: -1 })
+      packed.push(...appearance.sampleFrames)
+    }
+    nestedPrograms.push(nested)
   }
   let length = packed.length * 16
   stages.forEach((stage, i) => {
     if (typeof stage.guard !== 'boolean') { program.guardOffsets[i] = length; length += stage.guard.length }
     if (stage.operation) { program.operationOffsets![i] = length; length += stage.operation.parameters.length }
+    if (stage.operation?.indexGuards?.length) {
+      program.operationGuardOffsets![i] = length; length += 1 + stage.operation.indexGuards.length * 3
+    }
+    if (stage.operation?.appearancePlacement) { program.operationPlacementOffsets![i] = length; length += 16 }
+    if (nestedPrograms[i].length) {
+      program.nestedAppearanceOffsets![i] = length; length += 1 + nestedPrograms[i].length * 7
+      for (const nested of nestedPrograms[i]) {
+        nested.dataOffset = length; length += nested.operation.parameters.length
+        if (nested.operation.indexGuards?.length) { nested.guardOffset = length; length += 1 + nested.operation.indexGuards.length * 3 }
+        if (nested.inputIndices) { nested.indexOffset = length; length += nested.inputIndices.length }
+        if (nested.active) { nested.activeOffset = length; length += nested.active.length }
+      }
+    }
   })
   const appearanceOffsets: number[] = [], bareAppearanceOffsets: number[] = []
   const appearanceValues: { offset: number; values: number[] }[] = []
@@ -423,6 +497,32 @@ function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, b
   stages.forEach((stage, i) => {
     if (typeof stage.guard !== 'boolean') matrices.set(stage.guard, program.guardOffsets[i])
     if (stage.operation) matrices.set(stage.operation.parameters, program.operationOffsets![i])
+    if (stage.operation?.indexGuards?.length) {
+      const values = [stage.operation.indexGuards.length]
+      for (const guard of stage.operation.indexGuards) {
+        const mask = guard.on.reduce((bits, slice) => bits | (1 << slice), 0)
+        values.push(guard.rule === 'every' ? 0 : 1, guard.slices, mask)
+      }
+      matrices.set(values, program.operationGuardOffsets![i])
+    }
+    if (stage.operation?.appearancePlacement) matrices.set(stage.operation.appearancePlacement, program.operationPlacementOffsets![i])
+    if (nestedPrograms[i].length) {
+      const descriptors = [nestedPrograms[i].length]
+      for (const nested of nestedPrograms[i]) {
+        descriptors.push(nested.operation.kind, nested.dataOffset, nested.framesOffset, nested.guardOffset,
+          nested.indexOffset, nested.inputCount, nested.activeOffset)
+        matrices.set(nested.operation.parameters, nested.dataOffset)
+        if (nested.inputIndices) matrices.set(nested.inputIndices, nested.indexOffset)
+        if (nested.active) matrices.set(nested.active, nested.activeOffset)
+        if (nested.operation.indexGuards?.length) {
+          const guards = [nested.operation.indexGuards.length]
+          for (const guard of nested.operation.indexGuards) guards.push(guard.rule === 'every' ? 0 : 1, guard.slices,
+            guard.on.reduce((bits, slice) => bits | (1 << slice), 0))
+          matrices.set(guards, nested.guardOffset)
+        }
+      }
+      matrices.set(descriptors, program.nestedAppearanceOffsets![i])
+    }
   })
   for (const { offset, values } of appearanceValues) matrices.set(values, offset)
   const usesPlacement = chain.some(entry => entry.localLayoutUsesPlacement || entry.framedLayoutUsesPlacement || entry.gpuOperationUsesPlacement)
@@ -431,35 +531,98 @@ function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, b
     ...(usesPlacement ? { placementElements: (placement ?? identity).elements.slice() } : {}) }
 }
 
-/** Random access for inspection/picking: O(chain depth), with no expansion. */
-export function particlePlanMatrix(plan: ParticlePlan, index: number, out: Matrix4, scratch = new Matrix4()): Matrix4 {
+function particleOperationSelected(plan: ParticlePlan, offset: number, index: number, count: number): boolean {
+  if (offset < 0) return true
+  for (let i = 0; i < plan.matrices[offset]; i++) {
+    const p = offset + 1 + i * 3
+    const slices = Math.max(2, Math.min(Math.round(plan.matrices[p + 1]), 12, Math.max(2, count)))
+    const slice = plan.matrices[p] === 0 ? index % slices
+      : Math.max(0, Math.min(slices - 1, Math.floor(index / Math.max(1, count) * slices)))
+    if (((plan.matrices[p + 2] | 0) & (1 << slice)) === 0) return false
+  }
+  return true
+}
+
+/** Evaluate one ordinal through the same ordered frame/appearance program as
+ * the shader. Input ordinals are decoded BEFORE each stage's fanout, so a
+ * colorizer above a later splitter keeps its original index/count semantics. */
+function evaluateParticlePlan(plan: ParticlePlan, index: number, out: Matrix4, scratch: Matrix4, copy?: VisualCopy): Matrix4 {
   out.identity()
   const program = plan.program, internal = program ? new Matrix4() : undefined
+  const placement = copy && plan.placementElements ? new Matrix4().fromArray(plan.placementElements) : undefined
   let stride = plan.count
   for (let stage = 0; stage < plan.counts.length; stage++) {
+    const inputIndex = Math.floor(index / stride), inputCount = plan.count / stride
     stride /= plan.counts[stage]
     const slot = Math.floor(index / stride) % plan.counts[stage]
     const kind = program?.kinds[stage] ?? 0
+    const nestedOffset = program?.nestedAppearanceOffsets?.[stage] ?? -1
+    const parentFrame = copy && nestedOffset >= 0 ? out.clone() : undefined
     if (kind === 3) {
       const operationKind = program!.operationKinds![stage], start = program!.operationOffsets![stage]
-      applyGpuOperation({ kind: operationKind,
-        parameters: Array.from(plan.matrices.subarray(start, start + gpuOperationParameterCount(operationKind)!)),
-        scaleBound: 1, translationBound: 0 }, out, out)
-      continue
+      const guardOffset = program!.operationGuardOffsets?.[stage] ?? -1
+      const selected = particleOperationSelected(plan, guardOffset, inputIndex, inputCount)
+      if (selected && (operationKind !== GPU_OPERATION_APPEARANCE || copy)) {
+        const parameters = plan.matrices.subarray(start)
+        const operation: GpuOperation = { kind: operationKind,
+          parameters: Array.from(parameters.subarray(0, gpuOperationParameterCount(operationKind, parameters)!)),
+          scaleBound: 1, translationBound: 0 }
+        if (operationKind === GPU_OPERATION_APPEARANCE && copy) {
+          const placementOffset = program!.operationPlacementOffsets?.[stage] ?? -1
+          const operationPlacement = placementOffset >= 0 ? new Matrix4().fromArray(plan.matrices, placementOffset) : placement
+          const result = applyGpuAppearance(operation, { ...copy, transform: out },
+            { beat: plan.beat, index: inputIndex, count: inputCount, placementTransform: operationPlacement })
+          copy.opacity = result.opacity
+          copy.colorShift = result.colorShift
+        } else applyGpuOperation(operation, out, out)
+      }
+    } else {
+      const guard = program?.guardOffsets[stage] ?? -1
+      const active = guard === -1 || (guard >= 0 && plan.matrices[guard + Math.floor(index / program!.guardStrides[stage])] === 1)
+      const offset = kind === 2 && !active ? program!.bareOffsets[stage] : plan.offsets[stage]
+      scratch.fromArray(plan.matrices, (offset + slot) * 16)
+      if (kind === 1) out.premultiply(scratch)
+      else out.multiply(scratch)
+      if (kind === 2 && active) {
+        scratch.fromArray(plan.matrices, (program!.internalOffsets[stage] + slot) * 16)
+        internal!.multiply(scratch)
+      }
     }
-    const guard = program?.guardOffsets[stage] ?? -1
-    const active = guard === -1 || (guard >= 0 && plan.matrices[guard + Math.floor(index / program!.guardStrides[stage])] === 1)
-    const offset = kind === 2 && !active ? program!.bareOffsets[stage] : plan.offsets[stage]
-    scratch.fromArray(plan.matrices, (offset + slot) * 16)
-    if (kind === 1) out.premultiply(scratch)
-    else out.multiply(scratch)
-    if (kind === 2 && active) {
-      scratch.fromArray(plan.matrices, (program!.internalOffsets[stage] + slot) * 16)
-      internal!.multiply(scratch)
+    if (copy) {
+      const guard = program?.guardOffsets[stage] ?? -1
+      const active = guard === -1 || (guard >= 0 && plan.matrices[guard + Math.floor(index / program!.guardStrides[stage])] === 1)
+      const offset = (kind === 2 && !active ? plan.bareAppearanceOffsets?.[stage] : plan.appearanceOffsets?.[stage]) ?? -1
+      if (offset >= 0) {
+        copy.opacity *= plan.matrices[offset + slot * 2]
+        copy.colorShift.hue += plan.matrices[offset + slot * 2 + 1]
+      }
+      if (active && nestedOffset >= 0 && parentFrame) {
+        const childPlacement = placement ? placement.clone().multiply(parentFrame) : parentFrame
+        for (let nested = 0; nested < plan.matrices[nestedOffset]; nested++) {
+          const p = nestedOffset + 1 + nested * 7, operationKind = plan.matrices[p]
+          const inputIndex = plan.matrices[p + 4] >= 0 ? plan.matrices[plan.matrices[p + 4] + slot] : slot
+          const inputCount = plan.matrices[p + 5]
+          if (operationKind !== GPU_OPERATION_APPEARANCE
+            || plan.matrices[p + 6] >= 0 && plan.matrices[plan.matrices[p + 6] + slot] !== 1
+            || !particleOperationSelected(plan, plan.matrices[p + 3], inputIndex, inputCount)) continue
+          const start = plan.matrices[p + 1], parameters = plan.matrices.subarray(start)
+          const operation: GpuOperation = { kind: operationKind,
+            parameters: Array.from(parameters.subarray(0, gpuOperationParameterCount(operationKind, parameters)!)), scaleBound: 1, translationBound: 0 }
+          const sampleFrame = new Matrix4().fromArray(plan.matrices, (plan.matrices[p + 2] + slot) * 16)
+          const result = applyGpuAppearance(operation, { ...copy, transform: sampleFrame },
+            { beat: plan.beat, index: inputIndex, count: inputCount, placementTransform: childPlacement })
+          copy.opacity = result.opacity; copy.colorShift = result.colorShift
+        }
+      }
     }
   }
   if (internal) out.multiply(internal)
   return out
+}
+
+/** Random access for inspection/picking: O(chain depth), with no expansion. */
+export function particlePlanMatrix(plan: ParticlePlan, index: number, out: Matrix4, scratch = new Matrix4()): Matrix4 {
+  return evaluateParticlePlan(plan, index, out, scratch)
 }
 
 export function particlePlanCopy(plan: ParticlePlan, index: number): VisualCopy | undefined {
@@ -469,19 +632,6 @@ export function particlePlanCopy(plan: ParticlePlan, index: number): VisualCopy 
     const slot = Math.floor(index / (plan.count / plan.counts[0]))
     copy.colorShift = { ...plan.cpuPrefix.colors[slot], hue: 0 }
   }
-  particlePlanMatrix(plan, index, copy.transform)
-  let stride = plan.count
-  for (let stage = 0; stage < plan.counts.length; stage++) {
-    stride /= plan.counts[stage]
-    const slot = Math.floor(index / stride) % plan.counts[stage]
-    const guard = plan.program?.guardOffsets[stage] ?? -1
-    const active = guard === -1 || (guard >= 0 && plan.matrices[guard + Math.floor(index / plan.program!.guardStrides[stage])] === 1)
-    const offset = (plan.program?.kinds[stage] === 2 && !active
-      ? plan.bareAppearanceOffsets?.[stage] : plan.appearanceOffsets?.[stage]) ?? -1
-    if (offset >= 0) {
-      copy.opacity *= plan.matrices[offset + slot * 2]
-      copy.colorShift.hue += plan.matrices[offset + slot * 2 + 1]
-    }
-  }
+  evaluateParticlePlan(plan, index, copy.transform, new Matrix4(), copy)
   return copy
 }

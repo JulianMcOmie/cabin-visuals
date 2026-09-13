@@ -147,6 +147,7 @@ export function polarWarpTransform(placed: Matrix4, weights: readonly number[]):
 
 export const polarWarpMover: MoverOrSplitterDefinition<PolarWarpSettings> = {
   id: 'polarWarp', label: 'Polar Warp', kind: 'mover', identityColor: POLAR_WARP_COLOR,
+  particleExecution: { fallback: 'unported', reason: 'The world-space petal field changes both copy position and affine basis; its deformation and scale bounds still require a GPU operation.' },
   params: [
     { key: 'attack', label: 'Attack', min: 0, max: 16, step: 0.05, default: 0.5 },
     { key: 'release', label: 'Release', min: 0, max: 16, step: 0.05, default: 0.75 },

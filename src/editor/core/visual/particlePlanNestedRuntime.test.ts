@@ -143,7 +143,7 @@ test('worker frame codec preserves correlated program offsets and mixed-prefix g
   assert.deepEqual(receiver.getParticlePlan('p')!.program, engine.getParticlePlan('p')!.program)
 })
 
-test('bounded nested color edits stay compact while an unbounded suffix edit remounts correctly', () => {
+test('nested color edits stay compact in every suffix while a formation-dependent final mover remounts correctly', () => {
   const document = fixture('b')
   const engine = createVisualEngine()
   engine.setProject(document); engine.computeAtBeat(.7)
@@ -155,8 +155,9 @@ test('bounded nested color edits stay compact while an unbounded suffix edit rem
   colored.tracks.color = { ...colored.tracks.motion, id: 'color', moverId: 'gradient',
     inputValues: { mode: 1, amount: 1 }, stringParams: { colorA: '#ff0000', colorB: '#0000ff' } }
   engine.setProject(colored); engine.computeAtBeat(.7)
-  assert.ok(engine.getParticlePlan('p')!.cpuPrefix)
-  assert.equal(engine.getParticlePlan('p')!.cpuPrefix!.count, 32 ** 2)
+  assert.equal(engine.getParticlePlan('p')!.cpuPrefix, undefined)
+  assert.equal(engine.getParticlePlan('p')!.count, COPIES)
+  assert.ok(engine.getParticlePlan('p')!.program!.nestedAppearanceOffsets!.some(offset => offset >= 0))
   assert.equal(engine.getVisualCopyCount('p'), COPIES)
   assert.equal(engine.getVisualCopies('p').length, 0)
   assert.equal(engine.getObjectList().length, 1)
@@ -170,12 +171,36 @@ test('bounded nested color edits stay compact while an unbounded suffix edit rem
   }
   engine.setProject(document); engine.computeAtBeat(.7)
   assert.equal(publications, 0, 'bounded color changes keep the existing compact object list')
-  const expanded = structuredClone(colored)
-  expanded.tracks.b.childIds = expanded.tracks.b.childIds.filter(id => id !== 'color')
-  expanded.tracks.c.childIds.push('color')
-  expanded.tracks.color.parentId = 'c'
+  const finalColor = structuredClone(colored)
+  finalColor.tracks.b.childIds = finalColor.tracks.b.childIds.filter(id => id !== 'color')
+  finalColor.tracks.c.childIds.push('color')
+  finalColor.tracks.color.parentId = 'c'
+  finalColor.tracks.color.inputValues = { mode: 0, angle: 31, span: 6, amount: 1 }
+  engine.setProject(finalColor); engine.computeAtBeat(.7)
+  const finalPlan = engine.getParticlePlan('p')!
+  assert.ok(finalPlan)
+  assert.equal(finalPlan.cpuPrefix, undefined, 'a colorizer under the final splitter remains a shared appearance stage')
+  assert.equal(finalPlan.count, COPIES)
+  const placement = engine.getObjectState('p')!.world
+  assert.deepEqual(finalPlan.placementElements, placement.elements)
+  assert.equal(engine.getVisualCopies('p').length, 0)
+  assert.equal(engine.getObjectList().length, 1)
+  assert.ok(engine.getObjectList()[0].proceduralCopies)
+  const finalReference = resolveVisualCopies(resolveProject(finalColor).objects[0].moverAndSplitterChain, .7, placement)
+  for (const index of SAMPLE_INDICES) {
+    const actual = engine.getVisualCopy('p', index)!
+    assertMatrixNear(actual.transform, finalReference[index].transform)
+    assert.deepEqual(actual.colorShift, finalReference[index].colorShift)
+    assert.equal(actual.opacity, finalReference[index].opacity)
+  }
+  assert.equal(publications, 0, 'moving a colorizer to the final splitter preserves the compact object list')
+  const expanded = structuredClone(finalColor)
+  expanded.tracks.p.childIds.push('formation')
+  expanded.tracks.formation = { ...expanded.tracks.color, id: 'formation', name: 'Conveyor', moverId: 'conveyor',
+    parentId: 'p', childIds: [], inputValues: { speed: 1, glide: 0 }, stringParams: {},
+    blocks: [block('conveyor', [{ pitch: 60, startBeat: 0 }])] }
   engine.setProject(expanded); engine.computeAtBeat(.7)
-  assert.equal(engine.getParticlePlan('p'), undefined, 'a CPU-only final stage cannot precede GPU fanout')
+  assert.equal(engine.getParticlePlan('p'), undefined, 'a formation-dependent final Conveyor still requires the reference population')
   assert.equal(engine.getVisualCopies('p').length, COPIES)
   assert.equal(engine.getObjectList().length, COPIES)
   assert.ok(engine.getObjectList().every(entry => !entry.proceduralCopies))

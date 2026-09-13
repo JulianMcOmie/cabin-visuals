@@ -186,6 +186,7 @@ export function evaluateWaveHeight(
 
 export const waveTerrainMover: MoverOrSplitterDefinition<WaveTerrainSettings> = {
   id: 'waveTerrain',
+  particleExecution: { fallback: 'unported', reason: 'The legacy world-space surface displacement and conjugation have not been ported to a GPU operation.' },
   label: 'Wave Terrain',
   extras: true,
   kind: 'mover',

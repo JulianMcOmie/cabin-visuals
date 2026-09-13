@@ -34,6 +34,8 @@
 // would have no defined answer.
 
 import { entryMaxOutputCount } from './maxOutputCount'
+import { forwardCompactUniformGate } from './compactEntryGate'
+import { identityGpuOperation } from './gpuOperations'
 import type { MidiRowDef, SelectParamDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitter } from './types'
@@ -200,7 +202,10 @@ export function liveChildrenAt(
 
 /** An entry that declines to act, which this module spells "return the copy
  *  unchanged" (copyTargets.ts's untargeted copies, bypass's gated apply). */
-const PASS_THROUGH: MoverOrSplitter = { maxOutputCount: 1, apply: (visualCopy) => [visualCopy] }
+const PASS_THROUGH: MoverOrSplitter = {
+  maxOutputCount: 1, gpuOperationAtBeat: identityGpuOperation, gpuAppearanceOnly: true,
+  apply: (visualCopy) => [visualCopy],
+}
 
 /**
  * What the structural probe should be handed for child `index`.
@@ -264,6 +269,7 @@ export function switchGated(
     },
   }
   if (entry.composition) gated.composition = entry.composition
+  if (entry.localSlotMotion) gated.localSlotMotion = true
   if (entry.emitsCopyClocks) gated.emitsCopyClocks = true
   if (entry.applyFramed) {
     const applyFramed = entry.applyFramed.bind(entry)
@@ -282,6 +288,7 @@ export function switchGated(
     gated.bypassAt = (beat) => bypassAt(beat)
   }
   gated.structuralVariants = structuralVariants
+  forwardCompactUniformGate(gated, entry, isLive)
   return gated
 }
 

@@ -44,6 +44,7 @@
 // when what you want is the object dimming rather than the device stopping.
 
 import { entryMaxOutputCount } from './maxOutputCount'
+import { forwardCompactUniformGate } from './compactEntryGate'
 import type { MidiRowDef, ParamDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
@@ -172,11 +173,13 @@ export function bypassGated(
   // a splitter that happens to be bypassed at beat 0 - the beat the probe
   // samples - would mount a pool of one and every later frame would overflow it.
   gated.structuralVariants = [entry, ...(entry.structuralVariants ?? [])]
+  forwardCompactUniformGate(gated, entry, beat => !bypassed(beat))
   return gated
 }
 
 export const bypassMover: MoverOrSplitterDefinition<BypassSettings> = {
   id: BYPASS_ID,
+  particleExecution: { fallback: 'device-control', reason: 'Bypass is lifted from a device child into a uniform gate; it is not a separately rendered copy operation.' },
   label: 'Bypass',
   kind: 'mover',
   parentGate: true,

@@ -29,7 +29,8 @@
 import { entryMaxOutputCount } from './maxOutputCount'
 import { resolveVisualCopies } from './resolveVisualCopies'
 import { memoizeEvaluation } from './evaluationMemo'
-import type { Matrix4 } from 'three'
+import { Matrix4 } from 'three'
+import { compileParticlePlan, particlePlanMatrix } from './particlePlan'
 import type { MoverOrSplitter } from './types'
 
 function ignoresPlacement(entry: MoverOrSplitter): boolean {
@@ -86,6 +87,22 @@ export function framedMoverOrSplitter(
     elements: number[] | undefined
     transformed: Matrix4 | undefined
   }>())
+  const placementAt = (beat: number, input?: Matrix4) => {
+    const placements = placementsAtBeat(beat)
+    let cached = placements.get(input)
+    if (!cached || (input && !input.elements.every((value, i) => Object.is(value, cached!.elements![i])))) {
+      // A field uses only its frame's first slot. A compact frame must not be
+      // expanded merely to read that one transform.
+      const plan = compileParticlePlan(frame, 0, beat, input)
+      const transform = plan ? (plan.count > 0 ? particlePlanMatrix(plan, 0, new Matrix4()) : undefined)
+        : resolveVisualCopies(frame, beat, input)[0]?.transform
+      const transformed = transform?.clone().invert()
+      if (transformed && input) transformed.multiply(input)
+      cached = { elements: input?.elements.slice(), transformed }
+      placements.set(input, cached)
+    }
+    return cached.transformed
+  }
   const framedEntry: MoverOrSplitter = {
     maxOutputCount: entryMaxOutputCount(inner),
     cachePolicy: inner.cachePolicy === 'static' && frame.every((entry) => entry.cachePolicy === 'static')
@@ -94,20 +111,21 @@ export function framedMoverOrSplitter(
       // Resolved from identity, so F is the frame's own accumulated motion. It
       // sees the object's placement too, so a world-placed mover can itself be
       // used as a frame.
-      const placements = placementsAtBeat(context.beat)
-      const input = context.placementTransform
-      let cached = placements.get(input)
-      if (!cached || (input && !input.elements.every((value, i) => Object.is(value, cached!.elements![i])))) {
-        const [framed] = resolveVisualCopies(frame, context.beat, input)
-        const transformed = framed?.transform.clone().invert()
-        if (transformed && input) transformed.multiply(input)
-        cached = { elements: input?.elements.slice(), transformed }
-        placements.set(input, cached)
-      }
-      const placementTransform = cached.transformed
+      const placementTransform = placementAt(context.beat, context.placementTransform)
       if (!placementTransform) return inner.apply(visualCopy, context)
       return inner.apply(visualCopy, { ...context, placementTransform })
     },
+  }
+  if (inner.gpuAppearanceOnly && inner.gpuOperationAtBeat && !inner.applyFramed && !inner.emitsCopyClocks) {
+    framedEntry.gpuOperationUsesPlacement = true
+    framedEntry.gpuOperationPreservesDeterminant = true
+    framedEntry.gpuOperationAtBeat = (beat, input) => {
+      const placement = placementAt(beat, input) ?? input
+      const operation = inner.gpuOperationAtBeat!(beat, placement)
+      return { ...operation, appearancePlacement: operation.appearancePlacement ?? (placement ?? new Matrix4()).elements.slice() }
+    }
+    // This operation samples a private placement frame. Do not advertise the
+    // simpler nested-slot appearance proof, which assumes ordinary placement.
   }
   // A frame reinterprets WHERE an entry acts, never when, so a time remap has to
   // pass straight through - dropping it here would silently un-freeze any Freeze

@@ -192,7 +192,7 @@ export interface FramedVisualCopy {
 }
 
 /** Correlated local frame/internal slots with optional shared appearance for a framed
- * entry. Arrays have equal length and immutable matrices in output-slot order.
+ * entry. Active arrays have equal length and immutable matrices in output-slot order.
  * For an incoming chain frame P with finite determinant and |det(P)| >= 1e-12,
  * output i has frame P × frames[i] and the optional internals[i] contribution.
  * For a degenerate P it has frame P × bareFrames[i] and NO internal contribution.
@@ -201,8 +201,14 @@ export interface FramedVisualCopy {
  * only after every downstream frame factor; frames and internals use the SAME
  * slot index, never independent Cartesian dimensions. Opacities multiply the
  * input and hue shifts add to it; bare channels apply only on the skipped path.
- * Every optional channel has the same length as frames. */
+ * Active channels match frames; bare channels match bareFrames. Bare cardinality
+ * may differ only with requiresInvertibleInput, which forbids using this table
+ * for a population containing a degenerate incoming reference frame. */
 export interface FramedLocalTransforms {
+  /** Recursive fanout can emit fewer bare slots than active slots. Such a
+   * table is usable only when the compiler proves every incoming reference
+   * frame is invertible; otherwise it must retain reference evaluation. */
+  requiresInvertibleInput?: true
   frames: readonly Matrix4[]
   internals: readonly (Matrix4 | null)[]
   bareFrames: readonly Matrix4[]
@@ -210,6 +216,21 @@ export interface FramedLocalTransforms {
   hueShifts?: readonly number[]
   bareOpacities?: readonly number[]
   bareHueShifts?: readonly number[]
+  /** Ordered appearance-only children sampled at their own incoming local
+   * frames. Each table has one matrix per final active output. The interpreter supplies
+   * its declared index/count and world placement composed with the incoming
+   * parent frame; these operations run only on the active framed branch. */
+  appearanceStages?: readonly {
+    operation: GpuOperation
+    sampleFrames: readonly Matrix4[]
+    /** Omitted for a direct child: its ordinal is the parent slot. Recursive
+     * fanout repeats earlier samples while retaining their original domain. */
+    inputIndices?: readonly number[]
+    inputCount?: number
+    /** Per-output nested guard; omitted means the substage is always active
+     * whenever this outer framed stage's incoming-frame guard is active. */
+    active?: readonly number[]
+  }[]
 }
 
 /** Immutable local slot table. Optional channels have exactly one value per
@@ -275,12 +296,21 @@ export interface MoverOrSplitter {
    * read beat, incoming transform, index/count and formation transforms only;
    * independent of placement, appearance, birth and per-copy clocks. */
   localSlotMotion?: true
-  /** Exact count-one, appearance-preserving operation on the incoming full
-   * reference frame. The sampled data is serializable; its shared CPU and GPU
-   * interpreters preserve chain ordering. Exclusive with layout/root/framed
-   * families. No formation, birth, copy-clock or appearance dependence. */
+  /** Exact count-one program on the incoming reference frame and color state.
+   * Build new devices with sharedGpuOperation: its CPU apply and GPU data come
+   * from the same operation, including stage-local index/count and world-space
+   * appearance sampling. Exclusive with layout/root/framed families. Per-copy
+   * clocks and formation-wide reductions require their own execution contract. */
   gpuOperationAtBeat?: (beat: number, placementTransform?: Matrix4) => GpuOperation
   gpuOperationUsesPlacement?: boolean
+  /** Structural promise for every beat and placement: the operation preserves
+   * the incoming determinant. A single sampled operation cannot prove this. */
+  gpuOperationPreservesDeterminant?: true
+  /** The operation changes only appearance, and its serialized parameters
+   * depend on beat/resolved inputs only. Placement is interpreted at the copy,
+   * never baked into parameters or appearancePlacement. Nested splitters can
+   * carry it as a substage while sampling motion over bounded local slots. */
+  gpuAppearanceOnly?: true
   /** Exact uniform chain-root motion: output.transform is rootTransform ×
    * input.transform, with unchanged appearance/count and no context dependence.
    * The matrix is immutable. Mutually exclusive with localTransforms[AtBeat];
@@ -293,6 +323,14 @@ export interface MoverOrSplitter {
    * declared slot appearance and no other input/context dependence or copy clocks.
    * Placement dependence must be declared by framedLayoutUsesPlacement. */
   framedLocalTransformsAtBeat?: (beat: number, placementTransform?: Matrix4) => FramedLocalTransforms
+  /** Structural admission requirement, including beats where a gate returns
+   * identity. A recursive frame can change bare cardinality when enabled, so
+   * its incoming frames must stay invertible for the entry's whole lifetime. */
+  framedRequiresInvertibleInput?: true
+  /** Explicit false proves that transform tables are independent of placement.
+   * World appearance may still need framedLayoutUsesPlacement for sampling.
+   * Recursive splitter compilation must not infer this proof from one beat. */
+  framedTransformUsesPlacement?: boolean
   framedLayoutUsesPlacement?: boolean
   apply(visualCopy: VisualCopy, context: MoverOrSplitterContext): VisualCopy[]
   /**

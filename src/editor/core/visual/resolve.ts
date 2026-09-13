@@ -728,6 +728,9 @@ function resolveOwnMoverOrSplitter(track: Track, p: ProjectSnapshot): MoverOrSpl
     maxResolved.structuralVariants?.[0] ?? maxResolved,
     minResolved.structuralVariants?.[1] ?? minResolved,
   ]
+  if (resolved.framedRequiresInvertibleInput || wrapped.structuralVariants.some(entry => entry.framedRequiresInvertibleInput)) {
+    wrapped.framedRequiresInvertibleInput = true
+  }
   // Only definitions that explicitly guarantee a local affine layout may
   // forward this contract through automation. Targets/frames drop it later.
   if ((resolved.localTransforms || resolved.localTransformsAtBeat)
@@ -783,6 +786,10 @@ function resolveOwnMoverOrSplitter(track: Track, p: ProjectSnapshot): MoverOrSpl
       resolveAtBeat(beat).gpuOperationAtBeat!(beat, placementTransform)
     wrapped.gpuOperationUsesPlacement = !!resolved.gpuOperationUsesPlacement
       || wrapped.structuralVariants.some(entry => entry.gpuOperationUsesPlacement)
+    if (resolved.gpuAppearanceOnly && wrapped.structuralVariants.every(entry => entry.gpuAppearanceOnly)) wrapped.gpuAppearanceOnly = true
+    if (resolved.gpuOperationPreservesDeterminant && wrapped.structuralVariants.every(entry => entry.gpuOperationPreservesDeterminant)) {
+      wrapped.gpuOperationPreservesDeterminant = true
+    }
   }
   return wrapped
 }

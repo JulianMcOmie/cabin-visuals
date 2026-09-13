@@ -3,12 +3,10 @@
 // the current beat, so seeking a hit is identical to playing through it. Note
 // lengths do not sustain the impulse; velocity controls its strength.
 
-import { Matrix4 } from 'three'
 import type { MidiRowDef } from '../../instruments/types'
-import { memoByBeat } from './beatMemo'
+import { sharedGpuOperation } from './sharedGpuOperation'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { createFluidImpactSampler, type FluidImpactSettings } from './fluidImpactField'
-import { applyGpuOperation } from './gpuOperations'
 import { FLUID_IMPACT_COLOR } from './identityColors'
 
 export type { FluidImpactSettings } from './fluidImpactField'
@@ -45,22 +43,10 @@ export const fluidImpactMover: MoverOrSplitterDefinition<FluidImpactSettings> = 
   midiRows: () => FLUID_IMPACT_ROWS,
   strictMidiRows: true,
   resolve({ settings, notes }) {
-    const operationAt = memoByBeat(createFluidImpactSampler(notes, settings))
-    return {
-      maxOutputCount: 1,
-      localSlotMotion: true,
-      gpuOperationAtBeat: operationAt,
-      // Chain-root displacement keeps the pressure center and swirl axes fixed
-      // across differently rotated copies. The object's own placement still
-      // carries the complete formation, including its impact field.
-      composition: 'chainRoot',
-      apply(visualCopy, { beat }) {
-        return [{
-          transform: applyGpuOperation(operationAt(beat), visualCopy.transform, new Matrix4()),
-          opacity: visualCopy.opacity,
-          colorShift: { ...visualCopy.colorShift },
-        }]
-      },
-    }
+    // The object's placement carries both formation and field; individual
+    // copy rotations never re-aim this chain-root displacement.
+    return sharedGpuOperation(createFluidImpactSampler(notes, settings), {
+      localSlotMotion: true, preservesDeterminant: true, composition: 'chainRoot',
+    })
   },
 }

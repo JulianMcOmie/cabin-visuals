@@ -38,11 +38,11 @@
 // At SPREAD 0 every copy turns together, which is the honest "global filter"
 // case and a legitimate setting.
 
-import { Vector3 } from 'three'
 import type { ParamDef } from '../../instruments/types'
 import type { MoverOrSplitterDefinition } from './definitions'
+import { sharedGpuOperation } from './sharedGpuOperation'
+import { hueAppearance } from './gpuAppearance'
 import { HUE_ROTATE_COLOR } from './identityColors'
-import type { VisualCopy } from './types'
 
 /** Which scalar of the copy's placement scales SPREAD. The Cosine Palette's and
  *  the Riso's vocabulary, value for value - three colorizers now ask "where
@@ -177,39 +177,10 @@ export const hueRotateColorizer: MoverOrSplitterDefinition<HueRotateSettings> = 
   midiRows: () => [],
   strictMidiRows: true,
   resolve({ settings }) {
-    const perceptual = settings.hueMode !== HUE_MODE_HSL
-    const scratchPosition = new Vector3()
-    return {
-      maxOutputCount: 1,
-      apply(visualCopy, { beat, index, count, placementTransform }) {
-        // World position, the same read as the other colorizers: the chained
-        // transform's translation pushed through the track placement.
-        scratchPosition.setFromMatrixPosition(visualCopy.transform)
-        if (placementTransform) scratchPosition.applyMatrix4(placementTransform)
-        const t = hueRotatePosition(
-          settings, index, count, scratchPosition.x, scratchPosition.y, scratchPosition.z,
-        )
-        const next: VisualCopy = {
-          transform: visualCopy.transform.clone(),
-          opacity: visualCopy.opacity,
-          colorShift: {
-            ...visualCopy.colorShift,
-            // ACCUMULATES, where a tint replaces: these are relative channels,
-            // so stacking two of these devices means two turns, and one under a
-            // palette colorizer turns the colour that palette just chose. At
-            // ROTATE 0 with SPREAD 0 this adds exactly nothing - the passthrough
-            // every colorizer owes an upstream tint costs no special case here.
-            hue: visualCopy.colorShift.hue + hueRotateTurns(settings, t, beat),
-            saturation: visualCopy.colorShift.saturation + settings.saturation,
-            lightness: visualCopy.colorShift.lightness + settings.lightness,
-            // The circle the SUM turns on. Last writer wins, like the tint's
-            // own mix flag: two entries disagreeing about which circle their
-            // shared hue channel means is not something an average can settle.
-            huePerceptual: perceptual,
-          },
-        }
-        return [next]
-      },
-    }
+    const mapping = { mode: [0,1,2,3,4,5].includes(settings.mode) ? settings.mode : HUE_MAP_RADIAL,
+      span: settings.span, offset: settings.offset, single: 0 }
+    return sharedGpuOperation(beat => hueAppearance(mapping, hueRotateTurns(settings, 0, beat), settings.spread,
+      settings.saturation, settings.lightness, settings.hueMode !== HUE_MODE_HSL),
+    { appearanceOnly: true, usesPlacement: settings.mode !== HUE_MAP_INDEX })
   },
 }

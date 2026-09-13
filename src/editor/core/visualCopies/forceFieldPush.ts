@@ -127,6 +127,7 @@ export function evaluateForceFieldTwist(
 
 export const forceFieldPushMover: MoverOrSplitterDefinition<ForceFieldPushSettings> = {
   id: 'forceFieldPush',
+  particleExecution: { fallback: 'unported', reason: 'The legacy world-space force field has no serialized GPU evaluator for its displaced affine transform.' },
   label: 'Force Field Pulse',
   extras: true,
   kind: 'mover',

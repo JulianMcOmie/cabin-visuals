@@ -3,7 +3,7 @@ import test from 'node:test'
 import { Matrix4, Vector3 } from 'three'
 import { radialSplitter, gridSplitter, lineSplitter } from './library'
 import { mergeDefinitionSettings } from './definitions'
-import { compileParticlePlan, matrixScaleBound, particlePlanMatrix } from './particlePlan'
+import { compileParticlePlan, matrixScaleBound, particlePlanCopy, particlePlanMatrix } from './particlePlan'
 import { resolveVisualCopies, structuralCopyCount } from './resolveVisualCopies'
 import { gatedMoverOrSplitter } from './copyTargets'
 import { moverDefinition, type MoverSettings } from './mover'
@@ -112,9 +112,28 @@ test('interleaved root motions retain noncommuting order without expanding the l
   assert.equal(structuralCopyCount(large), 1048576)
 })
 
-test('root contracts preserve reference fallback for targeted, unproven framed and ambiguous entries', () => {
+test('targeted root motion stays compact while unproven framed, ambiguous and clocked entries retain fallback', () => {
   const root = motion(2, 1)
-  assert.equal(compileParticlePlan([gatedMoverOrSplitter(root, { rule: 'every', slices: 2, on: [0] })]), undefined)
+  const placement = new Matrix4().makeRotationY(.37).setPosition(4, -3, 2)
+  for (const rule of ['every', 'runs'] as const) {
+    const targeted = gatedMoverOrSplitter(root, { rule, slices: 2, on: [0] })
+    const chain = [layout(radialSplitter, { copies: 5, radius: 2, tilt: 27 }), targeted,
+      layout(lineSplitter, { copies: 3, spacing: .2 })]
+    for (const beat of [0, .8, 2.4, .8]) {
+      const plan = compileParticlePlan(chain, 0, beat, placement)!
+      assert.ok(plan)
+      assert.equal(plan.cpuPrefix, undefined)
+      assert.equal(plan.count, 15)
+      assert.ok(plan.program!.operationGuardOffsets!.some(offset => offset >= 0))
+      const reference = resolveVisualCopies(chain, beat, placement)
+      reference.forEach((copy, index) => {
+        const actual = particlePlanCopy(plan, index)!
+        actual.transform.elements.forEach((value, i) => assert.ok(Math.abs(value - copy.transform.elements[i]) < 1e-9))
+        assert.equal(actual.opacity, copy.opacity)
+        assert.deepEqual(actual.colorShift, copy.colorShift)
+      })
+    }
+  }
   const nested = splitterWithChildChain(layout(radialSplitter, { copies: 5 }), [root])
   assert.ok(compileParticlePlan([nested])?.program, 'proven nested root motion has a framed plan')
   assert.equal(compileParticlePlan([{ ...root, applyFramed: () => [] }]), undefined)

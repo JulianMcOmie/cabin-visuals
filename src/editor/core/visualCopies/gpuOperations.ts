@@ -1,9 +1,11 @@
 import { Matrix4, Vector3 } from 'three'
 import { pivotedRotation } from './motionBasis'
+import { isGpuAppearanceSupported } from './gpuAppearance'
+import type { CopyTargetSelection } from './copyTargets'
 
-/** A pure, count-one operation on the incoming FULL affine chain frame. The
- * host samples notes/automation once; workers and shaders receive only scalars.
- * Appearance, placement and copy clocks are unchanged by these operations.
+/** A pure, count-one operation on the incoming copy's frame and appearance.
+ * The host samples shared notes/automation once; workers and shaders receive
+ * only data. Spatial, color and selection operations share this contract.
  * Bounds describe the frame's linear scale and its position separately:
  * |positionOut| <= positionScaleBound * |positionIn| + translationBound. */
 export interface GpuOperation {
@@ -13,42 +15,93 @@ export interface GpuOperation {
   translationBound: number
   positionScaleBound?: number
   determinantPreserving?: boolean
+  /** Constant affine operators can certify determinant/whole-frame growth
+   * directly; no population-sized singularity probe is needed after a gate. */
+  determinantScale?: number
+  frameScaleBound?: number
+  /** Conjunctive predicates over this stage's INPUT ordinal/population. These
+   * are program data, so adding copy targeting never expands a GPU operation. */
+  indexGuards?: readonly CopyTargetSelection[]
+  /** A mover frame can relocate a world-sampled appearance field without
+   * changing the particle's geometry or losing compact execution. */
+  appearancePlacement?: readonly number[]
 }
 
+export const GPU_OPERATION_IDENTITY = 0
 export const GPU_OPERATION_MIRROR_DISPLACEMENT = 1
 export const GPU_OPERATION_RADIAL_DISPLACEMENT = 2
 export const GPU_OPERATION_AXIAL_ROTATION = 3
 export const GPU_OPERATION_FLUID_IMPACT = 4
+export const GPU_OPERATION_APPEARANCE = 5
+export const GPU_OPERATION_LOCAL_AFFINE = 6
+export const GPU_OPERATION_ROOT_AFFINE = 7
 
 type Triple = readonly [number, number, number]
 const POSITION_EPS = 1e-6
 const ANGLE_EPS = 1e-10
 
-export function gpuOperationParameterCount(kind: number): number | undefined {
+export function gpuOperationParameterCount(kind: number, parameters?: ArrayLike<number>): number | undefined {
   switch (kind) {
+    case GPU_OPERATION_IDENTITY: return 0
     case GPU_OPERATION_MIRROR_DISPLACEMENT: return 3
     case GPU_OPERATION_RADIAL_DISPLACEMENT: return 6
     case GPU_OPERATION_AXIAL_ROTATION: return 13
     case GPU_OPERATION_FLUID_IMPACT: return 14
+    case GPU_OPERATION_APPEARANCE: return parameters?.[1]
+    case GPU_OPERATION_LOCAL_AFFINE:
+    case GPU_OPERATION_ROOT_AFFINE: return 16
     default: return undefined
   }
 }
 
 export function isGpuOperationSupported(operation: GpuOperation): boolean {
   const p = operation.parameters
-  const unitAxis = operation.kind === GPU_OPERATION_MIRROR_DISPLACEMENT
+  const unitAxis = operation.kind === GPU_OPERATION_IDENTITY || operation.kind === GPU_OPERATION_APPEARANCE
+    || operation.kind === GPU_OPERATION_LOCAL_AFFINE || operation.kind === GPU_OPERATION_ROOT_AFFINE
+    || operation.kind === GPU_OPERATION_MIRROR_DISPLACEMENT
     || Math.abs(Math.hypot(p[0], p[1], p[2]) - 1) <= 1e-12
-  return p.length === gpuOperationParameterCount(operation.kind)
-    && operation.parameters.every(Number.isFinite)
+  return p.length === gpuOperationParameterCount(operation.kind, p)
+    && (operation.kind === GPU_OPERATION_APPEARANCE || operation.parameters.every(Number.isFinite))
     && unitAxis
     && (operation.kind !== GPU_OPERATION_RADIAL_DISPLACEMENT || p[3] === 0 || p[3] === 1)
     && (operation.kind !== GPU_OPERATION_AXIAL_ROTATION
       || (p[10] >= .0001 && p[11] >= .01 && (p[12] === 0 || p[12] === 1)))
     && (operation.kind !== GPU_OPERATION_FLUID_IMPACT || (p[6] > 0 && p[10] > 0))
+    && (operation.kind !== GPU_OPERATION_APPEARANCE || isGpuAppearanceSupported(operation))
+    && (![GPU_OPERATION_LOCAL_AFFINE, GPU_OPERATION_ROOT_AFFINE].includes(operation.kind)
+      || (p[3] === 0 && p[7] === 0 && p[11] === 0 && p[15] === 1))
+    && (!operation.indexGuards || operation.indexGuards.every(guard =>
+      (guard.rule === 'every' || guard.rule === 'runs') && Number.isFinite(guard.slices)
+      && guard.on.every(value => Number.isInteger(value) && value >= 0 && value < 12)))
+    && (!operation.appearancePlacement || operation.appearancePlacement.length === 16
+      && operation.appearancePlacement.every(Number.isFinite))
     && Number.isFinite(operation.scaleBound) && operation.scaleBound >= 0
     && Number.isFinite(operation.translationBound) && operation.translationBound >= 0
     && (operation.positionScaleBound === undefined
       || (Number.isFinite(operation.positionScaleBound) && operation.positionScaleBound >= 0))
+    && (operation.frameScaleBound === undefined || Number.isFinite(operation.frameScaleBound) && operation.frameScaleBound >= 0)
+    && (operation.determinantScale === undefined || Number.isFinite(operation.determinantScale) && operation.determinantScale >= 0)
+}
+
+export function identityGpuOperation(): GpuOperation {
+  return { kind: GPU_OPERATION_IDENTITY, parameters: [], scaleBound: 1,
+    positionScaleBound: 1, translationBound: 0, determinantPreserving: true }
+}
+
+/** Turn a uniform transform into the same operation vocabulary as spatial and
+ * appearance fields. Copy targeting can then condition it without a CPU loop. */
+export function affineGpuOperation(matrix: Matrix4, composition: 'local' | 'chainRoot'): GpuOperation {
+  const e = matrix.elements
+  const a = new Vector3(e[0], e[1], e[2]), b = new Vector3(e[4], e[5], e[6]), c = new Vector3(e[8], e[9], e[10])
+  const ab = Math.abs(a.dot(b)), ac = Math.abs(a.dot(c)), bc = Math.abs(b.dot(c))
+  const scaleBound = Math.sqrt(Math.max(a.lengthSq() + ab + ac, b.lengthSq() + ab + bc, c.lengthSq() + ac + bc)) * (1 + 8 * Number.EPSILON)
+  let frameScaleBound = 0
+  for (let row = 0; row < 4; row++) frameScaleBound = Math.max(frameScaleBound,
+    Math.abs(e[row]) + Math.abs(e[row + 4]) + Math.abs(e[row + 8]) + Math.abs(e[row + 12]))
+  return { kind: composition === 'local' ? GPU_OPERATION_LOCAL_AFFINE : GPU_OPERATION_ROOT_AFFINE,
+    parameters: e.slice(), scaleBound, positionScaleBound: scaleBound,
+    translationBound: Math.hypot(e[12], e[13], e[14]), frameScaleBound,
+    determinantScale: Math.abs(matrix.determinant()) }
 }
 
 /** Axis-aligned displacement, clamping inward motion at each mirror plane. */
@@ -125,6 +178,11 @@ export function fluidImpactOperation(p: FluidImpactOperationParameters): GpuOper
  * writing permits out === incoming. Full matrix multiplication retains shear,
  * mirrors and the reference path's behavior at zero and near-zero scales. */
 export function applyGpuOperation(operation: GpuOperation, incoming: Matrix4, out: Matrix4): Matrix4 {
+  if (operation.kind === GPU_OPERATION_IDENTITY || operation.kind === GPU_OPERATION_APPEARANCE) return out.copy(incoming)
+  if (operation.kind === GPU_OPERATION_LOCAL_AFFINE || operation.kind === GPU_OPERATION_ROOT_AFFINE) {
+    const delta = new Matrix4().fromArray(operation.parameters)
+    return operation.kind === GPU_OPERATION_LOCAL_AFFINE ? out.multiplyMatrices(incoming, delta) : out.multiplyMatrices(delta, incoming)
+  }
   const p = operation.parameters
   const e = incoming.elements
   const position = new Vector3(e[12], e[13], e[14])
@@ -227,6 +285,14 @@ export const GPU_OPERATIONS_GLSL = `
     return vec3(layoutScalar(offset), layoutScalar(offset + 1), layoutScalar(offset + 2));
   }
   mat4 applyParticleOperation(mat4 frame, int kind, int scalarOffset) {
+    if (kind == ${GPU_OPERATION_LOCAL_AFFINE} || kind == ${GPU_OPERATION_ROOT_AFFINE}) {
+      mat4 delta;
+      for (int column = 0; column < 4; column++) {
+        int p = scalarOffset + column * 4;
+        delta[column] = vec4(layoutScalar(p), layoutScalar(p + 1), layoutScalar(p + 2), layoutScalar(p + 3));
+      }
+      return kind == ${GPU_OPERATION_LOCAL_AFFINE} ? frame * delta : delta * frame;
+    }
     vec3 position = frame[3].xyz;
     if (kind == ${GPU_OPERATION_MIRROR_DISPLACEMENT}) {
       vec3 travel = particleOpTriple(scalarOffset), offset = vec3(0.0);

@@ -337,6 +337,7 @@ const MOTION_PARAMS: ParamDef[] = [
 
 export const motionMover: MoverOrSplitterDefinition<MotionSettings> = {
   id: 'motion',
+  particleExecution: { fallback: 'unported', reason: 'The legacy motion basis, per-copy wrapping and edge fades have not been expressed as a shared GPU operation.' },
   label: 'Motion',
   kind: 'mover',
   legacy: true,

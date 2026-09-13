@@ -26,11 +26,12 @@
 // the note Colorizer the same way the rainbow does: the flash's later chain
 // entry takes the tint over, and relative hue sweeps ride on top of the ramp.
 
-import { Vector3 } from 'three'
 import { buildGradientPath, sampleGradientPath, DEFAULT_GRADIENT_PATH } from './gradientPath'
 import type { ParamDef } from '../../instruments/types'
 import { gradientStops } from '../../utils/oklch'
 import type { MoverOrSplitterDefinition } from './definitions'
+import { sharedGpuOperation } from './sharedGpuOperation'
+import { paletteAppearance } from './gpuAppearance'
 import { GRADIENT_COLORIZER_COLOR } from './identityColors'
 import { clamp01 } from '../../utils/math'
 
@@ -164,42 +165,15 @@ export const gradientColorizer: MoverOrSplitterDefinition<GradientColorizerSetti
   midiRows: () => [],
   strictMidiRows: true,
   resolve({ settings }) {
-    // The ramp is fixed per resolve (settings changes re-resolve), so the
-    // per-frame work is an index into precomputed hex strings - no color math
-    // and no string building while a 32x32 grid animates.
     const lut = gradientStops(settings.colorA, settings.colorB, LUT_SIZE)
     const path = buildGradientPath(settings.path, settings.mode === GRADIENT_MODE_CURVE)
-    const amount = clamp01(settings.amount)
-    const scratchPosition = new Vector3()
-    return {
-      maxOutputCount: 1,
-      apply(visualCopy, { index, count, placementTransform }) {
-        // AMOUNT zero leaves upstream color state alone entirely - "no
-        // gradient" must not clear a tint some other colorizer asked for.
-        if (amount <= 0) {
-          return [{
-            transform: visualCopy.transform.clone(),
-            opacity: visualCopy.opacity,
-            colorShift: { ...visualCopy.colorShift },
-          }]
-        }
-        // World position, the same way the Colorizer's rainbow reads it: the
-        // chained transform's translation pushed through the track placement.
-        scratchPosition.setFromMatrixPosition(visualCopy.transform)
-        if (placementTransform) scratchPosition.applyMatrix4(placementTransform)
-        const t = gradientPosition(settings, index, count, scratchPosition.x, scratchPosition.y, scratchPosition.z, path)
-        return [{
-          transform: visualCopy.transform.clone(),
-          opacity: visualCopy.opacity,
-          colorShift: {
-            ...visualCopy.colorShift,
-            // Tint REPLACES upstream (the chain rule): the gradient owns the
-            // color; relative hue/sat/lightness continue to ride on top.
-            tint: lut[Math.round(t * (LUT_SIZE - 1))],
-            tintAmount: amount,
-          },
-        }]
-      },
-    }
+    const radians = settings.angle * Math.PI / 180
+    const mapping = settings.mode === GRADIENT_MODE_INDEX ? { mode: 5, single: .5 }
+      : settings.mode === GRADIENT_MODE_DEPTH ? { mode: 7, span: (settings.far ?? -3) - (settings.near ?? 3), offset: settings.near ?? 3 }
+      : settings.mode === GRADIENT_MODE_LINE || settings.mode === GRADIENT_MODE_CURVE
+        ? { mode: settings.mapping === 1 ? 9 : 8, path, span: settings.width ?? 3 }
+        : { mode: 6, span: settings.span, offset: settings.offset, bias: .5, axis: [Math.cos(radians), Math.sin(radians)] as const }
+    const operation = paletteAppearance({ ...mapping, flip: settings.flip >= .5, clamp: true }, lut, settings.amount, { rounded: true })
+    return sharedGpuOperation(() => operation, { appearanceOnly: true, usesPlacement: settings.mode !== GRADIENT_MODE_INDEX })
   },
 }

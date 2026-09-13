@@ -231,6 +231,7 @@ export function latticeAlong(copies: readonly VisualCopy[], axis: 0 | 1 | 2): Ax
 
 export const conveyorMover: MoverOrSplitterDefinition<ConveyorSettings> = {
   id: 'conveyor',
+  particleExecution: { fallback: 'formation', reason: 'Belt mode measures the complete incoming formation to prove its lattice period; compact formation topology or a GPU reduction is still required.' },
   label: 'Conveyor',
   kind: 'mover',
   identityColor: CONVEYOR_COLOR,

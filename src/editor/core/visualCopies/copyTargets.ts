@@ -21,6 +21,7 @@
 // so the two cannot drift without a type error there.
 
 import { entryMaxOutputCount } from './maxOutputCount'
+import { affineGpuOperation } from './gpuOperations'
 import type { MoverOrSplitter } from './types'
 
 export type CopyTargetRule = 'every' | 'runs'
@@ -119,6 +120,29 @@ export function gatedMoverOrSplitter(
   // Targeting only selects the existing count-one motion or identity. Its
   // index predicate remains local to the containing splitter's formation.
   if (entry.localSlotMotion) gated.localSlotMotion = true
+  // A count-one operation can be predicated at its incoming stage index. A
+  // targeted splitter changes emission order and cardinality, which requires a
+  // separate variable-fanout proof rather than hiding duplicate output slots.
+  const local = !!(entry.localTransforms || entry.localTransformsAtBeat)
+  const shared = !!(entry.localLayout || entry.localLayoutAtBeat)
+  const root = !!(entry.rootTransform || entry.rootTransformAtBeat)
+  const gpu = !!entry.gpuOperationAtBeat
+  const soleFamily = Number(local) + Number(shared) + Number(root) + Number(gpu) === 1
+  const localCount = entry.localTransformsAtBeat ? entry.localTransformCount : entry.localTransforms?.length
+  const operationAt = gpu ? entry.gpuOperationAtBeat : root
+    ? (beat: number) => affineGpuOperation(entry.rootTransformAtBeat?.(beat) ?? entry.rootTransform!, 'chainRoot')
+    : local && localCount === 1
+      ? (beat: number) => affineGpuOperation((entry.localTransformsAtBeat?.(beat) ?? entry.localTransforms!)[0], 'local')
+      : undefined
+  if (bound === 1 && soleFamily && operationAt && !entry.applyFramed && !entry.framedLocalTransformsAtBeat && !entry.emitsCopyClocks) {
+    gated.gpuOperationAtBeat = (beat, placement) => {
+      const operation = operationAt(beat, placement)
+      return { ...operation, indexGuards: [...(operation.indexGuards ?? []), selection] }
+    }
+    gated.gpuOperationUsesPlacement = entry.gpuOperationUsesPlacement
+    if (entry.gpuAppearanceOnly) gated.gpuAppearanceOnly = true
+    if (entry.gpuOperationPreservesDeterminant) gated.gpuOperationPreservesDeterminant = true
+  }
   if (entry.emitsCopyClocks) gated.emitsCopyClocks = true
   if (entry.applyFramed) {
     const applyFramed = entry.applyFramed.bind(entry)

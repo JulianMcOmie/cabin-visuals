@@ -44,6 +44,9 @@ import type { MidiRowDef, ParamDef } from '../../instruments/types'
 import { colorToOklch, oklchToHex } from '../../utils/oklch'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
+import { sharedGpuOperation } from './sharedGpuOperation'
+import { appearanceTimelineAtBeat, noteAppearance, staggeredNoteAppearance } from './gpuAppearance'
+import type { MoverOrSplitter } from './types'
 
 /** One row per function, so every declared note has a meaning the user can read
  *  off the piano roll instead of guessing at a keyboard. */
@@ -485,7 +488,7 @@ export const noteColorizer: MoverOrSplitterDefinition<ColorizerSettings> = {
     const palette = colorizerPalette(settings)
     const perceptual = settings.blend !== BLEND_LINEAR
     const latch = settings.sample === SAMPLE_AT_BIRTH
-    return {
+    const reference: MoverOrSplitter = {
       maxOutputCount: 1,
       apply(visualCopy, { beat, index, placementTransform, birthBeat }) {
         // The copy's WORLD position. (P * T)'s translation column is P applied
@@ -518,5 +521,12 @@ export const noteColorizer: MoverOrSplitterDefinition<ColorizerSettings> = {
         }]
       },
     }
+    const timeline = settings.staggerBeats !== 0 ? staggeredNoteAppearance(settings, notes, palette, 0) : undefined
+    return sharedGpuOperation(beat => {
+      if(timeline)return appearanceTimelineAtBeat(timeline,beat)
+      const output=evaluateColorizer(notes,settings,beat,0,0,palette)
+      const withDiagonal=evaluateColorizer(notes,settings,beat,0,1,palette)
+      return noteAppearance(output.tint,output.tintAmount,output.hue,withDiagonal.hue-output.hue,perceptual)
+    },{appearanceOnly:true,usesPlacement:true,referenceApply:reference.apply})
   },
 }

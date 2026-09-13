@@ -303,6 +303,7 @@ function holdPhase(beat: number, start: number, end: number, attack: number, rel
 
 export const meteorImpactMover: MoverOrSplitterDefinition<MeteorImpactSettings> = {
   id: 'meteorImpact',
+  particleExecution: { fallback: 'unported', reason: 'The legacy world-space impact field and its per-copy response have no serialized GPU evaluator.' },
   label: 'Meteor Impact',
   extras: true,
   kind: 'mover',

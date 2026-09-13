@@ -11,7 +11,9 @@ import { resolveVisualCopies } from './resolveVisualCopies'
 import type { MoverOrSplitter, VisualCopy } from './types'
 import { splitterWithChildChain } from './splitterChildChain'
 import { sharedLocalLayout } from './sharedLocalLayout'
-import { compileParticlePlan } from './particlePlan'
+import { compileParticlePlan, particlePlanCopy } from './particlePlan'
+import { sharedGpuOperation } from './sharedGpuOperation'
+import { paletteAppearance } from './gpuAppearance'
 
 /** A frame that slides the parent's field a fixed distance along +X. */
 function shift(distance: number): MoverOrSplitter {
@@ -220,4 +222,31 @@ test('GPU frame fast path binds its sampler and rejects placement-sensitive oper
   assert.equal(calls, 1)
   const mixed = framedMoverOrSplitter({ ...inner, structuralVariants: [dependent] }, frame)
   assert.equal(mixed.gpuOperationAtBeat, undefined)
+})
+
+test('an empty compact frame preserves incoming placement through CPU and GPU appearance evaluation', () => {
+  const frame: MoverOrSplitter[] = [{ maxOutputCount: 1,
+    apply(copy, context) { return context.beat < 1 ? [] : [copy] },
+  }, sharedLocalLayout({ transforms: [new Matrix4().makeTranslation(3, 0, 0)] })]
+  const inner = sharedGpuOperation(() => paletteAppearance({ mode: 0, span: 8 },
+    ['#ff0000', '#00ff00', '#0000ff', '#ffffff'], 1, { rounded: true }),
+  { usesPlacement: true, appearanceOnly: true })
+  const fast = framedMoverOrSplitter(inner, frame), reference = genericFrame(inner, frame)
+  assert.equal(fast.gpuOperationPreservesDeterminant, true)
+  const seed = sharedLocalLayout({ transforms: [new Matrix4().makeTranslation(.2, 0, 0),
+    new Matrix4().makeTranslation(4.7, 0, 0)] })
+  for (const placement of [undefined, new Matrix4().makeTranslation(1, 0, 0)]) {
+    for (const beat of [0, 2, 0]) {
+      const framePlan = compileParticlePlan(frame, 0, beat, placement)
+      assert.ok(framePlan)
+      assert.equal(framePlan.count, beat < 1 ? 0 : 1)
+      const context = { beat, index: 0, count: 1, placementTransform: placement }
+      assert.deepEqual(fast.apply(copyAt(.2, 0, 0), context), reference.apply(copyAt(.2, 0, 0), context))
+      const plan = compileParticlePlan([seed, fast], 0, beat, placement)
+      assert.ok(plan)
+      const expected = resolveVisualCopies([seed, reference], beat, placement)
+      assert.equal(plan.count, expected.length)
+      expected.forEach((copy, index) => assert.deepEqual(particlePlanCopy(plan, index), copy))
+    }
+  }
 })

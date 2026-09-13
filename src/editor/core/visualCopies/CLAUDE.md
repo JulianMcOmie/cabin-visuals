@@ -62,6 +62,13 @@ CPU/GLSL implementations. `maxOutputCount.ts` reads explicit cardinality proofs
 for bounded CPU prefixes. See [automation and mixed mover chains](../../../../docs/performance/automation-mover-program.md)
 for integration, measurements and fallback limits; the contracts live in `types.ts`.
 
+New registered movers, splitters and colorizers must preserve compact Particle
+execution. The registry-wide `particleExecution.test.ts` enforces this by default;
+existing limitations require a concrete definition-local `particleExecution`
+reason. This declaration never authorizes the compiler: only shared operation or
+layout proofs do. Follow the [authoring and wrapper contract](../../../../docs/performance/particle-execution-contract.md)
+when adding a definition or operation family.
+
 ## Structure
 
 - `definitions.ts` — `MoverOrSplitterDefinition` shape (id, params, evaluate) + settings merging. Numeric params come from the track's `inputValues`; **color/string params come from the shared `stringParams` field** (same split instruments use, so automation paths never meet a string). `mergeDefinitionSettings(def, inputValues, stringParams)` folds both.

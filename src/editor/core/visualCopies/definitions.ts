@@ -36,6 +36,17 @@ import type { MoverOrSplitter } from './types'
 export interface MoverOrSplitterDefinition<Settings> {
   id: string
   label: string
+  /** Registered definitions must preserve compact Particle execution unless
+   * they document an existing limitation here. This is a conformance-review
+   * contract, never a compiler permission: the compiler accepts only the
+   * operation/layout proofs on the resolved entry. New definitions should
+   * derive their reference apply and GPU data from the same shared factory.
+   * A fallback must name the concrete dependency or operation still missing,
+   * rather than using a device's label or Extras status as an explanation. */
+  particleExecution?: {
+    fallback: 'formation' | 'copy-clocks' | 'unported' | 'variable-fanout' | 'device-control'
+    reason: string
+  }
   /** Colorizers share the mover storage field, but get their own library and UI
    *  category because they alter appearance rather than spatial transforms. */
   kind: 'mover' | 'splitter' | 'colorizer'

@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Particle color program full-editor check</title>
+<style>body{background:#111;color:#eee;font:14px system-ui;margin:16px}button,select{font:inherit;padding:8px;margin:5px}iframe{width:100%;height:850px;border:0}pre{white-space:pre-wrap;max-height:220px;overflow:auto}p{max-width:1000px}</style>
+<p>Cosine Palette runs after Fluid Impact and three or four stacked 32-copy Radials. Scroll, Particle X/Y and the impact center are automated. The combined fixture stacks all five colorizers after the full population. This page changes only its own in-memory development editor. Keep it visible while measuring.</p>
+<label>Population <select id="fixture"><option value="cosine-million">Cosine + Fluid · 1,048,576 particles</option><option value="cosine">Cosine + Fluid · 32,768 particles</option><option value="all-million">All five colorizers + Fluid · 1,048,576 particles</option><option value="all">All five colorizers + Fluid · 32,768 particles</option></select></label>
+<label>Quality <select id="quality"><option value="final">Final</option><option value="auto">Auto</option></select></label>
+<button id="setup">Load Particle chain</button><button id="run">Measure editor playback</button>
+<pre id="result">Waiting for the local editor.</pre><iframe src="/editor"></iframe>
+<script>
+const w=()=>document.querySelector('iframe').contentWindow, output=document.querySelector('pre');let loadedFixture;
+document.querySelector('#setup').onclick=()=>{
+ try {
+ const win=w();if(!win.__cabinStores){output.textContent='The development editor is still loading.';return}
+ const {project,ui,time}=win.__cabinStores,p=project.getState(),sceneId=p.sceneOrder.find(id=>!p.scenes[id].isMain),mainId=p.sceneOrder.find(id=>p.scenes[id].isMain);
+ const fixture=document.querySelector('#fixture').value,million=fixture.endsWith('-million'),quality=document.querySelector('#quality').value,all=fixture.startsWith('all');
+ const radialIds=['r1','r2','r3',...(million?['r4']:[])];
+ const children=['x','r1','y','r2','r3',...(million?['r4']:[]),'fluid','cosine',...(all?['gradient','riso','hue','color']:[])];
+ const root=['particle'],base={id:'particle',name:'Particle',instrumentId:'particle',type:'base',color:'#72eadf',muted:false,solo:false,childIds:children,
+   params:{size:million ? .005 : .014,glow:.45,tfZ:-2,tfRotY:13,tfRotZ:7},stringParams:{color:'#72eadf'},blocks:[]};
+ const device=(id,splitterId,inputValues)=>({...base,id,parentId:'particle',name:'Radial '+id.slice(1),type:'splitter',splitterId,instrumentId:'',childIds:[],params:{},stringParams:{},inputValues});
+ const mover=(id,moverId,inputValues,childIds=[])=>({...base,id,parentId:'particle',name:'Fluid Impact',type:'mover',moverId,instrumentId:'',childIds,params:{},stringParams:{},inputValues});
+ const lane=(id,parentId,targetParam,min,max,pitches)=>({...base,id,parentId,name:targetParam,type:'automation',instrumentId:'',childIds:[],params:{},stringParams:{},targetParam,interpolation:'linear',automationRange:{min,max},blocks:[{id:id+'-block',startBar:0,durationBars:8,loop:false,notes:pitches.map((pitch,i)=>({id:id+'-n'+i,pitch,startBeat:[0,4,8,12,16,20][i],durationBeats:.25,velocity:100}))}]});
+ const tracks={particle:base,x:lane('x','particle','tfX',-.45,.45,[36,84,36,84,36,84]),y:lane('y','particle','tfY',-.3,.3,[84,36,84,36,84,36])};
+ radialIds.forEach((id,index)=>{tracks[id]=device(id,'radial',{copies:32,radius:[2.1,.6,.17,.045][index],plane:index%3,tilt:[31,17,-23,11][index]})});
+ tracks.fluid=mover('fluid','fluidImpact',{strength:1.6,radius:6.5,decay:1.4,curl:1.2,turbulence:.9,rebound:.45,eddySize:1.15,flow:.55,axis:2,centerX:0,centerY:0,centerZ:0},['cx','cy']);
+ tracks.fluid.blocks=[{id:'fluid-hits',startBar:0,durationBars:8,loop:false,
+   notes:[0,2,4,4.35,4.7,6,8,10,12,12.35,14,16,18,20,22,24,26,28,30].map((startBeat,i)=>({id:'hit-'+i,pitch:60,startBeat,durationBeats:.125,velocity:i%3===2?82:110}))}];
+ tracks.cx=lane('cx','fluid','centerX',-.7,.7,[36,84,36,84,36,84]);
+ tracks.cy=lane('cy','fluid','centerY',-.55,.55,[84,36,84,36,84,36]);
+ tracks.cosine=mover('cosine','cosinePalette',{mode:0,span:4.7,cycles:1.5,amount:.7,palette:0,kick:.25,kickDecay:1},['scroll']);tracks.cosine.name='Cosine Palette';
+ tracks.cosine.blocks=[{id:'cosine-kicks',startBar:0,durationBars:8,loop:false,notes:tracks.fluid.blocks[0].notes.map((note,i)=>({...note,id:'kick-'+i}))}];
+ tracks.scroll=lane('scroll','cosine','scroll',0,1,[36,84,36,84,36,84]);
+ if(all){
+  tracks.gradient=mover('gradient','gradient',{mode:1,amount:.35});tracks.gradient.name='Gradient';
+  tracks.riso=mover('riso','riso',{mode:3,dither:0,grain:.5,amount:.4});tracks.riso.name='Riso Duotone';
+  tracks.hue=mover('hue','hueRotate',{mode:5,rotate:.17,spread:.7,continuous:1,speed:.1});tracks.hue.name='Hue Rotate';
+  tracks.color=mover('color','calmHueRotate',{intensity:.65,releaseBeats:.5});tracks.color.name='Colorizer';
+  tracks.color.blocks=[{id:'color-hits',startBar:0,durationBars:8,loop:false,notes:tracks.fluid.blocks[0].notes.map((note,i)=>({...note,id:'color-'+i,pitch:i%3===0?61:60,durationBeats:.6}))}];
+ }
+ const lighting=Object.fromEntries(Object.entries(p.scenes[sceneId].tracks).filter(([id,t])=>t.instrumentId==='light'||t.type==='group'&&t.name==='Lighting'));
+ Object.assign(tracks,lighting);root.push(...Object.values(lighting).filter(t=>!t.parentId).map(t=>t.id));
+ const scene={...p.scenes[sceneId],tracks,rootTrackIds:root,backgroundColor:'#02090d'};
+ project.setState({activeSceneId:sceneId,scenes:{[sceneId]:scene,[mainId]:p.scenes[mainId]},tracks,rootTrackIds:root});ui.getState().setCanvasView('scene');ui.getState().setSelectedTrackId('cosine');ui.setState({previewQuality:quality});time.setState({currentBeat:2.2,isPlaying:false});
+ loadedFixture={name:fixture,copies:32**radialIds.length,radials:radialIds.length,quality,all,colorStages:all?5:1,expectedOperation:5,worldPrefix:false,
+   automation:'Cosine scroll; Particle X/Y around Radials; Fluid Impact center X/Y',notes:tracks.fluid.blocks[0].notes.length,
+   placement:'Fluid Impact and every colorizer run after all splitters'};
+ output.textContent='Loaded '+loadedFixture.copies.toLocaleString()+' particles: '+fixture+'. Wait for compilation and scene mount, then measure with this tab visible.';
+ }catch(error){output.textContent=String(error.stack??error)}
+};
+document.querySelector('#run').onclick=async()=>{
+ if(!loadedFixture){output.textContent='Load a Particle chain before measuring.';return}
+ const visibilityAtStart=document.visibilityState;
+ const win=w(),state=win.__r3fState(),time=win.__cabinStores.time,original=state.advance;
+ const profile=[],modes=new Map(),drawnMeshes=new Map(),offscreenDrawnMeshes=new Map(),callbacks=[],renders=[],cpu=[],beats=[],ticks=[];
+ const start=performance.now();let animation,particleDrawChecks=0,offscreenParticleDraws=0;const invalidDraws=[];
+ const expectedMesh=mesh=>mesh.particles===loadedFixture.copies&&mesh.operationKinds.includes(4)&&mesh.operationKinds.filter(kind=>kind===5).length===loadedFixture.colorStages&&mesh.seedColorOffset===-1;
+ const fieldRanges=Object.fromEntries([['centerX',3],['centerY',4],['radial',7],['swirl',8],['scatter',9]]
+   .map(([key,index])=>[key,{index,min:Infinity,max:-Infinity}]));
+ let fieldSamples=0,fieldFinite=true,firstField=null,lastField=null;
+ const recordField=object=>{
+   const uniforms=object.material.uniforms,stage=Array.from(uniforms.uOperationKinds.value).indexOf(4);
+   if(stage<0)return;
+   const offset=uniforms.uOperationOffsets.value[stage],data=uniforms.uLayouts.value.image.data;
+   const values=Array.from(data.slice(offset,offset+14));
+   fieldFinite=fieldFinite&&values.length===14&&values.every(Number.isFinite);
+   for(const range of Object.values(fieldRanges)){
+     const value=values[range.index];range.min=Math.min(range.min,value);range.max=Math.max(range.max,value);
+   }
+   const sample={beat:time.getState().currentBeat,textureVersion:uniforms.uLayouts.value.version,values};
+   if(!firstField)firstField=sample;lastField=sample;fieldSamples++;
+ };
+ const colorRanges={phase:{index:15,min:Infinity,max:-Infinity}};
+ let colorSamples=0,colorFinite=true,firstColor=null,lastColor=null;
+ const recordColor=object=>{
+  const uniforms=object.material.uniforms,stage=Array.from(uniforms.uOperationKinds.value).indexOf(5);
+  if(stage<0)return;
+  const offset=uniforms.uOperationOffsets.value[stage],values=Array.from(uniforms.uLayouts.value.image.data.slice(offset,offset+28));
+  colorFinite=colorFinite&&values.length===28&&values.every(Number.isFinite)&&values[0]===1;
+  for(const range of Object.values(colorRanges)){const value=values[range.index];range.min=Math.min(range.min,value);range.max=Math.max(range.max,value)}
+  const sample={beat:time.getState().currentBeat,textureVersion:uniforms.uLayouts.value.version,values};
+  if(!firstColor)firstColor=sample;lastColor=sample;colorSamples++;
+ };
+ const inspectMesh=(object,scene,camera)=>{
+   const uniforms=object.material.uniforms,stages=uniforms.uStages.value;
+   return {name:object.name,scene:scene.uuid,uuid:object.uuid,particles:object.isPoints?object.geometry.drawRange.count:object.geometry.instanceCount,
+     points:!!object.isPoints,matrixSlots:uniforms.uLayouts.value.image.data.length/16,stages,
+     counts:Array.from(uniforms.uCounts.value).slice(0,stages),operationKinds:Array.from(uniforms.uOperationKinds.value).slice(0,stages),
+     seedColorOffset:uniforms.uSeedColorOffset.value,near:camera.near,projectionY:camera.projectionMatrix.elements[5]};
+ };
+ const originalRender=state.gl.render.bind(state.gl);
+ state.gl.render=(scene,camera)=>{
+   const target=state.gl.getRenderTarget(),quality=win.__cabinStores.ui.getState().previewQuality;
+   // Match useRenderTargetScale -> previewSamplingScale -> VisualScene's
+   // Math.round(CSS size * scale), not the canvas's floored pixel dimensions.
+   const qualityScale=quality==='fastest' ? 0.25 : (quality==='fast'||quality==='auto'&&time.getState().isPlaying) ? 0.5 : 1;
+   const samplingScale=qualityScale<1?qualityScale:Math.max(Math.min(2,Math.max(1,state.viewport.dpr)),Math.min(2,1080/Math.max(1,state.size.height)));
+   const expectedMainTarget={width:Math.max(1,Math.round(state.size.width*samplingScale)),height:Math.max(1,Math.round(state.size.height*samplingScale)),samplingScale,quality};
+   const mainLayer=!target||target.width===expectedMainTarget.width&&target.height===expectedMainTarget.height;
+   const renderTarget=target?{kind:'offscreen',role:mainLayer?'main-composition':'preview',id:target.texture.uuid,width:target.width,height:target.height,expectedMainTarget}:{kind:'canvas',role:'main-canvas',id:null,width:state.gl.domElement.width,height:state.gl.domElement.height,expectedMainTarget};
+   const s=performance.now(),value=originalRender(scene,camera),ms=performance.now()-s;
+   if(ms>2)profile.push({kind:'render',ms,objects:scene.children.length});
+   // Direct preview owns private scenes outside the main engine's mounted-scene
+   // registry. Inspect the mesh in the scene actually handed to WebGLRenderer.
+   scene.traverse(object=>{
+     if(object.name!=='Factored Particle instances'||!object.visible)return;
+     const mesh={...inspectMesh(object,scene,camera),renderTarget},key=scene.uuid+':'+(renderTarget.id??'canvas'),old=modes.get(key);
+     modes.set(key,{renderTarget,count:mesh.particles,uuid:mesh.uuid,points:mesh.points,changes:(old?.changes??0)+(old&&old.uuid!==mesh.uuid?1:0),near:mesh.near,projectionY:mesh.projectionY});
+     if(s>start+2000){
+       if(target){offscreenParticleDraws++;offscreenDrawnMeshes.set(key,mesh)}
+       if(mainLayer){particleDrawChecks++;drawnMeshes.set(key,mesh);recordField(object);recordColor(object);if(!expectedMesh(mesh)&&invalidDraws.length<10)invalidDraws.push(mesh)}
+     }
+   });return value;
+ };
+ const subscribers=state.internal.subscribers.map((sub,index)=>{
+   const original=sub.ref.current,record={index,priority:sub.priority,source:original.toString().slice(0,650),ms:0,max:0,calls:0};callbacks.push(record);
+   sub.ref.current=(...args)=>{const s=performance.now(),value=original(...args),ms=performance.now()-s;record.ms+=ms;record.max=Math.max(record.max,ms);record.calls++;if(ms>2)profile.push({kind:'callback',index,priority:sub.priority,ms});return value};return {sub,original};
+ });
+ try{
+   state.set({advance:(...args)=>{const s=performance.now();original(...args);if(s>start+2000){renders.push(s);cpu.push(performance.now()-s)}}});
+   const tick=now=>{if(now>start+2000)ticks.push(now);time.setState({currentBeat:2+(now-start)/500,isPlaying:true});const runtime=win.__previewRuntime;if(runtime&&beats.at(-1)!==runtime.beat)beats.push(runtime.beat);animation=requestAnimationFrame(tick)};
+   animation=requestAnimationFrame(tick);await new Promise(resolve=>setTimeout(resolve,7000));
+ }finally{
+   cancelAnimationFrame(animation);time.setState({isPlaying:false});state.set({advance:original});state.gl.render=originalRender;
+   subscribers.forEach(({sub,original})=>sub.ref.current=original);
+ }
+ const meshes=[...drawnMeshes.values()],sorted=cpu.toSorted((a,b)=>a-b);
+ const fieldMotion={samples:fieldSamples,finite:fieldFinite,ranges:fieldRanges,first:firstField,last:lastField,
+   pass:fieldSamples>30&&fieldFinite&&Object.values(fieldRanges).every(range=>Number.isFinite(range.min)&&Number.isFinite(range.max)&&range.max>range.min)
+     &&fieldRanges.centerX.max-fieldRanges.centerX.min>.1&&fieldRanges.centerY.max-fieldRanges.centerY.min>.1
+     &&Math.max(...['radial','swirl','scatter'].map(key=>fieldRanges[key].max-fieldRanges[key].min))>.05
+     &&lastField.beat-firstField.beat>2&&lastField.textureVersion-firstField.textureVersion>10};
+ const colorMotion={samples:colorSamples,finite:colorFinite,ranges:colorRanges,first:firstColor,last:lastColor,
+  pass:colorSamples>30&&colorFinite&&colorRanges.phase.max-colorRanges.phase.min>.1
+    &&lastColor.beat-firstColor.beat>2&&lastColor.textureVersion-firstColor.textureVersion>10};
+ const result={fixture:loadedFixture,visibilityAtStart,visibilityAtEnd:document.visibilityState,
+   maxPointSize:state.gl.getContext().getParameter(state.gl.getContext().ALIASED_POINT_SIZE_RANGE)[1],modes:[...modes.values()],
+   rafFps:(ticks.length-1)*1000/(ticks.at(-1)-ticks[0]),callbacks:callbacks.toSorted((a,b)=>b.ms-a.ms).slice(0,6),profile:profile.slice(-40),
+   renders:renders.length,renderedFps:(renders.length-1)*1000/(renders.at(-1)-renders[0]),cpuMedianMs:sorted[Math.floor(sorted.length*.5)],cpuP95Ms:sorted[Math.floor(sorted.length*.95)],
+   runtime:win.__previewRuntime,workerResponses:beats.length,fieldMotion,colorMotion,meshes,particleDrawChecks,invalidDraws,offscreenMeshes:[...offscreenDrawnMeshes.values()],offscreenParticleDraws,classificationPending:particleDrawChecks===0,canvas:[state.gl.domElement.width,state.gl.domElement.height]};
+ result.pass=particleDrawChecks>0&&invalidDraws.length===0&&meshes.length>0&&meshes.every(expectedMesh)&&fieldMotion.pass&&colorMotion.pass&&[...modes.values()].filter(mode=>mode.renderTarget.role.startsWith('main')).every(mode=>mode.changes===0);
+ window.__particleColorEditorResult=result;output.textContent=JSON.stringify(result,(key,value)=>key==='ambient'?undefined:value,2);
+};
+</script>
+
+</html>

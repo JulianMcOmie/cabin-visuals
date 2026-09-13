@@ -155,6 +155,7 @@ function resolveModules(
  */
 export const consolidatedMover: MoverOrSplitterDefinition<ConsolidatedSettings> = {
   id: 'allMovers',
+  particleExecution: { fallback: 'unported', reason: 'The legacy bank composes heterogeneous motion and appearance evaluators without a serialized operation for their combined result.' },
   label: 'All Movers',
   kind: 'mover',
   legacy: true,

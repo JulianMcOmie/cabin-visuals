@@ -194,6 +194,7 @@ export function evaluateFreezeWarp(
 
 export const freezeMover: MoverOrSplitterDefinition<FreezeSettings> = {
   id: 'freeze',
+  particleExecution: { fallback: 'device-control', reason: 'Freeze remaps the whole object clock through warpBeat; its spatial apply is identity and the clock is evaluated by the engine.' },
   label: 'Freeze',
   kind: 'mover',
   identityColor: FREEZE_COLOR,

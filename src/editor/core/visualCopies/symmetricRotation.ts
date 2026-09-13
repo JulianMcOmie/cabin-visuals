@@ -67,8 +67,8 @@ import { evaluateOscillationAmounts } from './mover'
 import { evaluateConstantRotationAngles } from './rotationMovers'
 import { RETURN_PITCH } from './motionBasis'
 import { SYMMETRIC_ROTATION_COLOR } from './identityColors'
-import { memoByBeat } from './beatMemo'
-import { applyGpuOperation, axialRotationOperation, axialRotationWeight } from './gpuOperations'
+import { sharedGpuOperation } from './sharedGpuOperation'
+import { axialRotationOperation, axialRotationWeight } from './gpuOperations'
 
 const DEG_TO_RAD = Math.PI / 180
 
@@ -343,27 +343,13 @@ export const symmetricRotationMover: MoverOrSplitterDefinition<SymmetricRotation
   strictMidiRows: true,
   resolve({ settings, notes }) {
     const axis = resolveSymmetryAxis(settings)
-    const operationAt = memoByBeat(beat => axialRotationOperation({
+    const operationAt = (beat: number) => axialRotationOperation({
       axis: [axis.x, axis.y, axis.z],
       center: [settings.centerX ?? 0, settings.centerY ?? 0, settings.centerZ ?? 0],
       angles: evaluateSymmetricRotationChannels(notes, settings, beat),
       onAxis: settings.anchor !== SYMMETRIC_ROTATION_ANCHOR_SELF,
       falloff: settings.falloff, span: settings.span ?? 1, curve: settings.curve ?? 1,
-    }))
-    return {
-      maxOutputCount: 1,
-      localSlotMotion: true,
-      gpuOperationAtBeat: operationAt,
-      // All three rotations read the ORIGINAL incoming position; the shared
-      // operation preserves twist · fold · roll order on both CPU and GPU.
-      composition: 'chainRoot',
-      apply(visualCopy, { beat }) {
-        return [{
-          transform: applyGpuOperation(operationAt(beat), visualCopy.transform, new Matrix4()),
-          opacity: visualCopy.opacity,
-          colorShift: { ...visualCopy.colorShift },
-        }]
-      },
-    }
+    })
+    return sharedGpuOperation(operationAt, { localSlotMotion: true, preservesDeterminant: true, composition: 'chainRoot' })
   },
 }
