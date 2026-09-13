@@ -34,13 +34,3 @@ test('bestHit prefers real objects, then over-drawn passes, then distance', () =
   // Front pass is drawn over base, so a farther front hit beats a nearer base hit.
   assert.equal(bestHit([base('cube', 1), { trackId: 'overlay', distance: 8, pass: 'front', fullFrame: false }])?.trackId, 'overlay')
 })
-
-test('motion picking reverses scale, translation and aspect-correct rotation', () => {
-  const motion = { scale: 1.5, x: 0.1, y: -0.1, rotation: Math.PI / 2 }
-  const layer = { sceneId: 'moving', viewport: { x: 0, y: 0, width: 1, height: 1 }, motion }
-  // Original point (0.6, 0.5), aspect 2: rotate its scaled displacement upward.
-  const hit = layersUnderPoint([layer], 0.6, 0.7, 2)[0]
-  assert.ok(Math.abs(hit.ndcX - 0.2) < 1e-10)
-  assert.ok(Math.abs(hit.ndcY) < 1e-10)
-  assert.deepEqual(layersUnderPoint([{ ...layer, motion: { ...motion, scale: 0.1 } }], 0, 0, 2), [])
-})

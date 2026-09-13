@@ -1,3 +1,6 @@
+import { applyObjectTransition } from './objectTransition'
+import { getInstrument } from '../../instruments'
+import { isFullFrameTrack } from '../../instruments/types'
 import { isDirectParticlePopulation } from './directParticleScene'
 import { hasUnbatchableEffects } from './instancedEffects'
 import { Color, Matrix4, type Scene as ThreeScene } from 'three'
@@ -674,6 +677,7 @@ export function createVisualEngine() {
         }
         states.set(obj.trackId, state)
       }
+      state.objectMotion = undefined
       state.beat = objBeat
       state.secPerBeat = secPerBeat
       state.beatsPerBar = project?.beatsPerBar ?? 4
@@ -746,6 +750,29 @@ export function createVisualEngine() {
         )
       }
     }
+    }
+    // A composition transition is the last object-placement operation. Keep
+    // authored hierarchy/copy evaluation unchanged, then move each track's
+    // render matrix once. Backdrops, cameras and lighting never enter here.
+    if (compositionLayers.some(layer => layer.objectMotion)) {
+      const motions = new Map(compositionLayers.map(layer => [layer.sceneId, layer.objectMotion]))
+      const transformed = new Set<Matrix4>()
+      for (const sceneId of activeSceneIds) {
+        const motion = motions.get(sceneId)
+        for (const obj of graphs.get(sceneId)?.objects ?? []) {
+          const state = states.get(obj.trackId)
+          if (!state) continue
+          const objectMotion = obj.instrumentId === 'light' ? undefined : motion
+          const apply = (target: ObjectState) => {
+            target.objectMotion = objectMotion
+            if (!objectMotion || target.blackedOut || transformed.has(target.world)) return
+            transformed.add(target.world)
+            if (!isFullFrameTrack(getInstrument(obj.instrumentId), target.params)) applyObjectTransition(target.world, objectMotion)
+          }
+          apply(state)
+          for (const copy of copyStatesByTrack.get(obj.trackId) ?? []) if (copy) apply(copy)
+        }
+      }
     }
   }
 
@@ -880,6 +907,7 @@ export function createVisualEngine() {
         }
       }
 
+      state.objectMotion = undefined
       state.beat = copyBeat
       state.secPerBeat = secPerBeat
       state.beatsPerBar = project?.beatsPerBar ?? 4
