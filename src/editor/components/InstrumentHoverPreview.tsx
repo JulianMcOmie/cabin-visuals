@@ -581,6 +581,14 @@ const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
     seedScale: 0.3,
     notes: makeLoopNotes([60], 0.5, 4),
   },
+  // A field of neighboring copies reveals the pressure burst and curling
+  // wake; a lone centered cube cannot show this mover's spatial variation.
+  fluidImpact: {
+    seeds: gridSeeds(7, 7, 0.55),
+    seedScale: 0.2,
+    settings: { strength: 1.1, radius: 3.2, decay: 2, eddySize: 0.9 },
+    notes: makeLoopNotes([60], 0.25, 4),
+  },
   // Wave Terrain displaces along scene Z at each copy's own (x, y): the same
   // grid rides the rolling surface while Amplitude-up (60) is held, settling
   // as the hold ends so the loop restarts from calm water.

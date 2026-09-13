@@ -238,3 +238,6 @@ export const SCATTER_COLOR = '#53d6a0'
 
 /** Polar attraction: orchid, shared by the lane and its console. */
 export const POLAR_WARP_COLOR = '#ce79e8'
+
+/** Fluid Impact's pale aqua, shared by its lane and console. */
+export const FLUID_IMPACT_COLOR = '#5bddd4'

@@ -357,6 +357,12 @@ const G = {
       </g>
     </>
   ),
+  fluidImpact: (
+    <>
+      <circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none" />
+      <path d="M2.4 9.8c0-4 3.2-7 6.7-7 2.6 0 4.5 1.5 4.5 3.3 0 1.3-1.1 2.1-2.2 1.6M13.6 10.8c-1.9 2.3-5.1 3.1-7.6 1.7" />
+    </>
+  ),
   forceFieldPush: (
     <>
       <circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none" />

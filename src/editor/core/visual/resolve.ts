@@ -768,6 +768,11 @@ function resolveOwnMoverOrSplitter(track: Track, p: ProjectSnapshot): MoverOrSpl
   if (resolved.localSlotMotion && wrapped.structuralVariants.every(entry => entry.localSlotMotion)) {
     wrapped.localSlotMotion = true
   }
+  // A parameter lane must not re-anchor an otherwise identical nested mover.
+  // Preserve a stable convention alongside its operation/layout metadata.
+  if (resolved.composition && wrapped.structuralVariants.every(entry => entry.composition === resolved.composition)) {
+    wrapped.composition = resolved.composition
+  }
   const isGpuFamily = (entry: MoverOrSplitter) => !!entry.gpuOperationAtBeat
     && !entry.applyFramed && !entry.emitsCopyClocks && !entry.framedLocalTransformsAtBeat
     && !entry.localTransforms && !entry.localTransformsAtBeat

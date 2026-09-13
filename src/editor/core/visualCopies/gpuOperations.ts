@@ -18,6 +18,7 @@ export interface GpuOperation {
 export const GPU_OPERATION_MIRROR_DISPLACEMENT = 1
 export const GPU_OPERATION_RADIAL_DISPLACEMENT = 2
 export const GPU_OPERATION_AXIAL_ROTATION = 3
+export const GPU_OPERATION_FLUID_IMPACT = 4
 
 type Triple = readonly [number, number, number]
 const POSITION_EPS = 1e-6
@@ -28,6 +29,7 @@ export function gpuOperationParameterCount(kind: number): number | undefined {
     case GPU_OPERATION_MIRROR_DISPLACEMENT: return 3
     case GPU_OPERATION_RADIAL_DISPLACEMENT: return 6
     case GPU_OPERATION_AXIAL_ROTATION: return 13
+    case GPU_OPERATION_FLUID_IMPACT: return 14
     default: return undefined
   }
 }
@@ -42,6 +44,7 @@ export function isGpuOperationSupported(operation: GpuOperation): boolean {
     && (operation.kind !== GPU_OPERATION_RADIAL_DISPLACEMENT || p[3] === 0 || p[3] === 1)
     && (operation.kind !== GPU_OPERATION_AXIAL_ROTATION
       || (p[10] >= .0001 && p[11] >= .01 && (p[12] === 0 || p[12] === 1)))
+    && (operation.kind !== GPU_OPERATION_FLUID_IMPACT || (p[6] > 0 && p[10] > 0))
     && Number.isFinite(operation.scaleBound) && operation.scaleBound >= 0
     && Number.isFinite(operation.translationBound) && operation.translationBound >= 0
     && (operation.positionScaleBound === undefined
@@ -92,6 +95,30 @@ export function axialRotationWeight(along: number, radius: number, falloff: numb
   const raw = falloff === 1 ? along / span : falloff === 2 ? radius / span
     : falloff === 3 ? Math.max(0, 1 - radius / span) : 1
   return curve === 1 || raw === 0 ? raw : Math.sign(raw) * Math.pow(Math.abs(raw), curve)
+}
+
+export interface FluidImpactOperationParameters {
+  axis: Triple
+  center: Triple
+  radius: number
+  radialTravel: number
+  swirlTravel: number
+  scatterTravel: number
+  frequency: number
+  phase: Triple
+}
+
+/** A smooth pressure kick, coherent vortex and curling eddies. The analytic
+ * eddy field is the curl of a trigonometric vector potential; its normalized
+ * magnitude is at most one. Localizing the field and adding radial pressure
+ * gives a fluid-like impact without integration or per-particle history.
+ * Every term translates the frame, preserving object shape and orientation. */
+export function fluidImpactOperation(p: FluidImpactOperationParameters): GpuOperation {
+  return { kind: GPU_OPERATION_FLUID_IMPACT,
+    parameters: [...p.axis, ...p.center, p.radius, p.radialTravel, p.swirlTravel, p.scatterTravel, p.frequency, ...p.phase],
+    scaleBound: 1, positionScaleBound: 1,
+    translationBound: Math.abs(p.radialTravel) + Math.abs(p.swirlTravel) + Math.abs(p.scatterTravel),
+    determinantPreserving: true }
 }
 
 /** CPU counterpart of applyParticleOperation. Reading all incoming state before
@@ -148,6 +175,27 @@ export function applyGpuOperation(operation: GpuOperation, incoming: Matrix4, ou
       if (Math.abs(roll) > ANGLE_EPS) steps.push(pivotedRotation(new Matrix4().makeRotationAxis(outward, roll), self))
     }
     delta = steps.length ? steps.reduce((accumulated, step) => accumulated.multiply(step)) : null
+  } else if (operation.kind === GPU_OPERATION_FLUID_IMPACT) {
+    if (p[7] === 0 && p[8] === 0 && p[9] === 0) return out.copy(incoming)
+    const x = position.x - p[3], y = position.y - p[4], z = position.z - p[5]
+    const radius2 = p[6] * p[6], distance2 = x * x + y * y + z * z
+    if (distance2 >= radius2) return out.copy(incoming)
+    const tail = 1 - distance2 / radius2, falloff = tail * tail
+    const inverse = 1 / Math.sqrt(distance2 + radius2 * .01)
+    const nx = x * inverse, ny = y * inverse, nz = z * inverse
+    let dx = p[7] * nx + p[8] * (p[1] * nz - p[2] * ny)
+    let dy = p[7] * ny + p[8] * (p[2] * nx - p[0] * nz)
+    let dz = p[7] * nz + p[8] * (p[0] * ny - p[1] * nx)
+    if (p[9] !== 0) {
+      const qx = x * p[10] + p[11], qy = y * p[10] + p[12], qz = z * p[10] + p[13]
+      const sx = Math.sin(qx), sy = Math.sin(qy), sz = Math.sin(qz)
+      const cx = Math.cos(qx), cy = Math.cos(qy), cz = Math.cos(qz)
+      const amount = p[9] / (2 * Math.sqrt(3))
+      dx += amount * sx * (cy - cz)
+      dy += amount * sy * (cz - cx)
+      dz += amount * sz * (cx - cy)
+    }
+    delta = new Matrix4().makeTranslation(dx * falloff, dy * falloff, dz * falloff)
   } else {
     throw new Error(`Unsupported copy GPU operation ${operation.kind}`)
   }
@@ -239,6 +287,24 @@ export const GPU_OPERATIONS_GLSL = `
         }
       }
       return hasDelta ? delta * frame : frame;
+    }
+    if (kind == ${GPU_OPERATION_FLUID_IMPACT}) {
+      vec3 travel = particleOpTriple(scalarOffset + 7);
+      if (all(equal(travel, vec3(0.0)))) return frame;
+      vec3 relative = position - particleOpTriple(scalarOffset + 3);
+      float radius = layoutScalar(scalarOffset + 6), radius2 = radius * radius;
+      float distance2 = dot(relative, relative);
+      if (distance2 >= radius2) return frame;
+      float tail = 1.0 - distance2 / radius2, falloff = tail * tail;
+      vec3 outward = relative / sqrt(distance2 + radius2 * 0.01);
+      vec3 offset = travel.x * outward + travel.y * cross(particleOpTriple(scalarOffset), outward);
+      if (travel.z != 0.0) {
+        vec3 q = relative * layoutScalar(scalarOffset + 10) + particleOpTriple(scalarOffset + 11);
+        vec3 s = sin(q), c = cos(q);
+        vec3 eddy = vec3(s.x * (c.y - c.z), s.y * (c.z - c.x), s.z * (c.x - c.y));
+        offset += travel.z * 0.2886751345948129 * eddy;
+      }
+      return particleOpTranslation(offset * falloff) * frame;
     }
     return frame;
   }

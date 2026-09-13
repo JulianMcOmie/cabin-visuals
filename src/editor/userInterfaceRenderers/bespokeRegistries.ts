@@ -29,6 +29,7 @@ export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRenderer
   hueRotate: lazyPanel(() => import('./HueRotateUserInterface'), 'HueRotateUserInterfaceRenderer'),
   impactScatter: lazyPanel(() => import('./ImpactScatterMoverUserInterface'), 'ImpactScatterMoverUserInterfaceRenderer'),
   impactPulse: lazyPanel(() => import('./ImpactPulseMoverUserInterface'), 'ImpactPulseMoverUserInterfaceRenderer'),
+  fluidImpact: lazyPanel(() => import('./FluidImpactMoverUserInterface'), 'FluidImpactMoverUserInterfaceRenderer'),
   conveyor: lazyPanel(() => import('./ConveyorMoverUserInterface'), 'ConveyorMoverUserInterfaceRenderer'),
   symmetricMotion: lazyPanel(() => import('./SymmetricMotionMoverUserInterface'), 'SymmetricMotionMoverUserInterfaceRenderer'),
   symmetricRotation: lazyPanel(() => import('./SymmetricRotationMoverUserInterface'), 'SymmetricRotationMoverUserInterfaceRenderer'),

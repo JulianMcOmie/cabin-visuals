@@ -446,6 +446,7 @@ const MOVER_DESCRIPTIONS: Record<string, string> = {
   line: 'Marches N copies back into depth - or along any axis you aim - with sizes ramping step by step, the original object staying put.',
   symmetry: 'Folds its object across mirror lines through its own center - one line for a plain mirror image, more for a kaleidoscope.',
   impactPulse: "Punches its objects' size on every note - a snare's envelope, instant at the onset and gone again, with optional squash-and-stretch.",
+  fluidImpact: 'Sends a pressure burst through a formation on every hit, dispersing copies into curling currents before they spring back into place.',
   symmetricMotion: 'Moves a whole formation symmetrically about its own center - notes bloom it out, pull it in, turn it, or split it apart across an axis.',
   approach: 'Streams copies at the camera, each born far away at nothing and swelling as it arrives - an endless flight into the object.',
   polarWarp: "Pulls objects into a flower and stretches them along its petals. MIDI chooses 1–32 petals; Attack and Release shape the motion.",
@@ -581,7 +582,7 @@ const pick = (ids: readonly string[]): InstrumentItem[] =>
 
 // Impact is notes hitting the scene itself, split by envelope: Impulse
 // strikes once per note and decays; Rumble warps for as long as it's held.
-const IMPULSE_IDS = ['impactWarp', 'cameraControl', 'meteorImpact', 'forceFieldPush', 'impactScatter', 'impactPulse']
+const IMPULSE_IDS = ['impactWarp', 'cameraControl', 'fluidImpact', 'meteorImpact', 'forceFieldPush', 'impactScatter', 'impactPulse']
 // Both of the odd ones here file by ENVELOPE, which is what the Impact split is
 // for. Strobe sits in Rumble rather than Color because it is scene-wide and
 // sustained - it keeps flashing for exactly as long as the note is held. Camera
