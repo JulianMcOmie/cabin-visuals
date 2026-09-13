@@ -15,7 +15,7 @@ export interface FrameDriver {
   renderFrame(beat: number, timeMs: number): void
   /** Freeze the render loop and pin the canvas to the export resolution (DPR 1). */
   pin(width: number, height: number): void
-  /** Restore frameloop, size, and DPR exactly as they were. Safe to call twice. */
+  /** Restore the preview, applying layout/DPR changes deferred during capture. Safe to call twice. */
   unpin(): void
   /** The live WebGL canvas - what VideoFrame captures from. */
   getCanvas(): HTMLCanvasElement

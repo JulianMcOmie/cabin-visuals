@@ -14,6 +14,7 @@ import { renderAudioTrack, encodeAudioIntoWriter, willRenderAudio, EXPORT_AUDIO_
 import { createWatermarkCompositor } from './watermark'
 import { framePreparers } from './framePreparers'
 import { whenInstrumentsSettled } from '../../instruments/lazyInstrument'
+import { assertExportSize } from './exportSurface'
 
 export interface WalkHooks {
   /** Called about once a second of output (every `fps` frames) and once at the end. */
@@ -35,7 +36,11 @@ export { registerFramePreparer, type FramePreparer } from './framePreparers'
 function yieldMacrotask(): Promise<void> {
   return new Promise((resolve) => {
     const ch = new MessageChannel()
-    ch.port1.onmessage = () => resolve()
+    ch.port1.onmessage = () => {
+      ch.port1.close()
+      ch.port2.close()
+      resolve()
+    }
     ch.port2.postMessage(null)
   })
 }
@@ -186,14 +191,18 @@ export async function runExport(
   const posterFrame = Math.floor(timebase.frameCount / 2)
   let poster: string | null = null
 
-  driver.pin(settings.width, settings.height)
+  let pinned = false
   try {
+    driver.pin(settings.width, settings.height)
+    pinned = true
     await driver.prepare?.(timebase.startBeat)
     const completed = await walkFrames(
       timebase,
       settings.fps,
       (i, _beat, d) => {
-        const source = watermark ? watermark.compose(d.getCanvas()) : d.getCanvas()
+        const canvas = d.getCanvas()
+        assertExportSize(canvas, settings.width, settings.height)
+        const source = watermark ? watermark.compose(canvas) : canvas
         if (i === posterFrame) poster = captureStill(source)
         return video.encodeFrame(source, i, settings.fps)
       },
@@ -213,6 +222,6 @@ export async function runExport(
   } finally {
     // Also clears the beat override - the next live frame recomputes the scene
     // at the untouched store beat, exactly where the user left it.
-    driver.unpin()
+    if (pinned) driver.unpin()
   }
 }

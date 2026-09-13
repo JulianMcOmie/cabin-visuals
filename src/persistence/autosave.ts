@@ -4,7 +4,7 @@ import { useAudioStore } from '../editor/store/AudioStore'
 import { useTimeStore } from '../editor/store/TimeStore'
 import { serialize } from './serialize'
 import * as projectStorage from './projectStorage'
-import { getFrameDriver } from '../editor/core/export/frameDriver'
+import { getFrameDriver, isExportPinned } from '../editor/core/export/frameDriver'
 
 // The autosave loop: a debounced store subscription that mirrors the document
 // to Supabase - the same mechanism HistoryStore uses (subscribe + burst
@@ -39,12 +39,14 @@ const THUMB_H = 180
 let lastThumb: string | undefined
 let lastCaptureAt = 0
 
-function captureThumbnail(): string | undefined {
+export function captureThumbnail(): string | undefined {
   const now = Date.now()
   if (now - lastCaptureAt < CAPTURE_EVERY_MS) return lastThumb
   // Never touch the driver mid-playback - the capture is one paused frame or
   // nothing.
-  if (useTimeStore.getState().isPlaying) return lastThumb
+  // Export borrows this canvas while the transport is paused. A thumbnail
+  // would replace its beat and finally unpin its resolution mid-encode.
+  if (useTimeStore.getState().isPlaying || isExportPinned()) return lastThumb
   const driver = getFrameDriver()
   if (!driver) return lastThumb
   try {

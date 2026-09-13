@@ -10,6 +10,7 @@ import { whenFontsSettled } from '../../core/visual/fonts'
 import { whenInstrumentsSettled } from '../../instruments/lazyInstrument'
 import { computeAtBeat, setProject, setMainCompositionOverride } from '../../core/visual/VisualEngine'
 import { registerFrameDriver, setExportPinned } from '../../core/export/frameDriver'
+import { pinExportSurface } from '../../core/export/exportSurface'
 
 // MessageChannel yields without background-tab timer throttling.
 function yieldRenderTask(): Promise<void> {
@@ -41,10 +42,24 @@ export function ExportDriver() {
   const get = useThree((s) => s.get)
 
   useEffect(() => {
-    let saved: { frameloop: 'always' | 'demand' | 'never'; width: number; height: number; dpr: number } | null = null
+    let surface: ReturnType<typeof pinExportSurface> | null = null
+    let mounted = true
+    const assertSurface = () => {
+      if (!mounted) throw new Error('Export stopped: the renderer was closed. No video was saved. Please retry the export.')
+      surface?.assertValid()
+    }
+
+    const unpin = () => {
+      setBeatOverride(null)
+      setMainCompositionOverride(false)
+      setExportPinned(false)
+      surface?.release()
+      surface = null
+    }
 
     registerFrameDriver({
       async prepare(beat = useTimeStore.getState().currentBeat) {
+        assertSurface()
         // Resolve the export composition before waiting for its React mounts.
         computeAtBeat(beat)
         // Publishing the exact document schedules React's structural mounts.
@@ -64,7 +79,9 @@ export function ExportDriver() {
         // A mount may create its render objects from its first pure frame.
         // Prime at the requested beat, then commit those objects before frame 0.
         setBeatOverride(beat)
+        assertSurface()
         get().advance(0)
+        assertSurface()
         await whenFontsSettled()
         await yieldRenderTask()
         renderer.flushSyncWork()
@@ -72,56 +89,49 @@ export function ExportDriver() {
         await whenInstrumentsSettled()
       },
       prepareFrame(beat) {
+        assertSurface()
         setBeatOverride(beat)
         computeAtBeat(beat)
       },
       renderFrame(beat, timeMs) {
+        assertSurface()
         setBeatOverride(beat)
         get().advance(timeMs)
+        assertSurface()
       },
       pin(width, height) {
-        if (saved) return // already pinned
-        const s = get()
-        saved = { frameloop: s.frameloop, width: s.size.width, height: s.size.height, dpr: s.viewport.dpr }
+        assertSurface()
+        if (surface) throw new Error('A capture is already using the export renderer')
         // Before setSize: VisualScene's target-resize effect must see the pin
         // and stand the draft preview scale down for the export dimensions.
         // React's separate canvas root must commit its object tree before a
         // frame-exact export can sample it. This synchronous flush is export-only.
         const flush = (reconciler as unknown as { flushSyncFromReconciler: (fn: () => void) => void }).flushSyncFromReconciler
-        flush(() => {
-          setExportPinned(true)
-          const project = useProjectStore.getState()
-          preloadProjectInstruments(project.scenes)
-          setProject(project)
-          setMainCompositionOverride(true)
-          s.setFrameloop('never')
-          s.setDpr(1)
-          s.setSize(width, height)
-        })
-        // The drawing buffer is now export-sized, but the element must not
-        // reflow the editor: keep its on-screen CSS box where it was.
-        const el = s.gl.domElement
-        el.style.width = `${saved.width}px`
-        el.style.height = `${saved.height}px`
+        try {
+          flush(() => {
+            setExportPinned(true)
+            surface = pinExportSurface(get, width, height)
+            const project = useProjectStore.getState()
+            preloadProjectInstruments(project.scenes)
+            setProject(project)
+            setMainCompositionOverride(true)
+          })
+        } catch (error) {
+          unpin()
+          throw error
+        }
       },
-      unpin() {
-        // Clear the override even when never pinned - the pre-export snapshot
-        // render sets it, and a failure before pin() must not leave it stuck.
-        setBeatOverride(null)
-        setMainCompositionOverride(false)
-        setExportPinned(false)
-        if (!saved) return
-        const s = get()
-        s.setSize(saved.width, saved.height) // also resets the element's CSS box
-        s.setDpr(saved.dpr)
-        s.setFrameloop(saved.frameloop)
-        saved = null
-      },
+      unpin,
       getCanvas() {
+        assertSurface()
         return get().gl.domElement
       },
     })
-    return () => registerFrameDriver(null)
+    return () => {
+      mounted = false
+      unpin()
+      registerFrameDriver(null)
+    }
   }, [get])
 
   return null

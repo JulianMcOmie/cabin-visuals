@@ -4,6 +4,7 @@
 
 import { videoCodec, type ExportSettings } from './types'
 import type { Mp4Writer } from './mux'
+import { assertExportSize } from './exportSurface'
 
 /** Encoder queue depth the loop tolerates before waiting on 'dequeue'. Small on
  *  purpose: memory stays flat and cancel latency stays at a few frames. */
@@ -86,6 +87,7 @@ export function createVideoEncodeSession(
   return {
     async encodeFrame(canvas, frameIndex, fps) {
       if (error) throw error
+      assertExportSize(canvas, settings.width, settings.height)
       // Same task as the render - the GL surface still holds this frame, so no
       // pixel readback and no preserveDrawingBuffer anywhere.
       // Uniform PTS, exactly i/fps. Do NOT add an A/V offset here: a brief
@@ -99,8 +101,11 @@ export function createVideoEncodeSession(
         duration: Math.round(1e6 / fps),
       })
       // Keyframe every 2 seconds of output: scrubbable, negligible size cost.
-      encoder.encode(frame, { keyFrame: frameIndex % (fps * 2) === 0, ...encodeOptions })
-      frame.close()
+      try {
+        encoder.encode(frame, { keyFrame: frameIndex % (fps * 2) === 0, ...encodeOptions })
+      } finally {
+        frame.close()
+      }
       while (encoder.encodeQueueSize > MAX_QUEUE) await dequeue()
       if (error) throw error
     },
