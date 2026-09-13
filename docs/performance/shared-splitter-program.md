@@ -47,7 +47,7 @@ The full local development editor, including its lighting and timeline previews,
 
 ## Limits
 
-This expands the existing compact path; it does not make arbitrary device chains independent of their input copies. Stagger's clocks, world-dependent or formation-dependent sibling movers, unproven nested movement, nested splitter fanout, appearance operations beyond the declared channels, masks and unsupported effects retain the reference path. Compact Particle rendering still begins at a structural population of 16,384. Smaller chains reuse the sampled slot calculations through the ordinary evaluator.
+The subsequent [automation and mixed mover extension](automation-mover-program.md) adds GPU Symmetric operations and bounded CPU prefixes with complete appearance. World-dependent or formation-dependent movers can now feed a small seed population into a GPU splitter suffix. Unsupported operations after a large population, Stagger's clocks, unproven nested movement, masks and unsupported effects retain the reference path. Compact Particle rendering still begins at a structural population of 16,384. Smaller chains reuse the sampled slot calculations through the ordinary evaluator.
 
 Normal framed prefixes certify their singularity guard without enumerating copies. Mixed or near-singular prefixes can require exact CPU guard flags proportional to the incoming population. Fractal's small slot table remains bounded, but chaining many extremely shrunken stages can encounter this case. GPU time also depends on particle size, overdraw, canvas resolution and other scene work; lower CPU evaluation time is not an equivalent FPS multiplier.
 

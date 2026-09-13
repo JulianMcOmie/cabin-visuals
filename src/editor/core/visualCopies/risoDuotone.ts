@@ -282,6 +282,7 @@ export const risoDuotoneColorizer: MoverOrSplitterDefinition<RisoDuotoneSettings
     const grain = Math.max(0.001, settings.grain)
     const scratchPosition = new Vector3()
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { index, count, placementTransform }) {
         // AMOUNT zero leaves upstream color state alone entirely - "no print"
         // must not clear a tint another colorizer asked for.

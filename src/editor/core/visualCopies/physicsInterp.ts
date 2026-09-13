@@ -56,6 +56,7 @@ import type { MidiRowDef, ParamDef } from '../../instruments/types'
 import { AUTOMATION_PITCH_MAX, AUTOMATION_PITCH_MIN, pitchToValue } from '../trackTypes'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { PHYSICS_COLOR } from './identityColors'
+import { memoByBeat } from './beatMemo'
 
 export const PHYSICS_LAW_GRAVITY = 0
 export const PHYSICS_LAW_SPRING = 1
@@ -577,12 +578,15 @@ export const physicsMover: MoverOrSplitterDefinition<PhysicsSettings> = {
   strictMidiRows: true,
   resolve({ settings, notes }) {
     const pieces = buildPhysicsPieces(notes, settings)
+    const layoutAt = memoByBeat((beat: number) => [physicsTransform(evaluatePhysicsValue(pieces, beat), settings)])
     return {
       localSlotMotion: true,
+      maxOutputCount: 1,
+      localTransformCount: 1,
+      localTransformsAtBeat: layoutAt,
       apply(visualCopy, { beat }) {
-        const value = evaluatePhysicsValue(pieces, beat)
         return [{
-          transform: visualCopy.transform.clone().multiply(physicsTransform(value, settings)),
+          transform: visualCopy.transform.clone().multiply(layoutAt(beat)[0]),
           opacity: visualCopy.opacity,
           colorShift: { ...visualCopy.colorShift },
         }]

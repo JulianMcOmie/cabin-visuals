@@ -384,6 +384,7 @@ export const motionMover: MoverOrSplitterDefinition<MotionSettings> = {
         .multiply(basisRotation(basis, evaluateSnapAngles(snapNotes, settings, beat))))
 
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { beat }) {
         const offset = offsetAt(beat)
         const rotation = rotationAt(beat)

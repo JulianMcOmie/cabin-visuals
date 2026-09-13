@@ -571,6 +571,7 @@ export const impactScatterMover: MoverOrSplitterDefinition<ImpactScatterSettings
     const speedScale = Math.max(0.0001, Math.abs(tuning.blastSpeed))
 
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { beat, index, placementTransform }) {
         const placed = placementTransform
           ? placementTransform.clone().multiply(visualCopy.transform)

@@ -265,6 +265,7 @@ export const cosinePaletteColorizer: MoverOrSplitterDefinition<CosinePaletteSett
     const perceptual = settings.blend !== COSINE_BLEND_LINEAR
     const scratchPosition = new Vector3()
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { beat, index, count, placementTransform }) {
         // AMOUNT zero leaves upstream color state alone entirely - "no
         // palette" must not clear a tint another colorizer asked for.

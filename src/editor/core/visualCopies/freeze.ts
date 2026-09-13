@@ -205,6 +205,7 @@ export const freezeMover: MoverOrSplitterDefinition<FreezeSettings> = {
     const deficits = cumulativeDeficits(spans)
     const snap = Math.round(settings.release) === RELEASE_SNAP
     return {
+      maxOutputCount: 1,
       // Freeze contributes no transform of its own: it says WHEN the rest of
       // the chain is evaluated, not where. Pass the copy through untouched
       // (with its own matrix, per the contract) and let warpBeat do the work.

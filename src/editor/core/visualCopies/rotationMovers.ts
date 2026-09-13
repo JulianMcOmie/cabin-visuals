@@ -118,6 +118,7 @@ export const rotateBurstMover: MoverOrSplitterDefinition<RotationBurstSettings> 
     // Per beat, not per copy (beatMemo.ts); shared read-only across copies.
     const rotationAt = memoByBeat((beat) => basisRotation(basis, evaluateRotationBurstAngles(notes, settings, beat)))
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { beat }) {
         return [nextCopy(visualCopy, visualCopy.transform.clone().multiply(rotationAt(beat)))]
       },
@@ -138,6 +139,7 @@ export const orbitBurstMover: MoverOrSplitterDefinition<RotationBurstSettings> =
     // matrix, so the per-copy multiply below never touches the shared one.
     const rotationAt = memoByBeat((beat) => basisRotation(basis, evaluateRotationBurstAngles(notes, settings, beat)))
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { beat }) {
         const orbit = pivotedRotation(rotationAt(beat), pivot)
         return [nextCopy(visualCopy, orbit.multiply(visualCopy.transform.clone()))]
@@ -245,6 +247,7 @@ export const constantRotateMover: MoverOrSplitterDefinition<ConstantRotationSett
     // Per beat, not per copy (beatMemo.ts); shared read-only across copies.
     const rotationAt = memoByBeat((beat) => basisRotation(basis, evaluateConstantRotationAngles(notes, settings, beat)))
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { beat }) {
         return [nextCopy(visualCopy, visualCopy.transform.clone().multiply(rotationAt(beat)))]
       },
@@ -265,6 +268,7 @@ export const constantOrbitMover: MoverOrSplitterDefinition<ConstantRotationSetti
     // matrix, so the per-copy multiply never touches the shared one.
     const rotationAt = memoByBeat((beat) => basisRotation(basis, evaluateConstantRotationAngles(notes, settings, beat)))
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { beat }) {
         const orbit = pivotedRotation(rotationAt(beat), pivot)
         return [nextCopy(visualCopy, orbit.multiply(visualCopy.transform.clone()))]

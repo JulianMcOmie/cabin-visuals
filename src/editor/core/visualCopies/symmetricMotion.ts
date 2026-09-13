@@ -34,10 +34,11 @@ import { Matrix4, Vector3 } from 'three'
 import type { MidiRowDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
-import type { VisualCopy } from './types'
 import { BURST_EASINGS } from './burstEasings'
 import { midiVelocity } from '../../utils/midiVelocity'
 import { SYMMETRIC_MOTION_COLOR } from './identityColors'
+import { memoByBeat } from './beatMemo'
+import { applyGpuOperation, mirrorDisplacementOperation, radialDisplacementOperation } from './gpuOperations'
 
 export interface SymmetricMotionSettings {
   /** 0 = Radial (out/in/turn about the center), 1 = Mirror (apart/together per axis). */
@@ -169,10 +170,6 @@ export function evaluateSymmetricMotionChannels(
   return channels
 }
 
-/** Copies closer to the symmetry element than this have no readable side or
- *  outward direction, and stay put. */
-const CENTER_EPS = 0.000001
-
 export const symmetricMotionMover: MoverOrSplitterDefinition<SymmetricMotionSettings> = {
   id: 'symmetricMotion',
   label: 'Symmetric Motion',
@@ -235,60 +232,24 @@ export const symmetricMotionMover: MoverOrSplitterDefinition<SymmetricMotionSett
     const mirror = settings.symmetry === 1
     const plane = settings.plane >= 1 && settings.plane <= 3 ? settings.plane : 0
     const normal = PLANE_NORMALS[plane]
-    const sphere = plane === 3
+    const operationAt = memoByBeat(beat => {
+      const channels = evaluateSymmetricMotionChannels(notes, settings, beat)
+      return mirror ? mirrorDisplacementOperation(channels.axes)
+        : radialDisplacementOperation([normal.x, normal.y, normal.z], plane === 3, channels.out, channels.turn)
+    })
     return {
+      maxOutputCount: 1,
       localSlotMotion: true,
-      // Declared so a splitter's child chain knows this delta is already
-      // anchored on the chain frame's fixed axes (see the header) and must
-      // not be re-anchored the way LOCAL deltas are.
+      gpuOperationAtBeat: operationAt,
+      // Both the CPU path and GPU program read the incoming chain-frame
+      // position. Only the shared channels are sampled once per beat.
       composition: 'chainRoot',
       apply(visualCopy, { beat }) {
-        const channels = evaluateSymmetricMotionChannels(notes, settings, beat)
-        const te = visualCopy.transform.elements
-        const position = new Vector3(te[12], te[13], te[14])
-        const offset = new Vector3()
-        let delta: Matrix4 | null = null
-
-        if (mirror) {
-          for (let axis = 0 as 0 | 1 | 2; axis < 3; axis++) {
-            const component = position.getComponent(axis)
-            if (Math.abs(component) <= CENTER_EPS || channels.axes[axis] === 0) continue
-            // Signed travel along this copy's own side, clamped so "together"
-            // parks the copy ON the axis plane instead of crossing it.
-            const travel = Math.max(channels.axes[axis], -Math.abs(component))
-            offset.setComponent(axis, Math.sign(component) * travel)
-          }
-          if (offset.lengthSq() > 0) {
-            delta = new Matrix4().makeTranslation(offset.x, offset.y, offset.z)
-          }
-        } else {
-          const outward = sphere
-            ? position.clone()
-            : position.clone().addScaledVector(normal, -position.dot(normal))
-          const reach = outward.length()
-          if (reach > CENTER_EPS && channels.out !== 0) {
-            const travel = Math.max(channels.out, -reach)
-            offset.copy(outward).multiplyScalar(travel / reach)
-            delta = new Matrix4().makeTranslation(offset.x, offset.y, offset.z)
-          }
-          if (channels.turn !== 0) {
-            // The turn carries the radial offset with it: displace outward in
-            // the undisplaced frame, then revolve the result about the center.
-            const turn = new Matrix4().makeRotationAxis(normal, channels.turn)
-            delta = delta ? turn.multiply(delta) : turn
-          }
-        }
-
-        const next: VisualCopy = {
-          // PRE-multiplied: the delta is measured on fixed chain-frame axes
-          // (see the header), so the copy's own frame must not re-aim it.
-          transform: delta
-            ? delta.clone().multiply(visualCopy.transform)
-            : visualCopy.transform.clone(),
+        return [{
+          transform: applyGpuOperation(operationAt(beat), visualCopy.transform, new Matrix4()),
           opacity: visualCopy.opacity,
           colorShift: { ...visualCopy.colorShift },
-        }
-        return [next]
+        }]
       },
     }
   },

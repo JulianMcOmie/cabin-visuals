@@ -172,6 +172,7 @@ export const gradientColorizer: MoverOrSplitterDefinition<GradientColorizerSetti
     const amount = clamp01(settings.amount)
     const scratchPosition = new Vector3()
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { index, count, placementTransform }) {
         // AMOUNT zero leaves upstream color state alone entirely - "no
         // gradient" must not clear a tint some other colorizer asked for.

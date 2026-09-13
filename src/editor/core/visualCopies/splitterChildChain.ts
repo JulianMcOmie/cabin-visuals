@@ -50,6 +50,7 @@ import { warpChainBeat } from './resolveVisualCopies'
 import { identityVisualCopy } from './identityVisualCopy'
 import { memoByBeat } from './beatMemo'
 import { withCopyEvaluation } from './evaluationMemo'
+import { entryMaxOutputCount } from './maxOutputCount'
 import type { FramedLocalTransforms, FramedVisualCopy, MoverOrSplitter, MoverOrSplitterContext, SharedLocalLayout, VisualCopy } from './types'
 
 /** A child result still tied to the parent slot whose frame it moves: `copy`'s
@@ -265,6 +266,14 @@ export function splitterWithChildChain(
   // The wrapped splitter's clocks ride this wrapper's applyFramed (slotTimes),
   // so the structural declaration must ride with them.
   if (splitter.emitsCopyClocks) wrapper.emitsCopyClocks = true
+  const parentBound = entryMaxOutputCount(splitter)
+  const childBounds = children.map(entryMaxOutputCount)
+  if (parentBound !== undefined && childBounds.every((count): count is number => count !== undefined)) {
+    // A singular incoming frame skips every child. Even a child that emits
+    // zero results therefore cannot reduce the upper bound below bare slots.
+    const bound = parentBound * Math.max(1, childBounds.reduce((product, count) => product * count, 1))
+    if (Number.isSafeInteger(bound)) wrapper.maxOutputCount = bound
+  }
   // A child splitter (or an automated child) changes the copy count, so the
   // structural probe needs the composed entry at every variant rank - unlike
   // frames, which never change counts and skip their wrapper.

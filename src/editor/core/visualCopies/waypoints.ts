@@ -56,6 +56,7 @@ import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import type { VisualCopy } from './types'
 import { WAYPOINTS_COLOR } from './identityColors'
+import { memoByBeat } from './beatMemo'
 
 export const WAYPOINT_LAYOUT_LINE = 0
 export const WAYPOINT_LAYOUT_GRID = 1
@@ -384,13 +385,19 @@ export const waypointsMover: MoverOrSplitterDefinition<WaypointsSettings> = {
   strictMidiRows: true,
   resolve({ settings, notes }) {
     const segments = buildWaypointSegments(notes, settings)
+    const layoutAt = memoByBeat((beat: number) => {
+      const [x, y] = evaluateWaypointOffset(segments, settings, beat)
+      return [new Matrix4().makeTranslation(x, y, 0)]
+    })
     return {
       localSlotMotion: true,
+      maxOutputCount: 1,
+      localTransformCount: 1,
+      localTransformsAtBeat: layoutAt,
       apply(visualCopy, { beat }) {
-        const [x, y] = evaluateWaypointOffset(segments, settings, beat)
         return [nextCopy(
           visualCopy,
-          visualCopy.transform.clone().multiply(new Matrix4().makeTranslation(x, y, 0)),
+          visualCopy.transform.clone().multiply(layoutAt(beat)[0]),
         )]
       },
     }

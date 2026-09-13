@@ -2,6 +2,8 @@ import { BufferGeometry, DataTexture, FloatType, GLSL3, InstancedBufferGeometry,
 import type { ParticlePlan } from '../core/visualCopies/particlePlan'
 import { attachParticlePlanPicking } from './particlePlanPicking'
 import { createParticleMaterial } from './particleCore'
+import { GPU_OPERATIONS_GLSL } from '../core/visualCopies/gpuOperations'
+import { PARTICLE_PLAN_COLOR_GLSL } from './particlePlanColorGLSL'
 
 /** One quad, one compact layout texture, and an instance count. There are no
  * per-particle attributes or instance matrices to allocate or upload. */
@@ -36,12 +38,15 @@ export function createParticlePlanMesh(plan: ParticlePlan, points = false) {
     uOffsets: { value: Int32Array.from([...plan.offsets, ...new Array(16 - plan.offsets.length).fill(0)]) },
     uProgram: { value: plan.program ? 1 : 0 },
     uKinds: { value: stageValues(plan.program?.kinds) },
+    uOperationKinds: { value: stageValues(plan.program?.operationKinds) },
+    uOperationOffsets: { value: stageValues(plan.program?.operationOffsets) },
     uInternalOffsets: { value: stageValues(plan.program?.internalOffsets) },
     uBareOffsets: { value: stageValues(plan.program?.bareOffsets) },
     uGuardOffsets: { value: stageValues(plan.program?.guardOffsets, -1) },
     uGuardStrides: { value: stageValues(plan.program?.guardStrides, 1) },
     uAppearanceOffsets: { value: stageValues(plan.appearanceOffsets, -1) },
     uBareAppearanceOffsets: { value: stageValues(plan.bareAppearanceOffsets, -1) },
+    uSeedColorOffset: { value: plan.cpuPrefix?.colorOffset ?? -1 },
     uPlacement: { value: new Matrix4() }, uMeshScale: { value: 1 },
     uViewportHeight: { value: 1 },
   })
@@ -50,8 +55,10 @@ export function createParticlePlanMesh(plan: ParticlePlan, points = false) {
     uniform int uLayoutWidth, uStages, uTotal;
     uniform int uCounts[16], uOffsets[16];
     uniform int uProgram, uKinds[16], uInternalOffsets[16], uBareOffsets[16];
+    uniform int uOperationKinds[16], uOperationOffsets[16];
     uniform int uGuardOffsets[16], uGuardStrides[16];
     uniform int uAppearanceOffsets[16], uBareAppearanceOffsets[16];
+    uniform int uSeedColorOffset;
     uniform mat4 uPlacement;
     uniform float uMeshScale, uMinRadiusNdc, uOpacity, uViewportHeight;
     uniform vec3 uColor;
@@ -68,34 +75,13 @@ export function createParticlePlanMesh(plan: ParticlePlan, points = false) {
     float layoutScalar(int index) {
       return layoutColumn(index / 4)[index % 4];
     }
-    // Match Color.offsetHSL on the source's linear RGB values. Copies add hue
-    // along the chain; convert only once, after every contribution is known.
-    float hueChannel(float p, float q, float h) {
-      h = fract(h);
-      if (h < 1.0 / 6.0) return p + (q - p) * 6.0 * h;
-      if (h < 0.5) return q;
-      if (h < 2.0 / 3.0) return p + (q - p) * 6.0 * (2.0 / 3.0 - h);
-      return p;
-    }
-    vec3 shiftHue(vec3 rgb, float shift) {
-      if (shift == 0.0) return rgb;
-      float high = max(rgb.r, max(rgb.g, rgb.b));
-      float low = min(rgb.r, min(rgb.g, rgb.b));
-      float delta = high - low;
-      if (delta == 0.0) return rgb;
-      float lightness = (low + high) * 0.5;
-      float saturation = lightness <= 0.5 ? delta / (high + low) : delta / (2.0 - high - low);
-      float hue = high == rgb.r ? (rgb.g - rgb.b) / delta + (rgb.g < rgb.b ? 6.0 : 0.0)
-        : high == rgb.g ? (rgb.b - rgb.r) / delta + 2.0 : (rgb.r - rgb.g) / delta + 4.0;
-      hue = fract(hue / 6.0 + shift);
-      float q = lightness <= 0.5 ? lightness * (1.0 + saturation) : lightness + saturation - lightness * saturation;
-      float p = 2.0 * lightness - q;
-      return vec3(hueChannel(p, q, hue + 1.0 / 3.0), hueChannel(p, q, hue), hueChannel(p, q, hue - 1.0 / 3.0));
-    }
+    ${GPU_OPERATIONS_GLSL}
+    ${PARTICLE_PLAN_COLOR_GLSL}
     void main() {
       mat4 world = uProgram == 0 ? uPlacement : mat4(1.0);
       mat4 internal = mat4(1.0);
       int stride = uTotal;
+      int seedSlot = 0;
       float opacity = 1.0, hue = 0.0;
       #ifdef PARTICLE_POINTS
         int index = gl_VertexID;
@@ -106,6 +92,7 @@ export function createParticlePlanMesh(plan: ParticlePlan, points = false) {
         if (stage >= uStages) break;
         stride /= uCounts[stage];
         int slot = (index / stride) % uCounts[stage];
+        if (stage == 0) seedSlot = slot;
         int kind = uProgram == 0 ? 0 : uKinds[stage];
         bool applyMotion = true;
         if (kind == 2) {
@@ -117,6 +104,8 @@ export function createParticlePlanMesh(plan: ParticlePlan, points = false) {
           }
           world *= layoutMatrix((applyMotion ? uOffsets[stage] : uBareOffsets[stage]) + slot);
           if (applyMotion) internal *= layoutMatrix(uInternalOffsets[stage] + slot);
+        } else if (kind == 3) {
+          world = applyParticleOperation(world, uOperationKinds[stage], uOperationOffsets[stage]);
         } else if (kind == 1) {
           world = layoutMatrix(uOffsets[stage] + slot) * world;
         } else {
@@ -150,7 +139,7 @@ export function createParticlePlanMesh(plan: ParticlePlan, points = false) {
         vUv = uv;
       #endif
       gl_Position = projectionMatrix * center;
-      vColor = vec4(shiftHue(uColor, hue), fade);
+      vColor = vec4(particleCopyColor(uColor, hue, seedSlot, uSeedColorOffset), fade);
     }
   `
   material.fragmentShader = 'out vec4 outColor;\n' + material.fragmentShader.replaceAll('varying ', 'in ').replaceAll('gl_FragColor', 'outColor')
@@ -188,12 +177,17 @@ export function createParticlePlanMesh(plan: ParticlePlan, points = false) {
       material.uniforms.uCounts.value.set(next.counts)
       material.uniforms.uOffsets.value.set(next.offsets)
       material.uniforms.uProgram.value = next.program ? 1 : 0
+      material.uniforms.uSeedColorOffset.value = next.cpuPrefix?.colorOffset ?? -1
+      material.uniforms.uOperationKinds.value.fill(0)
+      material.uniforms.uOperationOffsets.value.fill(0)
       material.uniforms.uAppearanceOffsets.value.fill(-1)
       material.uniforms.uBareAppearanceOffsets.value.fill(-1)
       if (next.appearanceOffsets) material.uniforms.uAppearanceOffsets.value.set(next.appearanceOffsets)
       if (next.bareAppearanceOffsets) material.uniforms.uBareAppearanceOffsets.value.set(next.bareAppearanceOffsets)
       if (next.program) {
         material.uniforms.uKinds.value.set(next.program.kinds)
+        if (next.program.operationKinds) material.uniforms.uOperationKinds.value.set(next.program.operationKinds)
+        if (next.program.operationOffsets) material.uniforms.uOperationOffsets.value.set(next.program.operationOffsets)
         material.uniforms.uInternalOffsets.value.set(next.program.internalOffsets)
         material.uniforms.uBareOffsets.value.set(next.program.bareOffsets)
         material.uniforms.uGuardOffsets.value.set(next.program.guardOffsets)

@@ -180,6 +180,7 @@ export const hueRotateColorizer: MoverOrSplitterDefinition<HueRotateSettings> = 
     const perceptual = settings.hueMode !== HUE_MODE_HSL
     const scratchPosition = new Vector3()
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { beat, index, count, placementTransform }) {
         // World position, the same read as the other colorizers: the chained
         // transform's translation pushed through the track placement.

@@ -26,10 +26,24 @@
 // placementTransform, so a frame under one of those is a no-op - a pure relative
 // displacement has no location to move.
 
+import { entryMaxOutputCount } from './maxOutputCount'
 import { resolveVisualCopies } from './resolveVisualCopies'
 import { memoizeEvaluation } from './evaluationMemo'
 import type { Matrix4 } from 'three'
 import type { MoverOrSplitter } from './types'
+
+function ignoresPlacement(entry: MoverOrSplitter): boolean {
+  if (entry.applyFramed || entry.emitsCopyClocks || entry.framedLocalTransformsAtBeat) return false
+  const legacy = !!(entry.localTransforms || entry.localTransformsAtBeat)
+  const shared = !!(entry.localLayout || entry.localLayoutAtBeat)
+  const root = !!(entry.rootTransform || entry.rootTransformAtBeat)
+  const gpu = !!entry.gpuOperationAtBeat
+  const independentLayout = Number(legacy) + Number(shared) + Number(root) + Number(gpu) === 1
+    && (!shared || !entry.localLayoutUsesPlacement)
+    && (!gpu || !entry.gpuOperationUsesPlacement)
+  return !!(entry.localSlotMotion || independentLayout)
+    && (entry.structuralVariants?.every(ignoresPlacement) ?? true)
+}
 
 /**
  * Wraps `inner` so the resolved `frame` chain moves it. An empty frame returns
@@ -45,6 +59,26 @@ export function framedMoverOrSplitter(
   frame: MoverOrSplitter[],
 ): MoverOrSplitter {
   if (frame.length === 0) return inner
+  if (ignoresPlacement(inner)) {
+    // A frame can only replace placementTransform, which this entry proves it
+    // never reads. Preserve its compact contract without evaluating the frame.
+    // Do NOT return inner directly: this wrapper historically omits composition,
+    // so a chain-root mover nested under a splitter is re-anchored as local.
+    const unplaced: MoverOrSplitter = {
+      ...inner,
+      composition: undefined,
+      apply(copy, context) { return inner.apply(copy, context) },
+    }
+    if (inner.localTransformsAtBeat) unplaced.localTransformsAtBeat = inner.localTransformsAtBeat.bind(inner)
+    if (inner.localLayoutAtBeat) unplaced.localLayoutAtBeat = inner.localLayoutAtBeat.bind(inner)
+    if (inner.rootTransformAtBeat) unplaced.rootTransformAtBeat = inner.rootTransformAtBeat.bind(inner)
+    if (inner.gpuOperationAtBeat) unplaced.gpuOperationAtBeat = inner.gpuOperationAtBeat.bind(inner)
+    if (inner.warpBeat) unplaced.warpBeat = beat => inner.warpBeat!(beat)
+    if (inner.structuralVariants) {
+      unplaced.structuralVariants = inner.structuralVariants.map(variant => framedMoverOrSplitter(variant, frame))
+    }
+    return unplaced
+  }
   // The private frame starts from identity, not from the incoming copy. Equal
   // clocks and placement share it; matrix values are checked too because a
   // caller can reuse a world Matrix4 after editing it in place.
@@ -53,6 +87,7 @@ export function framedMoverOrSplitter(
     transformed: Matrix4 | undefined
   }>())
   const framedEntry: MoverOrSplitter = {
+    maxOutputCount: entryMaxOutputCount(inner),
     cachePolicy: inner.cachePolicy === 'static' && frame.every((entry) => entry.cachePolicy === 'static')
       ? 'static' : undefined,
     apply(visualCopy, context) {

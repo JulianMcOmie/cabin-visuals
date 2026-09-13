@@ -403,6 +403,7 @@ export const meteorImpactMover: MoverOrSplitterDefinition<MeteorImpactSettings> 
       }))
 
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { beat, placementTransform }) {
         const placed = placementTransform
           ? placementTransform.clone().multiply(visualCopy.transform)

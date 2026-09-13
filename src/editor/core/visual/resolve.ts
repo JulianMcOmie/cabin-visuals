@@ -768,6 +768,17 @@ function resolveOwnMoverOrSplitter(track: Track, p: ProjectSnapshot): MoverOrSpl
   if (resolved.localSlotMotion && wrapped.structuralVariants.every(entry => entry.localSlotMotion)) {
     wrapped.localSlotMotion = true
   }
+  const isGpuFamily = (entry: MoverOrSplitter) => !!entry.gpuOperationAtBeat
+    && !entry.applyFramed && !entry.emitsCopyClocks && !entry.framedLocalTransformsAtBeat
+    && !entry.localTransforms && !entry.localTransformsAtBeat
+    && !entry.localLayout && !entry.localLayoutAtBeat
+    && !entry.rootTransform && !entry.rootTransformAtBeat
+  if (isGpuFamily(resolved) && wrapped.structuralVariants.every(isGpuFamily)) {
+    wrapped.gpuOperationAtBeat = (beat, placementTransform) =>
+      resolveAtBeat(beat).gpuOperationAtBeat!(beat, placementTransform)
+    wrapped.gpuOperationUsesPlacement = !!resolved.gpuOperationUsesPlacement
+      || wrapped.structuralVariants.some(entry => entry.gpuOperationUsesPlacement)
+  }
   return wrapped
 }
 

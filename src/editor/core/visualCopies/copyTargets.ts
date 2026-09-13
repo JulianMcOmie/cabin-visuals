@@ -20,6 +20,7 @@
 // the document never depends on the engine); resolve.ts passes one to the other,
 // so the two cannot drift without a type error there.
 
+import { entryMaxOutputCount } from './maxOutputCount'
 import type { MoverOrSplitter } from './types'
 
 export type CopyTargetRule = 'every' | 'runs'
@@ -105,7 +106,9 @@ export function gatedMoverOrSplitter(
   entry: MoverOrSplitter,
   selection: CopyTargetSelection,
 ): MoverOrSplitter {
+  const bound = entryMaxOutputCount(entry)
   const gated: MoverOrSplitter = {
+    maxOutputCount: bound === undefined ? undefined : Math.max(1, bound),
     cachePolicy: entry.cachePolicy,
     apply(visualCopy, context) {
       if (!copyIsTargeted(context.index, context.count, selection)) return [visualCopy]

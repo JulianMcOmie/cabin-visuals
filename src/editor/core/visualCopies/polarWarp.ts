@@ -157,6 +157,7 @@ export const polarWarpMover: MoverOrSplitterDefinition<PolarWarpSettings> = {
     let cachedBeat = NaN
     let weights: number[] = []
     return {
+      maxOutputCount: 1,
       composition: 'chainRoot',
       apply(copy, { beat, placementTransform }) {
         if (beat !== cachedBeat) { weights = sample(beat).weights; cachedBeat = beat }

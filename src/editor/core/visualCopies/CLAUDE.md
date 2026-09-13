@@ -57,6 +57,11 @@ active appearance must remain separate from bare parent factors when a singular
 incoming frame skips child evaluation. See `particlePlan.ts` and
 `docs/performance/shared-splitter-program.md` for compilation and limits.
 
+`gpuOperations.ts` owns the serializable position-operation vocabulary and its
+CPU/GLSL implementations. `maxOutputCount.ts` reads explicit cardinality proofs
+for bounded CPU prefixes. See [automation and mixed mover chains](../../../../docs/performance/automation-mover-program.md)
+for integration, measurements and fallback limits; the contracts live in `types.ts`.
+
 ## Structure
 
 - `definitions.ts` — `MoverOrSplitterDefinition` shape (id, params, evaluate) + settings merging. Numeric params come from the track's `inputValues`; **color/string params come from the shared `stringParams` field** (same split instruments use, so automation paths never meet a string). `mergeDefinitionSettings(def, inputValues, stringParams)` folds both.

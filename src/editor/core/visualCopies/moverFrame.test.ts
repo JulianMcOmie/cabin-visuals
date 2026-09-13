@@ -9,6 +9,9 @@ import { MOTION_BLOCKS, motionMover } from './motion'
 import { framedMoverOrSplitter } from './moverFrame'
 import { resolveVisualCopies } from './resolveVisualCopies'
 import type { MoverOrSplitter, VisualCopy } from './types'
+import { splitterWithChildChain } from './splitterChildChain'
+import { sharedLocalLayout } from './sharedLocalLayout'
+import { compileParticlePlan } from './particlePlan'
 
 /** A frame that slides the parent's field a fixed distance along +X. */
 function shift(distance: number): MoverOrSplitter {
@@ -118,4 +121,103 @@ test('the frame does not become an extra chain entry', () => {
   // how many copies the chain produces.
   const framed = framedMoverOrSplitter(scatter(), [shift(9)])
   assert.equal(resolveVisualCopies([framed], 0.25).length, 1)
+})
+
+/** The pre-optimization wrapper, intentionally without proof or composition
+ * forwarding. This is an independent reference for nested anchoring parity. */
+function genericFrame(inner: MoverOrSplitter, frame: MoverOrSplitter[]): MoverOrSplitter {
+  return {
+    apply(copy, context) {
+      const [sample] = resolveVisualCopies(frame, context.beat, context.placementTransform)
+      if (!sample) return inner.apply(copy, context)
+      const placementTransform = sample.transform.clone().invert()
+      if (context.placementTransform) placementTransform.multiply(context.placementTransform)
+      return inner.apply(copy, { ...context, placementTransform })
+    },
+  }
+}
+
+test('irrelevant frames preserve compact metadata without evaluating their layout', () => {
+  const delta = new Matrix4().makeRotationY(.4)
+  const inner = sharedLocalLayout({ transforms: [delta], opacities: [.7], hueShifts: [.2] })
+  const frame = [shift(7)]
+  const expected = genericFrame(inner, frame)
+  const fast = framedMoverOrSplitter(inner, frame)
+  assert.equal(fast.localLayout, inner.localLayout)
+  assert.equal(fast.cachePolicy, 'static')
+  const placement = new Matrix4().makeRotationX(.7).setPosition(2, 3, 4)
+  const copy = copyAt(1, -.3, 2); copy.opacity = .6; copy.colorShift.hue = .13
+  for (const beat of [-1, 0, 2, 0]) {
+    const context = { beat, index: 3, count: 7, placementTransform: placement }
+    assert.deepEqual(fast.apply(copy, context), expected.apply(copy, context))
+  }
+  frame[0].apply = () => { throw new Error('irrelevant frame expanded') }
+  fast.apply(copy, { beat: 4, index: 0, count: 1 })
+  assert.ok(compileParticlePlan([fast], 0, 4))
+})
+
+test('a fast framed chain-root mover retains the generic wrapper local reanchoring', () => {
+  const delta = new Matrix4().makeRotationZ(.63).setPosition(.3, -.2, .4)
+  const inner: MoverOrSplitter = {
+    composition: 'chainRoot', localSlotMotion: true, rootTransform: delta,
+    apply(copy) { return [{ ...copy, transform: delta.clone().multiply(copy.transform) }] },
+  }
+  const parent = sharedLocalLayout({ transforms: [
+    new Matrix4().makeRotationY(.4).setPosition(2, 1, -.3),
+    new Matrix4().makeRotationX(.3).setPosition(-1, .5, .2),
+  ] })
+  const frame = [shift(9)]
+  const fast = framedMoverOrSplitter(inner, frame)
+  assert.equal(fast.composition, undefined)
+  assert.equal(fast.rootTransform, delta)
+  const baseline = splitterWithChildChain(parent, [genericFrame(inner, frame)])
+  const optimized = splitterWithChildChain(parent, [fast])
+  const naive = splitterWithChildChain(parent, [inner])
+  const suffix = sharedLocalLayout({ transforms: [new Matrix4().makeTranslation(.2, .4, .8)] })
+  for (const beat of [0, 1, -1]) {
+    assert.deepEqual(resolveVisualCopies([optimized, suffix], beat), resolveVisualCopies([baseline, suffix], beat))
+    assert.notDeepEqual(resolveVisualCopies([naive, suffix], beat), resolveVisualCopies([baseline, suffix], beat),
+      'returning the raw inner mover would change established nested composition')
+  }
+})
+
+test('frame fast paths require placement-independent variants and retain time remaps', () => {
+  let evaluated = 0
+  const frame = [{ apply: (copy: VisualCopy) => { evaluated++; return [copy] } }]
+  const independent = sharedLocalLayout({ transforms: [new Matrix4()] })
+  independent.warpBeat = beat => beat - 2
+  independent.structuralVariants = [sharedLocalLayout({ transforms: [new Matrix4().makeTranslation(1, 0, 0)] })]
+  const fast = framedMoverOrSplitter(independent, frame)
+  assert.equal(fast.warpBeat!(3), 1)
+  assert.ok(fast.structuralVariants?.[0].localTransforms)
+  fast.apply(identityVisualCopy(), { beat: 1, index: 0, count: 1 })
+  assert.equal(evaluated, 0)
+  const dependent = sharedLocalLayout((_beat, placement) => ({ transforms: [placement?.clone() ?? new Matrix4()] }),
+    { count: 1, usesPlacement: true })
+  const guarded = framedMoverOrSplitter({ ...independent, structuralVariants: [dependent] }, frame)
+  assert.equal(guarded.localTransforms, undefined)
+  guarded.apply(identityVisualCopy(), { beat: 1, index: 0, count: 1 })
+  assert.equal(evaluated, 1)
+})
+
+test('GPU frame fast path binds its sampler and rejects placement-sensitive operations', () => {
+  let calls = 0
+  const frame: MoverOrSplitter[] = [{ apply(copy) { calls++; return [copy] } }]
+  const operation = { kind: 1, parameters: [1, 2, 3], scaleBound: 1, translationBound: 4 }
+  const inner: MoverOrSplitter = {
+    maxOutputCount: 1,
+    gpuOperationAtBeat() { assert.equal(this, inner); return operation },
+    apply(copy) { return [copy] },
+  }
+  const fast = framedMoverOrSplitter(inner, frame)
+  assert.equal(fast.gpuOperationAtBeat!(2), operation)
+  fast.apply(identityVisualCopy(), { beat: 2, index: 0, count: 1 })
+  assert.equal(calls, 0)
+  const dependent = { ...inner, gpuOperationUsesPlacement: true }
+  const generic = framedMoverOrSplitter(dependent, frame)
+  assert.equal(generic.gpuOperationAtBeat, undefined)
+  generic.apply(identityVisualCopy(), { beat: 2, index: 0, count: 1 })
+  assert.equal(calls, 1)
+  const mixed = framedMoverOrSplitter({ ...inner, structuralVariants: [dependent] }, frame)
+  assert.equal(mixed.gpuOperationAtBeat, undefined)
 })

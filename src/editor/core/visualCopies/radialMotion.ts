@@ -339,6 +339,7 @@ export const radialMotionMover: MoverOrSplitterDefinition<RadialMotionSettings> 
     })
     return {
       localTransformsAtBeat: layoutAt,
+      localTransformCount: radialMotionCopies(settings, 0) * radialMotionCopies(settings, 1) * radialMotionCopies(settings, 2),
       apply(visualCopy, { beat }) {
         return layoutAt(beat).map((local): VisualCopy => ({
           transform: visualCopy.transform.clone().multiply(local),

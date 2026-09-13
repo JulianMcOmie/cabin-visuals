@@ -69,6 +69,7 @@ export const contourMover: MoverOrSplitterDefinition<ContourSettings> = {
   strictMidiRows: true,
   resolve({ settings }) {
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { placementTransform }) {
         const placedTransform = placementTransform
           ? placementTransform.clone().multiply(visualCopy.transform)

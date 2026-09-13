@@ -1,5 +1,8 @@
-import { Matrix4 } from 'three'
+import { Color, Matrix4 } from 'three'
 import { identityVisualCopy } from './identityVisualCopy'
+import { applyGpuOperation, gpuOperationParameterCount, isGpuOperationSupported, type GpuOperation } from './gpuOperations'
+import { entryMaxOutputCount } from './maxOutputCount'
+import { resolveVisualCopyFrames } from './resolveVisualCopies'
 import type { MoverOrSplitter, SharedLocalLayout, VisualCopy } from './types'
 
 /** A factored Cartesian product, never an array of its expanded occurrences.
@@ -21,33 +24,45 @@ export interface ParticlePlan {
   /** Snapshot, never the mutable ObjectState matrix. A placement-dependent
    * table must be resampled even when the playhead stays at the same beat. */
   placementElements?: number[]
+  /** Proven capacity, including every automation variant of a bounded CPU
+   * prefix. It must not be inferred by expanding the eventual GPU population. */
+  structuralCount?: number
+  cpuPrefix?: {
+    length: number
+    count: number
+    colors: VisualCopy['colorShift'][]
+    colorOffset: number
+  }
   /** Framed stages carry their motion separately until every layout has run.
    * Each frame/internal pair uses the SAME mixed-radix slot. Guard offsets
    * address scalar flags in matrices; -1 means always active, -2 always bare.
    * The flags are evaluated on the CPU so GPU float rounding cannot change a
    * near-singular frame's branch. Ordinary plans omit this program. */
   program?: {
-    kinds: number[] // 0 local, 1 root, 2 frame/internal
+    kinds: number[] // 0 local, 1 root, 2 frame/internal, 3 position operation
     internalOffsets: number[]
     bareOffsets: number[]
     guardOffsets: number[]
     guardStrides: number[]
+    operationKinds?: number[]
+    operationOffsets?: number[]
   }
 }
 
-/** The three metadata families are exclusive proofs, not inferred from cache
+/** The metadata families are exclusive proofs, not inferred from cache
  * policy or composition. Only the framed proof can accompany applyFramed. */
-export function particlePlanEntryKind(entry: MoverOrSplitter): 0 | 1 | 2 | undefined {
+export function particlePlanEntryKind(entry: MoverOrSplitter): 0 | 1 | 2 | 3 | undefined {
   const legacyLocal = !!(entry.localTransforms || entry.localTransformsAtBeat)
   const sharedLocal = !!(entry.localLayout || entry.localLayoutAtBeat)
   if (legacyLocal && sharedLocal) return undefined
   const local = legacyLocal || sharedLocal
   const root = !!(entry.rootTransform || entry.rootTransformAtBeat)
   const framed = !!entry.framedLocalTransformsAtBeat
-  if (Number(local) + Number(root) + Number(framed) !== 1 || entry.emitsCopyClocks) return undefined
+  const operation = !!entry.gpuOperationAtBeat
+  if (Number(local) + Number(root) + Number(framed) + Number(operation) !== 1 || entry.emitsCopyClocks) return undefined
   if (framed) return entry.applyFramed ? 2 : undefined
   if (entry.applyFramed) return undefined
-  return root ? 1 : 0
+  return operation ? 3 : root ? 1 : 0
 }
 
 export function particleLocalLayout(entry: MoverOrSplitter, beat: number, placement?: Matrix4): SharedLocalLayout | undefined {
@@ -58,8 +73,8 @@ export function particleLocalLayout(entry: MoverOrSplitter, beat: number, placem
 
 export function particlePlanNeedsUpdate(plan: ParticlePlan, chain: readonly MoverOrSplitter[], beat: number, placement: Matrix4): boolean {
   if (plan.placementElements?.some((value, i) => value !== placement.elements[i])) return true
-  return plan.beat !== beat && chain.some(entry => entry.localTransformsAtBeat || entry.localLayoutAtBeat
-    || entry.rootTransformAtBeat || entry.framedLocalTransformsAtBeat)
+  return plan.beat !== beat && (!!plan.cpuPrefix || chain.some(entry => entry.localTransformsAtBeat || entry.localLayoutAtBeat
+    || entry.rootTransformAtBeat || entry.framedLocalTransformsAtBeat || entry.gpuOperationAtBeat))
 }
 
 export function matrixScaleBound(matrix: Matrix4): number {
@@ -114,13 +129,17 @@ function packLocalLayout(layout: readonly Matrix4[]): PackedLocalLayout | undefi
   return packed
 }
 
-/** Only explicit, appearance-preserving layouts and uniform root motions can
- * use this path. Static alone does not imply independence from index, formation
- * or placement. Root deltas collect on the left; their count-one prefix never
- * changes the local layouts' input-major slot order. */
+/** Compile explicit layout/operation proofs, or a proven-small CPU prefix and
+ * compatible suffix. Static alone does not imply independence from index,
+ * formation or placement. The simple layout path still collects root deltas
+ * on the left without changing input-major slot order. */
 export function compileParticlePlan(chain: readonly MoverOrSplitter[], version = 0, beat = 0, placement?: Matrix4): ParticlePlan | undefined {
   if (!chain.length) return undefined
-  if (chain.some(entry => entry.framedLocalTransformsAtBeat || entry.localLayout || entry.localLayoutAtBeat)) {
+  if (chain.some(entry => particlePlanEntryKind(entry) === undefined
+    || entry.structuralVariants?.some(variant => particlePlanEntryKind(variant) === undefined))) {
+    return compileHybridPlan(chain, version, beat, placement)
+  }
+  if (chain.some(entry => entry.framedLocalTransformsAtBeat || entry.localLayout || entry.localLayoutAtBeat || entry.gpuOperationAtBeat)) {
     return compileFramedPlan(chain, version, beat, placement)
   }
   const counts: number[] = [], offsets: number[] = []
@@ -171,8 +190,65 @@ export function compileParticlePlan(chain: readonly MoverOrSplitter[], version =
   return { version, beat, count, counts, offsets, matrices, scaleBound }
 }
 
+/** Run only a proven-small prefix on the CPU, preserving its reference frames
+ * and deferred internal motion. Later splitters still form a Cartesian product
+ * on the GPU. A single sampled beat is never used as an output-count proof. */
+function compileHybridPlan(chain: readonly MoverOrSplitter[], version: number, beat: number, placement?: Matrix4): ParticlePlan | undefined {
+  let lastUnknown = -1
+  const malformedProof = (entry: MoverOrSplitter) => particlePlanEntryKind(entry) === undefined
+    && !!(entry.localTransforms || entry.localTransformsAtBeat || entry.localLayout || entry.localLayoutAtBeat
+      || entry.rootTransform || entry.rootTransformAtBeat || entry.framedLocalTransformsAtBeat || entry.gpuOperationAtBeat)
+  for (let i = 0; i < chain.length; i++) {
+    const entry = chain[i]
+    if (entry.emitsCopyClocks || malformedProof(entry) || entry.structuralVariants?.some(malformedProof)) return undefined
+    if (particlePlanEntryKind(entry) === undefined
+      || entry.structuralVariants?.some(variant => particlePlanEntryKind(variant) === undefined)) lastUnknown = i
+  }
+  if (lastUnknown < 0 || lastUnknown === chain.length - 1) return undefined
+  let capacity = 1
+  for (let i = 0; i < chain.length; i++) {
+    const bound = entryMaxOutputCount(chain[i])
+    if (bound === undefined) return undefined
+    capacity *= bound
+    if (!Number.isSafeInteger(capacity) || capacity > (i <= lastUnknown ? 4096 : 0x7fffffff)) return undefined
+  }
+  const prefix = resolveVisualCopyFrames(chain.slice(0, lastUnknown + 1), beat, placement, 4096)
+  if (!prefix) return undefined
+  const colors = prefix.copies.map(copy => ({ ...copy.colorShift }))
+  // Keep a valid, hidden seed stage when this beat emits no copies. Capacity
+  // still comes from the proof, so a later beat can populate the same mesh.
+  const copies = prefix.copies.length ? prefix.copies : [identityVisualCopy()]
+  const frames = copies.map(copy => copy.transform)
+  const seed: MoverOrSplitter = {
+    apply: copy => [copy], applyFramed: copy => [{ visualCopy: copy }],
+    framedLocalTransformsAtBeat: () => ({ frames, bareFrames: frames,
+      internals: prefix.copies.length ? prefix.internals ?? frames.map(() => null) : [null],
+      opacities: copies.map(copy => copy.opacity), hueShifts: copies.map(copy => copy.colorShift.hue) }),
+  }
+  const plan = compileFramedPlan([seed, ...chain.slice(lastUnknown + 1)], version, beat, placement, true)
+  if (!plan) return undefined
+  const colorOffset = plan.matrices.length
+  const matrices = new Float64Array(Math.ceil((colorOffset + copies.length * 8) / 16) * 16)
+  matrices.set(plan.matrices)
+  const tint = new Color()
+  for (let i = 0; i < copies.length; i++) {
+    const color = copies[i].colorShift
+    const amount = color.tint && /^#[0-9a-f]{6}$/i.test(color.tint) ? Math.max(0, Math.min(1, color.tintAmount)) : 0
+    tint.set(amount > 0 ? color.tint! : '#000000')
+    matrices.set([color.saturation, color.lightness, tint.r, tint.g, tint.b, amount,
+      color.tintPerceptual ? 1 : 0, color.huePerceptual ? 1 : 0], colorOffset + i * 8)
+  }
+  plan.matrices = matrices
+  plan.cpuPrefix = { length: lastUnknown + 1, count: prefix.copies.length, colors, colorOffset }
+  plan.structuralCount = capacity
+  plan.placementElements = (placement ?? new Matrix4()).elements.slice()
+  if (!prefix.copies.length) plan.count = 0
+  return plan
+}
+
 interface FrameStage {
-  kind: 0 | 1 | 2
+  kind: 0 | 1 | 2 | 3
+  operation?: GpuOperation
   frames: readonly Matrix4[]
   internals?: readonly (Matrix4 | null)[]
   bare?: readonly Matrix4[]
@@ -193,7 +269,8 @@ function prefixFrame(stages: readonly FrameStage[], count: number, index: number
   for (const stage of stages) {
     stride /= stage.frames.length
     const slot = Math.floor(index / stride) % stage.frames.length
-    if (stage.kind === 1) out.premultiply(stage.frames[slot])
+    if (stage.kind === 3) applyGpuOperation(stage.operation!, out, out)
+    else if (stage.kind === 1) out.premultiply(stage.frames[slot])
     else {
       const active = typeof stage.guard === 'boolean' ? stage.guard
         : stage.guard[Math.floor(index / (count / stage.inputCount))] === 1
@@ -203,10 +280,11 @@ function prefixFrame(stages: readonly FrameStage[], count: number, index: number
   return out
 }
 
-function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, beat: number, placement?: Matrix4): ParticlePlan | undefined {
+function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, beat: number, placement?: Matrix4, seeded = false): ParticlePlan | undefined {
   if (chain.length > 16) return undefined
   const stages: FrameStage[] = []
   const identity = new Matrix4(), scratch = new Matrix4()
+  let generalSeed = false
   let count = 1, scaleBound = 1, frameBound = 1, fullFrameBound = 1, determinantMin = 1, determinantMax = 1
   const affine = (matrix: Matrix4) => matrix.elements.every(Number.isFinite)
     && matrix.elements[3] === 0 && matrix.elements[7] === 0
@@ -214,25 +292,52 @@ function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, b
   for (const entry of chain) {
     const kind = particlePlanEntryKind(entry)
     if (kind === undefined || entry.structuralVariants?.some(variant => particlePlanEntryKind(variant) === undefined)) return undefined
+    if (kind === 3) {
+      const operation = entry.gpuOperationAtBeat!(beat, placement)
+      if (!isGpuOperationSupported(operation)) return undefined
+      stages.push({ kind, operation, frames: [identity], inputCount: count, guard: true })
+      scaleBound *= operation.scaleBound
+      frameBound *= operation.scaleBound
+      fullFrameBound = generalSeed
+        ? 4 * Math.max(1, operation.positionScaleBound ?? 1, operation.scaleBound, operation.translationBound)
+          * fullFrameBound * Math.max(1, fullFrameBound)
+        : 4 * Math.max(1, operation.positionScaleBound ?? 1, operation.scaleBound) * fullFrameBound + operation.translationBound
+      // Position operations preserve exact determinants mathematically. Widen
+      // the floating interval; near-singular decisions still use prefixFrame.
+      const error = 1e-10 * (generalSeed ? fullFrameBound ** 4 : frameBound ** 3)
+      determinantMin = operation.determinantPreserving ? Math.max(0, determinantMin - error) : 0
+      determinantMax = operation.determinantPreserving ? determinantMax + error : Infinity
+      continue
+    }
     const framed = kind === 2 ? entry.framedLocalTransformsAtBeat!(beat, placement) : undefined
     const layout = kind === 0 ? particleLocalLayout(entry, beat, placement) : undefined
     const frames = framed?.frames ?? (kind === 1
       ? [entry.rootTransformAtBeat?.(beat) ?? entry.rootTransform!]
       : layout!.transforms)
-    if (!frames?.length || frames.some(matrix => !affine(matrix))) return undefined
+    const isSeed = seeded && stages.length === 0
+    if (!frames?.length || (!isSeed && frames.some(matrix => !affine(matrix)))) return undefined
     if (framed && (framed.internals.length !== frames.length || framed.bareFrames.length !== frames.length
-      || framed.internals.some(matrix => matrix && !affine(matrix)) || framed.bareFrames.some(matrix => !affine(matrix)))) return undefined
+      || (!isSeed && (framed.internals.some(matrix => matrix && !affine(matrix)) || framed.bareFrames.some(matrix => !affine(matrix)))))) return undefined
+    if (isSeed) {
+      // CPU entries promise a count bound, not an affine transform contract.
+      // Preserve even a singular world's zero inverse or projective matrices.
+      // General seeds use full-matrix determinant bounds; projective linear
+      // parts cannot certify point size after position-dependent operations.
+      generalSeed = frames.some(matrix => !affine(matrix))
+      if ([...frames, ...(framed?.internals ?? [])].some(matrix => matrix
+        && (matrix.elements[3] !== 0 || matrix.elements[7] !== 0 || matrix.elements[11] !== 0))) scaleBound = Infinity
+    }
     const appearance = framed ?? layout
     const validChannel = (values: readonly number[] | undefined) => !values
       || (values.length === frames.length && values.every(Number.isFinite))
-    if (![appearance?.opacities, appearance?.hueShifts, framed?.bareOpacities, framed?.bareHueShifts].every(validChannel)) return undefined
+    if (!isSeed && ![appearance?.opacities, appearance?.hueShifts, framed?.bareOpacities, framed?.bareHueShifts].every(validChannel)) return undefined
 
     let guard: FrameStage['guard'] = true
     if (framed) {
       // Determinant error grows with the cube of the linear norm. Expand both
       // factor intervals and accumulated-product rounding outward. Ambiguous,
       // nonfinite and ill-conditioned cases use exact CPU prefix decisions.
-      const margin = 1e-10 * (stages.length + 1) * frameBound ** 3
+      const margin = 1e-10 * (stages.length + 1) * (generalSeed ? fullFrameBound ** 4 : frameBound ** 3)
       // Three's general determinant also evaluates translation cofactors even
       // for affine matrices. Enormous translations can overflow those terms
       // (then 0 * Infinity becomes NaN), so certify only finite full bounds.
@@ -258,14 +363,16 @@ function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, b
     let minimum = Infinity, maximum = 0, bound = 0, fullBound = 0
     for (const matrix of possibleFrames) {
       const norm = matrixScaleBound(matrix), determinant = Math.abs(matrix.determinant())
-      const error = 1e-12 * norm ** 3
+      const e = matrix.elements
+      let matrixFullBound = 0
+      for (let row = 0; row < 4; row++) {
+        matrixFullBound = Math.max(matrixFullBound, Math.abs(e[row]) + Math.abs(e[row + 4]) + Math.abs(e[row + 8]) + Math.abs(e[row + 12]))
+      }
+      fullBound = Math.max(fullBound, matrixFullBound)
+      const error = 1e-12 * (generalSeed ? matrixFullBound ** 4 : norm ** 3)
       minimum = Math.min(minimum, Math.max(0, determinant - error))
       maximum = Math.max(maximum, determinant + error)
       bound = Math.max(bound, norm)
-      const e = matrix.elements
-      for (let row = 0; row < 4; row++) {
-        fullBound = Math.max(fullBound, Math.abs(e[row]) + Math.abs(e[row + 4]) + Math.abs(e[row + 8]) + Math.abs(e[row + 12]))
-      }
     }
     determinantMin *= minimum * (1 - 16 * Number.EPSILON)
     determinantMax *= maximum * (1 + 16 * Number.EPSILON)
@@ -276,6 +383,7 @@ function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, b
   }
   const counts: number[] = [], offsets: number[] = [], packed: Matrix4[] = []
   const program: NonNullable<ParticlePlan['program']> = { kinds: [], internalOffsets: [], bareOffsets: [], guardOffsets: [], guardStrides: [] }
+  if (stages.some(stage => stage.operation)) { program.operationKinds = []; program.operationOffsets = [] }
   for (const stage of stages) {
     counts.push(stage.frames.length); offsets.push(packed.length)
     for (const matrix of stage.frames) packed.push(matrix)
@@ -286,10 +394,13 @@ function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, b
     if (stage.bare) for (const matrix of stage.bare) packed.push(matrix)
     program.guardOffsets.push(stage.guard === true ? -1 : -2)
     program.guardStrides.push(count / stage.inputCount)
+    program.operationKinds?.push(stage.operation?.kind ?? 0)
+    program.operationOffsets?.push(-1)
   }
   let length = packed.length * 16
   stages.forEach((stage, i) => {
     if (typeof stage.guard !== 'boolean') { program.guardOffsets[i] = length; length += stage.guard.length }
+    if (stage.operation) { program.operationOffsets![i] = length; length += stage.operation.parameters.length }
   })
   const appearanceOffsets: number[] = [], bareAppearanceOffsets: number[] = []
   const appearanceValues: { offset: number; values: number[] }[] = []
@@ -311,9 +422,10 @@ function compileFramedPlan(chain: readonly MoverOrSplitter[], version: number, b
   packed.forEach((matrix, i) => matrices.set(matrix.elements, i * 16))
   stages.forEach((stage, i) => {
     if (typeof stage.guard !== 'boolean') matrices.set(stage.guard, program.guardOffsets[i])
+    if (stage.operation) matrices.set(stage.operation.parameters, program.operationOffsets![i])
   })
   for (const { offset, values } of appearanceValues) matrices.set(values, offset)
-  const usesPlacement = chain.some(entry => entry.localLayoutUsesPlacement || entry.framedLayoutUsesPlacement)
+  const usesPlacement = chain.some(entry => entry.localLayoutUsesPlacement || entry.framedLayoutUsesPlacement || entry.gpuOperationUsesPlacement)
   return { version, beat, count, counts, offsets, matrices, scaleBound, program,
     ...(appearanceValues.length ? { appearanceOffsets, bareAppearanceOffsets } : {}),
     ...(usesPlacement ? { placementElements: (placement ?? identity).elements.slice() } : {}) }
@@ -328,6 +440,13 @@ export function particlePlanMatrix(plan: ParticlePlan, index: number, out: Matri
     stride /= plan.counts[stage]
     const slot = Math.floor(index / stride) % plan.counts[stage]
     const kind = program?.kinds[stage] ?? 0
+    if (kind === 3) {
+      const operationKind = program!.operationKinds![stage], start = program!.operationOffsets![stage]
+      applyGpuOperation({ kind: operationKind,
+        parameters: Array.from(plan.matrices.subarray(start, start + gpuOperationParameterCount(operationKind)!)),
+        scaleBound: 1, translationBound: 0 }, out, out)
+      continue
+    }
     const guard = program?.guardOffsets[stage] ?? -1
     const active = guard === -1 || (guard >= 0 && plan.matrices[guard + Math.floor(index / program!.guardStrides[stage])] === 1)
     const offset = kind === 2 && !active ? program!.bareOffsets[stage] : plan.offsets[stage]
@@ -346,6 +465,10 @@ export function particlePlanMatrix(plan: ParticlePlan, index: number, out: Matri
 export function particlePlanCopy(plan: ParticlePlan, index: number): VisualCopy | undefined {
   if (!Number.isInteger(index) || index < 0 || index >= plan.count) return undefined
   const copy = identityVisualCopy()
+  if (plan.cpuPrefix) {
+    const slot = Math.floor(index / (plan.count / plan.counts[0]))
+    copy.colorShift = { ...plan.cpuPrefix.colors[slot], hue: 0 }
+  }
   particlePlanMatrix(plan, index, copy.transform)
   let stride = plan.count
   for (let stage = 0; stage < plan.counts.length; stage++) {

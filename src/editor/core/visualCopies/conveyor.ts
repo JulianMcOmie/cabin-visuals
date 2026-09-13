@@ -279,6 +279,7 @@ export const conveyorMover: MoverOrSplitterDefinition<ConveyorSettings> = {
     }
 
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { beat, formation }) {
         const travel = travelAtBeat(beat)
         const elements = visualCopy.transform.elements

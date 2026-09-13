@@ -43,6 +43,7 @@
 // already has a home: automate the parent's own params, or reach for Visibility
 // when what you want is the object dimming rather than the device stopping.
 
+import { entryMaxOutputCount } from './maxOutputCount'
 import type { MidiRowDef, ParamDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
@@ -139,7 +140,9 @@ export function bypassGated(
   if (gates.length === 0) return entry
   const bypassed = (beat: number) => gates.some((gate) => gate(beat))
 
+  const bound = entryMaxOutputCount(entry)
   const gated: MoverOrSplitter = {
+    maxOutputCount: bound === undefined ? undefined : Math.max(1, bound),
     apply(visualCopy, context) {
       // Passing the copy through unchanged is the module's own convention for
       // "this entry declines to act" (copyTargets.ts's untargeted copies), and
@@ -183,6 +186,7 @@ export const bypassMover: MoverOrSplitterDefinition<BypassSettings> = {
   strictMidiRows: true,
   resolve({ settings, notes }) {
     return {
+      maxOutputCount: 1,
       // A bypass contributes nothing of its own; the copy passes through with
       // its own matrix, per the contract. Everything it does is in `bypassAt`,
       // which resolve.ts lifts off the lane and hands to `bypassGated`.

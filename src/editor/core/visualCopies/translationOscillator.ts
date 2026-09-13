@@ -86,6 +86,7 @@ export const translationOscillatorMover: MoverOrSplitterDefinition<TranslationOs
   midiRows: () => OSCILLATION_ROWS,
   resolve({ settings, notes }) {
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { beat }) {
         const [x, y, z] = evaluateTranslationOscillation(notes, settings, beat)
         return [{

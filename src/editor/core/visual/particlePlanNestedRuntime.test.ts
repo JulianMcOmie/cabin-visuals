@@ -143,7 +143,7 @@ test('worker frame codec preserves correlated program offsets and mixed-prefix g
   assert.deepEqual(receiver.getParticlePlan('p')!.program, engine.getParticlePlan('p')!.program)
 })
 
-test('nested color edits switch representation while count-one targeting keeps its compact object list', () => {
+test('bounded nested color edits stay compact while an unbounded suffix edit remounts correctly', () => {
   const document = fixture('b')
   const engine = createVisualEngine()
   engine.setProject(document); engine.computeAtBeat(.7)
@@ -155,14 +155,32 @@ test('nested color edits switch representation while count-one targeting keeps i
   colored.tracks.color = { ...colored.tracks.motion, id: 'color', moverId: 'gradient',
     inputValues: { mode: 1, amount: 1 }, stringParams: { colorA: '#ff0000', colorB: '#0000ff' } }
   engine.setProject(colored); engine.computeAtBeat(.7)
-  assert.equal(engine.getParticlePlan('p'), undefined)
+  assert.ok(engine.getParticlePlan('p')!.cpuPrefix)
+  assert.equal(engine.getParticlePlan('p')!.cpuPrefix!.count, 32 ** 2)
   assert.equal(engine.getVisualCopyCount('p'), COPIES)
+  assert.equal(engine.getVisualCopies('p').length, 0)
+  assert.equal(engine.getObjectList().length, 1)
+  assert.ok(engine.getVisualCopy('p', 12345)!.colorShift.tint)
+  const coloredReference = resolveVisualCopies(resolveProject(colored).objects[0].moverAndSplitterChain, .7)
+  for (const index of SAMPLE_INDICES) {
+    const actual = engine.getVisualCopy('p', index)!
+    assertMatrixNear(actual.transform, coloredReference[index].transform)
+    assert.deepEqual(actual.colorShift, coloredReference[index].colorShift)
+    assert.equal(actual.opacity, coloredReference[index].opacity)
+  }
+  engine.setProject(document); engine.computeAtBeat(.7)
+  assert.equal(publications, 0, 'bounded color changes keep the existing compact object list')
+  const expanded = structuredClone(colored)
+  expanded.tracks.b.childIds = expanded.tracks.b.childIds.filter(id => id !== 'color')
+  expanded.tracks.c.childIds.push('color')
+  expanded.tracks.color.parentId = 'c'
+  engine.setProject(expanded); engine.computeAtBeat(.7)
+  assert.equal(engine.getParticlePlan('p'), undefined, 'a CPU-only final stage cannot precede GPU fanout')
   assert.equal(engine.getVisualCopies('p').length, COPIES)
   assert.equal(engine.getObjectList().length, COPIES)
   assert.ok(engine.getObjectList().every(entry => !entry.proceduralCopies))
-  assert.ok(engine.getVisualCopy('p', 12345)!.colorShift.tint)
   engine.setProject(document); engine.computeAtBeat(.7)
-  assert.equal(publications, 2, 'representation changes publish the expanded and restored object lists')
+  assert.equal(publications, 2, 'expanding and restoring representation publish their object lists')
   const compactObjects = engine.getObjectList()
   for (const rule of ['every', 'runs'] as const) {
     const targeted = structuredClone(document)

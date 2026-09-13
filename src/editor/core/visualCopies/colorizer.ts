@@ -486,6 +486,7 @@ export const noteColorizer: MoverOrSplitterDefinition<ColorizerSettings> = {
     const perceptual = settings.blend !== BLEND_LINEAR
     const latch = settings.sample === SAMPLE_AT_BIRTH
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { beat, index, placementTransform, birthBeat }) {
         // The copy's WORLD position. (P * T)'s translation column is P applied
         // to T's translation, so transforming the point is equivalent to

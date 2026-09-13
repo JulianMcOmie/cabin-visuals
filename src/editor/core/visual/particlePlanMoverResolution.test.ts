@@ -9,7 +9,7 @@ import { resolveProject, type ProjectSnapshot } from './resolve'
 function fixture(motion: number, count = 4): ProjectSnapshot {
   const particle: Track = { id: 'p', name: 'Particle', instrumentId: 'particle', type: 'base',
     color: '#fff', childIds: ['a', 'm', 'b'], muted: false, solo: false, blocks: [], params: { size: .01 } }
-  const a: Track = { ...particle, id: 'a', type: 'splitter', splitterId: 'radial', parentId: 'p',
+  const a: Track = { ...particle, id: 'a', instrumentId: '', type: 'splitter', splitterId: 'radial', parentId: 'p',
     childIds: [], inputValues: { copies: count, radius: 2, tilt: 37 } }
   const b: Track = { ...a, id: 'b', inputValues: { copies: count, radius: .3, tilt: 13 }, blocks: [{
     id: 'counts', startBar: 0, durationBars: 8, loop: false, notes: [
@@ -17,7 +17,7 @@ function fixture(motion: number, count = 4): ProjectSnapshot {
       { id: 'many', pitch: 36 + count - 1, velocity: 100, startBeat: 3, durationBeats: .25 },
     ],
   }] }
-  const mover: Track = { ...particle, id: 'm', type: 'mover', moverId: 'mover', parentId: 'p',
+  const mover: Track = { ...particle, id: 'm', instrumentId: '', type: 'mover', moverId: 'mover', parentId: 'p',
     childIds: ['angle'], inputValues: { motion, mode: 1, angleX: 13, angleY: 21, angleZ: 37,
       pivotX: 1.2, pivotY: -.8, pivotZ: .4 } }
   const angle: Track = { ...mover, id: 'angle', type: 'automation', parentId: 'm', childIds: [],
@@ -62,10 +62,21 @@ test('structural probes with automated root motion never expand the splitter pro
   assert.equal(compileParticlePlan(chain, 0, 4)!.matrices.length, (4 * 32 + 1) * 16)
 })
 
-test('a nested Mover frame keeps the reference fallback after automation resolution', () => {
+test('a placement-independent Mover frame preserves compact automation and reference composition', () => {
   const p = fixture(2)
   p.tracks.frame = { ...p.tracks.m, id: 'frame', parentId: 'm', childIds: [] }
   p.tracks.m.childIds.push('frame')
   const chain = resolveProject(p).objects[0].moverAndSplitterChain
-  assert.equal(compileParticlePlan(chain), undefined)
+  const seen = new Map<number, Float64Array>()
+  for (const beat of [0, 1.3, 4, -.5, 1.3]) {
+    const plan = compileParticlePlan(chain, 0, beat)!
+    assert.ok(plan)
+    const reference = resolveVisualCopies(chain, beat)
+    assert.equal(plan.count, reference.length)
+    reference.forEach((copy, index) => particlePlanMatrix(plan, index, new Matrix4()).elements.forEach((value, i) =>
+      assert.ok(Math.abs(value - copy.transform.elements[i]) < 1e-9)))
+    if (seen.has(beat)) assert.deepEqual(plan.matrices, seen.get(beat))
+    seen.set(beat, plan.matrices)
+  }
+  assert.notDeepEqual(seen.get(0), seen.get(4))
 })

@@ -225,6 +225,7 @@ export const waveTerrainMover: MoverOrSplitterDefinition<WaveTerrainSettings> = 
   strictMidiRows: true,
   resolve({ settings, notes }) {
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { beat, placementTransform }) {
         const placedTransform = placementTransform
           ? placementTransform.clone().multiply(visualCopy.transform)

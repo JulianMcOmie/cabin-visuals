@@ -7,6 +7,7 @@
 // generic instructions for rendering copies of an already-processed output.
 
 import type { Matrix4 } from 'three'
+import type { GpuOperation } from './gpuOperations'
 
 /**
  * "Render the same already-processed instrument output once with this transform
@@ -239,6 +240,10 @@ export interface SharedLocalLayout {
  *    more.
  */
 export interface MoverOrSplitter {
+  /** Proven finite upper bound on output slots for EVERY input, beat, placement
+   * and formation. This permits bounded CPU evaluation before GPU fanout;
+   * sampling one beat is not a cardinality proof. Variants must also fit. */
+  maxOutputCount?: number
   /** Opt-in to complete-chain result reuse for immutable resolved entries.
    * `static` additionally guarantees apply/applyFramed ignore beat and birth;
    * `beat` permits reuse at the same beat. Placement contents and chain entry
@@ -270,6 +275,12 @@ export interface MoverOrSplitter {
    * read beat, incoming transform, index/count and formation transforms only;
    * independent of placement, appearance, birth and per-copy clocks. */
   localSlotMotion?: true
+  /** Exact count-one, appearance-preserving operation on the incoming full
+   * reference frame. The sampled data is serializable; its shared CPU and GPU
+   * interpreters preserve chain ordering. Exclusive with layout/root/framed
+   * families. No formation, birth, copy-clock or appearance dependence. */
+  gpuOperationAtBeat?: (beat: number, placementTransform?: Matrix4) => GpuOperation
+  gpuOperationUsesPlacement?: boolean
   /** Exact uniform chain-root motion: output.transform is rootTransform ×
    * input.transform, with unchanged appearance/count and no context dependence.
    * The matrix is immutable. Mutually exclusive with localTransforms[AtBeat];

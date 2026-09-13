@@ -65,9 +65,10 @@ import { BURST_EASINGS } from './burstEasings'
 import { evaluateBurstOffset } from './burstOffset'
 import { evaluateOscillationAmounts } from './mover'
 import { evaluateConstantRotationAngles } from './rotationMovers'
-import { RETURN_PITCH, pivotedRotation } from './motionBasis'
+import { RETURN_PITCH } from './motionBasis'
 import { SYMMETRIC_ROTATION_COLOR } from './identityColors'
 import { memoByBeat } from './beatMemo'
+import { applyGpuOperation, axialRotationOperation, axialRotationWeight } from './gpuOperations'
 
 const DEG_TO_RAD = Math.PI / 180
 
@@ -274,25 +275,8 @@ export function symmetricRotationWeight(
   radius: number,
   settings: SymmetricRotationSettings,
 ): number {
-  const span = Math.max(0.0001, settings.span ?? 1)
-  let raw: number
-  switch (settings.falloff) {
-    case SYMMETRIC_ROTATION_FALLOFF_ALONG:
-      raw = along / span
-      break
-    case SYMMETRIC_ROTATION_FALLOFF_FROM:
-      raw = radius / span
-      break
-    case SYMMETRIC_ROTATION_FALLOFF_INTO:
-      raw = Math.max(0, 1 - radius / span)
-      break
-    default:
-      raw = 1
-  }
-  const curve = Math.max(0.01, settings.curve ?? 1)
-  if (curve === 1 || raw === 0) return raw
-  // Bend the ramp, keep its sign: a curved twist still reverses across center.
-  return Math.sign(raw) * Math.pow(Math.abs(raw), curve)
+  return axialRotationWeight(along, radius, settings.falloff,
+    Math.max(.0001, settings.span ?? 1), Math.max(.01, settings.curve ?? 1))
 }
 
 /**
@@ -349,11 +333,6 @@ export function evaluateSymmetricRotationChannels(
   ]
 }
 
-/** Below this the copy is effectively ON the axis: it has no readable radial or
- *  tangent, so fold and roll leave it alone (twist still turns it). */
-const AXIS_EPS = 0.000001
-const ANGLE_EPS = 0.0000000001
-
 export const symmetricRotationMover: MoverOrSplitterDefinition<SymmetricRotationSettings> = {
   id: 'symmetricRotation',
   label: 'Symmetric Rotation',
@@ -364,66 +343,23 @@ export const symmetricRotationMover: MoverOrSplitterDefinition<SymmetricRotation
   strictMidiRows: true,
   resolve({ settings, notes }) {
     const axis = resolveSymmetryAxis(settings)
-    const center = new Vector3(settings.centerX ?? 0, settings.centerY ?? 0, settings.centerZ ?? 0)
-    const onAxis = settings.anchor !== SYMMETRIC_ROTATION_ANCHOR_SELF
-    // The note walk is per beat, not per copy (beatMemo.ts); the per-copy
-    // part below is the falloff weight and the pivot, which read the tuple.
-    const channelsAt = memoByBeat((beat) => evaluateSymmetricRotationChannels(notes, settings, beat))
+    const operationAt = memoByBeat(beat => axialRotationOperation({
+      axis: [axis.x, axis.y, axis.z],
+      center: [settings.centerX ?? 0, settings.centerY ?? 0, settings.centerZ ?? 0],
+      angles: evaluateSymmetricRotationChannels(notes, settings, beat),
+      onAxis: settings.anchor !== SYMMETRIC_ROTATION_ANCHOR_SELF,
+      falloff: settings.falloff, span: settings.span ?? 1, curve: settings.curve ?? 1,
+    }))
     return {
+      maxOutputCount: 1,
       localSlotMotion: true,
-      // Declared so a splitter's child chain takes this delta as-is: it is
-      // already anchored on the chain frame's fixed axes (see the header).
+      gpuOperationAtBeat: operationAt,
+      // All three rotations read the ORIGINAL incoming position; the shared
+      // operation preserves twist · fold · roll order on both CPU and GPU.
       composition: 'chainRoot',
       apply(visualCopy, { beat }) {
-        const channels = channelsAt(beat)
-        const te = visualCopy.transform.elements
-        const position = new Vector3(te[12], te[13], te[14])
-        const offset = position.clone().sub(center)
-        const along = offset.dot(axis)
-        const radial = offset.clone().addScaledVector(axis, -along)
-        const radius = radial.length()
-        const weight = symmetricRotationWeight(along, radius, settings)
-
-        const self: [number, number, number] = [position.x, position.y, position.z]
-        // The nearest point on the axis line - the pivot everything but a
-        // self-anchored rotation turns about.
-        const foot = center.clone().addScaledVector(axis, along)
-        const pivot: [number, number, number] = onAxis ? [foot.x, foot.y, foot.z] : self
-
-        // Collected in the fixed channel order and multiplied in it, so the
-        // composition is twist · fold · roll (twist outermost) and a chord
-        // across channels always lands the same way.
-        const steps: Matrix4[] = []
-        const twist = channels[0] * weight
-        if (Math.abs(twist) > ANGLE_EPS) {
-          steps.push(pivotedRotation(new Matrix4().makeRotationAxis(axis, twist), pivot))
-        }
-        if (radius > AXIS_EPS) {
-          const outward = radial.clone().divideScalar(radius)
-          const fold = channels[1] * weight
-          if (Math.abs(fold) > ANGLE_EPS) {
-            // t = r̂ × A, so a POSITIVE fold lifts the copy's arm toward +A:
-            // R(t, θ)·r̂ = r̂·cos θ + A·sin θ. At ±90° the arm lies on the axis.
-            const tangent = outward.clone().cross(axis).normalize()
-            steps.push(pivotedRotation(new Matrix4().makeRotationAxis(tangent, fold), pivot))
-          }
-          const roll = channels[2] * weight
-          if (Math.abs(roll) > ANGLE_EPS) {
-            // The copy lies on this rotation's own axis, so ANCHOR cannot move
-            // it - roll always turns the copy where it stands.
-            steps.push(pivotedRotation(new Matrix4().makeRotationAxis(outward, roll), self))
-          }
-        }
-        const delta = steps.length > 0
-          ? steps.reduce((accumulated, step) => accumulated.multiply(step))
-          : null
-
         return [{
-          // PRE-multiplied: the delta is measured on the chain frame's fixed
-          // axes, so the copy's own frame must not re-aim it (see the header).
-          transform: delta
-            ? delta.clone().multiply(visualCopy.transform)
-            : visualCopy.transform.clone(),
+          transform: applyGpuOperation(operationAt(beat), visualCopy.transform, new Matrix4()),
           opacity: visualCopy.opacity,
           colorShift: { ...visualCopy.colorShift },
         }]

@@ -33,6 +33,7 @@
 // depending on how you arrived at it, and scrubbing into a simultaneous onset
 // would have no defined answer.
 
+import { entryMaxOutputCount } from './maxOutputCount'
 import type { MidiRowDef, SelectParamDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitter } from './types'
@@ -199,7 +200,7 @@ export function liveChildrenAt(
 
 /** An entry that declines to act, which this module spells "return the copy
  *  unchanged" (copyTargets.ts's untargeted copies, bypass's gated apply). */
-const PASS_THROUGH: MoverOrSplitter = { apply: (visualCopy) => [visualCopy] }
+const PASS_THROUGH: MoverOrSplitter = { maxOutputCount: 1, apply: (visualCopy) => [visualCopy] }
 
 /**
  * What the structural probe should be handed for child `index`.
@@ -253,7 +254,10 @@ export function switchGated(
   isLive: (beat: number) => boolean,
   structuralVariants: MoverOrSplitter[],
 ): MoverOrSplitter {
+  const bounds = [entry, ...structuralVariants].map(entryMaxOutputCount)
+  const bound = bounds.reduce<number>((max, count) => Math.max(max, count ?? NaN), 1)
   const gated: MoverOrSplitter = {
+    maxOutputCount: Number.isSafeInteger(bound) ? bound : undefined,
     apply(visualCopy, context) {
       if (!isLive(context.beat)) return [visualCopy]
       return entry.apply(visualCopy, context)

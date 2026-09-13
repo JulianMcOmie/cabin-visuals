@@ -78,6 +78,18 @@ test('empty children return the splitter untouched', () => {
   assert.equal(splitterWithChildChain(grid, []), grid)
 })
 
+test('nested structural bounds include child fanout and singular bare output without evaluating copies', () => {
+  const neverApply = () => { throw new Error('structural proof must not evaluate copies') }
+  const parent: MoverOrSplitter = { maxOutputCount: 8, apply: neverApply }
+  const child: MoverOrSplitter = { maxOutputCount: 3, apply: neverApply }
+  assert.equal(splitterWithChildChain(parent, [child]).maxOutputCount, 24)
+  assert.equal(splitterWithChildChain(parent, [{ maxOutputCount: 0, apply: neverApply }]).maxOutputCount, 8)
+  assert.equal(splitterWithChildChain(parent, [{ apply: neverApply }]).maxOutputCount, undefined)
+  assert.equal(splitterWithChildChain(parent, [{ ...child, emitsCopyClocks: true }]).maxOutputCount, undefined)
+  assert.equal(splitterWithChildChain(parent, [{ ...child,
+    structuralVariants: [{ maxOutputCount: 5, apply: neverApply }] }]).maxOutputCount, 40)
+})
+
 test('a rotation child turns the formation about the splitter origin, not each copy in place', () => {
   // Grid slots at x = ±1. As a chain sibling BELOW the grid, a 90° Z rotation
   // composes locally and spins each copy in place - positions stay put.

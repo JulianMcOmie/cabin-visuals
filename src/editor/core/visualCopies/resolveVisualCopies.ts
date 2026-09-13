@@ -2,7 +2,7 @@ import type { Matrix4 } from 'three'
 import { identityVisualCopy } from './identityVisualCopy'
 import type { MoverOrSplitter, MoverOrSplitterContext, VisualCopy } from './types'
 import { withCopyEvaluation } from './evaluationMemo'
-import { particleLocalLayout, particlePlanEntryKind } from './particlePlan'
+import { compileParticlePlan, particleLocalLayout, particlePlanEntryKind } from './particlePlan'
 
 /**
  * Evaluates an ordered mover-and-splitter chain at one beat.
@@ -89,12 +89,37 @@ export function resolveVisualCopies(
   return withCopyEvaluation(() => resolveCopyChain(moverAndSplitterChain, beat, placementTransform, clocksOut))
 }
 
+export interface UnfoldedVisualCopies {
+  copies: VisualCopy[]
+  internals: (Matrix4 | null)[] | null
+}
+class CopyBudgetExceeded extends Error {}
+
+/** Evaluate a bounded CPU prefix without prematurely folding its internal
+ * motion into the frame seen by later GPU stages. Uses the SAME kernel as the
+ * reference path, including formation/index context and framed inheritance. */
+export function resolveVisualCopyFrames(
+  chain: MoverOrSplitter[], beat: number, placement?: Matrix4, maxCopies = Infinity,
+): UnfoldedVisualCopies | undefined {
+  const unfolded: UnfoldedVisualCopies = { copies: [], internals: null }
+  try {
+    unfolded.copies = withCopyEvaluation(() => resolveCopyChain(chain, beat, placement,
+      undefined, undefined, unfolded, maxCopies))
+    return unfolded
+  } catch (error) {
+    if (error instanceof CopyBudgetExceeded) return undefined
+    throw error
+  }
+}
+
 function resolveCopyChain(
   moverAndSplitterChain: MoverOrSplitter[],
   beat: number,
   placementTransform?: Matrix4,
   clocksOut?: CopyClocks,
   initialCopies?: VisualCopy[],
+  unfoldedOut?: UnfoldedVisualCopies,
+  maxCopies = Infinity,
 ): VisualCopy[] {
   let visualCopies = initialCopies ?? [identityVisualCopy()]
   // Parallel to visualCopies: each copy's accumulated internal motion, or null.
@@ -156,6 +181,7 @@ function resolveCopyChain(
       const inherited = previousInternals ? previousInternals[index] : null
       if (framed) {
         for (const { visualCopy: next, internalTransform, beatOffset, birthBeat } of framed.call(moverOrSplitter, visualCopy, context)) {
+          if (nextVisualCopies.length >= maxCopies) throw new CopyBudgetExceeded()
           const internal = inherited && internalTransform
             ? inherited.clone().multiply(internalTransform)
             : internalTransform ?? inherited
@@ -183,6 +209,7 @@ function resolveCopyChain(
         }
       } else {
         for (const next of moverOrSplitter.apply(visualCopy, context)) {
+          if (nextVisualCopies.length >= maxCopies) throw new CopyBudgetExceeded()
           if (inherited && !nextInternals) {
             nextInternals = new Array<Matrix4 | null>(nextVisualCopies.length).fill(null)
           }
@@ -232,6 +259,10 @@ function resolveCopyChain(
     clocksOut.checkpoints = clockCheckpoints
   }
 
+  if (unfoldedOut) {
+    unfoldedOut.internals = internals
+    return visualCopies
+  }
   if (!internals) return visualCopies
   const folded = internals
   return visualCopies.map((visualCopy, index) => {
@@ -324,9 +355,9 @@ export function structuralCopyCount(
 ): number {
   // Structural UI queries must not expand a factored million-copy layout.
   const factoredCount = (chain: MoverOrSplitter[]) => chain.every(entry => particlePlanEntryKind(entry) !== undefined)
-    ? chain.reduce((count, entry) => count * (entry.rootTransform || entry.rootTransformAtBeat
+    ? chain.reduce((count, entry) => count * (entry.rootTransform || entry.rootTransformAtBeat || entry.gpuOperationAtBeat
       ? 1 : entry.framedLocalTransformsAtBeat ? entry.framedLocalTransformsAtBeat(0).frames.length
-        : particleLocalLayout(entry, 0)!.transforms.length), 1) : undefined
+        : particleLocalLayout(entry, 0)!.transforms.length), 1) : compileParticlePlan(chain)?.structuralCount
   let count = plainCount ?? factoredCount(moverAndSplitterChain) ?? resolveVisualCopies(moverAndSplitterChain, 0).length
   const variantRanks = Math.max(
     0,

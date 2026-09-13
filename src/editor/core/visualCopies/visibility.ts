@@ -103,6 +103,7 @@ export const visibilityMover: MoverOrSplitterDefinition<VisibilitySettings> = {
   strictMidiRows: true,
   resolve({ settings, notes }) {
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { beat, index, count }) {
         return [{
           transform: visualCopy.transform.clone(),

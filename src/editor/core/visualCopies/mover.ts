@@ -321,6 +321,7 @@ export const moverDefinition: MoverOrSplitterDefinition<MoverSettings> = {
       })
       return {
         localSlotMotion: true,
+        maxOutputCount: 1,
         localTransformCount: 1,
         localTransformsAtBeat: layoutAt,
         apply(visualCopy, { beat }) {
@@ -341,6 +342,7 @@ export const moverDefinition: MoverOrSplitterDefinition<MoverSettings> = {
     const orbitAt = memoByBeat((beat) => pivotedRotation(rotationAt(beat), pivot))
     return {
       localSlotMotion: true,
+      maxOutputCount: 1,
       ...(orbit ? { rootTransformAtBeat: orbitAt } : { localTransformCount: 1, localTransformsAtBeat: layoutAt }),
       apply(visualCopy, { beat }) {
         if (!orbit) {

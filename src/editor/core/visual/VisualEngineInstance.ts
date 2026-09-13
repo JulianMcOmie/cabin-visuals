@@ -345,7 +345,7 @@ export function createVisualEngine() {
       const eligible = obj.instrumentId === 'particle' && obj.maskSourceIds.length === 0
         && !hasUnbatchableEffects(tracks, obj.trackId)
       const candidate = eligible ? compileParticlePlan(chain, particlePlanVersion + 1) : undefined
-      const capacity = candidate ? structuralCopyCount(chain, candidate.count) : 0
+      const capacity = candidate ? candidate.structuralCount ?? structuralCopyCount(chain, candidate.count) : 0
       const plan = candidate && capacity >= 16384 && capacity <= 0x7fffffff ? candidate : undefined
       if (chainEmitsCopyClocks(chain)) staggeredTracks.add(obj.trackId)
       if (sameEntries(copyChainByTrack.get(obj.trackId), chain) && !!plan === particlePlans.has(obj.trackId)) continue

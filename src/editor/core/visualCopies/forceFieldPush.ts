@@ -163,6 +163,7 @@ export const forceFieldPushMover: MoverOrSplitterDefinition<ForceFieldPushSettin
   resolve({ settings, notes }) {
     const center = new Vector3(settings.centerX, settings.centerY, settings.centerZ)
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { beat, placementTransform }) {
         const placedTransform = placementTransform
           ? placementTransform.clone().multiply(visualCopy.transform)

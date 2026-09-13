@@ -202,6 +202,7 @@ export const impactPulseMover: MoverOrSplitterDefinition<ImpactPulseSettings> = 
   strictMidiRows: true,
   resolve({ settings, notes }) {
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { beat, index }) {
         const pulse = evaluateImpactPulse(notes, settings, beat, index)
         const [x, y, z] = impactPulseScale(pulse, settings.hit, settings.stretch)
