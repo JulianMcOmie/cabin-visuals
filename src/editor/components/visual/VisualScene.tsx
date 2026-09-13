@@ -95,8 +95,6 @@ interface PartitionUniforms {
   index: { value: number }
   count: { value: number }
   aspect: { value: number }
-  motion: { value: Vector4 }
-  motionRotation: { value: number }
   crossfadeTexture: { value: Texture | null }
   crossfadeMix: { value: number }
   crossfadeAlpha: { value: Vector2 }
@@ -415,8 +413,6 @@ function makeCompositorMaterial(invertBehind = false) {
     index: { value: 0 },
     count: { value: 1 },
     aspect: { value: 1 },
-    motion: { value: new Vector4(0, 0, 1, 1) },
-    motionRotation: { value: 0 },
     crossfadeTexture: { value: null },
     crossfadeMix: { value: 1 },
     crossfadeAlpha: { value: new Vector2(1, 1) },
@@ -445,8 +441,6 @@ function makeCompositorMaterial(invertBehind = false) {
       partitionIndex: uniforms.index,
       partitionCount: uniforms.count,
       partitionAspect: uniforms.aspect,
-      sceneMotion: uniforms.motion,
-      sceneMotionRotation: uniforms.motionRotation,
       crossfadeTexture: uniforms.crossfadeTexture,
       crossfadeMix: uniforms.crossfadeMix,
       crossfadeAlpha: uniforms.crossfadeAlpha,
@@ -466,22 +460,13 @@ uniform float partitionBlur;
 uniform float partitionIndex;
 uniform float partitionCount;
 uniform float partitionAspect;
-uniform vec4 sceneMotion;
-uniform float sceneMotionRotation;
 uniform sampler2D crossfadeTexture;
 uniform float crossfadeMix;
 uniform vec2 crossfadeAlpha;
 void main() {`)
       .replace('#include <map_fragment>', `
 #ifdef USE_MAP
-vec2 sceneUv = vPartitionUv - vec2(0.5) - sceneMotion.xy;
-sceneUv.x *= partitionAspect;
-float motionCos = cos(sceneMotionRotation), motionSin = sin(sceneMotionRotation);
-sceneUv = vec2(motionCos * sceneUv.x + motionSin * sceneUv.y,
-  -motionSin * sceneUv.x + motionCos * sceneUv.y) / sceneMotion.zw;
-sceneUv.x /= partitionAspect;
-sceneUv += vec2(0.5);
-if (any(lessThan(sceneUv, vec2(0.0))) || any(greaterThan(sceneUv, vec2(1.0)))) discard;
+vec2 sceneUv = vPartitionUv;
 vec4 partitionSampled;
 if (partitionBlur > 0.0) {
   vec2 pb = vPartitionUv - vec2(0.5);
@@ -560,7 +545,7 @@ if (partitionSlice > 0.5) {
       )
     }
   }
-  material.customProgramCacheKey = () => invertBehind ? 'scene-partition-invert-v4' : 'scene-partition-v4'
+  material.customProgramCacheKey = () => invertBehind ? 'scene-partition-invert-v5' : 'scene-partition-v5'
   return material
 }
 
@@ -600,9 +585,6 @@ function applyCompositorLayer(
   uniforms.wedge.value = slice?.radial ? 1 : 0
   uniforms.flash.value = layer.flash ?? 0
   uniforms.blur.value = layer.blur ?? 0
-  const motion = layer.motion
-  uniforms.motion.value.set(motion?.x ?? 0, motion?.y ?? 0, motion?.scale ?? 1, motion?.scale ?? 1)
-  uniforms.motionRotation.value = motion?.rotation ?? 0
   uniforms.crossfadeTexture.value = sourceTexture ?? texture
   uniforms.crossfadeMix.value = layer.crossfade?.mix ?? 1
   uniforms.crossfadeAlpha.value.set(sourceTexture ? 1 : 0, targetPresent ? 1 : 0)
@@ -1602,7 +1584,7 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
           const roots = hoverTargetsForTrack(hover.trackId).filter((t) => t.sceneId === hover.sceneId)
           const track = useProjectStore.getState().scenes[hover.sceneId]?.tracks[hover.trackId]
           const layer = layers.find((l) => l.sceneId === hover.sceneId)
-          if (roots.length > 0 && track && layer && !layer.motion && !layer.crossfade) {
+          if (roots.length > 0 && track && layer && !layer.crossfade) {
             const maskScenes = new Set<ThreeScene>()
             for (const root of roots) {
               const scene = rootSceneOf(root.object)

@@ -1,3 +1,4 @@
+import { applyObjectTransition } from '../../core/visual/objectTransition'
 import { applyObjectPlacement } from '../../core/visual/applyObjectPlacement'
 import { previewRuntime } from '../../core/visual/previewRuntime'
 import { useContext, memo, Suspense, useEffect, useMemo, useRef } from 'react'
@@ -191,6 +192,7 @@ export const ObjectRenderer = memo(function ObjectRenderer({
       // identity copy pins the viewport-filling plane exactly as before and
       // translated/scaled copies move as screen-space layers.
       composeScreenAnchor(camera.position, camera.quaternion, visualCopy?.transform, _composed)
+      if (state?.objectMotion) applyObjectTransition(_composed, state.objectMotion)
       applyObjectPlacement(g, _composed)
     } else if (state) {
       const beat = getBeatOverride() ?? (previewRuntime.worker ? previewRuntime.beat : useTimeStore.getState().currentBeat)

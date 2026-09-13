@@ -217,6 +217,8 @@ export const GRID_COLOR = '#fb6dba'
  * indistinguishable from Tunnel's.
  */
 export const CONSOLIDATED_MOVER_COLOR = '#ababab'
+/** Beat-crossing motion; shared by the lane and its console. */
+export const DANCE_COLOR = '#ee82b6'
 /**
  * Bypass claims no hue either, and for a better reason than "nothing to stand
  * for": its whole subject is a device being switched OFF, and every hue on this

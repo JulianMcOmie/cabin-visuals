@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, Check } from 'lucide-react'
 import { useProjectStore } from '../store/ProjectStore'
 import { compositionDef } from '../core/directors'
-import { sceneTransitionParamVisible, transitionMode } from '../core/directors/sceneTransition'
+import { sceneTransitionParamVisible, transitionMode, motionCurve, motionCurveSample } from '../core/directors/sceneTransition'
 import { COMPOSITION_OPACITY_PARAM } from '../core/directors/types'
 import { orderedSceneBindings } from '../core/directors/sceneBindings'
 import { ParamControl } from '../userInterfaceRenderers'
@@ -90,12 +90,13 @@ export function CompositionSettingsPanel({ track }: { track: Track }) {
           />
         )
       ))}
+      {defId === 'sceneSwitcher' && transitionMode(track) === 2 && <MotionCurvePreview curve={motionCurve(track)} />}
       {defId === 'sceneSwitcher' && transitionMode(track) !== 0 && (
         <p className="mb-4 text-[11px] leading-relaxed text-[var(--text-muted)]">
           {transitionMode(track) === 2
-            ? 'Motion begins before the scene change and continues through it, then settles. Scale, position, and rotation share one curve with continuous velocity and acceleration. This moves the whole scene, including its backdrop; it adds to existing object motion.'
+            ? 'Objects accelerate into the scene change at peak speed, then slow into their new pose. Scale and rotation act around each object’s origin; the backdrop stays fixed. Each following change continues from the finished pose.'
             : 'Blend smoothly between scenes, centered on each scene change.'}
-          {' '}Length is in beats. Closely spaced changes shorten the transition; gaps stay empty. Preview from Main to see transitions.
+          {' '}Length is in beats. Closely spaced changes shorten the transition; empty rests start a new motion. Preview from Main to see transitions.
         </p>
       )}
       {def?.targetsSingleScene && (() => {
@@ -155,5 +156,26 @@ export function CompositionSettingsPanel({ track }: { track: Track }) {
         </>
       )}
     </>
+  )
+}
+
+function MotionCurvePreview({ curve }: { curve: number }) {
+  const samples = Array.from({ length: 65 }, (_, i) => motionCurveSample(i / 64, curve))
+  const maxV = Math.max(...samples.map(s => s.velocity))
+  const maxA = Math.max(...samples.map(s => Math.abs(s.acceleration)))
+  const path = (key: 'velocity' | 'acceleration', baseline: number, height: number, max: number) =>
+    samples.map((sample, i) => `${i ? 'L' : 'M'}${12 + i / 64 * 236},${baseline - sample[key] / max * height}`).join(' ')
+  return (
+    <div className="mb-3 rounded border border-[var(--border)] px-2 py-2">
+      <p className="mb-1 text-center text-[10px] text-[var(--text-2)]">Scene change at peak speed</p>
+      <svg viewBox="0 0 260 116" className="w-full" role="img" aria-label="Continuous velocity and acceleration curves across the scene change">
+        <path d="M12 48H248 M12 91H248" stroke="var(--border)" fill="none" />
+        <path d="M130 4V112" stroke="var(--text-muted)" strokeDasharray="3 4" opacity="0.5" />
+        <path d={path('velocity', 48, 28, maxV)} stroke="var(--accent)" strokeWidth="2" fill="none" />
+        <path d={path('acceleration', 91, 18, maxA)} stroke="var(--text-2)" strokeWidth="1.5" fill="none" />
+        <text x="12" y="12" fill="var(--text-muted)" fontSize="9">Velocity</text>
+        <text x="12" y="65" fill="var(--text-muted)" fontSize="9">Acceleration</text>
+      </svg>
+    </div>
   )
 }

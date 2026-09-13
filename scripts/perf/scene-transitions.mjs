@@ -8,7 +8,8 @@ const source = `
 import { Mesh, MeshBasicMaterial, BufferGeometry, Float32BufferAttribute, Vector2, Vector4,
  CustomBlending, AddEquation, OneMinusDstColorFactor, OneMinusSrcAlphaFactor, OneFactor,
  Scene, OrthographicCamera, WebGLRenderer, WebGLRenderTarget, DataTexture, RGBAFormat,
- UnsignedByteType, LinearSRGBColorSpace, NearestFilter } from 'three'
+ UnsignedByteType, LinearSRGBColorSpace, NearestFilter, PlaneGeometry, Matrix4 } from 'three'
+import { applyObjectTransition } from './src/editor/core/visual/objectTransition'
 ${part('interface PartitionUniforms {', 'function disposeMountedScene')}
 ${part('function makeCompositorGeometry()', 'const COLOR_FILTER_VERTEX')}
 ${part('function setPartitionGeometry(', '/** The per-pass light rig.')}
@@ -26,12 +27,21 @@ function close(a,b){if(a.some((v,i)=>Math.abs(v-b[i])>2))throw Error(JSON.string
 close(draw({...layer,crossfade:{sceneId:'a',mix:0}}),[255,0,0,255])
 close(draw({...layer,crossfade:{sceneId:'a',mix:.5}}),[128,0,128,255])
 close(draw(layer),[0,0,255,255])
-close(draw({...layer,motion:{x:.8,y:0,scale:1,rotation:0}}),[0,0,0,0])
-close(draw({...layer,motion:{x:0,y:0,scale:2,rotation:Math.PI/4}}),[0,0,255,255])
+close(draw({...layer,objectMotion:{x:.8,y:0,scale:1,rotation:0}}),[0,0,255,255])
+close(draw({...layer,objectMotion:{x:0,y:0,scale:2,rotation:Math.PI/4}}),[0,0,255,255])
 // A reused material must reset its transform for the next ordinary layer.
 close(draw(layer),[0,0,255,255])
+// Actual object placement moves a mesh while the background stays put.
+scene.remove(mesh)
+const object = new Mesh(new PlaneGeometry(.3,.3), new MeshBasicMaterial({color:0xff0000}))
+object.matrixAutoUpdate=false;object.matrix.makeTranslation(-.5,0,0);scene.add(object)
+function renderObject(){renderer.setClearColor(0x008000,1);renderer.clear();renderer.render(scene,camera)}
+function pixel(x,y){const b=new Uint8Array(4);renderer.readRenderTargetPixels(output,x,y,1,1,b);return [...b]}
+renderObject();const backdrop=pixel(75,50);close(pixel(25,50),[255,0,0,255])
+applyObjectTransition(object.matrix,{x:1,y:0,scale:1.5,rotation:Math.PI/4});object.matrixWorldNeedsUpdate=true
+renderObject();close(pixel(25,50),backdrop);close(pixel(75,50),[255,0,0,255]);close(pixel(5,5),backdrop)
 if(renderer.getContext().getError()!==0)throw Error('WebGL error')
-window.result='PASS: production shaders compile; true midpoint crossfade, motion clipping/rotation/scale, and pooled-material reset match expected pixels'
+window.result='PASS: production shaders compile; crossfade pixels are correct; object translation/scale/rotation move the mesh while background pixels stay fixed'
 `
 const built = await build({ stdin: { contents: source, resolveDir: process.cwd(), loader: 'ts' }, bundle: true, write: false, format: 'iife' })
 const browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader'] })

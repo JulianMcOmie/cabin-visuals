@@ -2,6 +2,7 @@
 // types (Track/Block/Note) live in src/editor/types.ts; the dependency points one
 // way (engine → document), which keeps the editor independent of the engine.
 
+import type { ObjectTransitionMotion } from './objectTransition'
 import type { Matrix4 } from 'three'
 import type { LocalTransform, TransformCtx } from '../../instruments/types'
 import type { LyricClip, LyricNotePayload, PhotoPad, StyleLane, VideoPad } from '../../types'
@@ -170,6 +171,8 @@ export interface ResolvedGraph {
 
 /** Per-frame state the renderer pulls for one object. */
 export interface ObjectState {
+  /** Also supplied to screen-anchored objects, which do not read world. */
+  objectMotion?: ObjectTransitionMotion
   /** The playhead this frame (fractional beats) - THE time source for instruments.
    *  The pause invariant: every visual is a pure function of this (+ params/notes),
    *  so a static playhead is a static frame and scrub == playback. */

@@ -49,9 +49,11 @@ test('Fluid Impact center automation and Particle X/Y placement retain compact r
     const plan = compileParticlePlan(chain, 0, beat, placement)!
     assert.ok(plan, `automated field at ${beat} remains compact`)
     assert.equal(plan.cpuPrefix, undefined)
-    assert.ok(plan.program?.operationKinds?.some(kind => kind > 3))
-    const fieldStage = plan.program!.operationKinds!.findIndex(kind => kind === 4)
-    const fieldOffset = plan.program!.operationOffsets![fieldStage]
+    assert.ok(plan.program?.operationKinds, 'the GPU program includes operation kinds')
+    assert.ok(plan.program.operationOffsets, 'the GPU program includes operation offsets')
+    assert.ok(plan.program.operationKinds.some(kind => kind > 3))
+    const fieldStage = plan.program.operationKinds.findIndex(kind => kind === 4)
+    const fieldOffset = plan.program.operationOffsets[fieldStage]
     if (beat === 0 || beat === 4) assert.equal(plan.matrices[fieldOffset + 3], beat === 0 ? -1 : 1,
       'the automated center is sampled into the GPU field, not merely retained in the document')
     const copies = resolveVisualCopies(chain, beat, placement)

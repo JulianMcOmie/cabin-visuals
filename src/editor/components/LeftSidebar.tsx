@@ -436,6 +436,7 @@ const MOVER_DESCRIPTIONS: Record<string, string> = {
   wallpaper: 'Repeats a motif across a plane with translation, mirror, half-turn or quarter-turn symmetry. Motif offsets place the seed inside every cell.',
   scatter: 'Creates a stable seeded cloud of copies: uniform, clustered, or evenly spread without a grid. Impact Scatter can then animate the cloud.',
   fractal: 'Builds smaller copies recursively into snowflakes and branching trees. Depth adds complete generations; shrink sets the scale of each generation.',
+  dance: 'Place X, Y, and Z notes where the swing should pass through center at speed. Dance alternates direction and smoothly joins the beats for you.',
   waypoints: 'Lay out positions (line, grid, ring, or custom) - each MIDI row sends the object to its position, and curve rows switch how it travels (linear, ease, or spring physics with overshoot).',
   mover: 'The fundamental mover: translate, rotate or orbit its objects, with notes bursting, holding or oscillating the motion - one lane, seven rows.',
   physics: 'Notes are values on a lane and real mechanics join them: gravity, a spring or drag, with the launch solved so the object lands on each value exactly on the beat - or crests there, or is simply kicked and left to bounce.',

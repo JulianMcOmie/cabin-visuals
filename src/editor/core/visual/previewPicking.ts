@@ -17,7 +17,7 @@ function passOf(scene: Scene | null): HitPass | undefined {
 /** Both renderers raycast their own mounted objects and the same layer mapping. */
 export function pickRenderedTrack(camera: Camera, nx: number, ny: number): PreviewHit {
   if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return null
-  for (const layer of layersUnderPoint(getCompositionLayers(), nx, ny, camera.projectionMatrix.elements[5] / camera.projectionMatrix.elements[0])) {
+  for (const layer of layersUnderPoint(getCompositionLayers(), nx, ny)) {
     ndc.set(layer.ndcX, layer.ndcY)
     raycaster.setFromCamera(ndc, camera)
     const hit = pickHoverTarget(raycaster, layer.sceneId, passOf)
