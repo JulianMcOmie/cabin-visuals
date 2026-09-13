@@ -5,6 +5,7 @@ import { InstrumentPending } from '../../instruments/lazyInstrument'
 import { isFullFrameTrack } from '../../instruments/types'
 import { useProjectStore } from '../../store/ProjectStore'
 import { InstancedScaleContext } from '../../core/visual/instancedFrame'
+import { hasUnbatchableEffects } from '../../core/visual/instancedEffects'
 import { SceneIdContext } from '../../core/visual/sceneContext'
 import { registerHoverTarget } from '../../core/visual/hoverTargets'
 import { VisualEngineContext, useVisualEngine } from '../../core/visual/VisualEngineContext'
@@ -23,11 +24,11 @@ const NO_SCALE: readonly [] = []
  * and this component's ONLY job besides mounting the instanced component is
  * deciding when the track still needs it. Fallback triggers (each carries
  * per-occurrence machinery the instanced path does not reproduce):
- * - Any NON-Scale effect instance on the track, or any effect on a group
- *   ancestor - transform effects wrap per-copy groups, material effects patch
+ * - An active NON-Scale effect on the track, or an active group-ancestor
+ *   effect - transform effects wrap per-copy groups, material effects patch
  *   per-mesh materials, shader effects render each occurrence offscreen, and
- *   even a disabled instance can be switched on by an `enabled` automation
- *   lane, so presence alone falls back. The track's OWN Scale effects stay on
+ *   disabled instances fall back if an `enabled` automation lane can switch
+ *   them on (unknown effects also keep the fallback). Own Scale effects stay on
  *   the instanced path: they're a per-track scalar the placement math lifts
  *   outside the copy transform (postMoverScale), delivered via
  *   InstancedScaleContext - and Scale is the most common effect, so falling
@@ -59,13 +60,7 @@ export function InstancedObjectRenderer({
   const def = getInstrument(instrumentId)
   const hasFallbackEffects = useProjectStore((s) => {
     const tracks = (preview?.tracks ?? s.scenes[sceneId]?.tracks)
-    const own = tracks?.[trackId]?.effects
-    if (own?.some((p) => p.pluginId !== 'scale')) return true
-    for (let cur = tracks?.[trackId]?.parentId; cur != null; cur = tracks?.[cur]?.parentId) {
-      const t = tracks?.[cur]
-      if (t?.type === 'group' && t.effects?.length) return true
-    }
-    return false
+    return hasUnbatchableEffects(tracks, trackId)
   })
   // The per-id slice keeps its reference across foreign edits, so this only
   // re-renders on this track's own effect edits.

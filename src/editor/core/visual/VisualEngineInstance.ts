@@ -1,4 +1,5 @@
 import { isDirectParticlePopulation } from './directParticleScene'
+import { hasUnbatchableEffects } from './instancedEffects'
 import { Color, Matrix4, type Scene as ThreeScene } from 'three'
 import { applyColorShiftToColor, HEX_COLOR } from './colorShift'
 import { sceneTrackView } from '../sceneTrack'
@@ -341,11 +342,8 @@ export function createVisualEngine() {
     for (const [sceneId, graph] of graphs) for (const obj of graph.objects) {
       const chain = obj.moverAndSplitterChain
       const tracks = graphInputs.get(sceneId)!.tracks
-      let eligible = obj.instrumentId === 'particle' && obj.maskSourceIds.length === 0
-        && !tracks[obj.trackId]?.effects?.some(effect => effect.pluginId !== 'scale')
-      for (let parent = tracks[obj.trackId]?.parentId; eligible && parent; parent = tracks[parent]?.parentId) {
-        if (tracks[parent]?.type === 'group' && tracks[parent]?.effects?.length) eligible = false
-      }
+      const eligible = obj.instrumentId === 'particle' && obj.maskSourceIds.length === 0
+        && !hasUnbatchableEffects(tracks, obj.trackId)
       const candidate = eligible ? compileParticlePlan(chain, particlePlanVersion + 1) : undefined
       const capacity = candidate ? structuralCopyCount(chain, candidate.count) : 0
       const plan = candidate && capacity >= 16384 && capacity <= 0x7fffffff ? candidate : undefined

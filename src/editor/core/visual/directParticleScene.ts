@@ -1,5 +1,6 @@
 import type { Scene } from '../../types'
 import type { ObjectListEntry } from './VisualEngineInstance'
+import { hasUnbatchableEffects } from './instancedEffects'
 
 /** Shared stream fields have bounded local sampling, but their modifier chains
  * still evaluate CPU copies. Admit a bounded population to direct presentation;
@@ -21,10 +22,7 @@ export function isDirectParticlePopulation(
     if (entry.instrumentId !== 'particleStream' && entry.instrumentId !== 'light') return false
     const tracks = scenes?.[entry.sceneId]?.tracks, track = tracks?.[entry.trackId]
     if (!track || staggered.has(entry.trackId) || entry.maskSourceIds.length
-      || track.effects?.some(effect => effect.pluginId !== 'scale')) return false
-    for (let parent = track.parentId; parent; parent = tracks?.[parent]?.parentId) {
-      if (tracks?.[parent]?.type === 'group' && tracks[parent].effects?.length) return false
-    }
+      || hasUnbatchableEffects(tracks, entry.trackId)) return false
     if (entry.instrumentId === 'light') {
       lights += copyCount(entry.trackId)
       if (lights > 16) return false
