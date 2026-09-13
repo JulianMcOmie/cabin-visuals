@@ -16,6 +16,8 @@ mockModule('./mux.ts', { namedExports: { Mp4Writer: class {
 } } })
 mockModule('./videoEncode.ts', { namedExports: {
   exportEncoderConfig: () => ({}), exportEncodeOptions: () => undefined,
+  ParallelVideoEncodingError: class extends Error {},
+  createParallelVideoEncodeSession: async () => { throw new Error('unexpected parallel session') },
   createVideoEncodeSession: () => ({
     encodeFrame: async () => { encoded++ }, flush: async () => {}, dispose: () => { disposed++ },
   }),
@@ -72,13 +74,13 @@ test('prepare failure and cancellation release the pin without returning a parti
       else assert.equal((await pending).blob, null)
       assert.equal(encoded, 0)
       assert.equal(finalized, 0)
-      assert.equal(disposed, 1)
+      assert.equal(disposed, 0)
       assert.equal(unpinned, 1)
     } finally { registerFrameDriver(null) }
   }
 })
 
-test('a failed or conflicting pin disposes its encoder without releasing another capture', async () => {
+test('a failed or conflicting pin creates no encoder and does not release another capture', async () => {
   const { runExport } = await engine
   disposed = finalized = 0
   let unpinned = 0
@@ -88,7 +90,7 @@ test('a failed or conflicting pin disposes its encoder without releasing another
   })
   try {
     await assert.rejects(runExport({ ...defaultSettings('test'), watermark: false }, { bpm: 120, beatsPerBar: 4, totalBars: 1 }), /already running/)
-    assert.equal(disposed, 1)
+    assert.equal(disposed, 0)
     assert.equal(finalized, 0)
     assert.equal(unpinned, 0)
   } finally { registerFrameDriver(null) }

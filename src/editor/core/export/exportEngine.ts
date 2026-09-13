@@ -8,7 +8,7 @@ import type { Track } from '../../types'
 import { makeTimebase, type BeatRange, type ExportSettings, type ExportTimebase } from './types'
 import { getFrameDriver, type FrameDriver } from './frameDriver'
 import { Mp4Writer } from './mux'
-import { createVideoEncodeSession, exportEncoderConfig, exportEncodeOptions } from './videoEncode'
+import { createVideoEncodeSession, createParallelVideoEncodeSession, ParallelVideoEncodingError, exportEncoderConfig, exportEncodeOptions, type VideoEncodeSession } from './videoEncode'
 import { encoderProducesMuxableChunks } from './support'
 import { renderAudioTrack, encodeAudioIntoWriter, willRenderAudio, EXPORT_AUDIO_SAMPLE_RATE } from './audioRender'
 import { createWatermarkCompositor } from './watermark'
@@ -56,12 +56,20 @@ export async function walkFrames(
   fps: number,
   sink: (frameIndex: number, beat: number, driver: FrameDriver) => void | Promise<void>,
   hooks: WalkHooks = {},
+  frameIndexAt?: (step: number, totalFrames: number) => number,
 ): Promise<boolean> {
   const driver = getFrameDriver()
   if (!driver) throw new Error('Export driver is not mounted')
 
-  for (let i = 0; i < timebase.frameCount; i++) {
+  for (let step = 0; step < timebase.frameCount; step++) {
     if (hooks.signal?.aborted) return false
+    // Only submission order changes; beat, timestamp and poster keep the real
+    // frame index. Async media stays chronological to avoid repeated seeks.
+    if (frameIndexAt && framePreparers.size > 0) {
+      throw new ParallelVideoEncodingError('Async frame inputs require sequential export')
+    }
+    const i = frameIndexAt ? frameIndexAt(step, timebase.frameCount) : step
+    if (!Number.isSafeInteger(i) || i < 0 || i >= timebase.frameCount) throw new Error('Invalid export frame index')
     // Range shift lives here and only here: media timestamps stay index-based.
     const beat = timebase.startBeat + (i * timebase.bpm) / (60 * fps)
     // Let async per-frame inputs (video seeks) settle before the render
@@ -72,8 +80,8 @@ export async function walkFrames(
     }
     driver.renderFrame(beat, (i * 1000) / fps)
     await sink(i, beat, driver)
-    if (i % fps === 0) {
-      hooks.onProgress?.(i, timebase.frameCount)
+    if (step % fps === 0) {
+      hooks.onProgress?.(step, timebase.frameCount)
       // Yield a macrotask so the progress UI paints and aborts can land even
       // when the sink never truly waits (fast encoders, or the no-op sink).
       await yieldMacrotask()
@@ -100,6 +108,21 @@ export interface ExportResult {
   /** A still of a real encoded frame (data URL) for the completion screen;
    *  null when the export was aborted before reaching it, or capture failed. */
   poster: string | null
+}
+
+/** Execution policy is independent of the saved document and output quality.
+ * Explicit concurrency supports reproducible performance comparisons. */
+export interface ExportExecutionOptions {
+  videoConcurrency?: 1 | 2 | 4
+}
+
+function defaultVideoConcurrency(settings: ExportSettings, frameCount: number): 1 | 2 | 4 {
+  // The measured win is high-resolution constant-quality encoding. Leave
+  // short clips, lower tiers, other rate controls and small devices alone.
+  if (settings.rateControl !== 'quality' || Math.min(settings.width, settings.height) < 2160
+    || frameCount < settings.fps * 4 || typeof navigator === 'undefined') return 1
+  return navigator.hardwareConcurrency >= 8 && frameCount >= settings.fps * 8
+    ? 4 : navigator.hardwareConcurrency >= 4 ? 2 : 1
 }
 
 // The completion screen's still. Grabbed INSIDE the frame sink - the same task
@@ -134,6 +157,29 @@ export async function runExport(
   settings: ExportSettings,
   project: ProjectTime,
   hooks: WalkHooks = {},
+  execution: ExportExecutionOptions = {},
+): Promise<ExportResult> {
+  try {
+    try {
+      return await runExportAttempt(settings, project, hooks, execution)
+    } catch (error) {
+      // A fresh writer preserves the chosen quality on devices that cannot
+      // keep compatible encoders alive. Cancellation must never restart.
+      if (!(error instanceof ParallelVideoEncodingError) || hooks.signal?.aborted) throw error
+      return await runExportAttempt(settings, project, hooks, { videoConcurrency: 1 })
+    }
+  } catch (error) {
+    if (!hooks.signal?.aborted) throw error
+    const timebase = makeTimebase(project.bpm, project.beatsPerBar, project.totalBars, settings.fps, project.range)
+    return { blob: null, frameCount: timebase.frameCount, poster: null }
+  }
+}
+
+async function runExportAttempt(
+  settings: ExportSettings,
+  project: ProjectTime,
+  hooks: WalkHooks,
+  execution: ExportExecutionOptions,
 ): Promise<ExportResult> {
   const driver = getFrameDriver()
   if (!driver) throw new Error('Export driver is not mounted')
@@ -182,7 +228,7 @@ export async function runExport(
 
   // Both tracks start at PTS 0, using the same beat arithmetic. Adding an AAC
   // priming offset to video breaks that alignment (see mux.test.ts).
-  const video = createVideoEncodeSession(settings, writer)
+  let video: VideoEncodeSession | undefined
 
   const watermark = settings.watermark ? createWatermarkCompositor(settings.width, settings.height) : null
 
@@ -196,6 +242,14 @@ export async function runExport(
     driver.pin(settings.width, settings.height)
     pinned = true
     await driver.prepare?.(timebase.startBeat)
+    if (hooks.signal?.aborted) return { blob: null, frameCount: timebase.frameCount, poster: null }
+    // prepare() may mount media and register async inputs. Check eligibility
+    // after the exact export tree has settled, including worker handoff.
+    const concurrency = execution.videoConcurrency ?? defaultVideoConcurrency(settings, timebase.frameCount)
+    video = concurrency > 1 && framePreparers.size === 0
+      ? await createParallelVideoEncodeSession(settings, writer, { concurrency, signal: hooks.signal })
+      : createVideoEncodeSession(settings, writer, { signal: hooks.signal })
+    const session = video
     const completed = await walkFrames(
       timebase,
       settings.fps,
@@ -204,9 +258,10 @@ export async function runExport(
         assertExportSize(canvas, settings.width, settings.height)
         const source = watermark ? watermark.compose(canvas) : canvas
         if (i === posterFrame) poster = captureStill(source)
-        return video.encodeFrame(source, i, settings.fps)
+        return session.encodeFrame(source, i, settings.fps)
       },
       hooks,
+      video.frameIndexAt,
     )
     if (!completed) {
       video.dispose()
@@ -214,10 +269,12 @@ export async function runExport(
     }
     await video.flush()
     const audioBuffer = await audioPromise
+    if (hooks.signal?.aborted) return { blob: null, frameCount: timebase.frameCount, poster: null }
     if (audioBuffer) await encodeAudioIntoWriter(audioBuffer, writer)
+    if (hooks.signal?.aborted) return { blob: null, frameCount: timebase.frameCount, poster: null }
     return { blob: writer.finalize(), frameCount: timebase.frameCount, poster }
   } catch (err) {
-    video.dispose()
+    video?.dispose()
     throw err
   } finally {
     // Also clears the beat override - the next live frame recomputes the scene

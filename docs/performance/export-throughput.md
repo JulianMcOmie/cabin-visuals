@@ -9,6 +9,77 @@ and pipelines frames into WebCodecs with bounded backpressure. Reducing the
 number of rendered frames or rendering at a lower resolution would change the
 output; this change does neither.
 
+## Implemented: parallel encoding for an already-batched project
+
+A real project with two 32-copy Radials, 1,024 particles and Impact Warp was
+already batched. It has no attached effects, so the disabled-effect fix below
+does not accelerate it. CPU evaluation took approximately 0.073 ms/frame;
+4K60 Maximum (H.264 QP21) encoding was the bottleneck.
+
+The same saved eight-second range was measured through `runExport`, including
+setup, rendering, capture, encoding, flush, poster capture and MP4 muxing. The
+local comparison used the same in-app Chromium browser on the M1 Max; project
+loading and copying the completed Blob to the local test server were excluded.
+The project snapshot stayed local and was not edited or committed.
+
+| Configuration | Complete export | Encoded frames |
+| --- | ---: | ---: |
+| Original serial exporter, final warmed comparison | 9.97 s | 480 |
+| Two concurrent encoders | 5.61 s | 480 |
+| Four concurrent encoders | 4.83 s | 480 |
+| Final automatic policy, no concurrency override | 5.03 s | 480 |
+
+The automatic result is approximately **2× faster at the same output
+settings** (2.1× in the explicit four-encoder run against a 10.18-second warm
+baseline). All 480 frames from the final automatic run are also pixel-identical
+to the original. A cold first local export took 16.11 seconds and is excluded
+from that ratio. Production Chrome's original export measured 9.81 seconds twice,
+consistent with the warmed local baseline. Standard quality previously took
+5.74 seconds, but changes rate control and is not the basis of this improvement.
+
+All three Maximum outputs are 20,258,441 bytes long. Their MP4 container
+hashes differ, but **all 480 fully decoded frames are pixel-identical**, including
+every segment boundary. `ffprobe` and parsed H.264 sample data confirm uniform
+60 fps timestamps/durations, an exact eight-second duration, and IDR keyframes
+at 0, 2, 4 and 6 seconds. All 33 direct-seek checks match full-decode frame hashes;
+strict full decoding reports no errors. A 9.5-second/570-frame comparison also
+exercises encoder reuse and a shortened final GOP: 11.88 seconds serial versus
+6.86 seconds parallel, with all 570 decoded frames pixel-identical.
+
+The implementation interleaves render submission across independent two-second
+segments (for example, frames 0, 120, 240, 360, then 1, 121, 241, 361). Each
+encoder receives consecutive frames within its segment. Original frame indices
+determine beats and timestamps, and compressed output reaches the muxer in
+timeline order. Raw frames are queued in small bounded batches; compressed
+reordering is capped at 64 MiB. Merely adding encoders while submitting entire
+segments chronologically did not offer useful overlap without huge raw buffers.
+
+Default parallelism applies to Maximum at 4K or above: two encoders for clips
+of at least four seconds on devices reporting four CPU threads, and four for
+eight-second clips on eight-thread devices. Concurrent preflight checks actual
+support and compatible decoder configurations. Runtime incompatibility discards
+the partial writer and retries once serially. Cancellation never retries or
+returns a partial file. Async frame preparers retain sequential rendering;
+eligibility is checked after the exact export tree mounts. Other quality modes,
+lower resolutions and short clips retain the original execution policy.
+
+For paired measurements, `runExport(settings, project, hooks,
+{ videoConcurrency: 1 | 2 | 4 })` overrides execution without changing output
+settings or the saved document. Compare fresh encoder sessions after warming the
+renderer, include `flush` and `finalize`, and decode every output frame. Focused
+tests live in `parallelVideoEncode.test.ts`, `videoEncodeSession.test.ts` and
+`exportEngine.parallel.test.ts`; they also exercise failures, resource limits,
+partial segments, exact time/range arithmetic and cancellation during audio.
+
+Validation on main `dcc992e0` plus the parallel change: all 1,784 tests pass,
+including automatic policy selection for the exact 4K60 Maximum/eight-second
+case. TypeScript and focused ESLint checks pass. Performance measurements above
+used the preceding main `63c8895e`; the intervening fog effect is inactive in
+this project and adds no render pass to it.
+
+This is a measured improvement for the actual encoder-bound workload. A
+10–100× whole-export improvement at these settings has not been demonstrated.
+
 ## Implemented: disabled effects retain batching
 
 A Particle track with a disabled Glow effect previously lost both its pooled
@@ -32,7 +103,7 @@ does not accelerate a track that already uses the compact GPU renderer.
 
 ## How to interpret the measurements
 
-The probes use disposable Chrome storage on this machine's Apple M1 Max and
+The earlier synthetic probes below use disposable Chrome storage on this machine's Apple M1 Max and
 native ANGLE Metal. They do not load or modify an existing browser project.
 These are development-build observations, not a promise for every GPU, particle
 size, effect chain or export quality setting.
@@ -132,9 +203,9 @@ permits frame dropping in realtime mode.
   per-copy shader effects can change overlaps, masks and nonlinear processing.
 - A dedicated worker export renderer could improve editor responsiveness.
   Moving the same GPU work to a worker does not itself make it render faster.
-- Chunked export can use independent beat ranges, then merge the encoded
-  tracks and render audio once. Local chunks compete for the same GPU and media
-  engine; large scaling would require multiple machines/GPUs, transfer and
+- Parallel local segments now provide the measured improvement above. They
+  still compete for the same GPU and media engine; much larger scaling would
+  require multiple machines/GPUs, transfer and
   startup costs, exact timestamp/keyframe handling, and additional infrastructure.
 - Sequential source-video decoding can avoid repeatedly decoding a GOP for
   every frame in video-heavy projects. It does not explain dense procedural
@@ -167,7 +238,7 @@ Results, including raw timing samples, system information and pixel comparisons,
 are saved under `artifacts/export-performance/`. That directory is ignored by
 Git. The three probe scripts and this report retain the reproduction path.
 
-Validation on main commit `61d76c52` plus this change: all 1,743 tests pass;
+Historical validation of the disabled-effect change on main `61d76c52`: all 1,743 tests pass;
 TypeScript, focused ESLint checks and `git diff --check` pass. The shared-motion
 benchmark prerequisite is included in that main commit. Timing observations
 above come from the original benchmark run before the main integration.

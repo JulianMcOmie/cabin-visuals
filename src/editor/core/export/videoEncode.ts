@@ -1,10 +1,12 @@
-// The WebCodecs video side: one hardware VideoEncoder, chunks streamed straight
-// into the muxer, and the backpressure gate the frame loop leans on - encode()
-// is fire-and-forget, so without the gate a fast walk would balloon the queue.
+// WebCodecs video sessions: bounded frame submission and encoded output to the
+// muxer. Eligible high-resolution exports can use multiple independent GOP
+// encoders; the serial session remains the compatibility path.
 
 import { videoCodec, type ExportSettings } from './types'
 import type { Mp4Writer } from './mux'
 import { assertExportSize } from './exportSurface'
+import { createGopEncodeSession } from './parallelVideoEncode'
+export { ParallelVideoEncodingError } from './parallelVideoEncode'
 
 /** Encoder queue depth the loop tolerates before waiting on 'dequeue'. Small on
  *  purpose: memory stays flat and cancel latency stays at a few frames. */
@@ -34,6 +36,9 @@ function quantizerFor(settings: ExportSettings): number | null {
 }
 
 export interface VideoEncodeSession {
+  /** Optional render order for independently encoded contiguous GOPs. The
+   * sink still receives the original frame index and uses its exact PTS. */
+  frameIndexAt?(step: number, totalFrames: number): number
   /** Encode one canvas frame; resolves once the encoder queue has drained below the cap. */
   encodeFrame(canvas: HTMLCanvasElement, frameIndex: number, fps: number): Promise<void>
   /** Drain the queue and close the encoder. Call once after the last frame. */
@@ -71,22 +76,46 @@ export function exportEncodeOptions(settings: ExportSettings): VideoEncoderEncod
 export function createVideoEncodeSession(
   settings: ExportSettings,
   writer: Mp4Writer,
+  options: { signal?: AbortSignal } = {},
 ): VideoEncodeSession {
   let error: Error | null = null
+  let encoder: VideoEncoder | undefined
+  let disposed = false
+  const waiters = new Set<() => void>()
+  const notify = () => { for (const resolve of waiters) resolve(); waiters.clear() }
+  const close = () => {
+    options.signal?.removeEventListener('abort', cancel)
+    if (!disposed) {
+      disposed = true
+      try { if (encoder && encoder.state !== 'closed') encoder.close() } catch { /* already closed */ }
+    }
+    notify()
+  }
+  const fail = (failure: unknown) => {
+    error ??= failure instanceof Error ? failure : new Error(String(failure))
+    close()
+  }
+  const cancel = () => fail(new DOMException('Video encoding was cancelled', 'AbortError'))
 
-  const encoder = new VideoEncoder({
-    output: (chunk, meta) => writer.addVideoChunk(chunk, meta),
-    error: (e) => { error = e instanceof Error ? e : new Error(String(e)) },
+  const activeEncoder = new VideoEncoder({
+    output: (chunk, meta) => {
+      if (disposed) return
+      try { writer.addVideoChunk(chunk, meta) } catch (failure) { fail(failure) }
+    },
+    error: fail,
   })
-  encoder.configure(exportEncoderConfig(settings))
+  encoder = activeEncoder
+  try { activeEncoder.configure(exportEncoderConfig(settings)) }
+  catch (failure) { fail(failure); throw error }
   const encodeOptions = exportEncodeOptions(settings)
-
-  const dequeue = () =>
-    new Promise<void>((resolve) => encoder.addEventListener('dequeue', () => resolve(), { once: true }))
+  options.signal?.addEventListener('abort', cancel, { once: true })
+  if (options.signal?.aborted) cancel()
+  activeEncoder.addEventListener?.('dequeue', notify)
 
   return {
     async encodeFrame(canvas, frameIndex, fps) {
       if (error) throw error
+      if (disposed) throw new DOMException('Video encoder is closed', 'InvalidStateError')
       assertExportSize(canvas, settings.width, settings.height)
       // Same task as the render - the GL surface still holds this frame, so no
       // pixel readback and no preserveDrawingBuffer anywhere.
@@ -102,23 +131,51 @@ export function createVideoEncodeSession(
       })
       // Keyframe every 2 seconds of output: scrubbable, negligible size cost.
       try {
-        encoder.encode(frame, { keyFrame: frameIndex % (fps * 2) === 0, ...encodeOptions })
+        activeEncoder.encode(frame, { keyFrame: frameIndex % (fps * 2) === 0, ...encodeOptions })
+      } catch (failure) {
+        fail(failure)
       } finally {
         frame.close()
       }
-      while (encoder.encodeQueueSize > MAX_QUEUE) await dequeue()
+      while (!error && activeEncoder.encodeQueueSize > MAX_QUEUE) await new Promise<void>(resolve => waiters.add(resolve))
       if (error) throw error
     },
     async flush() {
       if (error) throw error
-      await encoder.flush()
-      if (error) throw error
-      encoder.close()
+      try {
+        await activeEncoder.flush()
+        if (error) throw error
+        close()
+      } catch (failure) {
+        fail(failure)
+        throw error
+      }
     },
     dispose() {
-      try {
-        if (encoder.state !== 'closed') encoder.close()
-      } catch { /* already closed */ }
+      if (!disposed) cancel()
     },
+  }
+}
+
+/** Reserves and validates concurrent encoders before returning a render order.
+ * Unsupported configurations and device resource limits keep the serial path.
+ * A failure after encoding starts requires the caller to discard its writer
+ * and retry serially; it is never safe to concatenate a retry onto that file. */
+export async function createParallelVideoEncodeSession(
+  settings: ExportSettings,
+  writer: Mp4Writer,
+  options: { concurrency?: 1 | 2 | 4; signal?: AbortSignal } = {},
+): Promise<VideoEncodeSession> {
+  const concurrency = options.concurrency ?? 2
+  if (options.signal?.aborted) throw new DOMException('Video encoding was cancelled', 'AbortError')
+  if (concurrency === 1) return createVideoEncodeSession(settings, writer, options)
+  try {
+    return await createGopEncodeSession({
+      config: exportEncoderConfig(settings), encodeOptions: exportEncodeOptions(settings),
+      fps: settings.fps, concurrency, signal: options.signal,
+    }, (chunk, meta) => writer.addVideoChunk(chunk, meta))
+  } catch (error) {
+    if (options.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+    return createVideoEncodeSession(settings, writer, options)
   }
 }
