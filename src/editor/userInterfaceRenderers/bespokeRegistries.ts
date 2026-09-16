@@ -39,6 +39,7 @@ export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRenderer
   radialMotion: lazyPanel(() => import('./RadialMotionMoverUserInterface'), 'RadialMotionMoverUserInterfaceRenderer'),
   radial: lazyPanel(() => import('./RadialSplitterUserInterface'), 'RadialSplitterUserInterfaceRenderer'),
   line: lazyPanel(() => import('./LineSplitterUserInterface'), 'LineSplitterUserInterfaceRenderer'),
+  path: lazyPanel(() => import('./PathSplitterUserInterface'), 'PathSplitterUserInterfaceRenderer'),
   symmetry: lazyPanel(() => import('./SymmetrySplitterUserInterface'), 'SymmetrySplitterUserInterfaceRenderer'),
   parametricPattern: lazyPanel(() => import('./FormationSplitterUserInterface'), 'ParametricPatternUserInterfaceRenderer'),
   scatter: lazyPanel(() => import('./FormationSplitterUserInterface'), 'ScatterSplitterUserInterfaceRenderer'),

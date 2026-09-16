@@ -445,6 +445,7 @@ const MOVER_DESCRIPTIONS: Record<string, string> = {
   radialMotion: 'Nests three rings of copies inside each other and keeps every depth turning on its own - MIDI collapses, blooms, freezes or reverses any of them.',
   radial: 'Splits its object into N copies fanned around a circle - movers below it move each copy along its own axes.',
   line: 'Marches N copies back into depth - or along any axis you aim - with sizes ramping step by step, the original object staying put.',
+  path: 'Copies flow along a curved or waving path, growing and changing color with position. MIDI selects forward or reverse at three speeds; open paths fade out and closed paths loop continuously.',
   symmetry: 'Folds its object across mirror lines through its own center - one line for a plain mirror image, more for a kaleidoscope.',
   impactPulse: "Punches its objects' size on every note - a snare's envelope, instant at the onset and gone again, with optional squash-and-stretch.",
   fluidImpact: 'Sends a pressure burst through a formation on every hit, dispersing copies into curling currents before they spring back into place.',

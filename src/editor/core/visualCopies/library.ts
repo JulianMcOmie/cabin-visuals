@@ -48,6 +48,7 @@ import { symmetrySplitter } from './symmetry'
 import { tunnelSplitter } from './tunnel'
 import { duplicateTrailSplitter } from './duplicateTrail'
 import { approachSplitter } from './approach'
+import { pathSplitter } from './path'
 import { applySplitterSize, splitterSize, SPLITTER_SIZE_MIN, SPLITTER_SIZE_PARAM } from './splitterSize'
 import { GRID_COLOR, LINE_COLOR, RADIAL_COLOR } from './identityColors'
 
@@ -867,6 +868,7 @@ export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   hueRotateColorizer,
   radialSplitter,
   lineSplitter,
+  pathSplitter,
   staggerSplitter,
   symmetrySplitter,
   gridSplitter,

@@ -243,3 +243,6 @@ export const POLAR_WARP_COLOR = '#ce79e8'
 
 /** Fluid Impact's pale aqua, shared by its lane and console. */
 export const FLUID_IMPACT_COLOR = '#5bddd4'
+
+/** Copies flowing along a path. */
+export const PATH_COLOR = '#62d8f5'
