@@ -25,11 +25,8 @@ export function trackPreviewTargets(id: string, tracks: Record<string, Track>): 
     else if (track.parentId) {
       const parent = tracks[track.parentId]
       if (parent?.type === 'group' && (track.type === 'mover' || track.type === 'splitter')) {
-        // Group devices affect only members ABOVE them in the pipeline.
-        for (const child of parent.childIds) {
-          if (child === id) break
-          visit(child)
-        }
+        // A group's device chain processes its entire member subtree.
+        visit(parent.id)
       } else {
         // A device nested in a splitter/mover still belongs to the containing
         // instrument, not to a subtree with no renderable object of its own.

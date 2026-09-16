@@ -51,8 +51,8 @@ export type TrackType =
   // (inherited by the subtree via world-matrix composition), automation lanes
   // on those params, an effect chain broadcast to member objects, and
   // mover/splitter children that append to each member's chain - a chain child
-  // applies to the members ABOVE it in the group's child order (children read
-  // as a top-to-bottom pipeline), composed per member in the member's own
+  // applies to every member regardless of row position (device order still
+  // defines the group's pipeline), composed per member in the member's own
   // frame. Purely additive in persistence: Track's shape is unchanged.
   | 'group'
   // A rack of alternative DEVICES with one MIDI lane over them: each child gets

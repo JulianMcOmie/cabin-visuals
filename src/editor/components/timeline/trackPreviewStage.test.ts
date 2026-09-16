@@ -61,3 +61,19 @@ test('preview evaluation leaves the main evaluator unchanged and keeps pause det
   stage.computeAtBeat(7)
   assert.deepEqual(stage.getVisualCopies('cube').map(copy => [...copy.transform.elements]), transforms)
 })
+
+test('a leading group device previews complete member chains, including nested groups', () => {
+  const group = track('group', { type: 'group', childIds: ['groupHue', 'inner', 'laterHue'] })
+  const inner = track('inner', { type: 'group', parentId: 'group', childIds: ['cube', 'innerSplit'] })
+  const groupHue = track('groupHue', { ...hue, id: 'groupHue', parentId: 'group' })
+  const laterHue = track('laterHue', { ...groupHue, id: 'laterHue', inputValues: { rotate: 0.25, mode: 1, spread: 0 } })
+  const innerSplit = track('innerSplit', { ...split, id: 'innerSplit', parentId: 'inner', inputValues: { copies: 2 } })
+  const source = { ...project, rootTrackIds: ['group'], tracks: {
+    ...project.tracks, cube: { ...cube, parentId: 'inner', childIds: ['split'] }, group, inner, groupHue, laterHue, innerSplit,
+  } }
+  const stage = trackPreviewStage('groupHue', source)
+  assert.equal(stage.snapshot.tracks.laterHue, undefined, 'later group devices stay out of this stage')
+  const preview = evaluate('groupHue', source)
+  assert.equal(preview.getVisualCopies('cube').length, 6, 'both the object and nested group splitters are included')
+  for (const copy of preview.getVisualCopies('cube')) assert.equal(copy.colorShift.hue, 0.5)
+})

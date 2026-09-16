@@ -30,7 +30,7 @@ function affected(tracks: Record<string, Track>, rootTrackIds: string[]) {
 test('a root Polar Warp follows existing global target routing', () => {
   assert.deepEqual(affected({ a: object('a'), b: object('b'), warp: { ...warp(), targets: ['a', 'b'].map((id) => ({ port: '', scope: { kind: 'track' as const, id }, amount: 1 })) } }, ['a', 'b', 'warp']), ['a', 'b'])
 })
-test('a group Polar Warp affects preceding member subtrees, never outsiders', () => {
+test('a group Polar Warp affects member subtrees, never outsiders', () => {
   const tracks = {
     g: track({ id: 'g', type: 'group', childIds: ['a', 'nested', 'warp'] }),
     a: object('a', 'g'), nested: track({ id: 'nested', type: 'group', parentId: 'g', childIds: ['b'] }),

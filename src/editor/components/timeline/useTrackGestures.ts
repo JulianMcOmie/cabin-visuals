@@ -44,7 +44,7 @@ function rootAncestorId(tracks: Record<string, Track>, id: string): string {
 function canPasteChildUnder(track: Track, copiedRoot: Track): boolean {
   if (track.type === 'audio') return false
   if (copiedRoot.type === 'mover' || copiedRoot.type === 'splitter') {
-    // Groups take chain children too (they broadcast to the members above), and
+    // Groups take chain children too (they broadcast to every member), and
     // a switcher takes them as rows of its rack.
     return (track.type === 'base' && !track.parentId) || track.type === 'group'
       || track.type === 'switcher'

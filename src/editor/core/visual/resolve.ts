@@ -987,7 +987,7 @@ function weaveTfAutomationLanes(
 /** True when this mover/splitter belongs to a parent's chain rather than routing
  *  itself: a LOCAL entry of its parent instrument's chain, a FRAME entry of a
  *  parent mover/splitter (visualCopies/moverFrame.ts), a GROUP entry - a
- *  chain child of a group track, broadcast to the member objects above it (the
+ *  chain child of a group track, broadcast to all member objects (the
  *  group pass in resolveProject) - or a SWITCHER's device, which reaches the
  *  chain through its rack's span. Everything else (root level, or under an
  *  instrument the registry no longer knows) is a mover "without a parent": it
@@ -1081,7 +1081,7 @@ function priorChainPrefixes(trackId: string, p: ProjectSnapshot): MoverOrSplitte
   if (isChainChild(target, p)) {
     const parent = p.tracks[target.parentId!]
     if (!parent) return []
-    // A GROUP's chain child broadcasts to the member objects above it; one
+    // A GROUP's chain child broadcasts to all member objects; one
     // MIDI lane must serve all of them, so the row set uses the largest member
     // count. Per member: its own chain, then this group's entries above the
     // target. (Entries a nested inner group contributes in between are ignored
@@ -1111,7 +1111,7 @@ function priorChainPrefixes(trackId: string, p: ProjectSnapshot): MoverOrSplitte
           if (child.muted || (anySolo && !child.solo)) continue
           const entries = resolveChainChildEntries(child, p)
           entriesAbove.push(...(pastTarget ? entries.filter((e) => e.emitsCopyClocks) : entries))
-        } else if (!pastTarget) {
+        } else {
           collectObjects(cid)
         }
       }
@@ -1461,10 +1461,9 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
   }
 
   // Chain children of a GROUP track broadcast to the group's members: each
-  // mover/splitter child appends to the chain of every OBJECT descended from
-  // the member siblings ABOVE it (children read as a top-to-bottom pipeline,
-  // so an entry applies to what the group has already stacked; an entry above
-  // every member applies to nothing). Entries compose per member in the
+  // mover/splitter child appends to the chain of every member OBJECT, regardless
+  // of where member rows sit among the devices. Only device-to-device order
+  // defines the group's pipeline. Entries compose per member in the
   // member's own frame - "everyone gets the motion", not an orbit of the
   // group's origin; the group's own tf* transform and lanes are the
   // formation-as-one channel. Groups process deepest-first (reversed DFS), so
@@ -1480,12 +1479,12 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     const anySolo = chainChildren.some((c) => c.solo)
     // The scene instrument holds no members in its childIds - the scene's
     // objects stay at root in the document. Every object in the scene is a
-    // member, and they are all "above" it, so an entry anywhere in its chain
+    // member, so an entry anywhere in its chain
     // reaches all of them. (The scene node is FIRST in DFS, so it is the last
     // group this reversed walk visits: its entries land after every real
     // group's, which is the right nesting order for an outermost container.)
     const isSceneNode = isSceneTrackId(gid)
-    const membersAbove: ResolvedObject[] = isSceneNode ? [...objects] : []
+    const members = isSceneNode ? objects : objectsInSubtree(gid).map((id) => objectById.get(id)!)
     for (const cid of g.childIds ?? []) {
       const child = p.tracks[cid]
       if (!child) continue
@@ -1517,12 +1516,7 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
           backdropChain.push(...entries)
           continue
         }
-        for (const member of membersAbove) member.moverAndSplitterChain.push(...entries)
-      } else {
-        for (const oid of objectsInSubtree(cid)) {
-          const member = objectById.get(oid)
-          if (member) membersAbove.push(member)
-        }
+        for (const member of members) member.moverAndSplitterChain.push(...entries)
       }
     }
   }
