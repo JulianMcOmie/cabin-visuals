@@ -33,7 +33,7 @@ test('MIDI changes speed continuously, rests in gaps, resumes held notes and scr
 })
 
 test('size and color belong to position, not copy index or direction', () => {
-  const s = settings({ copies: 3, length: 8, fadeEnd: 0 })
+  const s = settings({ copies: 3, length: 8, fadeEnd: 0, repeat: 0 })
   const base = copies(s)
   const moved = copies(s, 1, [note(64)])
   near(moved[0].transform.elements[12], base[1].transform.elements[12])
@@ -46,8 +46,8 @@ test('size and color belong to position, not copy index or direction', () => {
   assert.equal(base[2].colorShift.tint, s.endColor)
 })
 
-test('open path fades completely and retains stable invisible slots outside its bounds', () => {
-  const s = settings({ copies: 5, length: 8, fadeEnd: 0.5 })
+test('Once mode fades completely and retains stable invisible slots outside its bounds', () => {
+  const s = settings({ copies: 5, length: 8, fadeEnd: 0.5, repeat: 0 })
   const base = copies(s)
   near(base[2].opacity, 1)
   near(base[3].opacity, 0.5)
@@ -57,6 +57,56 @@ test('open path fades completely and retains stable invisible slots outside its 
   assert.ok(exited.every(c => c.opacity === 0))
   assert.ok(copies(s, 30, [note(61, 0, 30)]).every(c => c.opacity === 0))
   near(copies(settings({ copies: 1, fadeStart: 0.2 }))[0].opacity, 0)
+})
+
+test('open paths repeat by default in both directions on straight, curved and sine paths', () => {
+  for (const shape of [{}, { bend: 3 }, { amplitude: 1, frequency: 2 }]) {
+    for (const motion of [1, 2]) {
+      const s = settings({ ...shape, copies: 12, motion })
+      const period = pathGeometry(s, 0).length / s.speed
+      const initial = copies(s)
+      for (const lap of [1, 20, 0, 3]) {
+        const frame = copies(s, period * lap)
+        assert.equal(frame.length, 12)
+        assert.ok(frame.some(c => c.opacity > 0))
+        frame.forEach((c, i) => {
+          c.transform.elements.forEach((v, j) => near(v, initial[i].transform.elements[j]))
+          assert.equal(c.colorShift.tint, initial[i].colorShift.tint)
+          near(c.opacity, initial[i].opacity)
+        })
+      }
+      const withoutRepeat = { ...s }
+      delete (withoutRepeat as Partial<PathSettings>).repeat
+      assert.deepEqual(copies(withoutRepeat, period * 3), copies(s, period * 3))
+    }
+  }
+})
+
+test('straight-path recycling fades at the exit and resets appearance at the entrance', () => {
+  const s = settings({ copies: 1, motion: 1, length: 8 })
+  const exiting = copies(s, 8 - 1e-5)[0]
+  assert.ok(exiting.opacity < 1e-8)
+  near(exiting.transform.elements[0], s.endSize, 1e-5)
+  const respawn = copies(s, 8)[0]
+  near(respawn.transform.elements[12], -4)
+  near(respawn.transform.elements[0], s.startSize)
+  assert.equal(respawn.colorShift.tint, s.startColor)
+  assert.equal(respawn.opacity, 1)
+  const fadingIn = copies({ ...s, fadeStart: 0.2 }, 8.8)[0]
+  near(fadingIn.opacity, 0.5)
+})
+
+test('MIDI recycling keeps distinct evenly spaced slots and stops where notes end', () => {
+  const s = settings({ copies: 4, length: 8, fadeEnd: 0 })
+  for (const pitch of [60, 62, 64, 61, 63, 65]) {
+    const entry = pathSplitter.resolve({ settings: s, notes: [note(pitch, 0, 100)] })
+    const frame = resolveVisualCopies([entry], 99.25)
+    const x = frame.map(c => c.transform.elements[12]).sort((a, b) => a - b)
+    assert.equal(new Set(x).size, 4)
+    for (let i = 1; i < x.length; i++) near(x[i] - x[i - 1], 2)
+    assert.ok(frame.every(c => c.opacity === 1 && c.transform.elements[12] >= -4 && c.transform.elements[12] < 4))
+    assert.deepEqual(resolveVisualCopies([entry], 100), resolveVisualCopies([entry], 150))
+  }
 })
 
 test('closed loop wraps both directions without a position, scale, color or opacity seam', () => {

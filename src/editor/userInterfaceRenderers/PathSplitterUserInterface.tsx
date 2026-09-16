@@ -6,8 +6,8 @@ import { pathPoint, pathSplitter, type PathSettings } from '../core/visualCopies
 import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
 import { resolveVisualCopies } from '../core/visualCopies/resolveVisualCopies'
 import { PATH_COLOR } from '../core/visualCopies/identityColors'
-import { consolePanel, usePreviewLoop, type PanelPreviewProps } from './console'
-import type { UserInterfaceRendererDefinition } from './types'
+import { bindPanel, consolePanel, Segmented, usePreviewLoop, type PanelPreviewProps } from './console'
+import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 
 function PathPreview({ values, strings }: PanelPreviewProps) {
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -61,10 +61,17 @@ function PathPreview({ values, strings }: PanelPreviewProps) {
       <span className="absolute bottom-2 left-3 text-[8px] tracking-wider text-[var(--text-muted)]">{settings.motion === 0 ? 'DEMO · FORWARD / REVERSE' : 'MOTION PREVIEW'}</span>
     </div>
     <p className="px-4 pt-2 text-[10px] text-[var(--text-muted)]">
-      {settings.pathMode === 1 ? 'Loop: size and color reach their end values halfway around, then return smoothly.' : 'Size and color follow position. Copies disappear beyond either end.'}
+      {settings.pathMode === 1 ? 'Loop: size and color reach their end values halfway around, then return smoothly.'
+        : settings.repeat !== 0 ? 'Copies fade at the end and respawn at the start. Reverse travel recycles in the opposite direction.'
+          : 'Size and color follow position. Copies disappear beyond either end.'}
       {' '}MIDI: hold a row for 1×, 2×, or 4× travel in either direction; release to stop.
     </p>
   </>
+}
+
+function RepeatControl({ parameters }: { parameters: readonly UserInterfaceParameter[] }) {
+  const binding = bindPanel(parameters).select('repeat', { optional: true })
+  return binding ? <div className="px-4 pt-2"><Segmented b={binding} /></div> : null
 }
 
 const PathConsole = consolePanel({
@@ -73,6 +80,7 @@ const PathConsole = consolePanel({
   preview: PathPreview,
   rows: [
     { segmented: 'pathMode', name: 'Path' },
+    { custom: RepeatControl, claims: ['repeat'] },
     { row: ['copies', 'length*:WIDTH', 'size'], spill: true },
     { row: [{ param: 'bend', bipolar: true, optional: true }, 'loopHeight?:HEIGHT', 'amplitude:WAVE', 'frequency:CYCLES'] },
     { segmented: 'motion', name: 'Motion' },

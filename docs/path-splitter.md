@@ -20,9 +20,15 @@ End, with Color mix controlling how strongly it tints the source. All three
 appearance properties follow current path position, including during reverse
 motion. On a loop, End values occur halfway around and return smoothly to Start
 at the seam; the loop never fades. On an open path, Fade in/out specify the
-fraction of path used to fade at each end. Copies outside the path remain
-structural slots with zero opacity; they reappear if MIDI brings them back.
-An open path does not respawn copies automatically.
+fraction of path used to fade at each end. **Travel → Repeat** is the default:
+copies that reach the end respawn at the start, even on a straight path. Reverse
+travel recycles from the start back to the end. Each new pass uses the size,
+color and opacity at its new position. Slots are spaced evenly without
+duplicating the endpoints. Existing open paths also default to Repeat.
+
+Choose **Travel → Once** for a single pass: copies outside the path remain
+structural slots with zero opacity and reappear if MIDI brings them back.
+Closed loops always repeat; their shape is independent of open-path recycling.
 
 Speed is world units per beat in the splitter's local frame, measured along
 the path at beat zero. Static curves use an arc-length lookup for constant

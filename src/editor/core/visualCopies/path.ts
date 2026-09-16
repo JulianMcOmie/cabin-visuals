@@ -13,6 +13,7 @@ export interface PathSettings {
   copies: number
   size: number
   pathMode: number
+  repeat: number
   length: number
   loopHeight: number
   bend: number
@@ -139,6 +140,7 @@ export const pathSplitter: MoverOrSplitterDefinition<PathSettings> = {
     { key: 'copies', label: 'Copies', min: 1, max: 128, step: 1, default: 12, integer: true },
     SPLITTER_SIZE_PARAM,
     { key: 'pathMode', label: 'Path', type: 'select', options: [{ value: 0, label: 'Open' }, { value: 1, label: 'Loop' }], default: 0 },
+    { key: 'repeat', label: 'Travel', type: 'select', options: [{ value: 1, label: 'Repeat' }, { value: 0, label: 'Once' }], default: 1, showIf: 'pathMode=0' },
     { key: 'length', label: 'Width', min: 0.1, max: 40, step: 0.1, default: 8 },
     { key: 'loopHeight', label: 'Loop height', min: 0.1, max: 40, step: 0.1, default: 5, showIf: 'pathMode=1' },
     { key: 'bend', label: 'Bend', min: -20, max: 20, step: 0.1, default: 0, showIf: 'pathMode=0' },
@@ -162,6 +164,9 @@ export const pathSplitter: MoverOrSplitterDefinition<PathSettings> = {
   resolve({ settings: s, notes }) {
     const count = clamp(Math.round(s.copies), 1, 128)
     const loop = s.pathMode === 1
+    // Repetition is independent of geometry. Missing settings also repeat,
+    // so existing open paths gain the continuous stream without a migration.
+    const repeating = loop || s.repeat !== 0
     const travel = pathTravelSampler(notes)
     const referenceGeometry = pathGeometry(s, 0)
     const geometryAt = memoizeEvaluation((beat: number) =>
@@ -177,8 +182,10 @@ export const pathSplitter: MoverOrSplitterDefinition<PathSettings> = {
         const geometry = geometryAt(beat)
         const travelProgress = progressAt(beat)
         return Array.from({ length: count }, (_, i) => {
-          const raw = (loop ? i / count : count === 1 ? 0 : i / (count - 1)) + travelProgress
-          const p = loop ? wrap(raw) : clamp(raw, 0, 1)
+          // Repeating paths exclude the endpoint: it is the next cycle's
+          // first slot, and including both would overlap two copies forever.
+          const raw = (repeating ? i / count : count === 1 ? 0 : i / (count - 1)) + travelProgress
+          const p = repeating ? wrap(raw) : clamp(raw, 0, 1)
           // A closed path has no end: the progression returns smoothly on
           // the second half, preventing a scale/color jump on every lap.
           const t = loop ? (1 - Math.cos(TAU * p)) / 2 : p
@@ -187,7 +194,7 @@ export const pathSplitter: MoverOrSplitterDefinition<PathSettings> = {
           const slot = orientation.clone().multiply(new Matrix4().makeTranslation(...position))
           const color = start.clone()
           mixOklabLinearRgb(color, end, t)
-          let opacity = loop || (raw >= 0 && raw <= 1) ? 1 : 0
+          let opacity = repeating || (raw >= 0 && raw <= 1) ? 1 : 0
           if (!loop) {
             if (s.fadeStart > 0) opacity *= smoothstep(p / s.fadeStart)
             if (s.fadeEnd > 0) opacity *= smoothstep((1 - p) / s.fadeEnd)
