@@ -36,6 +36,13 @@ interface HistoryState {
   /** Clear stacks AND cancel any in-flight burst. For document loads (project
    *  open), where the hydrate setState must not become an undoable step. */
   reset: () => void
+  /** Commit the in-flight burst as its own undo step now. Bracketing an
+   *  external change with two checkpoints makes it exactly ONE step (the file
+   *  sync does this, so Ctrl+Z reverts an edit the cabin CLI made). */
+  checkpoint: () => void
+  /** Drop the in-flight burst without recording it (an external reload that
+   *  changed nothing shouldn't leave an empty undo step). */
+  discardPending: () => void
 }
 
 // Module-level transient state (not reactive - it's plumbing).
@@ -108,6 +115,11 @@ export const useHistoryStore = create<HistoryState>((set, get) => {
       if (timer) { clearTimeout(timer); timer = null }
       pendingBase = null
       set({ past: [], future: [] })
+    },
+    checkpoint: () => flush(),
+    discardPending: () => {
+      if (timer) { clearTimeout(timer); timer = null }
+      pendingBase = null
     },
   }
 })

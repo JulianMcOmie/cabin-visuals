@@ -54,10 +54,36 @@ export interface CompositionLayer {
    * composition contract. Omitted means the scene's default camera. */
   cameraId?: string
   blendMode?: 'normal' | 'add' | 'multiply' | 'screen'
+  /**
+   * A code composition's own shader for this layer (instruments/code/composition.ts):
+   * the quad covers `viewport` and the fragment decides everything - where the
+   * scene lands, how it warps, what is masked. When set, partition/flash/blur
+   * are the shader's business and are ignored.
+   */
+  shader?: LayerShader
+}
+
+/** A per-layer fragment shader. Inputs: `uniform sampler2D tScene` (the layer's
+ *  scene, finished), `varying vec2 vUv` (0..1 across the layer's viewport),
+ *  `uniform float uOpacity, uAspect, uBeat`, `uniform vec2 uResolution`, plus
+ *  `uniforms` (numbers or 2/3/4-vectors) and `scenes` (more finished scenes as
+ *  samplers). Write straight-alpha gl_FragColor. */
+export interface LayerShader {
+  /** One compiled program per key: keep it stable per distinct fragment. */
+  key: string
+  fragment: string
+  uniforms?: Record<string, number | readonly number[]>
+  /** Extra scenes this shader samples: uniform name → scene id, bound as
+   *  `uniform sampler2D <name>` (auto-declared). Those scenes render (and their
+   *  instruments run) this frame even though they aren't layers themselves -
+   *  morphs, displacements and wipes between two live scenes. */
+  scenes?: Record<string, string>
 }
 
 export interface CompositionResolveContext {
   beat: number
+  /** Seconds per beat at the project tempo (optional for older call sites/tests). */
+  secPerBeat?: number
   beatsPerBar: number
   totalBars: number
   scenes: Record<string, Scene>

@@ -16,8 +16,31 @@ import type { CompositionInstrumentDef } from './types'
 
 // Order is the library's order on Main (LeftSidebar derives its card list from
 // listCompositionInstruments), so the plainest composer comes first.
-const DEFINITIONS: CompositionInstrumentDef[] = [sceneDirector, sceneSwitcherDirector, cutDirector, radialCutDirector, cropDirector]
+const BUILT_IN: CompositionInstrumentDef[] = [sceneDirector, sceneSwitcherDirector, cutDirector, radialCutDirector, cropDirector]
+const DEFINITIONS: CompositionInstrumentDef[] = [...BUILT_IN]
 const BY_ID = new Map(DEFINITIONS.map((def) => [def.id, def]))
+
+/**
+ * Code compositions (instruments/custom/**, `export const composition`) register
+ * here from instruments/index.ts - they are deliberately NOT imported by this
+ * module. ProjectStore imports this file, and under HMR every module that
+ * imports an edited one re-executes: a static import of the generated list made
+ * each edit to a code composition (or anything in instruments/code) rebuild
+ * ProjectStore - a fresh, empty project under the editor. Re-registering an id
+ * (the hot-reloaded def) replaces it in place; built-in ids can't be taken.
+ */
+export function registerCompositions(defs: readonly CompositionInstrumentDef[]) {
+  for (const def of defs) {
+    if (BUILT_IN.some((b) => b.id === def.id)) {
+      console.error(`[compositions] code composition id "${def.id}" collides with a built-in - skipped`)
+      continue
+    }
+    const at = DEFINITIONS.findIndex((d) => d.id === def.id)
+    if (at >= 0) DEFINITIONS[at] = def
+    else DEFINITIONS.push(def)
+    BY_ID.set(def.id, def)
+  }
+}
 
 export function listCompositionInstruments(): CompositionInstrumentDef[] {
   return DEFINITIONS

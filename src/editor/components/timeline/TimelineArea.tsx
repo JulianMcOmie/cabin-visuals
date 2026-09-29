@@ -26,6 +26,7 @@ import {
   PLAYHEAD_TRIANGLE_HALF,
 } from '../../constants'
 import { computeRulerGrid } from '../rulerGrid'
+import { SongStrip } from '../../review/SongStrip'
 import { updateMidiActivityAtBeat } from './midiActivityRegistry'
 import { scrollLeftAroundBeat } from '../../utils/zoomAroundBeat'
 import { audioPickupBars } from '../../utils/audioPickup'
@@ -84,6 +85,8 @@ export function TimelineArea() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const scClientSizeRef = useRef<{ width: number; height: number } | null>(null)
   const rulerContentRef = useRef<HTMLDivElement>(null)
+  // The song strip (sections, energy, comment pins) scrolls exactly like the ruler.
+  const songStripContentRef = useRef<HTMLDivElement>(null)
   const clipRef = useRef<HTMLDivElement>(null)
   const blockDragGuideRef = useRef<HTMLDivElement>(null)
   const loopStartGuideRef = useRef<HTMLDivElement>(null)
@@ -135,6 +138,7 @@ export function TimelineArea() {
     if (rulerContentRef.current) {
       rulerContentRef.current.style.transform = `translateX(${-e.currentTarget.scrollLeft}px)`
     }
+    if (songStripContentRef.current) songStripContentRef.current.style.transform = `translateX(${-e.currentTarget.scrollLeft}px)`
     if (projectLengthEdgeRef.current) {
       projectLengthEdgeRef.current.style.transform = `translateX(${pickupPx + projectWidthPx - e.currentTarget.scrollLeft}px)`
     }
@@ -283,6 +287,7 @@ export function TimelineArea() {
     sc.scrollTop = tracksScrollTop
     horizontalZoomRef.current.scrollLeft = sc.scrollLeft
     if (rulerContentRef.current) rulerContentRef.current.style.transform = `translateX(${-tracksScrollLeft}px)`
+    if (songStripContentRef.current) songStripContentRef.current.style.transform = `translateX(${-tracksScrollLeft}px)`
   }, [])
 
   // Horizontal zoom is centered on the playhead for both the H slider and
@@ -312,6 +317,7 @@ export function TimelineArea() {
     if (rulerContentRef.current) {
       rulerContentRef.current.style.transform = `translateX(${-appliedScrollLeft}px)`
     }
+    if (songStripContentRef.current) songStripContentRef.current.style.transform = `translateX(${-appliedScrollLeft}px)`
     if (projectLengthEdgeRef.current) {
       projectLengthEdgeRef.current.style.transform = `translateX(${pickupPx + projectWidthPx - appliedScrollLeft}px)`
     }
@@ -478,6 +484,13 @@ export function TimelineArea() {
           contentRef={rulerContentRef}
           playheadHeadRef={playheadHeadRef}
           corner={rulerCorner}
+        />
+        <SongStrip
+          contentRef={songStripContentRef}
+          barWidthPx={barWidthPx}
+          timelineWidthPx={timelineWidthPx}
+          pickupPx={pickupPx}
+          labelWidth={labelWidth}
         />
       </div>
 

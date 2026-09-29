@@ -11,6 +11,9 @@ locations and verification. Use it before exploring renderer/engine internals.
   and paused skipping; return `false` if a frame cannot be applied yet.
 - [Console kit](../userInterfaceRenderers/console/index.ts) owns ordinary settings
   controls/layout/binding. Use `panelSpec` before adding a bespoke renderer.
+- Code instruments are one `.ts` file each in [custom/](custom/CLAUDE.md)
+  (`defineInstrument` / `defineComposition`), registered by `code/register.tsx`;
+  this checklist and the add-an-instrument guide don't apply to them.
 
 ## Specialized references
 

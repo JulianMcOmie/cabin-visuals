@@ -4,6 +4,7 @@ import { MultiBlockHeaders, MultiBlockLayer } from './MultiBlockLayer'
 import type { MidiBlockView } from './multiBlock'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type UIEvent as ReactScrollEvent } from 'react'
+import { isUntouchedScriptNote } from '../../core/provenance'
 import { useUIStore } from '../../store/UIStore'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { computeRulerGrid } from '../rulerGrid'
@@ -529,6 +530,7 @@ export function MidiEditor({
         word={noteWords ? (noteWords[note.id] ?? '') : undefined}
         wordEditable={!!(onNoteWordEdit && noteWords)}
         editValue={wordEdit?.noteId === note.id ? wordEdit.value : null}
+        scriptedBy={isUntouchedScriptNote(note, blockStartBeat) ? note.src!.by : undefined}
         onPointerDown={onNoteRectPointerDown}
         onPointerMove={handleNotePointerMove}
         onPointerOut={onNoteRectPointerOut}
@@ -538,7 +540,7 @@ export function MidiEditor({
         onWordEditCancel={onWordEditCancel}
       />
     )
-  }), [allNotes, pitchToRowIndex, rows, blockStartPx, pixelsPerBeat, selectedNoteIds,
+  }), [allNotes, pitchToRowIndex, rows, blockStartPx, blockStartBeat, pixelsPerBeat, selectedNoteIds,
     drawingNote?.id, noteWords, onNoteWordEdit, wordEdit, wordFontSize,
     onNoteRectPointerDown, handleNotePointerMove, onNoteRectPointerOut,
     onWordEditStart, onWordEditChange, onWordEditCommit, onWordEditCancel])

@@ -2,6 +2,8 @@
 export const previewRuntime = {
   worker: false, rendering: false, frameReady: false,
   directParticles: false,
+  /** The project uses a main-thread-only instrument (mainThreadInstruments.ts). */
+  mainThread: false,
   beat: 0, revision: -1, duration: 0, error: '',
   ambient: null as ImageData | null,
   presentMs: 0,

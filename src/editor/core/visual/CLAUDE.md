@@ -424,6 +424,16 @@ keeps worker evaluation and main rendering; worker startup/runtime failure falls
 back to both on main. These platform compatibility paths cannot provide full
 input/render independence.
 
+Code instruments and compositions (instruments/custom, one file each) exist only
+on the editor thread: `code/register.tsx` registers them at runtime and lists
+their ids in `mainThreadInstruments.ts`. A project that uses one previews with
+both evaluation and rendering on main - the worker-failure path, entered and left
+per document revision in VisualBeatSync (`previewRuntime.mainThread`); removing
+the last one hands the worker a fresh document. Export and the cabin daemon
+always evaluate on main. Moving them into the worker means registering the
+generated lists, their hot swap and the world services (lanes, camera claim,
+look) inside `preview.worker.ts`.
+
 The main Canvas always has `frameloop="never"`. `RenderGovernor` alone advances
 compatibility frames in later tasks, with an adaptive cooldown and pending-input
 check; export advances directly. `PreviewSceneRenderer` unmounts the duplicate

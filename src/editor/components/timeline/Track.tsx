@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { TrackReviewBadges } from '../../review/TrackReviewBadges'
 import { ChevronDown, ChevronRight, Move3d, Tag } from 'lucide-react'
 import { useUIStore } from '../../store/UIStore'
 import { withAlpha } from '../../userInterfaceRenderers/colorWheel'
@@ -491,6 +492,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
               {replacePreview?.name ?? track.name}
             </span>
           )}
+          <TrackReviewBadges trackId={track.id} createdBy={track.createdBy} />
           {hasChildren && (
             <button
               onClick={(e) => { e.stopPropagation(); setTrackCollapsed(track.id, !isCollapsed) }}

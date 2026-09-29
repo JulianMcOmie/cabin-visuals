@@ -50,3 +50,10 @@ next-env.d.ts
 /.next-isolated-*/
 /.next-build/
 /.next-build-*/
+
+# cabin CLI: on-disk projects (content, often copyrighted audio) and local state
+/projects/*
+!/projects/README.md
+/tools/cabin/.daemon.json
+/tools/cabin/.daemon.log
+/tools/cabin/.config.json

@@ -3,8 +3,9 @@ import { createVisualEngine } from './VisualEngineInstance'
 export { createVisualEngine } from './VisualEngineInstance'
 export type { ObjectListEntry, SceneBackdrop, VisualEngineInstance } from './VisualEngineInstance'
 
-/** The shared editor engine. Preview evaluators have their own state. */
-export const visualEngine = createVisualEngine()
+/** The shared editor engine - the one whose frame owns the grade (look.ts).
+ *  Preview evaluators have their own state. */
+export const visualEngine = createVisualEngine({ frameLooks: true })
 export const {
   setProject,
   syncParams,
@@ -25,5 +26,9 @@ export const {
   getVisualCopy,
   getVisualCopyCount,
   subscribeObjects,
-  getObjectList
+  getObjectList,
+  getResolvedNotes,
+  findTrackId,
+  isTrackActive,
 } = visualEngine
+export { layerSceneIds } from './layerScenes'

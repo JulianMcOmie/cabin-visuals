@@ -15,6 +15,7 @@ import { isExportPinned, subscribeExportPinned } from '../export/frameDriver'
 import { LatestPreview } from './latestPreview'
 import { PreviewFrameDecoder } from './previewFrameCodec'
 import { canRenderInWorker, type PreviewRequest, type PreviewResponse, type PreviewWorkerMessage } from './previewProtocol'
+import { usesMainThreadInstruments } from './mainThreadInstruments'
 import { getTrackPreviewSurfaces, subscribeTrackPreviews } from '../../components/timeline/trackPreviewRegistry'
 import { useGradientEditing } from '../../userInterfaceRenderers/gradientEditing'
 import { previewRuntime, setPreviewRendering, notifyPreviewFrame, setWorkerPicker, type PreviewHit } from './previewRuntime'
@@ -128,6 +129,28 @@ export function VisualBeatSync({ sceneId, sourceRef }: {
         return
       }
       const project = useProjectStore.getState()
+      // Code instruments exist only on this thread (mainThreadInstruments.ts):
+      // a project that uses one evaluates and renders here, like a missing
+      // worker. When the last one leaves, the worker gets a fresh document
+      // before it owns playback again.
+      if (usesMainThreadInstruments(project.scenes)) {
+        if (!previewRuntime.mainThread) {
+          previewRuntime.mainThread = true
+          previewRuntime.worker = false
+          previewRuntime.directParticles = false
+          clearPick()
+          restoreCanvas()
+        }
+        preloadProjectInstruments(project.scenes)
+        previewRuntime.frameReady = true
+        get().invalidate()
+        return
+      }
+      if (previewRuntime.mainThread) {
+        previewRuntime.mainThread = false
+        previewRuntime.worker = true
+        revision++; lastSentRevision = -1
+      }
       if (previewRuntime.directParticles) {
         if (syncProject.current !== project) {
           visualEngine.setProject(project)
@@ -258,7 +281,7 @@ export function VisualBeatSync({ sceneId, sourceRef }: {
       pending?.({ id, revision, error: 'Disposed', duration: 0 })
       stopProject(); stopVideo(); stopTime(); stopUI(); stopSurfaces(); stopGradient(); resize.disconnect(); stopExport()
       presentation.remove(); restoreCanvas()
-      previewRuntime.directParticles = false
+      previewRuntime.directParticles = false; previewRuntime.mainThread = false
       previewRuntime.worker = false; previewRuntime.frameReady = false; previewRuntime.revision = -1
     }
   }, [get, sourceRef])

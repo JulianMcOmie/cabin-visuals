@@ -29,13 +29,14 @@ export function serialize(state = useProjectStore.getState()): ProjectDocument {
     loopRegion: useTimeStore.getState().loopRegion,
     viewAspect: state.viewAspect,
     appliedTemplateId: state.appliedTemplateId,
+    markers: state.markers,
   }
 }
 
 /** Document → stores. The inverse of serialize(); same shape HistoryStore
  *  restores into on undo (setState shallow-merges; actions are untouched). */
 export function hydrate(doc: ProjectDocument) {
-  const { schemaVersion: _v, audioClips, videoClips, photoClips, loopRegion, viewAspect, appliedTemplateId, ...fields } = doc
+  const { schemaVersion: _v, audioClips, videoClips, photoClips, loopRegion, viewAspect, appliedTemplateId, markers, ...fields } = doc
   void _v
   const activeSceneId = fields.activeSceneId && fields.scenes[fields.activeSceneId]
     ? fields.activeSceneId
@@ -52,6 +53,7 @@ export function hydrate(doc: ProjectDocument) {
     // not inherit whatever the previously open project had.
     viewAspect: viewAspect ?? 'fill',
     appliedTemplateId: appliedTemplateId ?? null,
+    markers: markers ?? [],
   })
   useAudioStore.setState({ audioClips: audioClips ?? {} })
   useVideoStore.setState({ videoClips: videoClips ?? {} })

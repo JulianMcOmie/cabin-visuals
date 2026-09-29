@@ -43,6 +43,9 @@ export interface NoteRectProps {
   wordEditable: boolean
   /** The in-progress edit value while THIS note's word is being retyped. */
   editValue: string | null
+  /** Provenance: the script that wrote this note, while nobody has touched it
+   *  (core/provenance.ts) - drawn as a small dot; edit it and it's yours. */
+  scriptedBy?: string
   onPointerDown: (e: ReactPointerEvent<HTMLDivElement>, noteId: string) => void
   onPointerMove: (e: ReactPointerEvent<HTMLDivElement>) => void
   onPointerOut: () => void
@@ -65,6 +68,7 @@ export const NoteRect = memo(function NoteRect({
   word,
   wordEditable,
   editValue,
+  scriptedBy,
   onPointerDown,
   onPointerMove,
   onPointerOut,
@@ -95,7 +99,13 @@ export const NoteRect = memo(function NoteRect({
       onPointerMove={onPointerMove}
       onPointerOut={onPointerOut}
       onDoubleClick={wordEditable ? (e) => { e.stopPropagation(); onWordEditStart(noteId, word === '∅' ? '' : (word ?? '')) } : undefined}
+      title={scriptedBy ? `written by ${scriptedBy} - edit it and it's yours (re-running keeps your edits)` : undefined}
     >
+      {scriptedBy && (
+        <span
+          style={{ position: 'absolute', top: 2, left: 2, width: 4, height: 4, borderRadius: 2, background: 'rgba(10,12,16,0.55)', pointerEvents: 'none' }}
+        />
+      )}
       {word !== undefined && !editing && (
         <span
           style={{

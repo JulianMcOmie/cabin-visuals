@@ -1,4 +1,4 @@
-import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track } from '../editor/types'
+import { DEFAULT_SCENE_BACKGROUND, type Marker, type Scene, type Track } from '../editor/types'
 import type { AudioClip } from '../editor/store/AudioStore'
 import type { VideoClip } from '../editor/store/VideoStore'
 import type { PhotoClip } from '../editor/store/PhotoStore'
@@ -64,6 +64,9 @@ export interface ProjectDocument {
    *  it rides through create-from-template verbatim; applyTemplate re-stamps
    *  it. Additive within v9 - absent means unknown/scratch. */
   appliedTemplateId?: string | null
+  /** Named song sections (bars). Additive - absent in older saves, defaulted
+   *  to [] on hydrate. No schema bump. */
+  markers?: Marker[]
   /** Small captured frame (JPEG data URL) for the projects-page card. Written
    *  by autosave when the editor's canvas is available; absent otherwise. */
   thumbnail?: string
@@ -95,5 +98,6 @@ export function emptyDocument(): ProjectDocument {
     photoClips: {},
     loopRegion: null,
     viewAspect: 'fill',
+    markers: [],
   }
 }
