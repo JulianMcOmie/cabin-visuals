@@ -1,3 +1,4 @@
+import { requestPreviewMedia } from '../visual/previewMedia'
 import type { Source } from 'mediabunny'
 import { loadMediabunny } from './loadMediabunny'
 import { mintVideoPath, uploadVideoTo, getVideoUrl } from '../../../persistence/videoStorage'
@@ -60,15 +61,20 @@ export function isPublicAssetRef(ref: string): boolean {
  *  not fully downloaded). */
 export async function getVideoSource(ref: string): Promise<Source> {
   const { BlobSource, UrlSource } = await loadMediabunny()
-  const file = memFiles.get(ref)
-  if (file) return new BlobSource(file)
-  if (isPublicAssetRef(ref)) return new UrlSource(new URL(ref, window.location.origin).href)
-  // Hydrated clip: signed URLs expire, so resolve fresh per open.
-  return new UrlSource(await getVideoUrl(ref))
+  const source = await (requestPreviewMedia('video', ref) ?? getVideoSourceAsset(ref))
+  return typeof source === 'string' ? new UrlSource(source) : new BlobSource(source)
 }
 
 /** Drop this session's local hold on a ref. Bucket bytes are deliberately left
  *  alone - see core/audio/audioSource.ts removeAudio for the reasoning. */
 export function removeVideo(ref: string): void {
   memFiles.delete(ref)
+}
+
+/** Cloneable source for the preview worker; File/Blob shares immutable bytes. */
+export async function getVideoSourceAsset(ref: string): Promise<Blob | string> {
+  const file = memFiles.get(ref)
+  if (file) return file
+  if (isPublicAssetRef(ref)) return new URL(ref, window.location.origin).href
+  return getVideoUrl(ref)
 }

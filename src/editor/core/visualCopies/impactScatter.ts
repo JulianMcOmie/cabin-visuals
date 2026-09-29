@@ -425,7 +425,9 @@ interface Strike {
 
 export const impactScatterMover: MoverOrSplitterDefinition<ImpactScatterSettings> = {
   id: 'impactScatter',
+  particleExecution: { fallback: 'unported', reason: 'The legacy scatter field samples per-copy physical response tables and appearance channels that have not been ported to a GPU operation.' },
   label: 'Impact Scatter',
+  extras: true,
   kind: 'mover',
   identityColor: IMPACT_SCATTER_COLOR,
   params: [
@@ -570,6 +572,7 @@ export const impactScatterMover: MoverOrSplitterDefinition<ImpactScatterSettings
     const speedScale = Math.max(0.0001, Math.abs(tuning.blastSpeed))
 
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { beat, index, placementTransform }) {
         const placed = placementTransform
           ? placementTransform.clone().multiply(visualCopy.transform)

@@ -251,7 +251,7 @@ function ShapeSelector({ b }: { b: SelectBinding }) {
   const selected = Math.round(b.value)
   return (
     <div className="flex flex-col items-center gap-1">
-      <div className="flex overflow-hidden rounded-md border border-white/10">
+      <div className="flex overflow-hidden rounded-md border border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
         {b.def.options.map((option) => {
           const active = option.value === selected
           return (
@@ -261,7 +261,7 @@ function ShapeSelector({ b }: { b: SelectBinding }) {
               aria-pressed={active}
               title={`${option.label} falloff`}
               onClick={() => b.set(option.value)}
-              className={`px-1 pb-0.5 pt-1 ${active ? '' : 'bg-black/25 hover:bg-white/5'}`}
+              className={`px-1 pb-0.5 pt-1 ${active ? '' : 'bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)]'}`}
               style={active ? { background: accent } : undefined}
             >
               <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
@@ -276,8 +276,8 @@ function ShapeSelector({ b }: { b: SelectBinding }) {
           )
         })}
       </div>
-      <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">SHAPE</span>
-      <span className="font-mono text-[9px] text-white/70">
+      <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">SHAPE</span>
+      <span className="font-mono text-[9px] text-[var(--text-2)]">
         {b.def.options.find((option) => option.value === selected)?.label.toUpperCase() ?? ''}
       </span>
     </div>
@@ -291,7 +291,7 @@ function WordSelector({ b, label }: { b: SelectBinding; label: string }) {
   const selected = Math.round(b.value)
   return (
     <div className="flex flex-col items-center gap-1">
-      <div className="flex overflow-hidden rounded-md border border-white/10">
+      <div className="flex overflow-hidden rounded-md border border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
         {b.def.options.map((option) => {
           const active = option.value === selected
           return (
@@ -300,7 +300,7 @@ function WordSelector({ b, label }: { b: SelectBinding; label: string }) {
               aria-pressed={active}
               onClick={() => b.set(option.value)}
               className={`px-1.5 py-[3px] text-[8px] font-semibold tracking-[0.1em] ${
-                active ? 'text-black' : 'bg-black/25 text-white/45 hover:bg-white/5'
+                active ? 'text-black' : 'bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)]'
               }`}
               style={active ? { background: accent } : undefined}
             >
@@ -309,7 +309,7 @@ function WordSelector({ b, label }: { b: SelectBinding; label: string }) {
           )
         })}
       </div>
-      <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">{label}</span>
+      <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">{label}</span>
     </div>
   )
 }
@@ -386,7 +386,7 @@ export const ColorizerUserInterfaceRenderer: UserInterfaceRendererDefinition = (
           five pills are the panel's second subject, and the piano roll shows
           these same five colors on its five rows, so they need to read as a
           set you can scan against it. */}
-      <div className="flex items-end gap-1.5 border-t border-white/[0.06] px-3 pb-3 pt-2.5">
+      <div className="flex items-end gap-1.5 border-t border-[color-mix(in_srgb,var(--text)_6%,transparent)] px-3 pb-3 pt-2.5">
         {COLORIZER_FLASH_SLOTS.map((slot, index) => (
           <ColorWheelPill
             key={slot.key}
@@ -402,7 +402,7 @@ export const ColorizerUserInterfaceRenderer: UserInterfaceRendererDefinition = (
             pillTestId={index === 0 ? 'colorizer-color-pill' : `colorizer-color-pill-${index + 1}`}
           />
         ))}
-        <span className="mb-1 ml-auto text-[8px] font-semibold tracking-[0.12em] text-white/25">PALETTE</span>
+        <span className="mb-1 ml-auto text-[8px] font-semibold tracking-[0.12em] text-[var(--text-muted)]">PALETTE</span>
       </div>
       <More parameters={b.rest()} />
     </Console>

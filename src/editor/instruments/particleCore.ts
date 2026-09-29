@@ -1,5 +1,5 @@
-import { AdditiveBlending, Color, InstancedMesh, Matrix4, Mesh, ShaderMaterial, Vector3 } from 'three'
-import type { Camera, Intersection, PlaneGeometry } from 'three'
+import { AdditiveBlending, Color, DynamicDrawUsage, InstancedBufferAttribute, InstancedMesh, Matrix4, Mesh, PlaneGeometry, ShaderMaterial, Vector3 } from 'three'
+import type { Camera, Intersection } from 'three'
 import { FORCE_TRANSPARENT_KEY } from '../core/visual/animatedOpacity'
 import { PARTICLE_COLOR, PARTICLE_GLOW } from './Particle'
 
@@ -57,10 +57,14 @@ export function createParticleMaterial(): ShaderMaterial {
       uColor: { value: new Color(PARTICLE_COLOR) },
       uGlow: { value: PARTICLE_GLOW },
       uOpacity: { value: 1 },
+      // Timeline thumbnails may keep a subpixel point legible. Zero preserves
+      // the exact scene/export size; placement, fade and color never change.
+      uMinRadiusNdc: { value: 0 },
     },
     vertexShader: `
       uniform vec3 uColor;
       uniform float uOpacity;
+      uniform float uMinRadiusNdc;
       varying vec2 vUv;
       varying vec4 vColor;
       #ifdef USE_INSTANCING
@@ -72,11 +76,15 @@ export function createParticleMaterial(): ShaderMaterial {
         #ifdef USE_INSTANCING
           world *= instanceMatrix;
           vColor = particleColor;
+          #ifdef PARTICLE_OBJECT_OPACITY
+            vColor.a *= uOpacity;
+          #endif
         #else
           vColor = vec4(uColor, uOpacity);
         #endif
         float diameter = max(length(world[0].xyz), max(length(world[1].xyz), length(world[2].xyz)));
         vec4 center = viewMatrix * world[3];
+        diameter = max(diameter, uMinRadiusNdc * abs(center.z) / projectionMatrix[1][1]);
         center.xy += position.xy * diameter;
         gl_Position = projectionMatrix * center;
       }
@@ -94,4 +102,28 @@ export function createParticleMaterial(): ShaderMaterial {
       }
     `,
   })
+}
+
+/** Shared Particle geometry, glow, buffers and picking for ordinary copies and
+ * instruments arranging particles internally. Ordinary copies already pack their
+ * final fade; internal arrangements additionally need the object's wrapper fade. */
+export function createParticlePool(capacity: number, objectOpacity = false) {
+  const geometry = new PlaneGeometry(2, 2)
+  const colors = new InstancedBufferAttribute(new Float32Array(capacity * 4), 4).setUsage(DynamicDrawUsage)
+  geometry.setAttribute('particleColor', colors)
+  const material = createParticleMaterial()
+  if (objectOpacity) material.defines.PARTICLE_OBJECT_OPACITY = 1
+  const mesh = new InstancedMesh(geometry, material, capacity)
+  mesh.name = 'Particle instances'
+  mesh.count = 0
+  mesh.frustumCulled = false
+  mesh.instanceMatrix.setUsage(DynamicDrawUsage)
+  configureParticlePicking(mesh)
+  return { mesh, colors, capacity }
+}
+
+export function disposeParticlePool(pool: ReturnType<typeof createParticlePool>) {
+  pool.mesh.geometry.dispose()
+  pool.mesh.material.dispose()
+  pool.mesh.dispose()
 }

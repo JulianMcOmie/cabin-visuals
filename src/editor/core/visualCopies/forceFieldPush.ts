@@ -127,7 +127,9 @@ export function evaluateForceFieldTwist(
 
 export const forceFieldPushMover: MoverOrSplitterDefinition<ForceFieldPushSettings> = {
   id: 'forceFieldPush',
+  particleExecution: { fallback: 'unported', reason: 'The legacy world-space force field has no serialized GPU evaluator for its displaced affine transform.' },
   label: 'Force Field Pulse',
+  extras: true,
   kind: 'mover',
   identityColor: FORCE_FIELD_PUSH_COLOR,
   params: [
@@ -162,6 +164,7 @@ export const forceFieldPushMover: MoverOrSplitterDefinition<ForceFieldPushSettin
   resolve({ settings, notes }) {
     const center = new Vector3(settings.centerX, settings.centerY, settings.centerZ)
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { beat, placementTransform }) {
         const placedTransform = placementTransform
           ? placementTransform.clone().multiply(visualCopy.transform)

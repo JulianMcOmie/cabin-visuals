@@ -6,22 +6,13 @@
 // plain-number primitives stay where they are for non-param callers (ADSR
 // fields, mover inputs) and this is the one wrapper for everyone else.
 
-import { LaserKnob, formatKnobValue } from '../laserKnob'
+import { LaserKnob } from '../laserKnob'
 import { ColorWheelPill } from '../colorWheel'
 import { useConsoleAccent } from './Console'
 import type { ColorBinding, NumBinding } from './bindings'
-import { clamp } from '../../utils/math'
+import type { KnobValueCodec } from '../knobValueParsing'
 
-/** The index of the detent nearest to `value`. */
-function nearestDetent(detents: readonly number[], value: number): number {
-  let best = 0
-  for (let index = 1; index < detents.length; index++) {
-    if (Math.abs(detents[index] - value) < Math.abs(detents[best] - value)) best = index
-  }
-  return best
-}
-
-export function Knob({ b, label, accent, large, bipolar, suffix, format, detents, ariaLabel }: {
+export function Knob({ b, label, accent, large, bipolar, suffix, format, detents, ariaLabel, entry }: {
   /** Null renders nothing — panels pass lookups through without narrowing. */
   b: NumBinding | null | undefined
   /** Short all-caps caption; defaults to the def's label uppercased, '' drops
@@ -35,6 +26,7 @@ export function Knob({ b, label, accent, large, bipolar, suffix, format, detents
   bipolar?: boolean
   suffix?: string
   format?: (value: number) => string
+  entry?: KnobValueCodec
   /**
    * Uneven allowed stops (a musical-rate ladder): the knob runs in INDEX units
    * so clicks space evenly on the arc regardless of how non-uniform the values
@@ -48,33 +40,13 @@ export function Knob({ b, label, accent, large, bipolar, suffix, format, detents
   if (!b) return null
   const def = b.def
 
-  if (detents && detents.length > 0) {
-    const show = format ?? ((value: number) => formatKnobValue(value, def.step))
-    return (
-      <LaserKnob
-        value={nearestDetent(detents, b.value)}
-        min={0}
-        max={detents.length - 1}
-        step={1}
-        defaultValue={nearestDetent(detents, def.default)}
-        label={label ?? def.label.toUpperCase()}
-        ariaLabel={ariaLabel ?? def.label}
-        accent={accent ?? consoleAccent}
-        large={large}
-        bipolar={bipolar}
-        suffix={suffix}
-        format={(index) => show(detents[clamp(Math.round(index), 0, detents.length - 1)])}
-        onChange={(index) => b.set(detents[clamp(Math.round(index), 0, detents.length - 1)])}
-      />
-    )
-  }
-
   return (
     <LaserKnob
       value={b.value}
       min={def.min}
       max={def.max}
       step={def.step}
+      integer={def.integer}
       defaultValue={def.default}
       curve={def.curve ?? 1}
       label={label ?? def.label.toUpperCase()}
@@ -84,6 +56,8 @@ export function Knob({ b, label, accent, large, bipolar, suffix, format, detents
       bipolar={bipolar}
       suffix={suffix}
       format={format}
+      entry={entry}
+      detents={detents}
       onChange={b.set}
     />
   )

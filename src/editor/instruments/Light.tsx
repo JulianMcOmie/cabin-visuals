@@ -9,10 +9,7 @@ import { lazyInstrument } from './lazyInstrument'
 // mirrored into every render pass by core/visual/sceneLights.ts, which is also
 // where the "which passes see the light" story lives.
 //
-// Every visual scene is seeded with a "Lighting" group of these wearing the
-// old hardcoded rig's exact values (core/defaultLighting.ts, persistence
-// UPGRADES[17]); a scene with NO light tracks at all still gets the legacy
-// baked rig (VisualScene's fallback), so unseeded fixtures keep rendering.
+// Scenes start without lights; users add this instrument to light them.
 //
 // TYPE values are append-only - they are saved in track params.
 

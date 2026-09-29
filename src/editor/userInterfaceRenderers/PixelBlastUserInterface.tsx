@@ -10,7 +10,9 @@
 // became gutter-labelled sections; the header went (identity lives on the tab
 // rail).
 
-import { useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
+import { useKnobInteraction } from './useKnobInteraction'
+import { KnobValue } from './KnobValue'
 import { PALETTES } from '../instruments/PixelBlast'
 import {
   bindPanel,
@@ -31,29 +33,23 @@ const CELLS = 14
 /** A stepped cell meter - the 8-bit answer to a slider. Click or drag across the
  *  cells; the value snaps to the param's own step. Double-click resets. */
 function PixelMeter({ b }: { b: NumBinding | null }) {
-  const trackRef = useRef<HTMLDivElement>(null)
+  const { handlers } = useKnobInteraction({ min: b?.def.min ?? 0, max: b?.def.max ?? 1,
+    value: b?.value ?? 0, step: b?.def.step ?? 1, defaultValue: b?.def.default ?? 0,
+    onChange: value => b?.set(value), gesture: 'track', keyStep: true })
   if (!b) return null
   const { def, value, set } = b
   const frac = (value - def.min) / (def.max - def.min)
   const filled = Math.round(frac * CELLS)
 
-  const setFromClientX = (clientX: number) => {
-    const rect = trackRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const t = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-    const raw = def.min + t * (def.max - def.min)
-    set(Math.max(def.min, Math.min(def.max, Number((def.min + Math.round((raw - def.min) / def.step) * def.step).toFixed(4)))))
-  }
-
   const decimals = def.step < 1 ? 2 : 0
   return (
     <div className="mb-2.5">
       <div className="mb-1 flex items-baseline justify-between select-none">
-        <span className="text-[8px] font-semibold uppercase tracking-[0.12em] text-white/40" title={def.label}>{def.label}</span>
-        <span className="font-mono text-[9px] tabular-nums text-white/70">{value.toFixed(decimals)}</span>
+        <span className="text-[8px] font-semibold uppercase tracking-[0.12em] text-[var(--text-3)]" title={def.label}>{def.label}</span>
+        <KnobValue value={value} min={def.min} max={def.max} label={def.label} onChange={set}
+          className="font-mono text-[9px] tabular-nums text-[var(--text-2)]">{value.toFixed(decimals)}</KnobValue>
       </div>
       <div
-        ref={trackRef}
         role="slider"
         tabIndex={0}
         aria-label={def.label}
@@ -61,19 +57,7 @@ function PixelMeter({ b }: { b: NumBinding | null }) {
         aria-valuemax={def.max}
         aria-valuenow={value}
         title="Click or drag · double-click to reset"
-        onPointerDown={(event: ReactPointerEvent<HTMLDivElement>) => {
-          event.preventDefault()
-          event.currentTarget.setPointerCapture(event.pointerId)
-          setFromClientX(event.clientX)
-        }}
-        onPointerMove={(event: ReactPointerEvent<HTMLDivElement>) => {
-          if (event.currentTarget.hasPointerCapture(event.pointerId)) setFromClientX(event.clientX)
-        }}
-        onDoubleClick={() => set(def.default)}
-        onKeyDown={(event) => {
-          if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') { event.preventDefault(); set(Math.max(def.min, Number((value - def.step).toFixed(4)))) }
-          if (event.key === 'ArrowRight' || event.key === 'ArrowUp') { event.preventDefault(); set(Math.min(def.max, Number((value + def.step).toFixed(4)))) }
-        }}
+        {...handlers}
         className="flex h-[11px] cursor-pointer touch-none gap-[2px] outline-none focus-visible:ring-1 focus-visible:ring-white/50"
       >
         {Array.from({ length: CELLS }, (_, index) => (
@@ -94,7 +78,7 @@ function PixelSwitch({ b }: { b: BooleanBinding | null }) {
   const on = b.value >= 0.5
   return (
     <div className="mb-2.5 flex items-center justify-between">
-      <span className="text-[8px] font-semibold uppercase tracking-[0.12em] text-white/40 select-none">{b.def.label}</span>
+      <span className="text-[8px] font-semibold uppercase tracking-[0.12em] text-[var(--text-3)] select-none">{b.def.label}</span>
       <button
         role="switch"
         aria-checked={on}
@@ -115,7 +99,7 @@ function PixelSwitch({ b }: { b: BooleanBinding | null }) {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="px-3 pt-2">
-      <p className="mb-1.5 text-[7px] font-bold uppercase tracking-[0.22em] text-white/25 select-none">{title}</p>
+      <p className="mb-1.5 text-[7px] font-bold uppercase tracking-[0.22em] text-[var(--text-muted)] select-none">{title}</p>
       {children}
     </div>
   )
@@ -141,7 +125,7 @@ export const PixelBlastUserInterfaceRenderer: UserInterfaceRendererDefinition = 
       {/* The six baked palettes, keyed by pitch class, ARE this instrument's
           face - they stand where a preview window would. Reference, not a
           control. */}
-      <div className="border-b border-white/[0.06] bg-[#05070c] px-3 pb-2 pt-2.5">
+      <div className="border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[var(--bg-canvas-deep)] px-3 pb-2 pt-2.5">
         <div className="grid grid-cols-6 gap-1">
           {PALETTES.map((palette, index) => (
             <div key={index} className="flex flex-col gap-px" title={`Palette ${index + 1} · pitch classes ${index} and ${index + 6}`}>
@@ -151,7 +135,7 @@ export const PixelBlastUserInterfaceRenderer: UserInterfaceRendererDefinition = 
             </div>
           ))}
         </div>
-        <p className="mt-1.5 text-[8px] leading-3 text-white/30">pitch class picks the palette · octave picks the row</p>
+        <p className="mt-1.5 text-[8px] leading-3 text-[var(--text-muted)]">pitch class picks the palette · octave picks the row</p>
       </div>
 
       <Section title="Blast">
@@ -180,7 +164,7 @@ export const PixelBlastUserInterfaceRenderer: UserInterfaceRendererDefinition = 
               }}
             />
           )}
-          <span className="text-[8px] uppercase tracking-[0.1em] text-white/30 select-none">one grid cell</span>
+          <span className="text-[8px] uppercase tracking-[0.1em] text-[var(--text-muted)] select-none">one grid cell</span>
         </div>
         <PixelMeter b={pixelSize} />
         <PixelMeter b={spreadX} />

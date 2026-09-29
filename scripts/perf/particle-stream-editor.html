@@ -1,0 +1,35 @@
+<!doctype html><title>Particle Stream editor check</title><style>body{background:#111;color:#eee;font:14px system-ui}button{padding:8px;margin:5px}iframe{width:100%;height:850px;border:0}pre{white-space:pre-wrap;max-height:180px;overflow:auto}</style>
+<button id="setup">Load representative chain</button><button id="run">Measure editor playback</button><pre id="result">Waiting for the local editor. This fixture has two Particle Stream tracks, each with Mover → Radial → Mover → Polar Warp → Gradient → Radial → Cosine Palette. It is not a copy of the user's saved project.</pre><iframe src="/editor"></iframe>
+<script>
+const w=()=>document.querySelector('iframe').contentWindow, output=document.querySelector('pre');
+document.querySelector('#setup').onclick=()=>{
+ const win=w(),{project,ui,time}=win.__cabinStores,p=project.getState(),sceneId=p.sceneOrder.find(id=>!p.scenes[id].isMain),mainId=p.sceneOrder.find(id=>p.scenes[id].isMain);
+ const tracks={};const root=[];
+ for(let t=0;t<2;t++){
+ const id='stream'+t,ids=['move1','radial1','move2','warp','gradient','radial2','palette'].map(k=>id+k);
+ const base={id,name:'Particle Stream '+(t+1),instrumentId:'particleStream',type:'base',color:'#7dd3fc',muted:false,solo:false,childIds:ids,params:{size:.007,count:16,density:48,tfPosX:t?2:-2},blocks:[{id:id+'notes',startBar:0,durationBars:8,loop:true,notes:[0,1,2,3,4,5,6,7].map((v,i)=>({id:'n'+i,pitch:60+i%5,velocity:100,startBeat:v*2+.133,durationBeats:.25}))}]};tracks[id]=base;root.push(id);
+ const add=(i,type,name,inputValues={})=>tracks[ids[i]]={...base,id:ids[i],parentId:id,name,type,instrumentId:'',childIds:[],params:{},blocks:[],inputValues,...(type==='splitter'?{splitterId:name}:{moverId:name})};
+ add(0,'mover','mover',{mode:1,drive:1,cyclesPerBeat:.25}); add(1,'splitter','radial',{copies:32,radius:3,plane:0});add(2,'mover','mover',{mode:1,drive:1,cyclesPerBeat:.5}); add(3,'mover','polarWarp');tracks[ids[3]].blocks=base.blocks;
+ add(4,'mover','gradient'); add(5,'splitter','radial',{copies:32,radius:1,plane:1}); add(6,'mover','cosinePalette');
+ const a=id+'radius';tracks[ids[1]].childIds=[a];tracks[a]={...base,id:a,parentId:ids[1],type:'automation',instrumentId:'',name:'Radius',childIds:[],params:{},targetParam:'radius',automationRange:{min:1,max:4},blocks:[{id:a+'b',startBar:0,durationBars:4,loop:true,notes:[{id:'low',pitch:36,velocity:100,startBeat:0,durationBeats:.25},{id:'high',pitch:84,velocity:100,startBeat:8,durationBeats:.25}]}]};
+ }
+ const lighting=Object.fromEntries(Object.entries(p.scenes[sceneId].tracks).filter(([id,t])=>t.instrumentId==='light'||t.type==='group'&&t.name==='Lighting'));
+ Object.assign(tracks,lighting);root.push(...Object.values(lighting).filter(t=>!t.parentId).map(t=>t.id));
+ const scene={...p.scenes[sceneId],tracks,rootTrackIds:root,backgroundColor:'#000000'};
+ project.setState({activeSceneId:sceneId,scenes:{[sceneId]:scene,[mainId]:p.scenes[mainId]},tracks,rootTrackIds:root}); ui.getState().setCanvasView('scene');time.setState({currentBeat:2,isPlaying:false});
+ output.textContent='Fixture loaded. Each track has 1,024 copies × 768 local particles (1,572,864 total).';
+};
+document.querySelector('#run').onclick=async()=>{
+ const win=w(),state=win.__r3fState(),time=win.__cabinStores.time,original=state.advance;
+ const profile = [];
+ const originalRender=state.gl.render.bind(state.gl);state.gl.render=(scene,camera)=>{const s=performance.now();const value=originalRender(scene,camera);const ms=performance.now()-s;if(ms>2)profile.push({kind:'render',ms,objects:scene.children.length});return value};
+ const subscribers=state.internal.subscribers.map(sub=>{const original=sub.ref.current;sub.ref.current=(...args)=>{const s=performance.now();const v=original(...args);const ms=performance.now()-s;if(ms>2)profile.push({kind:'callback',priority:sub.priority,ms});return v};return {sub,original}});
+ const renders=[],cpu=[],workerDurations=[],beats=[];const start=performance.now();let animation;
+ state.set({advance:(...args)=>{const s=performance.now();original(...args);if(s>start+2000){renders.push(s);cpu.push(performance.now()-s)}}});
+ const tick=now=>{time.setState({currentBeat:2+(now-start)/500,isPlaying:true});const runtime=win.__previewRuntime;if(beats.at(-1)!==runtime.beat){beats.push(runtime.beat);workerDurations.push(runtime.duration)}animation=requestAnimationFrame(tick)};animation=requestAnimationFrame(tick);
+ await new Promise(r=>setTimeout(r,7000));cancelAnimationFrame(animation);time.setState({isPlaying:false});state.set({advance:original}); state.gl.render=originalRender;subscribers.forEach(({sub,original})=>sub.ref.current=original);
+ const meshes=[];for(const scene of win.__cabinVisual.getMountedRenderScenes().values())scene.traverse(o=>{if(o.name==='Shared Particle Stream')meshes.push({name:o.name,particles:o.geometry.instanceCount})});
+ const sorted=cpu.toSorted((a,b)=>a-b);const result={profile:profile.slice(-40),renders:renders.length,renderedFps:(renders.length-1)*1000/(renders.at(-1)-renders[0]),cpuMedianMs:sorted[Math.floor(sorted.length*.5)],cpuP95Ms:sorted[Math.floor(sorted.length*.95)],runtime:win.__previewRuntime,workerResponses:beats.length,meshes,canvas:[state.gl.domElement.width,state.gl.domElement.height]};
+ output.textContent=JSON.stringify(result,(k,v)=>k==='ambient'?undefined:v,2);
+};
+</script>

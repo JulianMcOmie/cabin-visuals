@@ -94,10 +94,19 @@ function glContext(): WebGL2RenderingContext | WebGLRenderingContext {
 // The FrameDriver's pin() forces the Composite (exports always render the final
 // composition); a capture of ONE scene lifts that override again after pinning,
 // so the canvas follows the editor's scene view (App's PreviewSceneSync).
+// Then prepare() - what Export does - waits for the pinned document's lazy
+// instruments and mounts at the first beat: without it, a capture right after
+// a page load draws the scenes whose code hasn't arrived yet as black.
 let viewMode: 'main' | 'scene' = 'main'
-function pinFor(driver: NonNullable<ReturnType<typeof getFrameDriver>>, width: number, height: number) {
+async function pinFor(driver: NonNullable<ReturnType<typeof getFrameDriver>>, width: number, height: number, firstBeat: number) {
   driver.pin(width, height)
   if (viewMode === 'scene') setMainCompositionOverride(false)
+  try {
+    await driver.prepare?.(firstBeat)
+  } catch (err) {
+    driver.unpin()
+    throw err
+  }
 }
 
 export function installDevRenderHooks() {
@@ -125,7 +134,7 @@ export function installDevRenderHooks() {
       await whenInstrumentsSettled()
       const driver = await readyDriver()
       const { bpm } = useProjectStore.getState()
-      pinFor(driver, width, height)
+      await pinFor(driver, width, height, beats[0] ?? 0)
       try {
         const out: string[] = []
         for (const beat of beats) {
@@ -154,7 +163,7 @@ export function installDevRenderHooks() {
       ws.binaryType = 'arraybuffer'
       await new Promise<void>((ok, fail) => { ws.onopen = () => ok(); ws.onerror = () => fail(new Error(`cannot reach ${o.url}`)) })
       const done = new Promise<void>((ok) => { ws.onmessage = (m) => { if (m.data === 'done') ok() } })
-      pinFor(driver, o.width, o.height)
+      await pinFor(driver, o.width, o.height, o.startBeat)
       try {
         const gl = glContext()
         const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight
@@ -200,7 +209,7 @@ export function installDevRenderHooks() {
       await whenInstrumentsSettled()
       const driver = await readyDriver()
       const { bpm, scenes } = useProjectStore.getState()
-      pinFor(driver, width, height)
+      await pinFor(driver, width, height, o.startBeat)
       try {
         const gl = glContext()
         const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight

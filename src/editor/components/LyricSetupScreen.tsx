@@ -384,7 +384,7 @@ export function LyricSetupScreen({
                       )}
                     </div>
                     <div className="p-3">
-                      <h3 className="m-0 text-[13px] font-semibold text-[var(--text)] group-hover:text-white">
+                      <h3 className="m-0 text-[13px] font-semibold text-[var(--text)] group-hover:text-[var(--text)]">
                         {style.styleName ?? style.name}
                       </h3>
                       {picked ? (
@@ -467,7 +467,7 @@ export function LyricSetupScreen({
             </>
           ) : phase.kind === 'error' ? (
             <>
-              <p className="mx-auto m-0 max-w-[380px] text-[13px] leading-relaxed text-[#d68383]">{phase.message}</p>
+              <p className="mx-auto m-0 max-w-[380px] text-[13px] leading-relaxed text-[var(--danger)]">{phase.message}</p>
               <button
                 onClick={() => { setPhase({ kind: 'pick' }); if (firstAudioBlock()) void run() }}
                 className="flex h-9 items-center justify-center rounded bg-[var(--accent)] px-5 text-[13px] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] cursor-pointer"

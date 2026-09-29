@@ -6,6 +6,8 @@
 // registered but unreachable.
 
 import { cubeInstrument } from './Cube'
+import { birdInstrument } from './Bird'
+import { undertaleInstrument } from './Undertale'
 import { kaleidoSolidInstrument } from './KaleidoSolid'
 import { circleInstrument, triangleInstrument } from './shapes'
 import { icosahedronBurstInstrument } from './IcosahedronBurst'
@@ -13,6 +15,7 @@ import { textDisplayInstrument } from './TextDisplay'
 import { starsInstrument } from './Stars'
 import { particleBurstInstrument } from './ParticleBurst'
 import { particleInstrument } from './Particle'
+import { particleStreamInstrument } from './ParticleStream'
 import { fractalTunnelInstrument } from './FractalTunnel'
 import { neonPolarInstrument } from './NeonPolar'
 import { hopfFibrationInstrument } from './HopfFibration'
@@ -39,15 +42,15 @@ import { wormholeInstrument } from './Wormhole'
 import { particleSphereInstrument } from './ParticleSphere'
 import { photoSlotInstrument } from './PhotoSlot'
 import { polyFxInstrument } from './PolyFx'
-import { waterDropInstrument } from './WaterDrop'
+import { radialBloomInstrument } from './RadialBloom'
 import { flashWallInstrument } from './FlashWall'
 import { overlapShapeInstrument } from './OverlapShape'
 import { overlapSolidInstrument } from './OverlapSolid'
 import { cropMaskInstrument } from './Crop'
 import { midiRollInstrument } from './MidiRoll'
 import { starfieldInstrument } from './Starfield'
+import { glassRollInstrument } from './GlassRoll'
 import { wireframeInstrument } from './Wireframe'
-import { modSynthInstrument } from './ModSynth'
 import { lightInstrument } from './Light'
 import type { ObjectInstrumentDef } from './types'
 import { preloadComponent } from './lazyInstrument'
@@ -59,6 +62,8 @@ export type { ObjectInstrumentDef, ParamDef } from './types'
 
 export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [cubeInstrument.id]: cubeInstrument,
+  [birdInstrument.id]: birdInstrument,
+  [undertaleInstrument.id]: undertaleInstrument,
   [kaleidoSolidInstrument.id]: kaleidoSolidInstrument,
   [circleInstrument.id]: circleInstrument,
   [triangleInstrument.id]: triangleInstrument,
@@ -67,6 +72,7 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [starsInstrument.id]: starsInstrument,
   [particleBurstInstrument.id]: particleBurstInstrument,
   [particleInstrument.id]: particleInstrument,
+  [particleStreamInstrument.id]: particleStreamInstrument,
   [fractalTunnelInstrument.id]: fractalTunnelInstrument,
   [neonPolarInstrument.id]: neonPolarInstrument,
   [hopfFibrationInstrument.id]: hopfFibrationInstrument,
@@ -90,19 +96,19 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [strobeInstrument.id]: strobeInstrument,
   [laserSphereInstrument.id]: laserSphereInstrument,
   [laserLineInstrument.id]: laserLineInstrument,
-  [modSynthInstrument.id]: modSynthInstrument,
   [lightInstrument.id]: lightInstrument,
   [wormholeInstrument.id]: wormholeInstrument,
   [particleSphereInstrument.id]: particleSphereInstrument,
   [photoSlotInstrument.id]: photoSlotInstrument,
   [polyFxInstrument.id]: polyFxInstrument,
-  [waterDropInstrument.id]: waterDropInstrument,
+  [radialBloomInstrument.id]: radialBloomInstrument,
   [flashWallInstrument.id]: flashWallInstrument,
   [overlapShapeInstrument.id]: overlapShapeInstrument,
   [overlapSolidInstrument.id]: overlapSolidInstrument,
   [cropMaskInstrument.id]: cropMaskInstrument,
   [midiRollInstrument.id]: midiRollInstrument,
   [starfieldInstrument.id]: starfieldInstrument,
+  [glassRollInstrument.id]: glassRollInstrument,
   [wireframeInstrument.id]: wireframeInstrument,
 }
 

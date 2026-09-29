@@ -218,7 +218,7 @@ function GeometryRow({ bound }: { bound: UserInterfaceParameter }) {
             onClick={() => bound.setValue(option.id)}
             className={`flex min-w-0 items-center justify-center rounded-[3px] border py-1.5 text-[6px] font-semibold tracking-[0.06em] ${active
               ? 'border-violet-300/35 bg-violet-500/16 text-violet-100'
-              : 'border-white/[0.07] bg-white/[0.025] text-white/30 hover:bg-white/[0.06] hover:text-white/65'}`}
+              : 'border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--text)_2.5%,transparent)] text-[var(--text-muted)] hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-[var(--text-2)]'}`}
           >
             <span className="max-w-full truncate">{option.shortLabel}</span>
           </button>

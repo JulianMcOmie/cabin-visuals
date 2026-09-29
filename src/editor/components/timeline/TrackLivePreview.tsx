@@ -22,9 +22,9 @@ export const TrackLivePreview = memo(function TrackLivePreview({ trackId }: { tr
       data-track-live-preview={trackId}
       width={PREVIEW_WIDTH}
       height={PREVIEW_HEIGHT}
-      aria-label="Live track preview at the playhead"
-      title="Live track output · follows the playhead · before scene effects"
-      className="relative pointer-events-none flex-shrink-0 rounded border border-white/10 bg-black/40 object-contain"
+      aria-label="Live instrument chain through this row at the playhead"
+      title="Instrument chain through this row · follows the playhead"
+      className="relative pointer-events-none flex-shrink-0 rounded border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_40%,transparent)] object-contain"
       style={{ width: 56, height: 'calc(100% - 8px)', maxHeight: 40 }}
     />
   )

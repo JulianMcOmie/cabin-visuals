@@ -45,9 +45,19 @@ export function setTrackLook(trackId: string, look: Look | null) {
   else trackLooks.delete(trackId)
 }
 
-/** The composition's look for this frame (reset at the start of every resolve). */
+let muted = 0
+
+/** The composition's look for this frame (reset at the start of every resolve).
+ *  Ignored while a secondary engine (a loop or track preview) resolves. */
 export function setCompositionLook(look: Look | null) {
+  if (muted) return
   compositionLook = look
+}
+
+/** Resolve a secondary engine's compositions without touching the editor's look. */
+export function withoutLooks<T>(fn: () => T): T {
+  muted++
+  try { return fn() } finally { muted-- }
 }
 
 export function beginFrameLooks() {

@@ -3,7 +3,7 @@ import { Color, Group, Mesh, MeshBasicMaterial } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { InstrumentCopyContext } from '../core/visual/instrumentColor'
 import { SceneIdContext } from '../core/visual/sceneContext'
-import { getVisualCopy } from '../core/visual/VisualEngine'
+import { useVisualEngine } from '../core/visual/VisualEngineContext'
 import { defaultLightDesc, registerLightAnchor, LIGHT_TYPE_AMBIENT } from '../core/visual/sceneLights'
 import { paramDefault, stringParamDefault } from './types'
 import { lightInstrument } from './Light'
@@ -17,6 +17,7 @@ import { lightInstrument } from './Light'
 const num = (v: number | undefined, key: string) => v ?? paramDefault(lightInstrument, key)
 
 export function LightVisual({ trackId }: { trackId: string }) {
+  const { getVisualCopy } = useVisualEngine()
   const copyContext = useContext(InstrumentCopyContext)
   const sceneId = useContext(SceneIdContext)
   const copyIndex = copyContext?.visualCopyIndex ?? 0

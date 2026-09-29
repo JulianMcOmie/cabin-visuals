@@ -3,10 +3,10 @@ import test from 'node:test'
 import type { Track } from '../../types'
 import { getPriorVisualCopyCount, resolveProject, type ProjectSnapshot } from './resolve'
 import { structuralCopyCount } from '../visualCopies/resolveVisualCopies'
-import { computeAtBeat, getObjectState, setProject } from './VisualEngine'
+import { computeAtBeat, getObjectState, getVisualCopies, setProject } from './VisualEngine'
 
 // GROUP tracks in the resolved graph: they emit placement nodes (not objects),
-// their chain children broadcast to the member objects ABOVE them, and their
+// their chain children broadcast to all member objects, and their
 // mute/solo cascades onto member objects.
 
 function track(partial: Partial<Track> & { id: string }): Track {
@@ -42,7 +42,7 @@ test('a group resolves to a placement node, not an object', () => {
   assert.equal(graph.groups?.[0].afterObjectIndex, 0)
 })
 
-test('a group chain child broadcasts to the members above it only', () => {
+test('a group chain child broadcasts to members on both sides of its row', () => {
   const g = track({ id: 'g', type: 'group', childIds: ['a', 'sp', 'b'] })
   const a = track({ id: 'a', instrumentId: 'cube', parentId: 'g' })
   const sp = track({ id: 'sp', type: 'splitter', splitterId: 'radial', inputValues: { copies: 3 }, parentId: 'g' })
@@ -51,7 +51,38 @@ test('a group chain child broadcasts to the members above it only', () => {
   const objA = graph.objects.find((o) => o.trackId === 'a')!
   const objB = graph.objects.find((o) => o.trackId === 'b')!
   assert.equal(structuralCopyCount(objA.moverAndSplitterChain), 3, 'member above the splitter splits')
-  assert.equal(objB.moverAndSplitterChain.length, 0, 'member below the splitter is untouched')
+  assert.equal(structuralCopyCount(objB.moverAndSplitterChain), 3, 'member below the splitter splits too')
+})
+
+test('a leading burst Mover moves every copy of nested group members, never outsiders', () => {
+  const g = track({ id: 'g', type: 'group', childIds: ['mv', 'a', 'inner'] })
+  const mv = track({ id: 'mv', type: 'mover', moverId: 'mover', parentId: 'g',
+    inputValues: { motion: 1, mode: 0, angleX: 0, angleY: 0, angleZ: 90, angle: 1.4 },
+    blocks: [{ id: 'block', startBar: 0, durationBars: 4, loop: false, notes: [
+      { id: 'note', pitch: 64, startBeat: 0, durationBeats: 1, velocity: 1 },
+    ] }],
+  })
+  const a = track({ id: 'a', instrumentId: 'cube', parentId: 'g', childIds: ['sp'] })
+  const sp = track({ id: 'sp', type: 'splitter', splitterId: 'radial', parentId: 'a', inputValues: { copies: 3 } })
+  const inner = track({ id: 'inner', type: 'group', parentId: 'g', childIds: ['b'] })
+  const b = track({ id: 'b', instrumentId: 'cube', parentId: 'inner' })
+  const x = track({ id: 'x', instrumentId: 'cube' })
+  const p = snapshot([g, mv, a, sp, inner, b, x], ['g', 'x'])
+  assert.equal(getPriorVisualCopyCount('mv', p), 3, 'copy targeting includes members below the Mover')
+  setProject(p)
+  computeAtBeat(0)
+  const before = ['a', 'b', 'x'].map(id => getVisualCopies(id).map(c => [...c.transform.elements]))
+  computeAtBeat(1)
+  for (const [index, id] of ['a', 'b'].entries()) {
+    const copies = getVisualCopies(id)
+    assert.equal(copies.length, before[index].length)
+    copies.forEach((copy, i) => assert.notDeepEqual(copy.transform.elements, before[index][i], `${id} copy ${i} rotates`))
+  }
+  assert.deepEqual(getVisualCopies('x').map(c => c.transform.elements), before[2])
+  const after = getVisualCopies('a').map(c => [...c.transform.elements])
+  computeAtBeat(0)
+  computeAtBeat(1)
+  assert.deepEqual(getVisualCopies('a').map(c => c.transform.elements), after, 'scrubbing is deterministic')
 })
 
 test('inner group entries land before outer group entries on a member chain', () => {
@@ -97,7 +128,7 @@ test('group tf* and tfOpacity apply to members per frame; nested groups compound
   assert.equal(outsider.opacity, 1)
 })
 
-test('getPriorVisualCopyCount for a group entry uses the largest member chain above it', () => {
+test('getPriorVisualCopyCount for a group entry uses the largest member chain', () => {
   const g = track({ id: 'g', type: 'group', childIds: ['a', 'b', 'mv'] })
   const a = track({ id: 'a', instrumentId: 'cube', parentId: 'g', childIds: ['aSp'] })
   const aSp = track({ id: 'aSp', type: 'splitter', splitterId: 'radial', inputValues: { copies: 4 }, parentId: 'a' })

@@ -239,7 +239,7 @@ function PatternSegments({ b }: { b: SelectBinding }) {
     <div
       role="radiogroup"
       aria-label={b.def.label}
-      className="mx-4 mt-3 flex overflow-hidden rounded-md border border-white/10"
+      className="mx-4 mt-3 flex overflow-hidden rounded-md border border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
     >
       {b.def.options.map((option) => {
         const selected = option.value === active
@@ -251,7 +251,7 @@ function PatternSegments({ b }: { b: SelectBinding }) {
             aria-checked={selected}
             onClick={() => b.set(option.value)}
             className={`flex min-w-0 flex-1 items-center justify-center gap-1 px-1 py-[5px] text-[9px] font-semibold uppercase tracking-[0.1em] ${
-              selected ? '' : 'bg-black/25 text-white/40 hover:bg-white/5 hover:text-white/60'
+              selected ? '' : 'bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)] hover:text-[var(--text-3)]'
             }`}
             style={selected ? { background: ACCENT, color: '#0c0a1a' } : undefined}
           >

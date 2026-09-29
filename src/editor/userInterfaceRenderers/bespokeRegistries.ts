@@ -2,11 +2,13 @@ import type { UserInterfaceRendererDefinition } from './types'
 import { lazyPanel } from './lazyPanel'
 import { gradeScenePlugin } from '../effects/scene/grade'
 import { lensScenePlugin } from '../effects/scene/lens'
+import { liquidGlassScenePlugin } from '../effects/scene/liquidGlass'
 import { blurScenePlugin } from '../effects/scene/blur'
 import { grainScenePlugin } from '../effects/scene/grain'
 import { crushScenePlugin } from '../effects/scene/crush'
 import { glitchScenePlugin } from '../effects/scene/glitch'
 import { mirrorScenePlugin } from '../effects/scene/mirror'
+import { fogScenePlugin } from '../effects/scene/fog'
 
 // Bespoke settings surfaces for the non-object tracks, mirroring the object
 // registry in index.ts: movers/splitters are keyed by their definition id,
@@ -16,6 +18,7 @@ import { mirrorScenePlugin } from '../effects/scene/mirror'
 
 export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRendererDefinition>> = {
   mover: lazyPanel(() => import('./MoverUserInterface'), 'MoverUserInterfaceRenderer'),
+  dance: lazyPanel(() => import('./DanceMoverUserInterface'), 'DanceMoverUserInterfaceRenderer'),
   waypoints: lazyPanel(() => import('./WaypointsUserInterface'), 'WaypointsUserInterfaceRenderer'),
   visibility: lazyPanel(() => import('./VisibilityMoverUserInterface'), 'VisibilityMoverUserInterfaceRenderer'),
   bypass: lazyPanel(() => import('./BypassUserInterface'), 'BypassUserInterfaceRenderer'),
@@ -27,13 +30,16 @@ export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRenderer
   hueRotate: lazyPanel(() => import('./HueRotateUserInterface'), 'HueRotateUserInterfaceRenderer'),
   impactScatter: lazyPanel(() => import('./ImpactScatterMoverUserInterface'), 'ImpactScatterMoverUserInterfaceRenderer'),
   impactPulse: lazyPanel(() => import('./ImpactPulseMoverUserInterface'), 'ImpactPulseMoverUserInterfaceRenderer'),
+  fluidImpact: lazyPanel(() => import('./FluidImpactMoverUserInterface'), 'FluidImpactMoverUserInterfaceRenderer'),
   conveyor: lazyPanel(() => import('./ConveyorMoverUserInterface'), 'ConveyorMoverUserInterfaceRenderer'),
   symmetricMotion: lazyPanel(() => import('./SymmetricMotionMoverUserInterface'), 'SymmetricMotionMoverUserInterfaceRenderer'),
   symmetricRotation: lazyPanel(() => import('./SymmetricRotationMoverUserInterface'), 'SymmetricRotationMoverUserInterfaceRenderer'),
+  polarWarp: lazyPanel(() => import('./PolarWarpUserInterface'), 'PolarWarpUserInterfaceRenderer'),
   contour: lazyPanel(() => import('./ContourMoverUserInterface'), 'ContourMoverUserInterfaceRenderer'),
   radialMotion: lazyPanel(() => import('./RadialMotionMoverUserInterface'), 'RadialMotionMoverUserInterfaceRenderer'),
   radial: lazyPanel(() => import('./RadialSplitterUserInterface'), 'RadialSplitterUserInterfaceRenderer'),
   line: lazyPanel(() => import('./LineSplitterUserInterface'), 'LineSplitterUserInterfaceRenderer'),
+  path: lazyPanel(() => import('./PathSplitterUserInterface'), 'PathSplitterUserInterfaceRenderer'),
   symmetry: lazyPanel(() => import('./SymmetrySplitterUserInterface'), 'SymmetrySplitterUserInterfaceRenderer'),
   parametricPattern: lazyPanel(() => import('./FormationSplitterUserInterface'), 'ParametricPatternUserInterfaceRenderer'),
   scatter: lazyPanel(() => import('./FormationSplitterUserInterface'), 'ScatterSplitterUserInterfaceRenderer'),
@@ -54,6 +60,7 @@ const sceneFxPanel = (pluginId: string): UserInterfaceRendererDefinition =>
   )
 
 export const EFFECT_USER_INTERFACES: Partial<Record<string, UserInterfaceRendererDefinition>> = {
+  glow: lazyPanel(() => import('./GlowEffectUserInterface'), 'GlowEffectUserInterfaceRenderer'),
   offset: lazyPanel(() => import('./OffsetEffectUserInterface'), 'OffsetEffectUserInterfaceRenderer'),
   rotate: lazyPanel(() => import('./RotateEffectUserInterface'), 'RotateEffectUserInterfaceRenderer'),
   scale: lazyPanel(() => import('./ScaleEffectUserInterface'), 'ScaleEffectUserInterfaceRenderer'),
@@ -64,7 +71,9 @@ export const EFFECT_USER_INTERFACES: Partial<Record<string, UserInterfaceRendere
   opacity: lazyPanel(() => import('./OpacityEffectUserInterface'), 'OpacityEffectUserInterfaceRenderer'),
   deform: lazyPanel(() => import('./DeformEffectUserInterface'), 'DeformEffectUserInterfaceRenderer'),
   [gradeScenePlugin.id]: sceneFxPanel(gradeScenePlugin.id),
+  [fogScenePlugin.id]: sceneFxPanel(fogScenePlugin.id),
   [lensScenePlugin.id]: sceneFxPanel(lensScenePlugin.id),
+  [liquidGlassScenePlugin.id]: sceneFxPanel(liquidGlassScenePlugin.id),
   [blurScenePlugin.id]: sceneFxPanel(blurScenePlugin.id),
   [grainScenePlugin.id]: sceneFxPanel(grainScenePlugin.id),
   [crushScenePlugin.id]: sceneFxPanel(crushScenePlugin.id),

@@ -12,6 +12,7 @@ import { getEffect } from '../effects'
 import { fxTarget } from '../effects/automation'
 import { isSceneTrackId } from '../core/sceneTrack'
 import type { Track } from '../types'
+import { defaultAutomationCombine, type AutomationCombine } from '../core/automationCombineDefaults'
 
 export interface AutomationTargetOption {
   key: string
@@ -19,12 +20,14 @@ export interface AutomationTargetOption {
   /** The target is a whole-number count (NumberParamDef.integer): a lane
    *  landing on it starts on the integer row grid. */
   integer?: boolean
+  /** Creation default for this target; stored explicitly on the new lane. */
+  combine: AutomationCombine
   /** Numeric bounds for the inspector; absent for effect On/Off. */
   bounds?: Pick<NumberParamDef, 'min' | 'max'>
 }
 
 function numericTarget(param: NumberParamDef, key = param.key, label = param.label): AutomationTargetOption {
-  return { key, label, integer: param.integer, bounds: { min: param.min, max: param.max } }
+  return { key, label, integer: param.integer, combine: defaultAutomationCombine(key, param), bounds: { min: param.min, max: param.max } }
 }
 
 /**
@@ -57,7 +60,7 @@ export function automationTargetsForParent(parent: Track, mainActive: boolean): 
     const plugin = getEffect(inst.pluginId)
     if (!plugin) return []
     return [
-      { key: fxTarget(inst.id, 'enabled'), label: `${plugin.name} · On/Off` },
+      { key: fxTarget(inst.id, 'enabled'), label: `${plugin.name} · On/Off`, combine: 'override' as const },
       ...plugin.params.filter(isNumberParam).map((p) => numericTarget(p, fxTarget(inst.id, p.key), `${plugin.name} · ${p.label}`)),
     ]
   })

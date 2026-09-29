@@ -1,5 +1,7 @@
 'use client'
 
+import { ColorPicker } from './colorWheel'
+
 import { isNumberParam } from '../instruments/types'
 import { ParamControl, ParamSlider } from './ParameterControl'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
@@ -83,18 +85,12 @@ export const OscilloscopeUserInterfaceRenderer: UserInterfaceRendererDefinition 
           <span className="truncate text-[11px] text-[var(--text-3)]" title={color.definition.label}>Trace</span>
           <div className="flex items-center justify-end gap-2">
             <span className="font-mono text-[10px] text-[var(--text-muted)]">{color.value}</span>
-            <label
-              className="relative h-5 w-8 cursor-pointer overflow-hidden rounded border border-[var(--border-strong)]"
-              style={{ background: color.value }}
-            >
-              <input
-                type="color"
-                aria-label={color.definition.label}
-                value={color.value}
-                onChange={(event) => color.setValue(event.target.value)}
-                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-              />
-            </label>
+            <ColorPicker
+              ariaLabel={color.definition.label}
+              value={color.value}
+              onChange={(hex) => color.setValue(hex)}
+              size={24}
+            />
           </div>
         </div>
       )}

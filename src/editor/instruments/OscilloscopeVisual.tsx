@@ -1,7 +1,12 @@
-import { useEffect, useRef } from 'react'
+import { useContext, useEffect, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import { CanvasTexture, Group, LinearFilter, Mesh, MeshBasicMaterial, Quaternion } from 'three'
-import { getAudioEngine } from '../core/audio/AudioEngine'
+import { createRasterCanvas, type RasterCanvas } from '../core/visual/rasterCanvas'
+import { requestWaveform, waveformKey, waveformRevision } from '../core/visual/previewWaveform'
+import { useVisualEngine, VisualEngineContext } from '../core/visual/VisualEngineContext'
+import { InstrumentCopyContext } from '../core/visual/instrumentColor'
+import { registerFramePreparer } from '../core/export/framePreparers'
+import type { ObjectState } from '../core/visual/types'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { paramDefault } from './types'
 import { oscilloscopeInstrument } from './Oscilloscope'
@@ -33,13 +38,44 @@ export function OscilloscopeVisual({ trackId }: { trackId: string }) {
   const { viewport, camera, invalidate } = useThree()
   const groupRef = useRef<Group>(null)
   const meshRef = useRef<Mesh>(null)
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const canvasRef = useRef<RasterCanvas | null>(null)
   const textureRef = useRef<CanvasTexture | null>(null)
+
+  const { getObjectState } = useVisualEngine()
+  const preview = useContext(VisualEngineContext)
+  const copy = useContext(InstrumentCopyContext)
+  const windowRef = useRef<{ key: string; revision: unknown; samples?: Float32Array; promise: Promise<void> } | null>(null)
+  const alive = useRef(true)
+  useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
+  const ensureWindow = (state: ObjectState) => {
+    const query = { beat: state.beat, bpm: 60 / Math.max(0.0001, state.secPerBeat), beatsPerBar: state.beatsPerBar }
+    const key = waveformKey(query), revision = waveformRevision()
+    if (windowRef.current?.key === key && windowRef.current.revision === revision) return windowRef.current
+    const entry: NonNullable<typeof windowRef.current> = { key, revision, promise: Promise.resolve() }
+    windowRef.current = entry
+    entry.promise = requestWaveform(query).then(samples => {
+      entry.samples = samples
+      if (alive.current && windowRef.current === entry) invalidate()
+    })
+    // Worker/export readiness awaits the original promise and can report a
+    // failure. Live callbacks must not create unhandled promise rejections.
+    entry.promise.catch(() => {})
+    return entry
+  }
+  const ensureRef = useRef(ensureWindow)
+  ensureRef.current = ensureWindow
+  useEffect(() => {
+    if (preview) return
+    return registerFramePreparer(async () => {
+      const state = getObjectState(trackId, copy?.visualCopyIndex)
+      if (state) await ensureRef.current(state).promise
+    })
+  }, [preview, getObjectState, trackId, copy?.visualCopyIndex])
 
   useEffect(() => {
     // Created at a nominal size only: the real width tracks the panel's aspect
     // and is set from the frame callback, which is the one place that knows it.
-    const canvas = document.createElement('canvas')
+    const canvas = createRasterCanvas()
     canvas.width = TEXTURE_HEIGHT * 2
     canvas.height = TEXTURE_HEIGHT
     canvasRef.current = canvas
@@ -95,11 +131,8 @@ export function OscilloscopeVisual({ trackId }: { trackId: string }) {
       ctx.fillRect(0, 0, width, height)
     }
 
-    const samples = getAudioEngine().getWaveformAtBeat(
-      state.beat,
-      60 / Math.max(0.0001, state.secPerBeat),
-      state.beatsPerBar,
-    )
+    const samples = ensureWindow(state).samples
+    if (!samples) return false
     ctx.beginPath()
     for (let i = 0; i < samples.length; i++) {
       const x = samples.length > 1 ? (i / (samples.length - 1)) * width : width / 2
@@ -158,7 +191,7 @@ export function OscilloscopeVisual({ trackId }: { trackId: string }) {
         .multiply(viewAxisRoll(_inCameraSpace, _roll))
       group.quaternion.copy(_billboard)
     }
-  })
+  }, waveformRevision)
 
   return (
     <group ref={groupRef}>

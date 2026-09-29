@@ -11,7 +11,6 @@ import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { BRACKET_CORNER_RADIUS_PX, INDENT_PX, LABEL_BASE_PX, rowIndentPx } from './trackDrop'
 import type { RowGuide } from './trackTree'
 import { resolveTrackDisplayColor, resolveTrackIdentityColor } from '../../utils/trackDisplayColor'
-import { midiSelectionSpill } from '../../utils/colors'
 import { trackChromeColor } from '../../utils/trackChromeColor'
 import { selectTrack, selectTrackRange, shouldSuppressTrackSelect, toggleTrackInSelection } from '../../utils/selection'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
@@ -29,6 +28,7 @@ import { TrackTransformPanel, beginTransformDrag, resetTransformValues, transfor
 import { TrackTagsPanel } from './TrackTagsPanel'
 import { TF_OPACITY } from '../../core/transform'
 import { isSceneTrackId } from '../../core/sceneTrack'
+import { useTrackSceneHover } from './useTrackSceneHover'
 
 // The strip fader is the track's "volume": opacity 0..1, snapping at 0/50/100%.
 const OPACITY_FADER_SPEC = { min: 0, max: 1, step: 0.01, snaps: [0, 0.5, 1], snapThreshold: 0.03 }
@@ -100,9 +100,6 @@ interface TrackProps {
  *  plus one refinement for the selection Set. */
 export const Track = memo(function Track({ track, barWidthPx, pickupPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, depth = 0, guides, dividerInset, descendantRows = 0, liftOffset, dimmed, dropInto, replacePreview, onCopyDragStart, onNestDragStart, onLabelContextMenu }: TrackProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
-  // Audio lanes only need this for the selection spill's geometry (an audio
-  // block's width is derived from its trimmed seconds at the current tempo).
-  const bpm = useProjectStore((s) => s.bpm)
   const isPlaying = useTimeStore((s) => s.isPlaying)
 
   // A boolean, not the id: selecting some OTHER row must not re-render this one.
@@ -123,6 +120,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
   // and crop-in-a-scene keeps its fader this way).
   const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
   const isObjectTrack = track.type === 'base' && !!track.instrumentId && !activeIsMain
+  const sceneHoverRef = useTrackSceneHover(track.id, isObjectTrack)
   // The scene instrument (core/sceneTrack.ts) materializes as a group track, so
   // it takes the group chrome - the transform strip especially, since its tf*
   // moves the whole scene - but not the parts that would write a field it has
@@ -296,6 +294,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
 
   return (
     <div
+      ref={sceneHoverRef}
       style={{
         transform: inCopyDrag ? `translateY(${liftOffset}px)` : undefined,
         transition: inCopyDrag ? 'transform 0.15s ease' : undefined,
@@ -374,15 +373,22 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
             <span
               className="absolute left-0 top-full bg-inherit"
               style={{
-                // The first child surface has a rounded top-left cutout. The
-                // parent's strip always underpaints that radius - selected or
-                // not - so the fill meets the curved divider without leaving
-                // a bare notch.
-                width: childBracketLeft - regionLeft + BRACKET_CORNER_RADIUS_PX,
+                width: childBracketLeft - regionLeft,
                 // Relative to this row, so the bracket follows grid sizing.
                 height: `${descendantRows * 100}%`,
               }}
-            />
+            >
+              {/* Underpaint only the first child's rounded corner; extending
+                  the entire strip would spill past the highlighted stem. */}
+              <span
+                className="absolute left-full top-0 bg-inherit"
+                style={{
+                  width: BRACKET_CORNER_RADIUS_PX,
+                  height: BRACKET_CORNER_RADIUS_PX,
+                  maskImage: `radial-gradient(circle at bottom right, transparent ${BRACKET_CORNER_RADIUS_PX}px, black ${BRACKET_CORNER_RADIUS_PX}px)`,
+                }}
+              />
+            </span>
           )}
         </div>
         {/* The nest-into outline's bent half, drawn over the children's own chrome
@@ -505,7 +511,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
               {tagList.slice(0, 3).map((t) => (
                 <span
                   key={t}
-                  className="flex-shrink-0 max-w-[64px] truncate rounded-[3px] border border-[var(--border)] bg-white/10 px-1 text-[9px] leading-[13px] text-[var(--text-3)]"
+                  className="flex-shrink-0 max-w-[64px] truncate rounded-[3px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-1 text-[9px] leading-[13px] text-[var(--text-3)]"
                 >
                   {t}
                 </span>
@@ -545,17 +551,17 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
             >
               {/* Logic-style horizontal fader: a THIN groove with a cap that
                   stands well taller than the track it rides. */}
-              <div className="relative h-[3px] w-full rounded-full bg-black/55 shadow-[inset_0_1px_1px_rgba(0,0,0,0.65)]">
+              <div className="relative h-[3px] w-full rounded-full bg-[color-mix(in_srgb,var(--bg-canvas-deep)_55%,transparent)] shadow-[inset_0_1px_1px_rgba(0,0,0,0.65)]">
                 <div
                   className="absolute inset-y-0 left-0 rounded-l-full opacity-90 group-hover:opacity-100"
                   style={{ width: `${opacityValue * 100}%`, background: trackChromeColor(identityColor) }}
                 />
-                <div className="absolute left-1/2 top-[-3px] h-[2px] w-px bg-white/25" />
+                <div className="absolute left-1/2 top-[-3px] h-[2px] w-px bg-[color-mix(in_srgb,var(--text)_25%,transparent)]" />
                 <div
                   className="absolute top-1/2 h-[15px] w-[8px] -translate-x-1/2 -translate-y-1/2 rounded-[2.5px] border border-black/65 bg-gradient-to-b from-[#e3e5ea] to-[#b9bcc4] shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
                   style={{ left: `${opacityValue * 100}%` }}
                 >
-                  <div className="absolute inset-y-[2px] left-1/2 w-px -translate-x-1/2 bg-black/50" />
+                  <div className="absolute inset-y-[2px] left-1/2 w-px -translate-x-1/2 bg-[color-mix(in_srgb,var(--bg-canvas-deep)_50%,transparent)]" />
                 </div>
               </div>
             </div>
@@ -577,7 +583,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
             className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center active:scale-75 cursor-pointer ${
               track.muted
                 ? 'bg-[var(--accent)] text-[var(--on-accent)]'
-                : 'bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-2)]'
+                : 'bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text-muted)] hover:text-[var(--text-2)]'
             }`}
           >
             M
@@ -594,7 +600,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
             className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center active:scale-75 cursor-pointer ${
               track.solo
                 ? 'bg-[var(--warn)] text-[var(--on-accent)]'
-                : 'bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-2)]'
+                : 'bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text-muted)] hover:text-[var(--text-2)]'
             }`}
           >
             S
@@ -615,8 +621,8 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
                 tagsAnchor
                   ? 'bg-[var(--accent)] text-[var(--on-accent)]'
                   : tagList.length > 0
-                    ? 'bg-white/10 text-[var(--accent)] hover:text-[var(--accent-hover)]'
-                    : 'bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-2)]'
+                    ? 'bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--accent)] hover:text-[var(--accent-hover)]'
+                    : 'bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text-muted)] hover:text-[var(--text-2)]'
               }`}
             >
               <Tag size={10} />
@@ -635,7 +641,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
               className={`w-4 h-4 rounded-[3px] flex items-center justify-center active:scale-75 cursor-pointer ${
                 panelAnchor
                   ? 'bg-[var(--accent)] text-[var(--on-accent)]'
-                  : 'bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-2)]'
+                  : 'bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text-muted)] hover:text-[var(--text-2)]'
               }`}
             >
               <Move3d size={10} />
@@ -666,7 +672,7 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
         // the song end every totalBars bump re-rendered EVERY row for what is
         // purely a CSS width change (measured 2026-08-19: 4 bumps x the whole
         // stack, the bulk of the drag's foreign-row renders).
-        className={`relative flex-1 ${isDarkenedRow ? 'bg-black/10' : ''} ${isLast ? '' : 'border-b border-[var(--timeline-row-line,var(--border))]'}`}
+        className={`relative flex-1 ${isDarkenedRow ? 'bg-[color-mix(in_srgb,var(--bg-canvas-deep)_10%,transparent)]' : ''} ${isLast ? '' : 'border-b border-[var(--timeline-row-line,var(--border))]'}`}
         // A muted track's blocks go gray (hue stripped, alpha kept) so the mute
         // state reads from the MIDI side without the blocks fading into the lane.
         style={{ filter: track.muted ? 'grayscale(1)' : undefined }}
@@ -681,25 +687,6 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
             into the lane, so audio with startBar < 0 still renders on-lane
             (flush with the left edge when it defines the pickup). */}
         <div className="absolute inset-y-0" style={{ left: pickupPx, right: 0, opacity: ghostOpacity }}>
-        {/* Audio retains its selection wash; solid MIDI clips use only their
-            own perimeter. Audio widths follow trimmed seconds at this tempo. */}
-        {(track.type === 'audio'
-          ? (track.audioBlocks ?? []).map((block) => {
-              if (!selectedBlockIds.has(block.id)) return null
-              const widthBars = ((block.trimEnd - block.trimStart) * bpm) / 60 / beatsPerBar
-              const widthPx = Math.max(widthBars * barWidthPx, 4)
-              return { id: block.id, centerPx: block.startBar * barWidthPx + widthPx / 2, widthPx }
-            })
-          : []
-        ).map((spill) =>
-          spill && (
-            <div
-              key={`spill:${spill.id}`}
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0"
-              style={{ background: midiSelectionSpill(blockColor, spill.centerPx, spill.widthPx) }}
-            />
-          ))}
         {track.type === 'audio'
           ? (track.audioBlocks ?? []).map((block) => (
               <AudioBlock
@@ -748,8 +735,9 @@ export const Track = memo(function Track({ track, barWidthPx, pickupPx, selected
       {replacePreview && (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-30"
+          className={`pointer-events-none absolute inset-y-0 right-0 z-30 ${isFirstChild ? 'rounded-tl-md' : ''}`}
           style={{
+            left: regionLeft,
             background: `color-mix(in srgb, ${replacePreview.color} 13%, transparent)`,
             boxShadow: `inset 0 0 0 1px ${replacePreview.color}`,
           }}

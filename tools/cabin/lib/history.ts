@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import type { ProjectDocument } from '../../../src/persistence/types'
+import { upgradeDocument } from '../../../src/persistence/upgrade'
 import { docPath, projectDir } from './project'
 
 // Every CLI save records the document it WROTE in projects/<name>/.history/
@@ -36,7 +37,8 @@ export function listHistory(name: string): HistoryEntry[] {
 }
 
 export function readEntry(e: HistoryEntry): ProjectDocument {
-  return JSON.parse(fs.readFileSync(e.file, 'utf8')) as ProjectDocument
+  // snapshots written under an older schema compare in the current one
+  return upgradeDocument(JSON.parse(fs.readFileSync(e.file, 'utf8')))
 }
 
 /** Record a written document (call right after writing project.json). */

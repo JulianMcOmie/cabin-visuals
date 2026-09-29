@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Copy, Trash2 } from 'lucide-react'
 import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
@@ -37,20 +37,20 @@ function SceneTabMenu({ x, y, canDelete, onDuplicate, onDelete, onClose }: {
         onContextMenu={(e) => { e.preventDefault(); onClose() }}
       />
       <div
-        className="fixed z-50 min-w-[140px] py-1 rounded-md border border-zinc-700 bg-[#202024] text-xs shadow-lg shadow-black/50 select-none"
+        className="fixed z-50 min-w-[140px] py-1 rounded-md border border-[var(--border-strong)] bg-[var(--bg-elevated)] text-xs shadow-lg shadow-black/50 select-none"
         style={{ left, top: y }}
         onContextMenu={(e) => e.preventDefault()}
       >
         <button
           onClick={() => { onDuplicate(); onClose() }}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-zinc-200 hover:bg-zinc-700/60 cursor-pointer"
+          className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[var(--text)] hover:bg-[var(--menu-hover)] focus-visible:bg-[var(--menu-hover)] cursor-pointer"
         >
           <Copy size={12} /> Duplicate
         </button>
         <button
           onClick={() => { if (canDelete) { onDelete(); onClose() } }}
           disabled={!canDelete}
-          className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${canDelete ? 'text-red-400 hover:bg-red-500/15 cursor-pointer' : 'text-red-400/40 cursor-default'}`}
+          className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${canDelete ? 'text-red-400 hover:bg-red-500/15 focus-visible:bg-red-500/15 cursor-pointer' : 'text-red-400/40 cursor-default'}`}
         >
           <Trash2 size={12} /> Delete
         </button>
@@ -75,7 +75,7 @@ const ZOOM_POSITIONS = 240
  * timeline underneath is made of. Axis-aligned hairlines stay crisp at this
  * size where diagonal arrowheads cannot.
  *
- * Options were explored at /dev/timeline-zoom-lab.
+ * Options were explored at /dev/timeline-zoom-lab (removed 2026-09-08, see git history).
  */
 function BeatWidthGlyph() {
   return (
@@ -156,6 +156,11 @@ export function SceneTabs() {
   const scenes = useMemo(() => useProjectStore.getState().scenes, [scenesKey])
   const sceneOrder = useProjectStore((s) => s.sceneOrder)
   const activeSceneId = useProjectStore((s) => s.activeSceneId)
+  const tabsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    // New scenes and selection changes must stay reachable in a crowded rail.
+    tabsRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [activeSceneId])
   const setActiveScene = useProjectStore((s) => s.setActiveScene)
   const addScene = useProjectStore((s) => s.addScene)
   const renameScene = useProjectStore((s) => s.renameScene)
@@ -190,64 +195,65 @@ export function SceneTabs() {
     // Slightly translucent (the /85) so the workspace's ambient light passes
     // through the seam between visualizer and timeline instead of stopping at
     // an opaque bar - the strip sits exactly on that boundary.
-    <div className="flex h-[64px] flex-shrink-0 items-center gap-8 overflow-x-auto no-scrollbar border-t border-[rgba(255,255,255,0.06)] bg-[var(--bg-app)]/85 px-6 select-none" role="tablist" aria-label="Scenes">
-      {sceneOrder.map((id, index) => {
-        const scene = scenes[id]
-        if (!scene) return null
-        const active = id === activeSceneId
-        return (
-          <button
-            key={id}
-            role="tab"
-            aria-selected={active}
-            onClick={() => select(id)}
-            onDoubleClick={() => {
-              if (scene.isMain) return
-              const name = window.prompt('Scene name', scene.name)
-              if (name) renameScene(id, name)
-            }}
-            onContextMenu={(e) => {
-              e.preventDefault()
-              // Main can't be duplicated or deleted, so it has no menu.
-              if (!scene.isMain) setMenu({ x: e.clientX, y: e.clientY, id })
-            }}
-            title={scene.isMain ? 'The final composition - composes the other scenes into the exported frame' : 'Double-click to rename · Right-click for options'}
-            className={`group flex flex-shrink-0 items-baseline gap-2.5 border-b-2 pb-1 cursor-pointer ${
-              active ? 'border-[var(--accent)]' : 'border-transparent'
-            }`}
-          >
-            <span className={`font-mono text-[10.5px] leading-none ${active ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>
-              {String(index + 1).padStart(2, '0')}
-            </span>
-            <span
-              className={`max-w-44 truncate text-[22px] italic leading-none [font-family:var(--font-display)] ${
+    <div className="flex h-[34px] [@media(pointer:coarse)]:h-[52px] flex-shrink-0 items-center gap-3 border-t border-[var(--border-subtle)] bg-[var(--bg-app)]/85 px-3 select-none">
+      <div
+        ref={tabsRef}
+        className="flex h-full min-w-0 flex-1 items-center gap-1 overflow-x-auto no-scrollbar"
+        role="tablist"
+        aria-label="Scenes"
+        onKeyDown={(e) => {
+          // Let focused scene buttons activate instead of triggering transport.
+          if (e.key === 'Enter' || e.key === ' ') e.stopPropagation()
+        }}
+      >
+        {sceneOrder.map((id) => {
+          const scene = scenes[id]
+          if (!scene) return null
+          const active = id === activeSceneId
+          return (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={active}
+              onClick={() => select(id)}
+              onDoubleClick={() => {
+                if (scene.isMain) return
+                const name = window.prompt('Scene name', scene.name)
+                if (name) renameScene(id, name)
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                // Main can't be duplicated or deleted, so it has no menu.
+                if (!scene.isMain) setMenu({ x: e.clientX, y: e.clientY, id })
+              }}
+              title={scene.isMain ? 'The final composition - composes the other scenes into the exported frame' : `${scene.name} · Double-click to rename · Right-click for options`}
+              className={`flex h-[26px] [@media(pointer:coarse)]:h-11 flex-shrink-0 items-center rounded-[5px] border px-3 font-sans text-[13px] leading-none cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--text-2)] ${
                 active
-                  ? 'text-[var(--accent)]'
-                  : 'text-[rgba(233,237,244,0.32)] group-hover:text-[var(--accent-hover)]'
+                  ? 'border-[var(--border-strong)] bg-[var(--bg-elevated)] text-[var(--text-2)]'
+                  : 'border-transparent text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_3%,transparent)] hover:text-[var(--text-2)]'
               }`}
             >
-              {scene.name}
-            </span>
-          </button>
-        )
-      })}
-      <button
-        onClick={create}
-        title="Add scene"
-        className="flex-shrink-0 pb-1 text-[17px] italic leading-none [font-family:var(--font-display)] text-[var(--text-muted)] hover:text-[var(--accent)] cursor-pointer"
-      >
-        + new scene
-      </button>
-      <div className="ml-auto flex min-w-0 items-center gap-1">
-        {/* Which scene the canvas shows is the eye on the tabs now, not a second
-            row of scene names here. Aspect and timeline sizing stay. */}
+              <span className="max-w-44 truncate">
+                {scene.name}
+              </span>
+            </button>
+          )
+        })}
+        <button
+          onClick={create}
+          title="Add scene"
+          className="h-[26px] [@media(pointer:coarse)]:h-11 flex-shrink-0 rounded-[5px] border border-transparent px-3 font-sans text-[13px] leading-none text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_3%,transparent)] hover:text-[var(--text-2)] cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--text-2)]"
+        >
+          + new scene
+        </button>
+      </div>
+      <div className="ml-auto flex flex-shrink-0 items-center gap-1">
         {/* Review comments (dev ?file= sessions; renders nothing otherwise). */}
         <CommentsChip />
-
         {/* Timeline zoom lives here so it never covers track content. The two
             sliders share one pill: they are one control ("how big is the
             timeline"), not two unrelated settings. */}
-        <div className="ml-1 flex h-6 flex-shrink-0 items-center gap-2.5 rounded-full bg-white/[0.03] px-2.5 hover:bg-white/[0.06]">
+        <div className="ml-1 flex h-6 flex-shrink-0 items-center gap-2.5 rounded-full bg-[color-mix(in_srgb,var(--text)_3%,transparent)] px-2.5 hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]">
           <ZoomSlider
             icon={<BeatWidthGlyph />}
             label="Horizontal zoom - beat width"

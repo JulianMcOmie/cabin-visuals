@@ -1,5 +1,8 @@
 'use client'
 
+import { ColorPicker } from './colorWheel'
+import { KnobValue } from './KnobValue'
+
 import { useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import type { ParamDef } from '../instruments/types'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
@@ -9,13 +12,14 @@ import { lockCursor, unlockCursor } from '../utils/dragCursor'
  *  accent blue was too loud for a wall of params; --accent-muted keeps the hue
  *  without the shout). Matches .slider-console in globals.css. */
 export function ParamSlider({
-  label, value, min, max, step, curve = 1, onChange,
+  label, value, min, max, step, curve = 1, onChange, integer,
 }: {
   label: string
   value: number
   min: number
   max: number
   step: number
+  integer?: boolean
   curve?: number
   onChange: (value: number) => void
 }) {
@@ -65,10 +69,11 @@ export function ParamSlider({
           style={{ left: `calc(${pct}% - 5.5px)` }}
         />
       </div>
-      <span className="font-mono text-[10px] text-[var(--text-muted)] text-right tabular-nums">
+      <KnobValue value={value} min={min} max={max} label={label} onChange={onChange} integer={integer}
+        className="font-mono text-[10px] text-[var(--text-muted)] text-right tabular-nums">
         {/* Curved sliders reach values a 2-decimal readout would show as 0.00. */}
         {curve !== 1 && value !== 0 && Math.abs(value) < 0.01 ? value.toPrecision(1) : value.toFixed(2)}
-      </span>
+      </KnobValue>
     </div>
   )
 }
@@ -118,7 +123,8 @@ export function ParamStepper({
         </div>
         {button(1, '+', upLabel ?? `More ${label}`)}
       </div>
-      <span className="text-right font-mono text-[10px] tabular-nums text-[var(--text-muted)]">{n}</span>
+      <KnobValue integer value={n} min={min} max={max} label={label} onChange={v => onChange(Math.round(v))}
+        className="text-right font-mono text-[10px] tabular-nums text-[var(--text-muted)]">{n}</KnobValue>
     </div>
   )
 }
@@ -179,7 +185,8 @@ export function ParamHueSlider({
           style={{ left: `calc(${pct}% - 1px)` }}
         />
       </div>
-      <span className="text-right font-mono text-[10px] tabular-nums text-[var(--text-muted)]">{value.toFixed(2)}</span>
+      <KnobValue value={value} min={min} max={max} label={label} onChange={onChange}
+        className="text-right font-mono text-[10px] tabular-nums text-[var(--text-muted)]">{value.toFixed(2)}</KnobValue>
     </div>
   )
 }
@@ -219,6 +226,7 @@ export function ParamControl({ param, numValue, strValue, onNum, onStr }: {
       <div className="grid grid-cols-[100px_1fr] items-center gap-2.5 mb-[13px]">
         <span className="text-[11px] text-[var(--text-3)] truncate" title={param.label}>{param.label}</span>
         <select
+          aria-label={param.label}
           value={numValue ?? param.default}
           onChange={(e) => onNum(Number(e.target.value))}
           className="w-full h-6 px-1.5 rounded bg-[var(--bg-app)] text-[11px] text-[var(--text-2)] border border-[var(--border)] outline-none cursor-pointer"
@@ -244,11 +252,11 @@ export function ParamControl({ param, numValue, strValue, onNum, onStr }: {
       <div className="grid grid-cols-[100px_1fr] items-center gap-2.5 mb-[13px]">
         <span className="text-[11px] text-[var(--text-3)] truncate" title={param.label}>{param.label}</span>
         <div className="flex justify-end">
-          <input
-            type="color"
+          <ColorPicker
+            ariaLabel={param.label}
             value={strValue ?? param.default}
-            onChange={(e) => onStr?.(e.target.value)}
-            className="w-8 h-5 rounded bg-transparent border border-[var(--border)] cursor-pointer flex-shrink-0 active:scale-95"
+            onChange={(hex) => onStr?.(hex)}
+            size={24}
           />
         </div>
       </div>
@@ -273,6 +281,7 @@ export function ParamControl({ param, numValue, strValue, onNum, onStr }: {
       max={param.max}
       step={param.step}
       curve={param.curve}
+      integer={param.integer}
       onChange={onNum}
     />
   )

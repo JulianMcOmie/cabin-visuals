@@ -4,16 +4,13 @@
 // extracted from Laser Sphere so every bespoke panel shares one wheel: a round
 // swatch pill with label + hex readout, opening a continuous HSV wheel popover
 // (hue around the ring, saturation toward the white center, brightness bar
-// beneath) - never the native browser picker. Opens upward (`bottom-full`) so
-// the host panel never scrolls; closes on outside click or Escape.
+// beneath) - never the native browser picker. Floats in the browser top layer,
+// above the icon when it fits and below otherwise; closes on outside click or Escape.
 //
-// `ColorField` is the same picker with nothing floating: a captioned hue rail
-// over a saturation/brightness field, always open, laid flat in the panel. Use
-// it where the color IS the panel's subject and a popover would cover the very
-// preview you are judging (the scene backdrop); keep the pill+wheel where color
-// is one control among many and vertical space is scarce.
+// `ColorPicker` owns the circle and interaction. `ColorWheelPill` adds the
+// console caption/readout; inline rows and gradient stops use ColorPicker.
 
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type RefObject } from 'react'
 import { clamp } from '../utils/math'
 
 // ── Color math (HSV ↔ hex) ──────────────────────────────────────────────────
@@ -90,33 +87,141 @@ function arrowStep(event: KeyboardEvent, step: number): number {
   return 0
 }
 
-const HUE_RAIL = 'linear-gradient(90deg,#f00,#ff0 17%,#0f0 33%,#0ff 50%,#00f 67%,#f0f 83%,#f00)'
-
 // ── The pill + wheel ────────────────────────────────────────────────────────
 
 const WHEEL_SIZE = 132
 const WHEEL_RADIUS = WHEEL_SIZE / 2
 
-/** The floating wheel surface alone - hosts that anchor it themselves (pills,
- *  segmented controls) render it inside a `relative` wrapper while managing
- *  their own open state / outside-click close. */
-export function ColorWheelPopover({ value, onChange, align = 'right', edge = 'top', testId }: {
+/** Keep top-layer color controls anchored and inside the viewport. */
+export function useColorPopoverPosition(
+  popupRef: RefObject<HTMLDivElement | null>,
+  anchorRef: RefObject<HTMLButtonElement | null>,
+  open: boolean,
+  align: 'left' | 'right' = 'right',
+) {
+  useLayoutEffect(() => {
+    if (!open) return
+    const popup = popupRef.current
+    const anchor = anchorRef.current
+    if (!popup || !anchor) return
+    const position = () => {
+      const gap = 8
+      const rect = anchor.getBoundingClientRect()
+      const viewport = window.visualViewport
+      const left = viewport?.offsetLeft ?? 0
+      const top = viewport?.offsetTop ?? 0
+      const right = left + (viewport?.width ?? window.innerWidth)
+      const bottom = top + (viewport?.height ?? window.innerHeight)
+      popup.style.maxWidth = `${Math.max(1, right - left - gap * 2)}px`
+      const above = Math.max(0, rect.top - top - gap * 2)
+      const below = Math.max(0, bottom - rect.bottom - gap * 2)
+      const naturalHeight = popup.scrollHeight + popup.offsetHeight - popup.clientHeight
+      // If neither side fits, use the larger side and allow scrolling.
+      const opensAbove = naturalHeight <= above || (naturalHeight > below && above > below)
+      popup.style.maxHeight = `${Math.max(1, opensAbove ? above : below)}px`
+      const { width, height } = popup.getBoundingClientRect()
+      const x = align === 'right' ? rect.right - width : rect.left
+      const y = opensAbove ? rect.top - height - gap : rect.bottom + gap
+      popup.style.left = `${Math.max(left + gap, Math.min(x, right - width - gap))}px`
+      popup.style.top = `${Math.max(top + gap, Math.min(y, bottom - height - gap))}px`
+    }
+    position()
+    const observer = new ResizeObserver(position)
+    observer.observe(anchor)
+    observer.observe(popup)
+    window.addEventListener('resize', position)
+    window.addEventListener('scroll', position, true)
+    window.visualViewport?.addEventListener('resize', position)
+    window.visualViewport?.addEventListener('scroll', position)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', position)
+      window.removeEventListener('scroll', position, true)
+      window.visualViewport?.removeEventListener('resize', position)
+      window.visualViewport?.removeEventListener('scroll', position)
+    }
+  }, [open, align, anchorRef, popupRef])
+}
+
+/** A top-layer surface that retains DOM ancestry for outside-click handling. */
+export function ColorWheelPopover({ value, onChange, anchorRef, align = 'right', testId, ariaLabel = 'Color' }: {
   value: string
   onChange: (hex: string) => void
+  anchorRef: RefObject<HTMLButtonElement | null>
   /** Which edge of the anchor the popover hugs. */
   align?: 'left' | 'right'
-  /** Which side of the anchor it opens on: 'top' (default) floats above,
-   *  'bottom' drops below - for anchors sitting near their panel's top. */
-  edge?: 'top' | 'bottom'
   testId?: string
+  ariaLabel?: string
+}) {
+  const popupRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const popup = popupRef.current
+    popup?.showPopover()
+    return () => { popup?.hidePopover() }
+  }, [])
+  useColorPopoverPosition(popupRef, anchorRef, true, align)
+
+  return (
+    <div
+      ref={popupRef}
+      popover="manual"
+      role="dialog"
+      aria-label={ariaLabel}
+      onKeyDown={(event) => event.stopPropagation()}
+      data-testid={testId}
+      className="fixed m-0 w-max overflow-auto rounded-md border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[var(--bg-panel)] p-3 text-[var(--text)] shadow-[0_8px_24px_rgba(0,0,0,.5)]"
+      style={{ inset: 'auto' }}
+    >
+      <ColorWheelPicker value={value} onChange={onChange} />
+      <label className="mt-3 flex items-center gap-2 text-[10px] text-[var(--text-3)]">
+        Hex
+        <input
+          key={value}
+          defaultValue={value.toUpperCase()}
+          aria-label={`${ariaLabel} hex color`}
+          spellCheck={false}
+          maxLength={7}
+          onBlur={(event) => {
+            const hex = event.currentTarget.value.trim()
+            if (/^#[\da-f]{6}$/i.test(hex)) onChange(hex)
+            else event.currentTarget.value = value.toUpperCase()
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') event.currentTarget.blur()
+          }}
+          className="w-24 min-w-0 rounded border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] px-2 py-1 font-mono text-[11px] text-[var(--text-2)]"
+        />
+      </label>
+    </div>
+  )
+}
+
+/** Shared wheel contents for hosts that supply their own floating surface. */
+export function ColorWheelPicker({ value, onChange }: {
+  value: string
+  onChange: (hex: string) => void
 }) {
   const wheelRef = useRef<HTMLDivElement>(null)
   const barRef = useRef<HTMLDivElement>(null)
   const [hsv, setHsv] = useState(() => hexToHsv(value))
+  const emitted = useRef(value)
+  const [previousValue, setPreviousValue] = useState(value)
+
+  // Resolve external edits before committing the next render, so a keyboard
+  // nudge immediately after a hex edit cannot use the previous color's HSV.
+  if (value !== previousValue) {
+    setPreviousValue(value)
+    if (value.toLowerCase() !== emitted.current.toLowerCase()) {
+      emitted.current = value
+      setHsv(hexToHsv(value))
+    }
+  }
 
   const commit = (h: number, s: number, v: number) => {
+    const hex = hsvToHex(h, s, v)
+    emitted.current = hex
     setHsv({ h, s, v })
-    onChange(hsvToHex(h, s, v))
+    onChange(hex)
   }
 
   const wheelFromPointer = (clientX: number, clientY: number) => {
@@ -144,13 +249,25 @@ export function ColorWheelPopover({ value, onChange, align = 'right', edge = 'to
   const fullColor = hsvToHex(hsv.h, hsv.s, 1)
 
   return (
-    <div
-      data-testid={testId}
-      className={`absolute z-50 rounded-md border border-white/10 bg-[#0d1017] p-3 shadow-[0_8px_24px_rgba(0,0,0,.5)] ${edge === 'bottom' ? 'top-full mt-2' : 'bottom-full mb-2'} ${align === 'right' ? 'right-0' : 'left-0'}`}
-    >
+    <div style={{ width: WHEEL_SIZE }}>
       <div
         ref={wheelRef}
         {...dragHandlers(wheelFromPointer)}
+        role="slider"
+        tabIndex={0}
+        aria-label="Hue and saturation"
+        aria-valuemin={0}
+        aria-valuemax={360}
+        aria-valuenow={Math.round(hsv.h)}
+        aria-valuetext={`Hue ${Math.round(hsv.h)} degrees, saturation ${Math.round(hsv.s * 100)} percent`}
+        onKeyDown={(event) => {
+          const step = arrowStep(event, event.shiftKey ? 10 : 1)
+          if (!step) return
+          event.preventDefault()
+          event.stopPropagation()
+          if (event.key === 'ArrowUp' || event.key === 'ArrowDown') commit(hsv.h, clamp(hsv.s + step / 100, 0, 1), hsv.v)
+          else commit((hsv.h + step + 360) % 360, hsv.s, hsv.v)
+        }}
         className="relative cursor-crosshair touch-none rounded-full"
         style={{
           width: WHEEL_SIZE,
@@ -159,7 +276,7 @@ export function ColorWheelPopover({ value, onChange, align = 'right', edge = 'to
         }}
       >
         <span
-          className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_4px_rgba(0,0,0,.8)]"
+          className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[color-mix(in_srgb,var(--text)_100%,transparent)] shadow-[0_0_4px_rgba(0,0,0,.8)]"
           style={{ left: markerX, top: markerY, background: fullColor }}
         />
       </div>
@@ -167,11 +284,23 @@ export function ColorWheelPopover({ value, onChange, align = 'right', edge = 'to
         ref={barRef}
         {...dragHandlers((x) => barFromPointer(x))}
         aria-label="Brightness"
+        role="slider"
+        tabIndex={0}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(hsv.v * 100)}
+        onKeyDown={(event) => {
+          const step = arrowStep(event, event.shiftKey ? 0.1 : 0.01)
+          if (!step) return
+          event.preventDefault()
+          event.stopPropagation()
+          commit(hsv.h, hsv.s, clamp(hsv.v + step, 0, 1))
+        }}
         className="relative mt-3 h-3 cursor-pointer touch-none rounded-full"
         style={{ background: `linear-gradient(to right, #000, ${fullColor})` }}
       >
         <span
-          className="absolute top-1/2 h-4 w-2 -translate-x-1/2 -translate-y-1/2 rounded-[2px] border border-white/60 bg-white/90"
+          className="absolute top-1/2 h-4 w-2 -translate-x-1/2 -translate-y-1/2 rounded-[2px] border border-[color-mix(in_srgb,var(--text)_60%,transparent)] bg-[color-mix(in_srgb,var(--text)_90%,transparent)]"
           style={{ left: `${hsv.v * 100}%` }}
         />
       </div>
@@ -201,14 +330,54 @@ export function useColorPopoverDismiss(open: boolean, close: () => void) {
     }, { signal: controller.signal, capture: true })
     window.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') closeRef.current()
-    }, { signal: controller.signal })
+    }, { signal: controller.signal, capture: true })
     return () => controller.abort()
   }, [open])
 
   return hostRef
 }
 
-export function ColorWheelPill({ value, onChange, label, ariaLabel, title, halo, align = 'right', dimmed = false, pillTestId, wheelTestId }: {
+/** The Colorizer's current-color circle and wheel, shared by every color input.
+ * Caption layout belongs to the caller; picker interaction lives only here. */
+export function ColorPicker({ value, onChange, ariaLabel, title, halo, align = 'right', dimmed = false, size = 32, selected, pillTestId, wheelTestId }: {
+  value: string
+  onChange: (hex: string) => void
+  ariaLabel: string
+  title?: string
+  halo?: string
+  align?: 'left' | 'right'
+  dimmed?: boolean
+  size?: number
+  selected?: boolean
+  pillTestId?: string
+  wheelTestId?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const hostRef = useColorPopoverDismiss(open, () => setOpen(false))
+  const anchorRef = useRef<HTMLButtonElement>(null)
+
+  return (
+    <div ref={hostRef} className="relative flex shrink-0">
+      <button
+        type="button"
+        ref={anchorRef}
+        data-testid={pillTestId}
+        aria-label={ariaLabel}
+        aria-expanded={open}
+        aria-pressed={selected}
+        aria-haspopup="dialog"
+        title={title ?? `${ariaLabel} ${value}`}
+        onClick={() => setOpen((o) => !o)}
+        className={`shrink-0 cursor-pointer rounded-full border border-[color-mix(in_srgb,var(--text)_15%,transparent)] active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${dimmed ? 'opacity-45' : ''} ${selected ? 'ring-2 ring-[var(--accent)]' : ''}`}
+        style={{ width: size, height: size, background: value, boxShadow: halo }}
+      />
+      {open && <ColorWheelPopover anchorRef={anchorRef} value={value} onChange={onChange} align={align} testId={wheelTestId} ariaLabel={ariaLabel} />}
+    </div>
+  )
+}
+
+/** Captioned console layout for the shared picker, used by Colorizer. */
+export function ColorWheelPill({ label, ...pickerProps }: {
   value: string
   onChange: (hex: string) => void
   /** Short caps label under the pill (COLOR, BACKDROP, ...). */
@@ -224,144 +393,11 @@ export function ColorWheelPill({ value, onChange, label, ariaLabel, title, halo,
   pillTestId?: string
   wheelTestId?: string
 }) {
-  const [open, setOpen] = useState(false)
-  const hostRef = useColorPopoverDismiss(open, () => setOpen(false))
-
   return (
-    <div ref={hostRef} className="relative flex min-w-0 flex-col items-center">
-      <button
-        data-testid={pillTestId}
-        aria-label={ariaLabel}
-        aria-expanded={open}
-        title={title ?? `${ariaLabel} ${value}`}
-        onClick={() => setOpen((o) => !o)}
-        className={`h-8 w-8 cursor-pointer rounded-full border border-white/15 active:scale-95 ${dimmed ? 'opacity-45' : ''}`}
-        style={{ background: value, boxShadow: halo }}
-      />
-      <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-white/40">{label}</span>
-      <span className="font-mono text-[9px] uppercase text-white/70">{value}</span>
-
-      {open && <ColorWheelPopover value={value} onChange={onChange} align={align} testId={wheelTestId} />}
-    </div>
-  )
-}
-
-// ── The flat field ──────────────────────────────────────────────────────────
-
-/** The wheel's anatomy laid flat and always open: a header (caption + live hex)
- *  over a hue rail over a saturation/brightness field. Nothing floats, so the
- *  preview it edits stays visible under the thumb - and stacking two of these
- *  gives a two-stop gradient one editor per stop with no selector between them.
- *
- *  HSV lives in local state so a color that reaches black or full desaturation
- *  still remembers which hue it was being dragged through (same reason as the
- *  wheel); an EXTERNAL change to `value` re-derives it. */
-export function ColorField({ value, onChange, label, ariaLabel, testId }: {
-  value: string
-  onChange: (hex: string) => void
-  /** Short caps caption on the left of the header (BACKGROUND, FROM, TO). */
-  label: string
-  /** Spoken name for the two rails, when the caption is too terse alone. */
-  ariaLabel?: string
-  testId?: string
-}) {
-  const railRef = useRef<HTMLDivElement>(null)
-  const fieldRef = useRef<HTMLDivElement>(null)
-  const [hsv, setHsv] = useState(() => hexToHsv(value))
-  // What WE last emitted - anything else arriving in `value` came from
-  // elsewhere (a mode switch, undo) and must reset the remembered hue.
-  const emitted = useRef(value)
-
-  useEffect(() => {
-    if (value.toLowerCase() === emitted.current.toLowerCase()) return
-    emitted.current = value
-    setHsv(hexToHsv(value))
-  }, [value])
-
-  const commit = (h: number, s: number, v: number) => {
-    const hex = hsvToHex(h, s, v)
-    emitted.current = hex
-    setHsv({ h, s, v })
-    onChange(hex)
-  }
-
-  const hueFromPointer = (clientX: number) => {
-    const rect = railRef.current?.getBoundingClientRect()
-    if (!rect) return
-    commit(clamp((clientX - rect.left) / rect.width, 0, 1) * 360, hsv.s, hsv.v)
-  }
-
-  const fieldFromPointer = (clientX: number, clientY: number) => {
-    const rect = fieldRef.current?.getBoundingClientRect()
-    if (!rect) return
-    commit(
-      hsv.h,
-      clamp((clientX - rect.left) / rect.width, 0, 1),
-      1 - clamp((clientY - rect.top) / rect.height, 0, 1),
-    )
-  }
-
-  const name = ariaLabel ?? label
-  const current = hsvToHex(hsv.h, hsv.s, hsv.v)
-  const pureHue = hsvToHex(hsv.h, 1, 1)
-
-  return (
-    <div data-testid={testId} className="flex flex-col gap-[7px]">
-      <div className="flex items-baseline justify-between">
-        <span className="text-[8px] font-semibold tracking-[0.12em] uppercase text-white/40 select-none">{label}</span>
-        <span className="font-mono text-[9px] uppercase text-white/45">{value}</span>
-      </div>
-      <div
-        ref={railRef}
-        {...dragHandlers(hueFromPointer)}
-        role="slider"
-        tabIndex={0}
-        aria-label={`${name} hue`}
-        aria-valuemin={0}
-        aria-valuemax={360}
-        aria-valuenow={Math.round(hsv.h)}
-        onKeyDown={(event) => {
-          const step = arrowStep(event, 4)
-          if (!step) return
-          event.preventDefault()
-          commit((hsv.h + step + 360) % 360, hsv.s, hsv.v)
-        }}
-        className="relative h-3 cursor-pointer touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-        style={{ background: HUE_RAIL }}
-      >
-        <span
-          className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_4px_rgba(0,0,0,.8)]"
-          style={{ left: `${hsv.h / 360 * 100}%`, background: pureHue }}
-        />
-      </div>
-      <div
-        ref={fieldRef}
-        {...dragHandlers(fieldFromPointer)}
-        role="slider"
-        tabIndex={0}
-        aria-label={`${name} saturation and brightness`}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(hsv.v * 100)}
-        aria-valuetext={`${Math.round(hsv.s * 100)}% saturation, ${Math.round(hsv.v * 100)}% brightness`}
-        onKeyDown={(event) => {
-          // Horizontal walks saturation, vertical walks brightness - the field's
-          // own axes, so the keys go where the eye expects.
-          const horizontal = event.key === 'ArrowLeft' || event.key === 'ArrowRight'
-          const step = arrowStep(event, 0.03)
-          if (!step) return
-          event.preventDefault()
-          if (horizontal) commit(hsv.h, clamp(hsv.s + step, 0, 1), hsv.v)
-          else commit(hsv.h, hsv.s, clamp(hsv.v + step, 0, 1))
-        }}
-        className="relative h-[54px] cursor-crosshair touch-none rounded-[5px] border border-white/[0.08] outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-        style={{ background: `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, ${pureHue})` }}
-      >
-        <span
-          className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_4px_rgba(0,0,0,.8)]"
-          style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%`, background: current }}
-        />
-      </div>
+    <div className="relative flex min-w-0 flex-col items-center">
+      <ColorPicker {...pickerProps} />
+      <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">{label}</span>
+      <span className="font-mono text-[9px] uppercase text-[var(--text-2)]">{pickerProps.value}</span>
     </div>
   )
 }

@@ -1,7 +1,11 @@
 'use client'
 
+import { KnobValue } from './KnobValue'
+import { numberEntry } from './knobValueParsing'
+import { useKnobInteraction } from './useKnobInteraction'
+
 import { Minus, Plus } from 'lucide-react'
-import { useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { isNumberParam, type NumberParamDef } from '../instruments/types'
 import { ParamControl, ParamSlider } from './ParameterControl'
 import { ParameterList } from './ParametersUserInterface'
@@ -43,7 +47,6 @@ function MirrorDisc({ segments, rotation, zoom, spinSpeed, hueShift }: {
   spinSpeed: NumberBound
   hueShift: NumberBound
 }) {
-  const dragRef = useRef<{ pointerRad: number; value: number } | null>(null)
   const discRef = useRef<HTMLDivElement>(null)
   const d = rotation.definition
 
@@ -55,31 +58,8 @@ function MirrorDisc({ segments, rotation, zoom, spinSpeed, hueShift }: {
   const spin = spinSpeed.value
   const spinDur = Math.abs(spin) > 0.001 ? TAU / Math.abs(spin) : 0
 
-  const pointerRadians = (event: ReactPointerEvent<HTMLDivElement>): number => {
-    const rect = discRef.current?.getBoundingClientRect()
-    if (!rect) return 0
-    return Math.atan2(event.clientY - (rect.top + rect.height / 2), event.clientX - (rect.left + rect.width / 2))
-  }
-
-  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    event.currentTarget.setPointerCapture(event.pointerId)
-    dragRef.current = { pointerRad: pointerRadians(event), value: rotation.value }
-  }
-
-  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current) return
-    let delta = pointerRadians(event) - dragRef.current.pointerRad
-    if (delta > Math.PI) delta -= TAU
-    if (delta < -Math.PI) delta += TAU
-    const wrapped = ((dragRef.current.value + delta) % TAU + TAU) % TAU
-    rotation.setValue(snap(Math.min(wrapped, d.max), d))
-  }
-
-  const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    dragRef.current = null
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-  }
+  const { handlers } = useKnobInteraction({ ...d, value: rotation.value, defaultValue: d.default,
+    onChange: rotation.setValue, gesture: 'angular', angularPeriod: TAU, wrap: true, keyStep: true })
 
   return (
     <div className="flex justify-center rounded-[3px] border border-[var(--border)] bg-[var(--bg-canvas-deep)] py-1.5">
@@ -94,16 +74,7 @@ function MirrorDisc({ segments, rotation, zoom, spinSpeed, hueShift }: {
         aria-valuemax={d.max}
         aria-valuenow={rotation.value}
         title="Drag to rotate · double-click to reset"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onDoubleClick={() => rotation.setValue(d.default)}
-        onKeyDown={(event) => {
-          if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
-          event.preventDefault()
-          rotation.setValue(snap(rotation.value + (event.key === 'ArrowRight' ? d.step : -d.step), d))
-        }}
+        {...handlers}
         className="h-[96px] w-[96px] cursor-grab touch-none select-none outline-none focus-visible:rounded-full focus-visible:ring-1 focus-visible:ring-[var(--accent)] active:cursor-grabbing"
       >
         <svg viewBox="0 0 100 100" className="h-full w-full">
@@ -265,6 +236,11 @@ export const KaleidoscopeEffectUserInterfaceRenderer: UserInterfaceRendererDefin
   return (
     <section data-testid="kaleidoscope-effect-user-interface">
       <MirrorDisc segments={segments} rotation={rotation} zoom={zoom} spinSpeed={spinSpeed} hueShift={hueShift} />
+      <div className="mb-2 text-center">
+        <KnobValue value={rotation.value} min={rotation.definition.min} max={rotation.definition.max}
+          label={rotation.definition.label} codec={numberEntry('rad')} onChange={rotation.setValue}
+          className="font-mono text-[10px] tabular-nums text-[var(--text-muted)]">{rotation.value.toFixed(2)} rad</KnobValue>
+      </div>
       <SegmentStepper segments={segments} />
       <ParamSlider
         label={zoom.definition.label}

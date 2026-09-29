@@ -1,5 +1,5 @@
 import { Matrix4, Vector3 } from 'three'
-import type { VisualCopy } from './types'
+import { sharedLocalLayout } from './sharedLocalLayout'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { SCATTER_COLOR } from './identityColors'
 import { applySplitterSize, splitterSize, SPLITTER_SIZE_PARAM } from './splitterSize'
@@ -69,14 +69,7 @@ export function scatterPositions(settings: ScatterSettings): Vector3[] {
 function resolveScatter(settings: ScatterSettings) {
   const transforms = scatterPositions(settings).map(p => applySplitterSize(new Matrix4().makeTranslation(p.x, p.y, p.z), splitterSize(settings.size)))
   // LOCAL placement: a preceding mover or splitter re-frames the whole cloud.
-  return {    
-apply(copy: VisualCopy) {      
-return transforms.map(transform => ({        
-...copy,
-        transform: copy.transform.clone().multiply(transform), colorShift: { ...copy.colorShift },
-      }))    
-}  
-}
+  return sharedLocalLayout({ transforms })
 }
 export const scatterSplitter: MoverOrSplitterDefinition<ScatterSettings> = {
   id: 'scatter', label: 'Scatter', kind: 'splitter', identityColor: SCATTER_COLOR,

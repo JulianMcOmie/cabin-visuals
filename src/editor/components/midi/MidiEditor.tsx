@@ -1,5 +1,8 @@
 'use client'
 
+import { MultiBlockHeaders, MultiBlockLayer } from './MultiBlockLayer'
+import type { MidiBlockView } from './multiBlock'
+
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type UIEvent as ReactScrollEvent } from 'react'
 import { isUntouchedScriptNote } from '../../core/provenance'
 import { useUIStore } from '../../store/UIStore'
@@ -34,6 +37,8 @@ export interface MidiEditorProps {
    *  loop dashes, marquee) is voiced from it. */
   trackColor: string
   block: Block
+  blockViews?: MidiBlockView[]
+  scrollPosition?: React.MutableRefObject<{ left: number; top: number } | null>
   onNotesChange: (notes: Note[]) => void
   /** Persist a gesture's result to the store as one undo step. */
   onCommit: (notes: Note[]) => void
@@ -90,6 +95,8 @@ export function MidiEditor({
   trackId,
   trackColor,
   block,
+  blockViews = [],
+  scrollPosition,
   noteWords,
   onNoteWordEdit,
   onLaneRowClick,
@@ -120,6 +127,7 @@ export function MidiEditor({
   const playheadRef = useRef<HTMLDivElement>(null)
   const rulerPlayheadRef = useRef<HTMLDivElement>(null)
   const rulerContentRef = useRef<HTMLDivElement>(null)
+  const blockHeadersRef = useRef<HTMLDivElement>(null)
   const prevZoomRef = useRef({ rowHeight, pixelsPerBeat, scrollLeft: 0 })
   // The label gutter's width - drag its right edge to resize (same gesture as
   // the tracks label column).
@@ -131,10 +139,23 @@ export function MidiEditor({
   // ruler; horizontal sits under the grid).
   const onScrollSync = (e: ReactScrollEvent<HTMLDivElement>) => {
     prevZoomRef.current.scrollLeft = e.currentTarget.scrollLeft
+    if (scrollPosition) scrollPosition.current = { left: e.currentTarget.scrollLeft, top: e.currentTarget.scrollTop }
+    if (blockHeadersRef.current) blockHeadersRef.current.style.transform = `translateX(${-e.currentTarget.scrollLeft}px)`
     if (rulerContentRef.current) {
       rulerContentRef.current.style.transform = `translateX(${-e.currentTarget.scrollLeft}px)`
     }
   }
+
+  // Switching the active clip resets note gestures, but keeps the shared view.
+  useLayoutEffect(() => {
+    const position = scrollPosition?.current
+    const container = containerRef.current
+    if (!position || !container) return
+    container.scrollLeft = position.left
+    container.scrollTop = position.top
+    if (rulerContentRef.current) rulerContentRef.current.style.transform = `translateX(${-position.left}px)`
+    if (blockHeadersRef.current) blockHeadersRef.current.style.transform = `translateX(${-position.left}px)`
+  }, [scrollPosition])
 
   // One ruler mapping for every transport gesture. Keeping playhead scrubbing,
   // loop creation, loop movement, and edge resizing on this exact function
@@ -324,19 +345,19 @@ export function MidiEditor({
     const images: string[] = []
     const sizes: string[] = []
 
-    images.push(`repeating-linear-gradient(to right, rgba(255,255,255,0.12) 0px 1px, transparent 1px ${barWidthPx}px)`)
+    images.push(`repeating-linear-gradient(to right, color-mix(in srgb,var(--text) 12%,transparent) 0px 1px, transparent 1px ${barWidthPx}px)`)
     sizes.push(`${barWidthPx}px 100%`)
 
     // Skip beat lines when they coincide with bar lines (1 beat per bar),
     // otherwise the overlapping layers double the line opacity
     if (beatWidthPx !== barWidthPx) {
-      images.push(`repeating-linear-gradient(to right, rgba(255,255,255,0.06) 0px 1px, transparent 1px ${beatWidthPx}px)`)
+      images.push(`repeating-linear-gradient(to right, color-mix(in srgb,var(--text) 6%,transparent) 0px 1px, transparent 1px ${beatWidthPx}px)`)
       sizes.push(`${beatWidthPx}px 100%`)
     }
 
     // Same for subdivision lines when quantize is a full beat
     if (subdivWidthPx !== beatWidthPx) {
-      images.push(`repeating-linear-gradient(to right, rgba(255,255,255,0.025) 0px 1px, transparent 1px ${subdivWidthPx}px)`)
+      images.push(`repeating-linear-gradient(to right, color-mix(in srgb,var(--text) 2.5%,transparent) 0px 1px, transparent 1px ${subdivWidthPx}px)`)
       sizes.push(`${subdivWidthPx}px 100%`)
     }
 
@@ -364,7 +385,7 @@ export function MidiEditor({
     }).filter(Boolean) as { label: string; top: number; height: number }[]
   }, [rangeLabels, rows, rowHeight])
 
-  // Playhead position via RAF (no React re-renders). The canvas is an absolute
+  // Playhead position off the beat (no React re-renders). The canvas is an absolute
   // timeline, so the playhead sits at the absolute currentBeat and is visible
   // anywhere within the timeline (not just over the block).
   usePlayhead((beat) => {
@@ -525,7 +546,7 @@ export function MidiEditor({
     onWordEditStart, onWordEditChange, onWordEditCommit, onWordEditCancel])
 
   return (
-    <div className="relative flex-1 flex flex-col min-h-0 bg-[#1e1e21] select-none">
+    <div className="relative flex-1 flex flex-col min-h-0 bg-[var(--bg-panel)] select-none">
       {/* Resize handle along the label gutter's right edge - spans the full height
           (ruler corner + every row label). Invisible; the cursor is the affordance -
           mirrors the tracks label column exactly. */}
@@ -564,7 +585,7 @@ export function MidiEditor({
       >
         {/* Block clip header: drag the body to move the block, the edges to resize.
             Sits in the bottom half below the triangle (zIndex 10 < 21). */}
-        <div
+        {blockViews.length <= 1 && <div
           style={{
             position: 'absolute',
             top: '50%',
@@ -588,8 +609,11 @@ export function MidiEditor({
             if (ph != null && Math.abs(e.clientX - ph) <= 10) { e.currentTarget.style.cursor = 'ew-resize'; return }
             handleHeaderPointerMove(e)
           }}
-        />
+        />}
       </Ruler>
+      {blockViews.length > 1 && <MultiBlockHeaders blocks={blockViews} activeId={block.id} labelWidth={labelWidth}
+        contentWidth={canvasWidth - labelWidth} pixelsPerBeat={pixelsPerBeat} beatsPerBar={beatsPerBar} contentRef={blockHeadersRef}
+        onActivePointerDown={handleHeaderPointerDown} onActivePointerMove={handleHeaderPointerMove} />}
 
       <div
         ref={containerRef}
@@ -619,7 +643,7 @@ export function MidiEditor({
             width: labelWidth,
             height: canvasHeight,
             flexShrink: 0,
-            backgroundColor: '#202024',
+            backgroundColor: 'var(--bg-elevated)',
             position: 'sticky',
             left: 0,
             zIndex: 20,
@@ -651,8 +675,8 @@ export function MidiEditor({
                 width: labelWidth,
                 height: rl.height,
                 pointerEvents: 'none',
-                borderTop: '1px solid rgba(255,255,255,0.12)',
-                borderBottom: i === rangeLabelPositions.length - 1 ? '1px solid rgba(255,255,255,0.12)' : undefined,
+                borderTop: '1px solid color-mix(in srgb,var(--text) 12%,transparent)',
+                borderBottom: i === rangeLabelPositions.length - 1 ? '1px solid color-mix(in srgb,var(--text) 12%,transparent)' : undefined,
               }}
             >
               <span
@@ -664,7 +688,7 @@ export function MidiEditor({
                   right: 4,
                   fontSize: 11,
                   fontWeight: 600,
-                  color: 'rgba(255,255,255,0.3)',
+                  color: 'color-mix(in srgb,var(--text) 30%,transparent)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em',
                   whiteSpace: 'nowrap',
@@ -680,7 +704,7 @@ export function MidiEditor({
 
         {/* Gutter (half a triangle wide) between the labels and the grid so the
             ruler playhead triangle has room to show its left half at beat 0. */}
-        <div style={{ width: PLAYHEAD_TRIANGLE_HALF, flexShrink: 0, backgroundColor: '#18181b' }} />
+        <div style={{ width: PLAYHEAD_TRIANGLE_HALF, flexShrink: 0, backgroundColor: 'var(--bg-panel-raised)' }} />
 
         {/* Grid area */}
         <div
@@ -689,7 +713,7 @@ export function MidiEditor({
             flex: 1,
             height: canvasHeight,
             position: 'relative',
-            backgroundColor: '#18181b',
+            backgroundColor: 'var(--bg-panel-raised)',
             ...gridBackground,
           }}
           onPointerDown={(e) => {
@@ -732,8 +756,8 @@ export function MidiEditor({
                 left: 0,
                 right: 0,
                 height: rl.height,
-                backgroundColor: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                borderTop: '1px solid rgba(255,255,255,0.08)',
+                backgroundColor: i % 2 === 0 ? 'color-mix(in srgb,var(--text) 2%,transparent)' : 'transparent',
+                borderTop: '1px solid color-mix(in srgb,var(--text) 8%,transparent)',
                 pointerEvents: 'none',
               }}
             />
@@ -742,6 +766,8 @@ export function MidiEditor({
           {/* Alternating row bands + dividers make neighboring MIDI lanes easy
               to track across the labels and time grid without adding visual weight. */}
           <RowStripes count={rows.length} rowHeight={rowHeight} />
+
+          {blockViews.length > 1 && <MultiBlockLayer blocks={blockViews} activeId={block.id} rows={rows} beatsPerBar={beatsPerBar} pixelsPerBeat={pixelsPerBeat} />}
 
           {/* Midi block region: tint + edge lines. Painted ABOVE the row
               stripes so the track hue reads cleanly instead of being greyed
@@ -757,7 +783,7 @@ export function MidiEditor({
             }}
           />
           <div
-            data-midi-block-region=""
+            data-midi-block-region={block.id}
             style={{
               position: 'absolute',
               borderLeft: `1px solid ${chrome.regionEdge}`,
@@ -1016,7 +1042,7 @@ export function MidiEditor({
               left: 0,
               width: 0.5,
               height: '100%',
-              backgroundColor: '#ffffff',
+              backgroundColor: 'var(--text)',
             }} />
             {/* Hit area for scrubbing (kept narrow so it barely overlaps notes) */}
             <div
@@ -1052,7 +1078,7 @@ export function MidiEditor({
         className="pointer-events-none absolute left-0 top-0 bottom-0 z-[45]"
         style={{ visibility: 'hidden', width: 0, willChange: 'transform' }}
       >
-        <div className="absolute top-0 bottom-0 w-px bg-white/60" style={{ left: -0.5 }} />
+        <div className="absolute top-0 bottom-0 w-px bg-[color-mix(in_srgb,var(--text)_60%,transparent)]" style={{ left: -0.5 }} />
       </div>
 
       {/* The readout sits under the grid, flush with it - it belongs to the

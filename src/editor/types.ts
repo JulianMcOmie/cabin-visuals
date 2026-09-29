@@ -74,8 +74,8 @@ export type TrackType =
   // (inherited by the subtree via world-matrix composition), automation lanes
   // on those params, an effect chain broadcast to member objects, and
   // mover/splitter children that append to each member's chain - a chain child
-  // applies to the members ABOVE it in the group's child order (children read
-  // as a top-to-bottom pipeline), composed per member in the member's own
+  // applies to every member regardless of row position (device order still
+  // defines the group's pipeline), composed per member in the member's own
   // frame. Purely additive in persistence: Track's shape is unchanged.
   | 'group'
   // A rack of alternative DEVICES with one MIDI lane over them: each child gets
@@ -100,6 +100,17 @@ export type LyricLayoutKind = 'one' | 'row' | 'stack' | 'scatter' | 'grid' | 'ci
 
 export interface LyricClipLayout {
   kind: LyricLayoutKind
+  /** Pipe-separated pieces reveal cumulatively unless explicitly set to single. */
+  pipeMode?: 'build' | 'single'
+  /** Per-clip multipliers; absent values are 1. */
+  fontScale?: number
+  width?: number
+  height?: number
+  wordSpacing?: number
+  lineSpacing?: number
+  align?: 'left' | 'center' | 'right'
+  /** Circle start angle in degrees, clockwise from the top. */
+  rotation?: number
   /** Grid only: columns. Absent = 2. */
   cols?: number
 }
@@ -325,6 +336,8 @@ export interface Track {
   /** Set ONLY on the transcribed Lyrics track: sung-seconds word timing that
    *  its note beats are re-derived from on BPM changes. */
   lyricTiming?: LyricTimingWord[]
+  /** Extracted drums retain seconds through tempo edits, without rebuilding notes. */
+  drumMidi?: { audioBlockId: string; anchorBar: number }
   /** Lyrics tracks only: how lyricTiming becomes notes+text - one WORD per
    *  note (default), or grouped LINES shown whole (one note per line, the
    *  line wrapped in Text Display's !...! phrase syntax). Note rebuilds
@@ -397,6 +410,8 @@ export interface Track {
    *  burst targets) is multiplied by this and clamped back to the param's range.
    *  1 = as written (default), 0 = the lane flattens to zero, up to
    *  AUTOMATION_AMOUNT_MAX for boosting a lane written low. */
+  /** New lanes store a target-specific default; absence preserves legacy override playback. */
+  automationCombine?: 'override' | 'sum' | 'multiply'
   automationAmount?: number
   color: string
   muted: boolean
@@ -466,67 +481,9 @@ export interface Track {
   /** Photo-instrument-only: the ordered photos of its bank. Order is the MIDI
    *  mapping - index 0 answers baseNote. Bytes live behind core/photo. */
   photoPads?: PhotoPad[]
-  /** Mod-Synth-only: the modulator rack. Every note spawns a voice (a copy of
-   *  the object) and each modulator shapes one channel of that voice's flight.
-   *  Absence = the starter rack (instruments/modSynthCore.ts), so pre-feature
-   *  saves and fresh tracks need no seeding; an empty array is a genuinely
-   *  bare rack. Purely additive field - persists and undoes like videoPads. */
-  synthMods?: SynthMod[]
   /** Provenance: set when a script (the cabin CLI) created this track, e.g.
    *  'script:innuendo.ts'. The row shows a small badge; absent = made by hand. */
   createdBy?: string
-}
-
-/** Which channel of a spawned voice a Mod Synth modulator drives. */
-export type SynthModTarget = 'size' | 'posX' | 'posY' | 'posZ' | 'opacity' | 'hue' | 'rotZ'
-/** How the modulator's curve is authored. */
-export type SynthModShape = 'adsr' | 'bezier' | 'points'
-/** How the curve maps onto the voice's life: gate follows the note (release
- *  after note-off), oneshot is a fixed flight in beats, loop cycles while the
- *  note is held. */
-export type SynthModLife = 'gate' | 'oneshot' | 'loop'
-
-export interface SynthModPoint { x: number; y: number }
-
-/**
- * One modulator in a Mod Synth's rack. ADSR times are BEATS (a synth's attack
- * must not stretch with note length); bezier/points curves are normalized over
- * the life's span. The value units are the target's own (see
- * `SYNTH_MOD_TARGETS` in instruments/modSynthCore.ts for amount ranges).
- */
-export interface SynthMod {
-  /** Stable identity for panel rows and React keys - never re-minted on edit. */
-  id: string
-  target: SynthModTarget
-  enabled: boolean
-  shape: SynthModShape
-  life: SynthModLife
-  /** ADSR: attack/decay/release in beats, sustain a 0..1 level. */
-  attack: number
-  decay: number
-  sustain: number
-  release: number
-  /** Cubic-bezier control points (endpoints pinned at value 0). */
-  bezier: [SynthModPoint, SynthModPoint]
-  /** Hand-drawn curve, x ascending over [0,1]. */
-  points: SynthModPoint[]
-  /** Flight (oneshot) / cycle (loop) length in beats for bezier/points curves. */
-  beats: number
-  /** Where the curve BEGINS and where it LANDS (0..1 of the channel), so an
-   *  envelope need not start or end at zero - a size that opens at full, an
-   *  opacity that holds. Absence = 0 (the historical pinned endpoints, so
-   *  pre-feature racks are untouched). ADSR: attack departs from valueStart,
-   *  release decays to valueEnd and HOLDS it while the voice outlives this
-   *  modulator. Bezier: the two endpoint heights. Points: unused - its end
-   *  knots are already free. */
-  valueStart?: number
-  valueEnd?: number
-  /** Output gain in the target's units (size multiplier, world units, turns). */
-  amount: number
-  /** 0 = ignore note velocity, 1 = full velocity scaling. */
-  velocity: number
-  /** 0 = ignore pitch, 1 = full key tracking (pitch 36 silent, 84 full). */
-  keyTracking: number
 }
 
 /**

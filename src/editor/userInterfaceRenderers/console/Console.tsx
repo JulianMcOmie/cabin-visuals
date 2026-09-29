@@ -85,7 +85,7 @@ export function ControlRow({ spill = false, className = 'gap-5 px-4 pb-4 pt-3', 
 export function GutterRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex items-start gap-2 px-3">
-      <span className="w-[46px] flex-shrink-0 pt-4 text-right text-[7px] font-bold tracking-[0.22em] text-white/25">
+      <span className="w-[46px] flex-shrink-0 pt-4 text-right text-[7px] font-bold tracking-[0.22em] text-[var(--text-muted)]">
         {label}
       </span>
       <div className="flex flex-1 items-end justify-between gap-1">{children}</div>

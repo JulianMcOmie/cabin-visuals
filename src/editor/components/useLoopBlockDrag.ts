@@ -1,152 +1,100 @@
-import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { useProjectStore } from '../store/ProjectStore'
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { MAX_TOTAL_BARS, useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
+import { useTimeStore } from '../store/TimeStore'
 import { flattenVisualRows } from './timeline/trackTree'
-import { selectNewBlock } from '../utils/selection'
+import { selectNewTrack } from '../utils/selection'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
-import { getInstrument } from '../instruments'
-import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
-import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
 import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
 import { audioPickupBars } from '../utils/audioPickup'
-import type { Block, Track } from '../types'
-import type { LoopPattern } from './loops'
+import type { VisualLoop } from './loops'
 
-/** The target's midi-row pitches, top row first - the vocabulary a dropped
- *  loop's relative rows map onto. Empty = a full-piano instrument. */
-function rowPitchesFor(track: Track): number[] {
-  if (track.type === 'base') {
-    return getInstrument(track.instrumentId)?.midiRows?.map((r) => r.pitch) ?? []
-  }
-  if (track.type === 'mover' || track.type === 'splitter') {
-    const def = getMoverOrSplitterDefinition((track.type === 'splitter' ? track.splitterId : track.moverId) ?? '')
-    const rows = def?.midiRows?.(mergeDefinitionSettings(def, track.inputValues), { priorCount: 0 })
-    return rows?.map((r) => r.pitch) ?? []
-  }
-  return []
+/** Complete loops always add their own root instrument; dropping on a lane
+ * chooses a time and insertion point without changing that lane's instrument. */
+export function addVisualLoop(loop: VisualLoop, bar?: number, index?: number) {
+  const state = useProjectStore.getState()
+  if (state.scenes[state.activeSceneId]?.isMain) return
+  const startBar = Math.max(0, Math.min(MAX_TOTAL_BARS - loop.bars,
+    Math.floor(bar ?? useTimeStore.getState().currentBeat / state.beatsPerBar)))
+  const tree = loop.createTracks(startBar, state.beatsPerBar)
+  state.addTrackTree(tree, index)
+  selectNewTrack(tree[0].id)
+  useUIStore.getState().setTrackCollapsed(tree[0].id, false)
 }
 
-// Where a full-piano instrument's "top row" sits (C5, descending per row).
-const FULL_ROLL_TOP = 72
-
-/** Map a pattern's relative row (0 = top) onto the vocabulary. Rows past the
- *  bottom keep descending BELOW the instrument's lowest row - the editor
- *  surfaces those pitches as extra ghost rows under the vocabulary. */
-function pitchForRow(rowPitches: number[], row: number): number {
-  if (rowPitches.length === 0) return Math.max(0, FULL_ROLL_TOP - row)
-  if (row < rowPitches.length) return rowPitches[row]
-  return Math.max(0, Math.min(...rowPitches) - (row - rowPitches.length + 1))
-}
-
-/**
- * Drag a loop pattern from the library onto a track LANE: the row under the
- * cursor takes a looping block at the bar under the cursor. Same gesture
- * skeleton as useLibraryDrag (ghost + movement threshold), different target -
- * lanes and bars instead of the label column.
- */
 export function useLoopBlockDrag() {
   const ghostRef = useRef<HTMLDivElement>(null)
+  const cancelDrag = useRef<(() => void) | null>(null)
   const [ghostName, setGhostName] = useState<string | null>(null)
-
-  const startLoopBlockDrag = useCallback((e: ReactPointerEvent, pattern: LoopPattern) => {
+  useEffect(() => () => cancelDrag.current?.(), [])
+  const startLoopBlockDrag = useCallback((e: ReactPointerEvent, loop: VisualLoop) => {
+    if (e.button !== 0) return
+    cancelDrag.current?.()
     e.preventDefault()
-    const startX = e.clientX
-    const startY = e.clientY
+    const startX = e.clientX, startY = e.clientY
+    const sceneId = useProjectStore.getState().activeSceneId
     let started = false
-    let lastX = startX
-    let lastY = startY
-
+    const controller = new AbortController()
     const moveGhost = (x: number, y: number) => {
       if (ghostRef.current) {
         ghostRef.current.style.left = `${x}px`
         ghostRef.current.style.top = `${y}px`
       }
     }
-
-    /** The track row + bar under a client point, or null off-lane. */
-    const laneTarget = (x: number, y: number): { track: Track; bar: number } | null => {
-      const sc = document.querySelector('[data-tracks-scroll]') as HTMLElement | null
-      if (!sc) return null
+    const dropTarget = (x: number, y: number) => {
+      const sc = document.querySelector<HTMLElement>('[data-tracks-scroll]')
+      const state = useProjectStore.getState()
+      if (!sc || state.activeSceneId !== sceneId || state.scenes[sceneId]?.isMain) return null
       const r = sc.getBoundingClientRect()
       if (x < r.left || x > r.right || y < r.top || y > r.bottom) return null
       const ui = useUIStore.getState()
+      const rows = flattenVisualRows(state.tracks, state.rootTrackIds, ui.collapsedTrackIds)
+      const rowIndex = Math.floor((y - r.top + sc.scrollTop) / ui.tracksRowHeight)
+      let rootId: string | undefined = rows[rowIndex]?.id
+      while (rootId && state.tracks[rootId]?.parentId) rootId = state.tracks[rootId].parentId
+      const index = rootId ? state.rootTrackIds.indexOf(rootId) + 1 : state.rootTrackIds.length
+      const lastRow = rootId ? rows.findLastIndex(row => {
+        let id: string | undefined = row.id
+        while (id && state.tracks[id]?.parentId) id = state.tracks[id].parentId
+        return id === rootId
+      }) + 1 : rows.length
       const laneLeft = r.left + ui.tracksLabelWidth + PLAYHEAD_TRIANGLE_HALF
-      if (x < laneLeft) return null // the label column is the instruments' drop zone
-      const { tracks, rootTrackIds, beatsPerBar, totalBars } = useProjectStore.getState()
-      const rows = flattenVisualRows(tracks, rootTrackIds, ui.collapsedTrackIds)
-      const index = Math.floor((y - (r.top - sc.scrollTop)) / ui.tracksRowHeight)
-      const row = rows[index]
-      const track = row ? tracks[row.id] : undefined
-      if (!track || track.type === 'audio') return null
-      // Content x=0 is the start of the PICKUP, not musical beat 0 - shift out.
-      const beat = (x - laneLeft + sc.scrollLeft) / ui.tracksPixelsPerBeat
-        - audioPickupBars(tracks) * beatsPerBar
-      const bar = Math.max(0, Math.min(totalBars - 1, Math.floor(beat / beatsPerBar)))
-      return { track, bar }
+      const beat = x < laneLeft ? 0 : (x - laneLeft + sc.scrollLeft) / ui.tracksPixelsPerBeat
+        - audioPickupBars(state.tracks) * state.beatsPerBar
+      return { index, bar: Math.max(0, Math.floor(beat / state.beatsPerBar)), top: lastRow * ui.tracksRowHeight }
     }
-
-    const controller = new AbortController()
-
     const onMove = (ev: PointerEvent) => {
       if (!started) {
         if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 3) return
         started = true
         lockCursor('default')
-        setGhostName(pattern.name)
-        const px = ev.clientX
-        const py = ev.clientY
-        requestAnimationFrame(() => moveGhost(px, py))
+        setGhostName(loop.name)
+        useUIStore.getState().setLibraryDragging(true)
+        requestAnimationFrame(() => moveGhost(ev.clientX, ev.clientY))
       }
-      lastX = ev.clientX
-      lastY = ev.clientY
       moveGhost(ev.clientX, ev.clientY)
-
-      // Over a lane the cursor ghost stands down and the drag "becomes" a
-      // MIDI block: the target row draws the would-be block at that bar.
-      const target = laneTarget(ev.clientX, ev.clientY)
-      if (ghostRef.current) ghostRef.current.style.display = target ? 'none' : ''
-      useUIStore.getState().setLoopDrag({
-        name: pattern.name,
-        durationBars: pattern.bars * 4,
-        target: target ? { trackId: target.track.id, bar: target.bar } : null,
-      })
+      const target = dropTarget(ev.clientX, ev.clientY)
+      useUIStore.getState().setTrackDrop(target ? { line: { top: target.top, left: 0 }, intoId: null } : null)
     }
-
-    const onUp = () => {
+    const cleanup = () => {
       controller.abort()
+      cancelDrag.current = null
       if (!started) return
       unlockCursor()
       setGhostName(null)
-      useUIStore.getState().setLoopDrag(null)
-      const target = laneTarget(lastX, lastY)
-      if (!target) return
-      const { beatsPerBar } = useProjectStore.getState()
-      const rowPitches = rowPitchesFor(target.track)
-      const block: Block = {
-        id: crypto.randomUUID(),
-        startBar: target.bar,
-        // Land as a few visible repeats; the edges drag out to taste.
-        durationBars: pattern.bars * 4,
-        loop: true,
-        loopLengthBars: pattern.bars,
-        notes: pattern.notes
-          .filter(([b]) => b < pattern.bars * beatsPerBar)
-          .map(([b, dur, vel, row]) => ({
-            id: crypto.randomUUID(),
-            startBeat: b,
-            durationBeats: dur,
-            pitch: pitchForRow(rowPitches, row ?? 0),
-            velocity: vel ?? 100,
-          })),
-      }
-      useProjectStore.getState().addBlock(target.track.id, block)
-      selectNewBlock(block.id)
+      useUIStore.getState().setLibraryDragging(false)
+      useUIStore.getState().setTrackDrop(null)
     }
-
+    const onUp = (ev: PointerEvent) => {
+      const target = started ? dropTarget(ev.clientX, ev.clientY) : null
+      cleanup()
+      if (target) addVisualLoop(loop, target.bar, target.index)
+    }
+    cancelDrag.current = cleanup
     window.addEventListener('pointermove', onMove, { signal: controller.signal })
     window.addEventListener('pointerup', onUp, { signal: controller.signal })
-    window.addEventListener('pointercancel', onUp, { signal: controller.signal })
+    window.addEventListener('pointercancel', cleanup, { signal: controller.signal })
+    window.addEventListener('blur', cleanup, { signal: controller.signal })
   }, [])
-
   return { startLoopBlockDrag, ghostRef, ghostName }
 }

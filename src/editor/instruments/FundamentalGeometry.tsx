@@ -1,3 +1,4 @@
+import { createRasterCanvas } from '../core/visual/rasterCanvas'
 import type { Ref } from 'react'
 import {
   BoxGeometry,
@@ -215,6 +216,7 @@ export function fundamentalMaterialSettings(surface: FundamentalSurface, energy:
 /** The instrument's original emissive - kept for the shaded look so existing
  *  projects' glow color does not change. */
 const SHADED_EMISSIVE = '#312e81'
+const SHADED_EMISSIVE_HEX = parseInt(SHADED_EMISSIVE.slice(1), 16)
 
 let grainTexture: CanvasTexture | null = null
 
@@ -222,7 +224,7 @@ let grainTexture: CanvasTexture | null = null
  *  (seeded - Math.random would make two exports disagree), built lazily so the
  *  module stays importable outside the browser. */
 export function fundamentalGrainTexture(): CanvasTexture | null {
-  if (typeof document === 'undefined') return null
+  if (typeof document === 'undefined' && typeof OffscreenCanvas === 'undefined') return null
   if (grainTexture) return grainTexture
   const size = 256
   const cells = 16
@@ -237,7 +239,7 @@ export function fundamentalGrainTexture(): CanvasTexture | null {
   const lattice = new Float32Array((cells + 1) * (cells + 1))
   for (let i = 0; i < lattice.length; i++) lattice[i] = rand()
   const at = (x: number, y: number) => lattice[(y % cells) * (cells + 1) + (x % cells)]
-  const canvas = document.createElement('canvas')
+  const canvas = createRasterCanvas()
   canvas.width = size
   canvas.height = size
   const ctx = canvas.getContext('2d')
@@ -286,14 +288,17 @@ export function applyFundamentalSurface(
   material.thickness = settings.thickness
   material.ior = settings.ior
   material.emissiveIntensity = settings.emissiveIntensity
+  // setHex, not set('#rrggbb'): Color.set parses the CSS string on every call,
+  // and this runs per copy per frame. For a six-digit hex the string path IS
+  // setHex(parseInt(hex, 16)) in the same sRGB space, so the values are identical.
   if (settings.unlit) {
     // The color is carried entirely by emission; black diffuse keeps the
     // scene's lights from shading the silhouette.
-    material.color.set('#000000')
+    material.color.setHex(0x000000)
     material.emissive.copy(baseColor)
   } else {
     material.color.copy(baseColor)
-    material.emissive.set(SHADED_EMISSIVE)
+    material.emissive.setHex(SHADED_EMISSIVE_HEX)
   }
   const grain = settings.textured ? fundamentalGrainTexture() : null
   if (material.bumpMap !== grain) {

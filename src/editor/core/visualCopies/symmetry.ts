@@ -21,7 +21,7 @@ import type { MidiRowDef } from '../../instruments/types'
 import { countLaneRows, resolveCountLane } from './countLane'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { SYMMETRY_COLOR } from './identityColors'
-import type { VisualCopy } from './types'
+import { sharedLocalLayout } from './sharedLocalLayout'
 import { applySplitterSize, splitterSize, SPLITTER_SIZE_PARAM } from './splitterSize'
 
 export interface SymmetrySettings {
@@ -55,10 +55,6 @@ const clampMirrors = (mirrors: number) =>
   Math.max(1, Math.min(SYMMETRY_MAX_MIRRORS, Math.round(mirrors)))
 
 const clampPlane = (plane: number) => (plane === 1 || plane === 2 ? plane : 0)
-
-/** Total copies for a mirror count - one reflection per line, plus the
- *  rotations that pair of adjacent lines generates. */
-export const symmetryCopyCount = (mirrors: number) => clampMirrors(mirrors) * 2
 
 /**
  * The slot transforms in slot order, in the object's own frame.
@@ -217,13 +213,5 @@ function resolveSymmetryLayout(settings: SymmetrySettings) {
   // genuine mirror images.
   const size = splitterSize(settings.size)
   const transforms = symmetryTransforms(settings).map((slot) => applySplitterSize(slot, size))
-  return {
-    apply(visualCopy: VisualCopy) {
-      return transforms.map((transform) => ({
-        transform: visualCopy.transform.clone().multiply(transform),
-        opacity: visualCopy.opacity,
-        colorShift: { ...visualCopy.colorShift },
-      }))
-    },
-  }
+  return sharedLocalLayout({ transforms })
 }

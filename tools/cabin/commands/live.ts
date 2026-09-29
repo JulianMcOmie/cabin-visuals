@@ -57,6 +57,24 @@ export const liveCommands: CommandGroup = {
   note: 'drive the open editor (via the daemon page); results save back to project.json',
   commands: [
     {
+      name: 'page', usage: '<name> "<js>"',
+      summary: 'evaluate JavaScript in the live editor page and print the result',
+      details: 'an expression, or statements with `return`; async is fine. Handy globals: __cabinStores, __previewRuntime, __cabinCommands, __three',
+      async run(a) {
+        const name = a.need('project name')
+        const js = a.need('javascript')
+        // an expression first; statements (with their own return) if that doesn't parse
+        let result: unknown
+        try {
+          result = await inPage<unknown>(name, `return (${js}\n)`)
+        } catch (err) {
+          if (!/Unexpected|SyntaxError|missing|Invalid/i.test((err as Error).message)) throw err
+          result = await inPage<unknown>(name, js)
+        }
+        console.log(typeof result === 'string' ? result : JSON.stringify(result, null, 1))
+      },
+    },
+    {
       name: 'actions', usage: '[filter]', summary: 'every editor store action with its signature (generated from source)',
       async run(a) {
         const filter = a.next()?.toLowerCase()

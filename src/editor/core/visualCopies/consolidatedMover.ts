@@ -1,3 +1,4 @@
+import { entryMaxOutputCount } from './maxOutputCount'
 import type { MidiRowDef, ParamDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
@@ -154,6 +155,7 @@ function resolveModules(
  */
 export const consolidatedMover: MoverOrSplitterDefinition<ConsolidatedSettings> = {
   id: 'allMovers',
+  particleExecution: { fallback: 'unported', reason: 'The legacy bank composes heterogeneous motion and appearance evaluators without a serialized operation for their combined result.' },
   label: 'All Movers',
   kind: 'mover',
   legacy: true,
@@ -163,7 +165,10 @@ export const consolidatedMover: MoverOrSplitterDefinition<ConsolidatedSettings> 
   strictMidiRows: true,
   resolve({ settings, notes }) {
     const modules = resolveModules(settings, notes)
+    const bounds = modules.map(entryMaxOutputCount)
+    const product = bounds.reduce<number>((count, bound) => count * (bound ?? NaN), 1)
     return {
+      maxOutputCount: Number.isSafeInteger(product) && product >= 0 ? product : undefined,
       apply(visualCopy, context) {
         let copies: VisualCopy[] = [visualCopy]
         for (const resolvedMover of modules) {

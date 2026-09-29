@@ -26,6 +26,12 @@ page polls the file and re-hydrates when the CLI writes it (one undo step, and a
 review bar: "Claude changed … · Show · Undo"); editor edits PUT back (a 409 means
 the file moved - the file wins). Projects live in `projects/` (gitignored).
 
+**Always the current schema.** Every CLI read goes through the app's own
+`upgradeDocument` (src/persistence/upgrade.ts) - `loadDoc`, history snapshots,
+the daemon's skeleton - so the API only ever sees the version main is on and an
+older file is stored current by the next write (`cabin upgrade <p>|--all` writes
+it now). Never hand-write a `schemaVersion`; tests use `CURRENT_VERSION`.
+
 ## Working with the user: comments
 
 The user pins comments in the editor - C at the playhead (on the selected
@@ -97,7 +103,9 @@ edited since, unless --force). The semantic diff is src/devtools/docDiff.ts.
 
 - A daemon keeps one headless Chrome (real GPU) on `/editor?file=<name>`; starts
   on demand, exits after 30 min idle. `cabin config dev-url http://localhost:<port>`.
-- Frames go through the export FrameDriver - stills = what export encodes.
+- Frames go through the export FrameDriver - stills = what export encodes:
+  `pin()` then `prepare(firstBeat)` (lazy instruments, mounts, one primed frame),
+  exactly as Export does; skipping prepare draws not-yet-loaded scenes black.
   `--view <scene>` captures one scene. Clips stream RGBA over a WebSocket into
   ffmpeg with the project's audio; `--mb N` averages N subframes (motion blur).
   ~80 fps at 960×540; ~13 fps at 1080p60 --mb 2 (a 3.5 min song ≈ 16 min).
@@ -107,6 +115,8 @@ edited since, unless --force). The semantic diff is src/devtools/docDiff.ts.
 - `cabin ui <p> [--at] [--select Scene/Track] [--comments] [--do "press c; wait 300;
   type hi; press Meta+Enter; click [data-testid=x]"]` - a screenshot of the
   EDITOR (timeline, panels) after scripted input: how to check UI work.
+- `cabin page <p> "<js>"` - evaluate in the live page and print the result
+  (`__previewRuntime`, `__cabinStores`, `__cabinCommands`, `__three`).
 - `cabin actions [filter]` (every ProjectStore action, generated from source),
   `cabin act <p> <action> args…` (JSON, `@Scene/Track`, `@@Scene`) - runs it in
   the live editor, saved back by file sync. `cabin commands <p>` / `cabin cmd <p>

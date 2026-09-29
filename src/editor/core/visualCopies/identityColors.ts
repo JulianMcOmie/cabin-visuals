@@ -217,6 +217,8 @@ export const GRID_COLOR = '#fb6dba'
  * indistinguishable from Tunnel's.
  */
 export const CONSOLIDATED_MOVER_COLOR = '#ababab'
+/** Beat-crossing motion; shared by the lane and its console. */
+export const DANCE_COLOR = '#ee82b6'
 /**
  * Bypass claims no hue either, and for a better reason than "nothing to stand
  * for": its whole subject is a device being switched OFF, and every hue on this
@@ -235,3 +237,12 @@ export const BYPASS_COLOR = '#d9d9d9'
 export const FRACTAL_COLOR = '#c084fc'
 export const WALLPAPER_COLOR = '#fb923c'
 export const SCATTER_COLOR = '#53d6a0'
+
+/** Polar attraction: orchid, shared by the lane and its console. */
+export const POLAR_WARP_COLOR = '#ce79e8'
+
+/** Fluid Impact's pale aqua, shared by its lane and console. */
+export const FLUID_IMPACT_COLOR = '#5bddd4'
+
+/** Copies flowing along a path. */
+export const PATH_COLOR = '#62d8f5'

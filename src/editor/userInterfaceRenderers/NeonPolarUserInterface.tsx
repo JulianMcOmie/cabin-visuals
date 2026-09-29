@@ -1,5 +1,7 @@
 'use client'
 
+import { ColorPicker } from './colorWheel'
+
 // Bespoke settings for NeonPolar: a live rose-curve preview drawn in the neon
 // color (with a blurred glow pass), a dual-handle RADIUS range that drags min
 // and max on one shared axis, then CURVE / GLOW / MOTION groups. Presentation
@@ -225,15 +227,13 @@ export const NeonPolarUserInterfaceRenderer: UserInterfaceRendererDefinition = (
             <span className="truncate text-[11px] text-[var(--text-3)]">{color.definition.label}</span>
             <div className="flex items-center justify-end gap-2">
               <span className="font-mono text-[9px] text-[var(--text-muted)]">{color.value}</span>
-              <span className="relative h-5 w-8 flex-shrink-0 cursor-pointer overflow-hidden rounded border border-[var(--border)]" style={{ background: color.value, boxShadow: `0 0 10px ${color.value}55` }}>
-                <input
-                  type="color"
-                  aria-label="Curve color"
-                  value={color.value}
-                  onChange={(e) => color.setValue(e.target.value)}
-                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                />
-              </span>
+              <ColorPicker
+                ariaLabel="Curve color"
+                halo={`0 0 10px ${color.value}55`}
+                value={color.value}
+                onChange={(hex) => color.setValue(hex)}
+                size={24}
+              />
             </div>
           </div>
         )}

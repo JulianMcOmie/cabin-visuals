@@ -193,7 +193,9 @@ export function impactPulseScale(
 
 export const impactPulseMover: MoverOrSplitterDefinition<ImpactPulseSettings> = {
   id: 'impactPulse',
+  particleExecution: { fallback: 'unported', reason: 'The legacy per-copy impact size and squash response has not been expressed as a shared GPU operation.' },
   label: 'Impact Pulse',
+  extras: true,
   kind: 'mover',
   params: IMPACT_PULSE_PARAMS,
   identityColor: IMPACT_PULSE_COLOR,
@@ -201,6 +203,7 @@ export const impactPulseMover: MoverOrSplitterDefinition<ImpactPulseSettings> = 
   strictMidiRows: true,
   resolve({ settings, notes }) {
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { beat, index }) {
         const pulse = evaluateImpactPulse(notes, settings, beat, index)
         const [x, y, z] = impactPulseScale(pulse, settings.hit, settings.stretch)

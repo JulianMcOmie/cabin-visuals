@@ -3,6 +3,7 @@ import { useThree } from '@react-three/fiber'
 import { PerspectiveCamera, Vector3 } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { claimCamera } from '../core/visual/cameraOwner'
+import { setSceneCameraFov } from '../core/visual/cameraFraming'
 import {
   CAMERA_ORBIT_ROWS,
   DEFAULT_ORBIT_AXIS,
@@ -118,10 +119,7 @@ function CameraOrbitVisual({ trackId }: { trackId: string }) {
 
     if (camera instanceof PerspectiveCamera) {
       const fov = Math.max(1, Math.min(179, settings.fov))
-      if (camera.fov !== fov) {
-        camera.fov = fov
-        camera.updateProjectionMatrix()
-      }
+      setSceneCameraFov(camera, fov)
     }
   })
 

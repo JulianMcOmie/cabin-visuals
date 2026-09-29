@@ -43,6 +43,8 @@
 // already has a home: automate the parent's own params, or reach for Visibility
 // when what you want is the object dimming rather than the device stopping.
 
+import { entryMaxOutputCount } from './maxOutputCount'
+import { forwardCompactUniformGate } from './compactEntryGate'
 import type { MidiRowDef, ParamDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
@@ -139,7 +141,9 @@ export function bypassGated(
   if (gates.length === 0) return entry
   const bypassed = (beat: number) => gates.some((gate) => gate(beat))
 
+  const bound = entryMaxOutputCount(entry)
   const gated: MoverOrSplitter = {
+    maxOutputCount: bound === undefined ? undefined : Math.max(1, bound),
     apply(visualCopy, context) {
       // Passing the copy through unchanged is the module's own convention for
       // "this entry declines to act" (copyTargets.ts's untargeted copies), and
@@ -150,6 +154,7 @@ export function bypassGated(
     },
   }
   if (entry.composition) gated.composition = entry.composition
+  if (entry.localSlotMotion) gated.localSlotMotion = true
   if (entry.emitsCopyClocks) gated.emitsCopyClocks = true
   if (entry.applyFramed) {
     const applyFramed = entry.applyFramed.bind(entry)
@@ -168,11 +173,13 @@ export function bypassGated(
   // a splitter that happens to be bypassed at beat 0 - the beat the probe
   // samples - would mount a pool of one and every later frame would overflow it.
   gated.structuralVariants = [entry, ...(entry.structuralVariants ?? [])]
+  forwardCompactUniformGate(gated, entry, beat => !bypassed(beat))
   return gated
 }
 
 export const bypassMover: MoverOrSplitterDefinition<BypassSettings> = {
   id: BYPASS_ID,
+  particleExecution: { fallback: 'device-control', reason: 'Bypass is lifted from a device child into a uniform gate; it is not a separately rendered copy operation.' },
   label: 'Bypass',
   kind: 'mover',
   parentGate: true,
@@ -182,6 +189,7 @@ export const bypassMover: MoverOrSplitterDefinition<BypassSettings> = {
   strictMidiRows: true,
   resolve({ settings, notes }) {
     return {
+      maxOutputCount: 1,
       // A bypass contributes nothing of its own; the copy passes through with
       // its own matrix, per the contract. Everything it does is in `bypassAt`,
       // which resolve.ts lifts off the lane and hands to `bypassGated`.

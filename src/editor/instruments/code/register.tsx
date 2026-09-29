@@ -3,6 +3,7 @@ import { registerCompositions } from '../../core/directors'
 import { findTrackId, getResolvedNotes, setProject } from '../../core/visual/VisualEngine'
 import { claimCamera } from '../../core/visual/cameraOwner'
 import { setCompositionLook, setTrackLook } from '../../core/visual/look'
+import { setMainThreadInstruments } from '../../core/visual/mainThreadInstruments'
 import { provideWorld } from './world'
 import { useProjectStore } from '../../store/ProjectStore'
 import { CODE_INSTRUMENTS } from '../custom/instruments.generated'
@@ -26,6 +27,7 @@ import { bumpRegistry } from './live'
 const holder = globalThis as unknown as { __cabinCodeRegistered?: boolean }
 const rerun = !!holder.__cabinCodeRegistered
 
+const registered: string[] = []
 for (const def of CODE_INSTRUMENTS) {
   const existing = INSTRUMENTS[def.id]
   if (existing && !isCodeInstrument(existing)) {
@@ -33,8 +35,12 @@ for (const def of CODE_INSTRUMENTS) {
     continue
   }
   INSTRUMENTS[def.id] = def
+  registered.push(def.id)
 }
 registerCompositions(CODE_COMPOSITIONS)
+// These exist only on this thread: a project using one previews here, not in
+// the preview worker (core/visual/mainThreadInstruments.ts).
+setMainThreadInstruments([...registered, ...CODE_COMPOSITIONS.map((c) => c.id)])
 // What the SDK reaches outside a track through (world.ts): the engine's notes
 // for ctx.lane(), the shared camera claim, the frame's look.
 provideWorld({
@@ -50,7 +56,7 @@ holder.__cabinCodeRegistered = true
 bumpRegistry()
 
 // A hot re-run: metadata may have changed under resolved tracks.
-if (rerun && typeof window !== 'undefined') setProject(useProjectStore.getState())
+if (rerun && typeof document !== 'undefined') setProject(useProjectStore.getState())
 
 /** Mounted once by the editor so this module loads (and stays a refresh boundary). */
 export function CodeRegistry() {

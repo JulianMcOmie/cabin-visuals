@@ -24,13 +24,13 @@ export function More({ parameters, label = 'MORE', className = 'px-3 pb-3' }: {
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="flex cursor-pointer items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 hover:text-white/60"
+        className="flex cursor-pointer items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-[var(--text-muted)] hover:text-[var(--text-3)]"
       >
         {open ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
         {label}
       </button>
       {open && (
-        <div className="mt-1.5 rounded-md border border-white/[0.06] bg-black/25 p-2">
+        <div className="mt-1.5 rounded-md border border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] p-2">
           <ParameterList parameters={parameters} />
         </div>
       )}

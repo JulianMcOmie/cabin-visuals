@@ -1,9 +1,9 @@
 import { createContext, useContext, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
-import { Color, Matrix4 } from 'three'
-import { getObjectState, getVisualCopies } from './VisualEngine'
-import { applyColorShiftToColor } from './colorShift'
+import { Matrix4, type Color } from 'three'
+import { useVisualEngine, useVisualFrame as useFrame } from './VisualEngineContext'
+import { createCopyColorSampler } from './copyColorSampler'
 import { getBeatOverride } from './beatOverride'
+import { previewRuntime } from './previewRuntime'
 import { composePostMoverScale, evaluatePostMoverScale } from './postMoverScale'
 import { useTimeStore } from '../../store/TimeStore'
 import type { ObjectState } from './types'
@@ -43,6 +43,8 @@ export interface InstancedCopyFrame {
    *  matrix the per-copy path's placement group wears (Scale effects arrive
    *  through InstancedScaleContext; every other effect falls back per copy). */
   composeCopyMatrix(i: number, out: Matrix4): Matrix4
+  /** Shared world × Scale-effect prefix, before copy and instrument scale. */
+  composePlacement(out: Matrix4): Matrix4
   /** `state.opacity × copy.opacity`, 0 while blacked out. Instances at ≤0.001
    *  must be hidden, not faded - the ghost-wall depth artifact. */
   copyFade(i: number): number
@@ -51,37 +53,44 @@ export interface InstancedCopyFrame {
   copyColor(i: number, sourceHex: string, out: Color): Color
 }
 
-const _scale = new Matrix4()
-
 export function useInstancedCopyFrame(
   trackId: string,
   cb: (frame: InstancedCopyFrame) => void,
 ): void {
+  const { getObjectState, getVisualCopies } = useVisualEngine()
   const frameRef = useRef<InstancedCopyFrame | null>(null)
-  const scratchTint = useRef(new Color()).current
+  const sampleColor = useRef<ReturnType<typeof createCopyColorSampler> | null>(null)
+  sampleColor.current ??= createCopyColorSampler()
   const scaleInstances = useContext(InstancedScaleContext)
-  const effectScaleRef = useRef(1)
+  const placement = useRef(new Matrix4()).current
+  const meshScale = useRef(new Matrix4()).current
   useFrame(() => {
     const state = getObjectState(trackId)
     if (!state) return
     const copies = getVisualCopies(trackId)
     // Same beat source as ObjectRenderer's scale evaluation: the REAL playhead
     // (or export override), not the object's warped beat.
-    effectScaleRef.current = scaleInstances.length === 0 ? 1 : evaluatePostMoverScale(
+    const effectScale = scaleInstances.length === 0 ? 1 : evaluatePostMoverScale(
       scaleInstances,
       state.effectOverrides,
-      getBeatOverride() ?? useTimeStore.getState().currentBeat,
+      getBeatOverride() ?? (previewRuntime.worker ? previewRuntime.beat : useTimeStore.getState().currentBeat),
     )
+    // Preserve the multiplication order while sharing the track's common
+    // prefix and scalar matrix across all copies in this frame.
+    composePostMoverScale(state.world, undefined, effectScale, placement)
+    if (state.meshScale !== 1) meshScale.makeScale(state.meshScale, state.meshScale, state.meshScale)
     let frame = frameRef.current
     if (!frame) {
       frame = {
         state,
         copies,
+        composePlacement(out) { return out.copy(placement) },
         composeCopyMatrix(i, out) {
           const f = frameRef.current as InstancedCopyFrame
-          composePostMoverScale(f.state.world, f.copies[i]?.transform, effectScaleRef.current, out)
-          const s = f.state.meshScale
-          if (s !== 1) out.multiply(_scale.makeScale(s, s, s))
+          out.copy(placement)
+          const transform = f.copies[i]?.transform
+          if (transform) out.multiply(transform)
+          if (f.state.meshScale !== 1) out.multiply(meshScale)
           return out
         },
         copyFade(i) {
@@ -91,10 +100,7 @@ export function useInstancedCopyFrame(
         },
         copyColor(i, sourceHex, out) {
           const f = frameRef.current as InstancedCopyFrame
-          out.set(sourceHex)
-          const shift = f.copies[i]?.colorShift
-          if (shift) applyColorShiftToColor(out, shift, scratchTint)
-          return out
+          return sampleColor.current!(sourceHex, f.copies[i]?.colorShift, out)
         },
       }
       frameRef.current = frame

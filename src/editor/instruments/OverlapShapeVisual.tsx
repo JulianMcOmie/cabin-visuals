@@ -31,7 +31,6 @@ import { applyColorShiftToColor } from '../core/visual/colorShift'
 import type { VisualCopy } from '../core/visualCopies/types'
 import {
   OVERLAP_RAMP_GRADIENT,
-  OVERLAP_SHAPE_OPTIONS,
   OVERLAP_SHAPE_PASSES,
   overlapShapeDepthColors,
   overlapShapeIndex,
@@ -55,7 +54,7 @@ import { overlapShapeInstrument } from './OverlapShape'
 // outright, so a plain parity track pays nothing per copy for the counted
 // fills hanging beside it.
 
-function geometryFor(shape: number): ShapeGeometry {
+export function geometryFor(shape: number): ShapeGeometry {
   const points = overlapShapePoints(shape)
   const outline = new Shape()
   outline.moveTo(points[0][0], points[0][1])
@@ -64,12 +63,23 @@ function geometryFor(shape: number): ShapeGeometry {
   return new ShapeGeometry(outline)
 }
 
+// The per-copy path's geometries, ONE per shape for every copy of every
+// track: a ShapeGeometry is immutable, and a plain Mesh (unlike the instanced
+// meshes below, which attach their own instanceIndex attribute) can share it
+// freely. Building all six per mounted copy - and triangulating the 96-gon
+// circle each time - was a quarter of a copy-heavy project's load stall.
+// Built on first use and never disposed: the set is bounded by the shape menu.
+const sharedGeometries: (ShapeGeometry | undefined)[] = []
+function sharedGeometryFor(shape: number): ShapeGeometry {
+  return sharedGeometries[shape] ??= geometryFor(shape)
+}
+
 /** One material per pass, configured straight from the pure pass spec. The
  *  color materials stay tone-map-free so "renders a single color" is literal.
  *  None of them declare FORCE_TRANSPARENT: at full opacity all seven live in
  *  the OPAQUE render list (renderOrder is honored there), and a track fade
  *  flips them transparent together, so the pass order survives either way. */
-function materialFor(pass: OverlapShapePass): Material {
+export function materialFor(pass: OverlapShapePass): Material {
   // The depth-clear pass is the one that cannot be a stock material: writing
   // FAR depth (rather than the mesh's own plane) takes gl_FragDepth. Depth
   // test must stay ENABLED (a disabled test also disables depth writes in GL)
@@ -148,12 +158,10 @@ export function OverlapShapeVisual({ trackId }: { trackId: string }) {
   const groupRef = useRef<Group>(null)
   const meshRefs = useRef<(Mesh | null)[]>([])
   const shapeRef = useRef(-1)
-  const geometries = useMemo(() => OVERLAP_SHAPE_OPTIONS.map((o) => geometryFor(o.value)), [])
   const materials = useMemo(() => OVERLAP_SHAPE_PASSES.map(materialFor), [])
   useEffect(() => () => {
-    for (const g of geometries) g.dispose()
     for (const m of materials) m.dispose()
-  }, [geometries, materials])
+  }, [materials])
 
   useInstrumentFrame(trackId, (state) => {
     const group = groupRef.current
@@ -165,7 +173,7 @@ export function OverlapShapeVisual({ trackId }: { trackId: string }) {
     if (shape !== shapeRef.current) {
       shapeRef.current = shape
       for (const mesh of meshRefs.current) {
-        if (mesh) mesh.geometry = geometries[shape]
+        if (mesh) mesh.geometry = sharedGeometryFor(shape)
       }
     }
 
@@ -394,7 +402,7 @@ export function OverlapShapeInstanced({ trackId }: { trackId: string }) {
   return (
     <>
       {rig.meshes.map((mesh, i) => (
-        <primitive key={OVERLAP_SHAPE_PASSES[i].name} object={mesh} />
+        <primitive key={`${OVERLAP_SHAPE_PASSES[i].name}${OVERLAP_SHAPE_PASSES[i].order ?? ''}`} object={mesh} />
       ))}
     </>
   )

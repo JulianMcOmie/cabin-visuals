@@ -29,6 +29,25 @@ const CORNERS: [number, number, number][] = [
   [-1, 1, 1], [-1, 1, -1], [-1, -1, 1], [-1, -1, -1],
 ]
 
+// The eight Shatter fragments of one copy share one geometry (with every other
+// copy - immutable) and ONE material (per copy - the placement wrapper writes
+// the copy's fade into it, so it cannot cross copies without changing what a
+// half-faded copy's fragments look like). They used to be eight declarative
+// <boxGeometry>/<meshPhysicalMaterial> pairs per copy, i.e. eight lit
+// materials per copy for meshes that are hidden until a Shatter note - and
+// every one of them was walked by the shader precompile at load.
+const FRAGMENT_GEOMETRY = new BoxGeometry(1.6, 1.6, 1.6)
+const FRAGMENT_MATERIAL_PROPS = {
+  color: '#f472b6',
+  metalness: 0.65,
+  roughness: 0.18,
+  clearcoat: 0.45,
+  clearcoatRoughness: 0.1,
+  envMapIntensity: 1.4,
+  emissive: '#be185d',
+  emissiveIntensity: 1.4,
+} as const
+
 /** Shatter: sample this track's Shatter lane at the current beat - a pure
  * function of the beat, so scrubbing mirrors playback exactly. The burst is MAX
  * at the note onset and decays back over the note (the cube flies apart, then
@@ -83,13 +102,15 @@ export function Cube({ trackId }: { trackId: string }) {
   // swapped onto the mesh; its own physical material is remembered so Gloss
   // can take it back.
   const posterMaterial = useMemo(() => createPosterMaterial(), [])
+  const fragmentMaterial = useMemo(() => new MeshPhysicalMaterial(FRAGMENT_MATERIAL_PROPS), [])
   const glossMaterials = useRef(new WeakMap<Mesh, Mesh['material']>()).current
 
   useEffect(() => () => {
     // The imperative geometry is invisible to r3f's auto-dispose.
     meshRef.current?.geometry.dispose()
     posterMaterial.dispose()
-  }, [posterMaterial])
+    fragmentMaterial.dispose()
+  }, [posterMaterial, fragmentMaterial])
 
   useInstrumentFrame(trackId, (state) => {
     if (!spinRef.current) return false
@@ -169,19 +190,15 @@ export function Cube({ trackId }: { trackId: string }) {
           now, rebuilt from the GEOMETRY / TUBE / SIDES params. */}
       <FundamentalMesh meshRef={meshRef} />
       {CORNERS.map((_, i) => (
-        <mesh key={i} ref={(el) => { fragRefs.current[i] = el }} visible={false} castShadow receiveShadow>
-          <boxGeometry args={[1.6, 1.6, 1.6]} />
-          <meshPhysicalMaterial
-            color="#f472b6"
-            metalness={0.65}
-            roughness={0.18}
-            clearcoat={0.45}
-            clearcoatRoughness={0.1}
-            envMapIntensity={1.4}
-            emissive="#be185d"
-            emissiveIntensity={1.4}
-          />
-        </mesh>
+        <mesh
+          key={i}
+          ref={(el) => { fragRefs.current[i] = el }}
+          geometry={FRAGMENT_GEOMETRY}
+          material={fragmentMaterial}
+          visible={false}
+          castShadow
+          receiveShadow
+        />
       ))}
     </group>
   )
@@ -206,6 +223,7 @@ const _quat = new Quaternion()
 const _scl = new Vector3()
 const _instColor = new Color()
 const _baseScratch = new Color()
+const _fragmentLocal = CORNERS.map(() => new Matrix4())
 const WHITE = new Color('#ffffff')
 
 export function CubeInstanced({ trackId }: { trackId: string }) {
@@ -218,16 +236,7 @@ export function CubeInstanced({ trackId }: { trackId: string }) {
     solid.receiveShadow = true
     const gloss = new MeshPhysicalMaterial({ ...FUNDAMENTAL_MATERIAL_PROPS })
     // Fragments: the Shatter burst, 8 corners per copy in one instanced draw.
-    const frags = new InstancedMesh2(new BoxGeometry(1.6, 1.6, 1.6), new MeshPhysicalMaterial({
-      color: '#f472b6',
-      metalness: 0.65,
-      roughness: 0.18,
-      clearcoat: 0.45,
-      clearcoatRoughness: 0.1,
-      envMapIntensity: 1.4,
-      emissive: '#be185d',
-      emissiveIntensity: 1.4,
-    }))
+    const frags = new InstancedMesh2(new BoxGeometry(1.6, 1.6, 1.6), new MeshPhysicalMaterial(FRAGMENT_MATERIAL_PROPS))
     frags.castShadow = true
     frags.receiveShadow = true
     frags.visible = false
@@ -305,6 +314,19 @@ export function CubeInstanced({ trackId }: { trackId: string }) {
     const dimY = state.params.dimY ?? paramDefault(cubeInstrument, 'dimY')
     const dimZ = state.params.dimZ ?? paramDefault(cubeInstrument, 'dimZ')
     const fragsLive = a > 0.001
+    _scale2.makeScale(shatterScale * dimX, shatterScale * dimY, shatterScale * dimZ)
+    // Every eligible copy shares this track's clock and Shatter state. Build
+    // the eight local fragments once; only their placement varies per copy.
+    if (fragsLive) {
+      const dist = a * spread
+      _scl.setScalar(0.45 * a)
+      for (let c = 0; c < CORNERS.length; c++) {
+        const [dx, dy, dz] = CORNERS[c]
+        _pos.set(dx * dist, dy * dist, dz * dist)
+        _quat.setFromEuler(_euler.set(state.beat * 0.6 + c, state.beat * 0.8 + c, 0))
+        _fragmentLocal[c].compose(_pos, _quat, _scl)
+      }
+    }
 
     let anyFaded = false
     for (let i = 0; i < count; i++) {
@@ -320,19 +342,14 @@ export function CubeInstanced({ trackId }: { trackId: string }) {
       _placed.multiply(_spin)
       // Solid: placement × spin × (shatter shrink × per-axis dims).
       _local.copy(_placed)
-      _local.multiply(_scale2.makeScale(shatterScale * dimX, shatterScale * dimY, shatterScale * dimZ))
+      _local.multiply(_scale2)
       solid.setMatrixAt(i, _local)
       solid.setColorAt(i, f.copyColor(i, baseHex, _instColor))
       solid.setOpacityAt(i, Math.min(1, fade))
       if (fragsLive) {
-        const dist = a * spread
         for (let c = 0; c < CORNERS.length; c++) {
-          const [dx, dy, dz] = CORNERS[c]
           const idx = i * CORNERS.length + c
-          _pos.set(dx * dist, dy * dist, dz * dist)
-          _quat.setFromEuler(_euler.set(state.beat * 0.6 + c, state.beat * 0.8 + c, 0))
-          _scl.setScalar(0.45 * a)
-          _local.compose(_pos, _quat, _scl)
+          _local.copy(_fragmentLocal[c])
           _local.premultiply(_placed)
           frags.setMatrixAt(idx, _local)
           frags.setVisibilityAt(idx, true)

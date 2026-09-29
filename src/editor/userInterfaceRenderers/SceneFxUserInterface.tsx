@@ -1,5 +1,7 @@
 'use client'
 
+import { noteRateEntry } from './knobValueParsing'
+
 // The seven Scene FX device consoles (effects/scene/*). They are one family and
 // share a chassis on purpose - a rack of them should read as one instrument
 // with seven voices, not seven unrelated dialogs - so everything common lives in
@@ -28,12 +30,14 @@
 import { useRef } from 'react'
 import { gradeScenePlugin } from '../effects/scene/grade'
 import { lensScenePlugin } from '../effects/scene/lens'
+import { liquidGlassScenePlugin } from '../effects/scene/liquidGlass'
 import { blurScenePlugin } from '../effects/scene/blur'
 import { grainScenePlugin } from '../effects/scene/grain'
 import { crushScenePlugin } from '../effects/scene/crush'
 import { glitchScenePlugin } from '../effects/scene/glitch'
 import { mirrorScenePlugin } from '../effects/scene/mirror'
-import { SCENE_FX_RATE_DETENTS, formatSceneFxRate } from '../effects/scene/rate'
+import { fogScenePlugin } from '../effects/scene/fog'
+import { SCENE_FX_RATE_DETENTS } from '../effects/scene/rate'
 import type { VisualEffect } from '../effects/types'
 import {
   Console,
@@ -44,6 +48,7 @@ import {
   ParameterList,
   Segmented,
   bindPanel,
+  consolePanel,
   type NumBinding,
   type SegmentOption,
 } from './console'
@@ -251,7 +256,7 @@ function GlyphChoice({ b, options, testId }: {
   return (
     <div className="px-3 pt-2.5">
       <Segmented b={b} options={options} testId={testId} />
-      <div className="pt-1 text-center text-[8px] font-semibold uppercase tracking-[0.18em] text-white/35">
+      <div className="pt-1 text-center text-[8px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
         {active?.label ?? ''}
       </div>
     </div>
@@ -285,7 +290,7 @@ function TemperatureTintPad({ temperature, tint }: { temperature: NumBinding | n
         role="application"
         aria-label="Temperature and tint"
         tabIndex={0}
-        className="relative h-[62px] w-[62px] cursor-crosshair touch-none overflow-hidden rounded-[5px] border border-white/[0.08]"
+        className="relative h-[62px] w-[62px] cursor-crosshair touch-none overflow-hidden rounded-[5px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)]"
         style={{
           background:
             'linear-gradient(to top, rgba(233,72,204,0.5), rgba(60,220,140,0.5)), linear-gradient(to right, #2f6fd0, #e8a13c)',
@@ -314,7 +319,7 @@ function TemperatureTintPad({ temperature, tint }: { temperature: NumBinding | n
         }}
       >
         <span
-          className="pointer-events-none absolute h-[9px] w-[9px] rounded-full border-[1.5px] border-white"
+          className="pointer-events-none absolute h-[9px] w-[9px] rounded-full border-[1.5px] border-[color-mix(in_srgb,var(--text)_100%,transparent)]"
           style={{
             left: `${toFraction(temperature) * 100}%`,
             top: `${(1 - toFraction(tint)) * 100}%`,
@@ -323,7 +328,7 @@ function TemperatureTintPad({ temperature, tint }: { temperature: NumBinding | n
           }}
         />
       </div>
-      <span className="text-[7px] font-semibold uppercase tracking-[0.16em] text-white/40">Temp · Tint</span>
+      <span className="text-[7px] font-semibold uppercase tracking-[0.16em] text-[var(--text-3)]">Temp · Tint</span>
     </div>
   )
 }
@@ -396,6 +401,32 @@ const LensPanel: UserInterfaceRendererDefinition = ({ parameters }) => {
   )
 }
 
+const LiquidGlassPanel: UserInterfaceRendererDefinition = ({ parameters }) => {
+  const b = bindPanel(parameters)
+  const amount = b.num('amount')
+  const refraction = b.num('refraction')
+  const frost = b.num('frost')
+  const width = b.num('width')
+  const height = b.num('height')
+  const corners = b.num('corners')
+  const rest = b.rest()
+  if (b.missing) return <ParameterList parameters={parameters} />
+  return (
+    <SceneFxShell plugin={liquidGlassScenePlugin} parameters={parameters} rest={rest}>
+      <ControlRow spill>
+        <Knob b={amount} label="AMOUNT" large />
+        <Knob b={refraction} label="REFRACT" />
+        <Knob b={frost} label="FROST" />
+      </ControlRow>
+      <GutterRow label="PANEL">
+        <Knob b={width} label="WIDTH" />
+        <Knob b={height} label="HEIGHT" />
+        <Knob b={corners} label="CORNERS" />
+      </GutterRow>
+    </SceneFxShell>
+  )
+}
+
 const BlurPanel: UserInterfaceRendererDefinition = ({ parameters }) => {
   const b = bindPanel(parameters)
   const mode = b.select('mode')
@@ -432,7 +463,7 @@ const GrainPanel: UserInterfaceRendererDefinition = ({ parameters }) => {
       <ControlRow>
         <Knob b={amount} label="AMOUNT" large />
         <Knob b={size} label="SIZE" />
-        <Knob b={rate} label="RATE" detents={SCENE_FX_RATE_DETENTS} format={formatSceneFxRate} />
+        <Knob b={rate} label="RATE" detents={SCENE_FX_RATE_DETENTS} format={(value) => `1/${Number((4 * value).toPrecision(8))}`} entry={noteRateEntry} />
       </ControlRow>
     </SceneFxShell>
   )
@@ -474,7 +505,7 @@ const GlitchPanel: UserInterfaceRendererDefinition = ({ parameters }) => {
     <SceneFxShell plugin={glitchScenePlugin} parameters={parameters} rest={rest}>
       <ControlRow spill>
         <Knob b={amount} label="AMOUNT" large />
-        <Knob b={rate} label="RATE" detents={SCENE_FX_RATE_DETENTS} format={formatSceneFxRate} />
+        <Knob b={rate} label="RATE" detents={SCENE_FX_RATE_DETENTS} format={(value) => `1/${Number((4 * value).toPrecision(8))}`} entry={noteRateEntry} />
         <Knob b={slices} label="SLICES" />
       </ControlRow>
       <GutterRow label="DAMAGE">
@@ -509,8 +540,18 @@ const MirrorPanel: UserInterfaceRendererDefinition = ({ parameters }) => {
 
 /** Keyed by plugin id, spread into EFFECT_USER_INTERFACES. */
 export const SCENE_FX_USER_INTERFACES: Record<string, UserInterfaceRendererDefinition> = {
+  [fogScenePlugin.id]: consolePanel({
+    accent: fogScenePlugin.accent!,
+    testId: 'scene-fx-sceneFog',
+    rows: [
+      { custom: () => <p className="px-3 pt-3 text-[11px] leading-relaxed text-[var(--text-muted)]">Haze catches your scene’s lights. Try a colored Spot light for beams. Fog sits behind on-top overlays, before color and lens effects.</p> },
+      { row: ['amount*:AMOUNT', 'density:DENSITY', 'scattering:SCATTER'] },
+      { row: ['detail:TEXTURE', 'scale:SIZE', 'drift:DRIFT'], gutter: 'CLOUDS' },
+    ],
+  }),
   [gradeScenePlugin.id]: GradePanel,
   [lensScenePlugin.id]: LensPanel,
+  [liquidGlassScenePlugin.id]: LiquidGlassPanel,
   [blurScenePlugin.id]: BlurPanel,
   [grainScenePlugin.id]: GrainPanel,
   [crushScenePlugin.id]: CrushPanel,

@@ -303,7 +303,9 @@ function holdPhase(beat: number, start: number, end: number, attack: number, rel
 
 export const meteorImpactMover: MoverOrSplitterDefinition<MeteorImpactSettings> = {
   id: 'meteorImpact',
+  particleExecution: { fallback: 'unported', reason: 'The legacy world-space impact field and its per-copy response have no serialized GPU evaluator.' },
   label: 'Meteor Impact',
+  extras: true,
   kind: 'mover',
   identityColor: METEOR_IMPACT_COLOR,
   params: [
@@ -402,6 +404,7 @@ export const meteorImpactMover: MoverOrSplitterDefinition<MeteorImpactSettings> 
       }))
 
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { beat, placementTransform }) {
         const placed = placementTransform
           ? placementTransform.clone().multiply(visualCopy.transform)

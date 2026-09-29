@@ -23,7 +23,10 @@
 // about, so the performance stays out of the way and lets every change read on
 // the next hit.
 
-import { useMemo, useRef, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useMemo, useRef } from 'react'
+import { useKnobInteraction } from './useKnobInteraction'
+import { KnobValue } from './KnobValue'
+import { percentEntry, numberEntry } from './knobValueParsing'
 import { useFrame } from '@react-three/fiber'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import {
@@ -350,8 +353,6 @@ const OVERDRIVE = '#ff8a3c'
 /** Laser Sphere's knob scale: the primary param one step larger than the rest. */
 const PRIMARY_KNOB = 52
 const KNOB = 44
-/** Pointer travel needed to break past the detent. */
-const CATCH_PX = 16
 
 function ShockKnob({ b, label, format, size = KNOB, detent }: {
   b: NumBinding | null
@@ -362,7 +363,9 @@ function ShockKnob({ b, label, format, size = KNOB, detent }: {
   /** Value the arc catches on, if any. */
   detent?: number
 }) {
-  const dragRef = useRef<{ y: number; norm: number; catchY: number | null } | null>(null)
+  const interaction = useKnobInteraction({ value: b?.value ?? 0, min: b?.def.min ?? 0, max: b?.def.max ?? 1,
+    step: b?.def.step ?? 0.01, defaultValue: b?.def.default ?? 0, catchDetent: detent,
+    onChange: value => b?.set(value) })
   if (!b) return null
   const { def: definition, value } = b
   const range = definition.max - definition.min
@@ -386,55 +389,6 @@ function ShockKnob({ b, label, format, size = KNOB, detent }: {
     return `conic-gradient(from 225deg, ${stops})`
   }
 
-  const commitNorm = (t: number) => {
-    const raw = definition.min + clamp(t, 0, 1) * range
-    const snapped = definition.min + Math.round((raw - definition.min) / definition.step) * definition.step
-    b.set(clamp(Number(snapped.toFixed(8)), definition.min, definition.max))
-  }
-  const crosses = (target: number) => detentPercent != null
-    && ((percent < detentPercent && target > detentPercent)
-      || (percent > detentPercent && target < detentPercent))
-
-  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    try { event.currentTarget.setPointerCapture(event.pointerId) } catch {}
-    dragRef.current = { y: event.clientY, norm: percent, catchY: null }
-  }
-  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const drag = dragRef.current
-    if (!drag) return
-    const target = drag.norm + (drag.y - event.clientY) / 140
-    if (detentPercent != null) {
-      if (drag.catchY != null) {
-        // Held on the detent until the pointer has clearly kept going.
-        if (Math.abs(event.clientY - drag.catchY) < CATCH_PX) return commitNorm(detentPercent)
-        // Broken out: re-anchor at the detent so motion resumes from there
-        // rather than jumping by the travel spent breaking free.
-        drag.norm = detentPercent
-        drag.y = event.clientY
-        drag.catchY = null
-        return
-      }
-      if (crosses(target)) {
-        drag.catchY = event.clientY
-        return commitNorm(detentPercent)
-      }
-    }
-    commitNorm(target)
-  }
-  const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    dragRef.current = null
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-  }
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
-    event.preventDefault()
-    const direction = event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1
-    const target = percent + direction * 0.03
-    // The keyboard gets the detent too: one press lands on it, the next passes.
-    commitNorm(crosses(target) && detentPercent != null ? detentPercent : target)
-  }
-
   return (
     // Fixed column width: the readouts change length as you turn ("even" →
     // "percussive", "55%" → "110%"), and a row that reflows while you are
@@ -449,12 +403,7 @@ function ShockKnob({ b, label, format, size = KNOB, detent }: {
         aria-valuenow={value}
         aria-valuetext={format ? format(value) : undefined}
         title={`${definition.label} · drag vertically · double-click to reset`}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onDoubleClick={() => b.set(definition.default)}
-        onKeyDown={onKeyDown}
+        {...interaction.handlers}
         className="relative cursor-ns-resize touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/50"
         style={{ width: size, height: size }}
       >
@@ -478,38 +427,39 @@ function ShockKnob({ b, label, format, size = KNOB, detent }: {
             background: `conic-gradient(from 225deg, transparent 0deg ${arcTo}deg, rgba(255,255,255,0.07) ${arcTo}deg 270deg, transparent 270deg)`,
           }}
         />
-        <div className="absolute inset-[3px] rounded-full border border-white/10 bg-[#0f151b]" />
+        <div className="absolute inset-[3px] rounded-full border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[#0f151b]" />
         {/* Where the knob catches: the designed limit, marked. */}
         {detentPercent != null && (
           <div className="absolute inset-0" style={{ transform: `rotate(${-135 + detentPercent * 270}deg)` }}>
             <span
-              className="absolute left-1/2 -translate-x-1/2 rounded-full bg-white/45"
+              className="absolute left-1/2 -translate-x-1/2 rounded-full bg-[color-mix(in_srgb,var(--text)_45%,transparent)]"
               style={{ top: -2, height: 4, width: 1.5 }}
             />
           </div>
         )}
         <div className="absolute inset-0" style={{ transform: `rotate(${angle}deg)` }}>
           <span
-            className="absolute left-1/2 -translate-x-1/2 rounded-full bg-white/90"
+            className="absolute left-1/2 -translate-x-1/2 rounded-full bg-[color-mix(in_srgb,var(--text)_90%,transparent)]"
             style={{ top: size * 0.12, height: size * 0.24, width: 2 }}
           />
           <span
-            className="absolute left-1/2 top-[-1px] h-1 w-1 -translate-x-1/2 rounded-full bg-white"
+            className="absolute left-1/2 top-[-1px] h-1 w-1 -translate-x-1/2 rounded-full bg-[color-mix(in_srgb,var(--text)_100%,transparent)]"
             style={{ boxShadow: `0 0 5px 1.5px ${accent}` }}
           />
         </div>
       </div>
       {/* Laser Sphere's caption scale, on fixed line heights: the knobs differ
           in size, their captions must not, or the row stops reading as a row. */}
-      <span className="mt-1 whitespace-nowrap text-[8px] font-semibold leading-[11px] tracking-[0.12em] text-white/40">
+      <span className="mt-1 whitespace-nowrap text-[8px] font-semibold leading-[11px] tracking-[0.12em] text-[var(--text-3)]">
         {label}
       </span>
-      <span
+      <KnobValue value={value} min={definition.min} max={definition.max} label={definition.label}
+        onChange={b.set} codec={format === asPercent ? percentEntry : numberEntry(value === 1 ? 'beat' : 'beats')}
         className="whitespace-nowrap font-mono text-[9px] leading-[12px] tabular-nums"
         style={{ color: overdriven ? OVERDRIVE : 'rgba(255,255,255,0.7)' }}
       >
         {format ? format(value) : definition.step >= 1 ? value.toFixed(0) : value.toFixed(2)}
-      </span>
+      </KnobValue>
     </div>
   )
 }
@@ -538,7 +488,7 @@ function ShapeSelector({ b }: { b: SelectBinding }) {
   const selected = Math.round(b.value)
   return (
     <div className="flex w-[58px] flex-col items-center">
-      <div className="flex overflow-hidden rounded-md border border-white/10">
+      <div className="flex overflow-hidden rounded-md border border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
         {b.def.options.map((option) => {
           const active = option.value === selected
           return (
@@ -548,7 +498,7 @@ function ShapeSelector({ b }: { b: SelectBinding }) {
               aria-pressed={active}
               title={`${option.label} recovery`}
               onClick={() => b.set(option.value)}
-              className={`px-1 pb-0.5 pt-1 ${active ? '' : 'bg-black/25 hover:bg-white/5'}`}
+              className={`px-1 pb-0.5 pt-1 ${active ? '' : 'bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)]'}`}
               style={active ? { background: SHOCK } : undefined}
             >
               <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
@@ -563,10 +513,10 @@ function ShapeSelector({ b }: { b: SelectBinding }) {
           )
         })}
       </div>
-      <span className="mt-1 whitespace-nowrap text-[8px] font-semibold leading-[11px] tracking-[0.12em] text-white/40">
+      <span className="mt-1 whitespace-nowrap text-[8px] font-semibold leading-[11px] tracking-[0.12em] text-[var(--text-3)]">
         CURVE
       </span>
-      <span className="whitespace-nowrap font-mono text-[9px] leading-[12px] text-white/70">
+      <span className="whitespace-nowrap font-mono text-[9px] leading-[12px] text-[var(--text-2)]">
         {b.def.options.find((option) => option.value === selected)?.label.toUpperCase() ?? ''}
       </span>
     </div>

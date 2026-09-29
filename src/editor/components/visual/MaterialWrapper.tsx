@@ -1,9 +1,9 @@
+import { previewRuntime } from '../../core/visual/previewRuntime'
 import { useEffect, useRef, type ReactNode } from 'react'
-import { useFrame } from '@react-three/fiber'
 import { BufferAttribute, BufferGeometry, Group, Mesh, Material, type IUniform } from 'three'
 import { useTimeStore } from '../../store/TimeStore'
 import { getBeatOverride } from '../../core/visual/beatOverride'
-import { getObjectState } from '../../core/visual/VisualEngine'
+import { useVisualEngine, useVisualFrame as useFrame } from '../../core/visual/VisualEngineContext'
 import { getEffect } from '../../effects'
 import { effectiveEffectState } from '../../effects/automation'
 import { instanceSuffix, uniformName } from '../../effects/uniforms'
@@ -125,6 +125,7 @@ export function MaterialWrapper({
   plugins: EffectInstance[]
   children: ReactNode
 }) {
+  const { getObjectState } = useVisualEngine()
   const groupRef = useRef<Group>(null)
   // One uniform set per effect INSTANCE, shared by every material it patches, so
   // a single write per frame updates the whole subtree.
@@ -172,7 +173,7 @@ export function MaterialWrapper({
     const group = groupRef.current
     if (!group) return
     const state = getObjectState(trackId)
-    const beat = getBeatOverride() ?? useTimeStore.getState().currentBeat
+    const beat = getBeatOverride() ?? (previewRuntime.worker ? previewRuntime.beat : useTimeStore.getState().currentBeat)
 
     // The LAST enabled material effect owns the surface. Stacking two generated
     // surfaces has no meaningful composition - one simply overwrites albedo - so

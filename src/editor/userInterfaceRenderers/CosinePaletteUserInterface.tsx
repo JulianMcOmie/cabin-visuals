@@ -1,5 +1,9 @@
 'use client'
 
+import { numberEntry } from './knobValueParsing'
+
+import { percentEntry } from './knobValueParsing'
+
 // Bespoke settings for the Cosine Palette colorizer, on the console kit. The
 // hero is the PERIOD ITSELF: a full-bleed strip drawn from the definition's
 // own cosinePaletteLut(), rotated by SCROLL, so the picture is byte-for-byte
@@ -51,7 +55,7 @@ const MAP_SEGMENTS = [
 
 /** A quiet caps caption over a segmented control, in the knob-label voice. */
 function SegmentCaption({ children }: { children: string }) {
-  return <div className="mb-1 text-[9px] font-semibold tracking-[0.1em] text-white/40">{children}</div>
+  return <div className="mb-1 text-[9px] font-semibold tracking-[0.1em] text-[var(--text-3)]">{children}</div>
 }
 
 /** Enough stops that the strip is visually continuous at panel widths; the
@@ -104,14 +108,14 @@ export const CosinePaletteUserInterfaceRenderer: UserInterfaceRendererDefinition
           so the headline automation target has a picture before it has notes. */}
       <div
         data-testid="cosine-palette-strip"
-        className="h-9 border-b border-white/10"
+        className="h-9 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
         style={{ background: strip }}
       />
 
       <div className="flex flex-col gap-2.5 px-3 pb-3 pt-2.5">
         <ControlRow className="justify-between gap-1 px-1">
           <Knob b={scroll} label="SCROLL" ariaLabel="Palette scroll phase" large format={(v) => v.toFixed(2)} />
-          <Knob b={amount} label="AMOUNT" ariaLabel="Palette amount" format={(v) => `${Math.round(v * 100)}%`} />
+          <Knob b={amount} label="AMOUNT" ariaLabel="Palette amount" entry={percentEntry} format={(v) => `${Math.round(v * 100)}%`} />
           <Knob b={span} label="SPAN" ariaLabel="World units per palette period" />
         </ControlRow>
 
@@ -135,7 +139,7 @@ export const CosinePaletteUserInterfaceRenderer: UserInterfaceRendererDefinition
         <ControlRow className="justify-between gap-1 px-1">
           <Knob b={bright} label="BRIGHT" ariaLabel="Palette brightness (a)" format={(v) => v.toFixed(2)} />
           <Knob b={range} label="RANGE" ariaLabel="Palette range (b)" format={(v) => v.toFixed(2)} />
-          <Knob b={cycles} label="CYCLES" ariaLabel="Palette cycles (c)" format={(v) => `${v.toFixed(1)}×`} />
+          <Knob b={cycles} label="CYCLES" ariaLabel="Palette cycles (c)" entry={numberEntry('×')} format={(v) => `${v.toFixed(1)}×`} />
         </ControlRow>
 
         <ControlRow className="gap-1 px-1">

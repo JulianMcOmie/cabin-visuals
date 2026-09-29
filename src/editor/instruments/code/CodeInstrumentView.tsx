@@ -1,4 +1,4 @@
-import { useEffect, useRef, type FC } from 'react'
+import { useContext, useEffect, useRef, type FC } from 'react'
 import { useThree } from '@react-three/fiber'
 import type { Group } from 'three'
 import { beatInBlock, useInstrumentFrame } from '../../core/visual/instrumentFrame'
@@ -8,6 +8,7 @@ import { reportCodeError } from './errors'
 import { latestSpec, onSpecSwap } from './live'
 import { world } from './world'
 import { applyCameraPose } from '../../core/visual/cameraOwner'
+import { VisualEngineContext } from '../../core/visual/VisualEngineContext'
 import type { CodeInstrumentSpec, FrameCtx, SetupCtx } from './types'
 
 // The one R3F host behind every code instrument. It owns an empty <group> (the
@@ -22,6 +23,11 @@ import type { CodeInstrumentSpec, FrameCtx, SetupCtx } from './types'
 // setup is disposed and the new one runs, on the next frame, without a
 // remount. The spec is part of the frame signature and a swap invalidates the
 // canvas, so this happens while paused too.
+//
+// Loop and track previews mount the same view under their own engine
+// (VisualEngineContext). There it draws and poses its own camera, but never
+// claims the editor's camera or sets/clears the editor's look - those belong
+// to the one editor view of the track.
 
 interface Mount {
   spec: CodeInstrumentSpec
@@ -49,8 +55,8 @@ export function codeViewFor(id: string): FC<{ trackId: string }> {
   return view
 }
 
-function teardown(m: Mount, root: Group | null, id: string, trackId: string) {
-  world().setTrackLook(trackId, null)
+function teardown(m: Mount, root: Group | null, id: string, trackId: string, editor: boolean) {
+  if (editor) world().setTrackLook(trackId, null)
   try { m.spec.dispose?.(m.state) } catch (err) { reportCodeError(id, trackId, 'dispose', err, 0) }
   for (const thing of m.owned) {
     try { thing.dispose() } catch { /* already gone */ }
@@ -65,6 +71,8 @@ function makeView(id: string): FC<{ trackId: string }> {
     const invalidate = useThree((s) => s.invalidate)
     const mount = useRef<Mount | null>(null)
     const colors = useRef(new ColorCache()).current
+    // the editor's own view (no preview engine provided) owns camera + look
+    const editor = useContext(VisualEngineContext) === null
 
     // A hot swap of this id repaints even when nothing else changed.
     useEffect(() => onSpecSwap((swapped) => { if (swapped === id) invalidate() }), [invalidate])
@@ -72,8 +80,8 @@ function makeView(id: string): FC<{ trackId: string }> {
     useEffect(() => () => {
       const m = mount.current
       mount.current = null
-      if (m) teardown(m, groupRef.current, id, trackId)
-    }, [trackId])
+      if (m) teardown(m, groupRef.current, id, trackId, editor)
+    }, [trackId, editor])
 
     useInstrumentFrame(trackId, (s: ObjectState) => {
       const root = groupRef.current
@@ -81,7 +89,7 @@ function makeView(id: string): FC<{ trackId: string }> {
       const spec = latestSpec(id)
       if (!spec) return false
       if (mount.current && mount.current.spec !== spec) {
-        teardown(mount.current, root, id, trackId)
+        teardown(mount.current, root, id, trackId, editor)
         mount.current = null
       }
       const three = get()
@@ -128,7 +136,7 @@ function makeView(id: string): FC<{ trackId: string }> {
         px,
         aspect: size.width / Math.max(1, size.height),
         viewport: { width: vp.width, height: vp.height },
-        claimCamera: () => world().claimCamera(trackId),
+        claimCamera: () => { if (editor) world().claimCamera(trackId) },
       }
       try {
         spec.frame?.(ctx, m.state)
@@ -140,13 +148,13 @@ function makeView(id: string): FC<{ trackId: string }> {
           const pose = spec.camera(ctx, m.state)
           if (pose) {
             applyCameraPose(three.camera, pose)
-            world().claimCamera(trackId)
+            if (editor) world().claimCamera(trackId)
           }
         } catch (err) {
           reportCodeError(id, trackId, 'camera', err, s.beat)
         }
       }
-      if (spec.look) {
+      if (spec.look && editor) {
         try {
           world().setTrackLook(trackId, spec.look(ctx, m.state) || null)
         } catch (err) {

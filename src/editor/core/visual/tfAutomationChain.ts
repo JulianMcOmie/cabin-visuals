@@ -17,6 +17,7 @@
 
 import { Matrix4 } from 'three'
 import type { MoverOrSplitter } from '../visualCopies/types'
+import { memoizeEvaluation } from '../visualCopies/evaluationMemo'
 import { sampleAutomationLane } from './automation'
 import type { ResolvedAutomation } from './types'
 import { SPATIAL_TRANSFORM_PARAM_DEFS, TF_X, TF_Y, TF_Z, TF_ROT_X, TF_ROT_Y, TF_ROT_Z, TF_SIZE } from '../transform'
@@ -57,19 +58,26 @@ function composeDelta(param: string, value: number, base: number, out: Matrix4):
  *  is the panel value closed over at resolve time (a param edit re-resolves via
  *  the normal debounced structural pass, like any chain setting). Pure function
  *  of the beat, memoized per beat like resolveOwnMoverOrSplitter's overlay. */
-export function tfAutomationChainEntry(lane: ResolvedAutomation, base: number): MoverOrSplitter {
-  let cachedBeat = Number.NaN
-  const delta = new Matrix4()
+export function tfAutomationChainEntry(input: ResolvedAutomation | ResolvedAutomation[], base: number): MoverOrSplitter {
+  const lanes = Array.isArray(input) ? input : [input]
+  const deltaAtBeat = memoizeEvaluation((beat: number) => {
+    let value = base
+    for (const lane of lanes) {
+      const sampled = sampleAutomationLane(lane, beat, value)
+      if (!Number.isNaN(sampled)) value = sampled
+    }
+    const delta = new Matrix4()
+    composeDelta(lanes[0].param, value, base, delta)
+    return delta
+  })
   return {
+    cachePolicy: 'beat',
+    localSlotMotion: true,
+    localTransformCount: 1,
+    localTransformsAtBeat: beat => [deltaAtBeat(beat)],
     apply(visualCopy, context) {
-      if (context.beat !== cachedBeat) {
-        cachedBeat = context.beat
-        const sampled = sampleAutomationLane(lane, context.beat, base)
-        // NaN = the lane is inert this frame - the delta collapses to identity.
-        composeDelta(lane.param, Number.isNaN(sampled) ? base : sampled, base, delta)
-      }
+      const delta = deltaAtBeat(context.beat)
       return [{ ...visualCopy, transform: visualCopy.transform.clone().multiply(delta) }]
     },
   }
 }
-

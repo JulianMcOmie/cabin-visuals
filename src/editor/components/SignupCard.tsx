@@ -104,7 +104,7 @@ export function SignupCard({ page }: { page: string }) {
       </p>
 
       {googleBusy && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-[14px] bg-[rgba(15,17,24,0.85)] text-[13px] text-[var(--text-2)]">
+        <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-[14px] bg-[color-mix(in_srgb,var(--bg-panel)_85%,transparent)] text-[13px] text-[var(--text-2)]">
           <Loader2 size={14} className="animate-spin" />
           Signing you in…
         </div>

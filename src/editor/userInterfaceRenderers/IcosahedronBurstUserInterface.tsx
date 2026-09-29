@@ -43,11 +43,11 @@ function ShellWindow({ startSize, maxSize, fadeStart, expansionSpeed }: {
           <circle cx="58" cy="58" r={toRadius(startSize)} fill={withAlpha(ACCENT, 0.22)} stroke="rgba(255,255,255,0.7)" strokeWidth="1.2" />
           <circle cx="58" cy="58" r="1.4" fill="rgba(255,255,255,0.7)" />
         </svg>
-        <div className="min-w-0 space-y-1.5 font-mono text-[9px] leading-3 text-white/45 select-none">
-          <p><span className="mr-1.5 inline-block h-[7px] w-[7px] rounded-full border border-white/70 align-[-1px]" />born at {startSize.toFixed(2)}</p>
-          <p><span className="mr-1.5 inline-block h-0 w-[7px] border-t border-dashed border-white/30 align-[2px]" />fades past {(maxSize * fadeStart).toFixed(1)}</p>
+        <div className="min-w-0 space-y-1.5 font-mono text-[9px] leading-3 text-[var(--text-3)] select-none">
+          <p><span className="mr-1.5 inline-block h-[7px] w-[7px] rounded-full border border-[color-mix(in_srgb,var(--text)_70%,transparent)] align-[-1px]" />born at {startSize.toFixed(2)}</p>
+          <p><span className="mr-1.5 inline-block h-0 w-[7px] border-t border-dashed border-[color-mix(in_srgb,var(--text)_30%,transparent)] align-[2px]" />fades past {(maxSize * fadeStart).toFixed(1)}</p>
           <p><span className="mr-1.5 inline-block h-[7px] w-[7px] rounded-full border align-[-1px]" style={{ borderColor: withAlpha(ACCENT, 0.55) }} />gone at {maxSize.toFixed(1)}</p>
-          <p className="pt-1 text-white/60">{lifetime.toFixed(2)}s per shell</p>
+          <p className="pt-1 text-[var(--text-3)]">{lifetime.toFixed(2)}s per shell</p>
         </div>
       </div>
     </PreviewWindow>
@@ -77,7 +77,7 @@ function GradientSlider({ b, label, gradient, format }: {
 
   return (
     <div className="grid grid-cols-[64px_1fr_44px] items-center gap-2.5">
-      <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40" title={def.label}>{label}</span>
+      <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]" title={def.label}>{label}</span>
       <div
         ref={trackRef}
         role="slider"
@@ -103,11 +103,11 @@ function GradientSlider({ b, label, gradient, format }: {
         style={{ background: gradient }}
       >
         <span
-          className="absolute top-1/2 h-[12px] w-[6px] -translate-x-1/2 -translate-y-1/2 rounded-[1px] border border-black/60 bg-white/90"
+          className="absolute top-1/2 h-[12px] w-[6px] -translate-x-1/2 -translate-y-1/2 rounded-[1px] border border-black/60 bg-[color-mix(in_srgb,var(--text)_90%,transparent)]"
           style={{ left: `${pct}%` }}
         />
       </div>
-      <span className="text-right font-mono text-[9px] tabular-nums text-white/70">{format(value)}</span>
+      <span className="text-right font-mono text-[9px] tabular-nums text-[var(--text-2)]">{format(value)}</span>
     </div>
   )
 }
@@ -118,7 +118,7 @@ function HueWalkStrip({ baseHue, hueStep, saturation, lightness }: {
 }) {
   return (
     <div className="grid grid-cols-[64px_1fr] items-center gap-2.5 select-none">
-      <span className="text-[8px] font-semibold tracking-[0.12em] text-white/25">NEXT 8</span>
+      <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-muted)]">NEXT 8</span>
       <div className="flex h-[14px] gap-px overflow-hidden rounded-sm">
         {Array.from({ length: 8 }, (_, index) => (
           <span

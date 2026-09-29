@@ -22,6 +22,8 @@ import { rng } from '../motion'
 // attribute float aIndex, uniform float uBeat / uSec / uPx, your uniforms, and
 // GLSL.noise + GLSL.rotate helpers. Outputs to assign: vec3 pos (local space),
 // float size (pixels at 1080p, before perspective), vec4 color (linear rgb, a).
+// A point smaller than a pixel at the render size is drawn at one pixel with
+// its alpha scaled by its true area, so brightness doesn't depend on resolution.
 // Optional `header` goes above main (functions, extra uniforms/varyings).
 
 export interface ParticleOpts {
@@ -71,8 +73,12 @@ export class Particles extends THREE.Points {
         ${opts.vertex}
         vec4 mv = modelViewMatrix * vec4(pos, 1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = size * uPx * (uSizeRef / max(0.05, -mv.z));
-        vColor = color;
+        // A point can't rasterize below one pixel: draw it at one and dim it by
+        // the area it really covers, so a small render (an audit, a thumbnail)
+        // keeps the full-size frame's brightness instead of fogging over.
+        float cabinPointPx = size * uPx * (uSizeRef / max(0.05, -mv.z));
+        gl_PointSize = max(cabinPointPx, 1.0);
+        vColor = vec4(color.rgb, color.a * min(1.0, cabinPointPx * cabinPointPx));
       }
     `
     const fragmentShader = opts.fragment ?? /* glsl */ `

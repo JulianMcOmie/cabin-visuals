@@ -5,13 +5,17 @@
 // export borrows the live canvas rather than spinning up a second one.
 
 export interface FrameDriver {
+  /** Wait for the freshly pinned document and its instrument mounts. */
+  prepare?: (beat?: number) => Promise<void>
+  /** Resolve this exact beat before async instrument frame inputs. */
+  prepareFrame?: (beat: number) => void
   /** Render exactly one frame at `beat` - the same setCurrentBeat → computeAtBeat
    *  path scrubbing takes, then a single R3F advance(). Synchronous: when this
    *  returns, the canvas holds the frame. */
   renderFrame(beat: number, timeMs: number): void
   /** Freeze the render loop and pin the canvas to the export resolution (DPR 1). */
   pin(width: number, height: number): void
-  /** Restore frameloop, size, and DPR exactly as they were. Safe to call twice. */
+  /** Restore the preview, applying layout/DPR changes deferred during capture. Safe to call twice. */
   unpin(): void
   /** The live WebGL canvas - what VideoFrame captures from. */
   getCanvas(): HTMLCanvasElement

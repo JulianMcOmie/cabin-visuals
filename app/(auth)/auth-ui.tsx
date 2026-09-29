@@ -92,7 +92,7 @@ export function AuthBanner({ kind, children }: { kind: 'success' | 'error'; chil
   return (
     <div
       className={`mb-4 rounded-[5px] border border-[var(--border)] bg-[var(--bg-panel)] px-3 py-2.5 text-center text-[12px] ${
-        kind === 'error' ? 'text-[#d16969]' : 'text-[#6a9955]'
+        kind === 'error' ? 'text-[var(--danger)]' : 'text-[var(--success)]'
       }`}
     >
       {children}

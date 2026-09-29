@@ -5,6 +5,7 @@
 /** The slice of a CompositionLayer the picker needs. */
 export interface PickLayer {
   sceneId: string
+  crossfade?: { sceneId: string; mix: number }
   /** Normalized viewport in final-frame coordinates, y up from the bottom. */
   viewport: { x: number; y: number; width: number; height: number }
 }
@@ -36,7 +37,8 @@ export function layersUnderPoint(layers: readonly PickLayer[], nx: number, ny: n
     if (nx < vp.x || nx > vp.x + vp.width || ny < vp.y || ny > vp.y + vp.height) continue
     const u = (nx - vp.x) / vp.width
     const v = (ny - vp.y) / vp.height
-    out.push({ sceneId, ndcX: u * 2 - 1, ndcY: v * 2 - 1 })
+    const fade = layers[i].crossfade
+    out.push({ sceneId: fade && fade.mix < 0.5 ? fade.sceneId : sceneId, ndcX: u * 2 - 1, ndcY: v * 2 - 1 })
   }
   return out
 }

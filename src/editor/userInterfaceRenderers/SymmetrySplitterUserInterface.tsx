@@ -1,5 +1,8 @@
 'use client'
 
+import { useKnobInteraction } from './useKnobInteraction'
+import { KnobValue } from './KnobValue'
+
 // Bespoke settings for the Symmetry splitter, migrated to
 // docs/instrument-panel-design-guide.md on the console kit (./console). The
 // hero is the fold window: the
@@ -236,11 +239,11 @@ function FoldPad({ settings, tilt, spread, planeLabel, hoveredSlot, onHoverSlot 
           )
         })}
       </svg>
-      <span className="pointer-events-none absolute bottom-1 left-1.5 font-mono text-[8px] tabular-nums text-white/60">
+      <span className="pointer-events-none absolute bottom-1 left-1.5 font-mono text-[8px] tabular-nums text-[var(--text-3)]">
         {tilt.value}° · S {spread.value.toFixed(1)}
       </span>
-      <span className="pointer-events-none absolute right-1.5 top-1 font-mono text-[8px] text-white/30">{planeLabel}</span>
-      <span className="pointer-events-none absolute bottom-1 right-1.5 font-mono text-[8px] tabular-nums text-white/30">{info}</span>
+      <span className="pointer-events-none absolute right-1.5 top-1 font-mono text-[8px] text-[var(--text-muted)]">{planeLabel}</span>
+      <span className="pointer-events-none absolute bottom-1 right-1.5 font-mono text-[8px] tabular-nums text-[var(--text-muted)]">{info}</span>
     </div>
     </PreviewWindow>
   )
@@ -248,12 +251,13 @@ function FoldPad({ settings, tilt, spread, planeLabel, hoveredSlot, onHoverSlot 
 
 /** Mirror count: - / + stepper whose readout also drags vertically like a knob. */
 function MirrorsStepper({ b }: { b: NumBinding }) {
-  const dragRef = useRef<{ y: number; start: number } | null>(null)
   const { def } = b
   const mirrors = clamp(Math.round(b.value), def.min, def.max)
   const commit = (raw: number) => b.set(clamp(Math.round(raw), def.min, def.max))
+  const { handlers } = useKnobInteraction({ ...def, value: mirrors, defaultValue: def.default,
+    onChange: commit, travel: 9 * (def.max - def.min), keyStep: true })
   const buttonClass =
-    'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-sm leading-none text-white/70 hover:border-white/25 hover:text-white active:scale-95 disabled:pointer-events-none disabled:opacity-35'
+    'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--text)_4%,transparent)] text-sm leading-none text-[var(--text-2)] hover:border-[color-mix(in_srgb,var(--text)_25%,transparent)] hover:text-[var(--text)] active:scale-95 disabled:pointer-events-none disabled:opacity-35'
 
   return (
     <div className="flex items-stretch gap-1">
@@ -266,29 +270,12 @@ function MirrorsStepper({ b }: { b: NumBinding }) {
         aria-valuemax={def.max}
         aria-valuenow={mirrors}
         title="Drag vertically · double-click to reset"
-        onPointerDown={(event) => {
-          event.preventDefault()
-          event.currentTarget.setPointerCapture(event.pointerId)
-          dragRef.current = { y: event.clientY, start: mirrors }
-        }}
-        onPointerMove={(event) => {
-          const drag = dragRef.current
-          if (drag) commit(drag.start + (drag.y - event.clientY) / 9)
-        }}
-        onPointerUp={(event) => {
-          dragRef.current = null
-          if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-        }}
-        onDoubleClick={() => b.set(def.default)}
-        onKeyDown={(event) => {
-          if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
-          event.preventDefault()
-          commit(mirrors + (event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1))
-        }}
-        className="flex flex-1 cursor-ns-resize touch-none select-none items-baseline justify-center gap-1.5 rounded-md border border-white/10 bg-black/25 py-1.5 outline-none focus-visible:ring-1 focus-visible:ring-white/50"
+        {...handlers}
+        className="flex flex-1 cursor-ns-resize touch-none select-none items-baseline justify-center gap-1.5 rounded-md border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] py-1.5 outline-none focus-visible:ring-1 focus-visible:ring-white/50"
       >
-        <span className="font-mono text-[16px] leading-none tabular-nums text-white/90">{mirrors}</span>
-        <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">
+        <KnobValue draggable integer value={mirrors} min={def.min} max={def.max} label={def.label} onChange={commit}
+          className="font-mono text-[16px] leading-none tabular-nums text-[var(--text)]">{mirrors}</KnobValue>
+        <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">
           {mirrors === 1 ? 'MIRROR' : 'MIRRORS'}
         </span>
       </div>
@@ -322,7 +309,7 @@ function PlaneSelector({ b }: { b: SelectBinding }) {
             title={`${b.def.label}: ${option.label}`}
             onClick={() => b.set(option.value)}
             className={`flex cursor-pointer flex-col items-center gap-0.5 rounded-md border py-1.5 ${
-              active ? '' : 'border-white/[0.07] bg-white/[0.025] text-white/30 hover:bg-white/[0.06] hover:text-white/65'
+              active ? '' : 'border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--text)_2.5%,transparent)] text-[var(--text-muted)] hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-[var(--text-2)]'
             }`}
             style={active ? { borderColor: withAlpha(ACCENT, 0.4), background: withAlpha(ACCENT, 0.15), color: towardWhite(ACCENT, 0.45) } : undefined}
           >
@@ -344,10 +331,10 @@ function MuteMap({ count, mirroredSlot, hoveredSlot, onHoverSlot }: {
   onHoverSlot: (slot: number | null) => void
 }) {
   return (
-    <div data-testid="symmetry-mute-map" className="rounded-md border border-white/[0.06] bg-black/25 p-1.5">
+    <div data-testid="symmetry-mute-map" className="rounded-md border border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] p-1.5">
       <div className="mb-1 flex items-baseline justify-between">
-        <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40 select-none">MUTE MAP</span>
-        <span className="text-[7px] text-white/25 select-none">note on hides the copy</span>
+        <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)] select-none">MUTE MAP</span>
+        <span className="text-[7px] text-[var(--text-muted)] select-none">note on hides the copy</span>
       </div>
       <div className="grid grid-cols-8 gap-[3px]">
         {Array.from({ length: count }, (_, slot) => {

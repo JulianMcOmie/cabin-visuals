@@ -248,7 +248,7 @@ function TwistPreview({ settings }: { settings: SymmetricRotationSettings }) {
       >
         <canvas ref={canvasRef} className="h-full w-full" />
       </div>
-      <span className="pointer-events-none absolute bottom-1 left-1.5 font-mono text-[8px] text-white/40">
+      <span className="pointer-events-none absolute bottom-1 left-1.5 font-mono text-[8px] text-[var(--text-3)]">
         POSITION PICKS EACH COPY&apos;S SHARE
       </span>
     </PreviewWindow>
@@ -288,7 +288,7 @@ function CaptionedSegments({ b, caption, glyphs }: {
   if (!b) return null
   return (
     <div>
-      <span className="mb-1 block text-[8px] font-semibold tracking-[0.12em] text-white/40 select-none">
+      <span className="mb-1 block text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)] select-none">
         {(caption ?? b.def.label).toUpperCase()}
       </span>
       <Segmented
@@ -323,7 +323,7 @@ function ChannelStrip({ b, label }: { b: NumBinding | null; label: string }) {
   }
   return (
     <div className="grid grid-cols-[34px_1fr_40px] items-center gap-2">
-      <span className="text-[8px] font-semibold tracking-[0.1em] text-white/50 select-none">{label}</span>
+      <span className="text-[8px] font-semibold tracking-[0.1em] text-[var(--text-3)] select-none">{label}</span>
       <div
         role="slider"
         tabIndex={0}
@@ -331,7 +331,7 @@ function ChannelStrip({ b, label }: { b: NumBinding | null; label: string }) {
         aria-valuemin={def.min}
         aria-valuemax={def.max}
         aria-valuenow={b.value}
-        className="relative h-3.5 cursor-ew-resize touch-none rounded border border-white/[0.08] bg-black/40 outline-none focus-visible:border-white/30"
+        className="relative h-3.5 cursor-ew-resize touch-none rounded border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_40%,transparent)] outline-none focus-visible:border-[color-mix(in_srgb,var(--text)_30%,transparent)]"
         onPointerDown={(event) => {
           event.preventDefault()
           try { event.currentTarget.setPointerCapture(event.pointerId) } catch {}
@@ -355,7 +355,7 @@ function ChannelStrip({ b, label }: { b: NumBinding | null; label: string }) {
           if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') { event.preventDefault(); commit(b.value - step) }
         }}
       >
-        <span className="absolute bottom-0 left-1/2 top-0 w-px bg-white/20" />
+        <span className="absolute bottom-0 left-1/2 top-0 w-px bg-[color-mix(in_srgb,var(--text)_20%,transparent)]" />
         <span
           className="absolute bottom-[2px] top-[2px] rounded-[2px]"
           style={{
@@ -366,7 +366,7 @@ function ChannelStrip({ b, label }: { b: NumBinding | null; label: string }) {
           }}
         />
       </div>
-      <span className="text-right font-mono text-[9px] tabular-nums text-white/70 select-none">
+      <span className="text-right font-mono text-[9px] tabular-nums text-[var(--text-2)] select-none">
         {Math.round(b.value)}°
       </span>
     </div>
@@ -420,7 +420,7 @@ export const SymmetricRotationMoverUserInterfaceRenderer: UserInterfaceRendererD
       <TwistPreview settings={settings} />
       <button
         type="button"
-        className="mx-3 mt-2 rounded border border-white/15 px-2 py-1 text-[10px] text-white/70 hover:bg-white/10"
+        className="mx-3 mt-2 rounded border border-[color-mix(in_srgb,var(--text)_15%,transparent)] px-2 py-1 text-[10px] text-[var(--text-2)] hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)]"
         onClick={() => {
           // Apply only the spatial pose and Amount mode; MIDI feel stays stored.
           const keys = new Set(['axis', 'axisYaw', 'axisPitch', 'centerX', 'centerY', 'centerZ', 'mode', 'falloff', 'anchor', 'twist', 'fold', 'roll', 'angle'])
@@ -437,7 +437,7 @@ export const SymmetricRotationMoverUserInterfaceRenderer: UserInterfaceRendererD
         <CaptionedSegments b={mode} caption="Mode" />
         <CaptionedSegments b={falloff} glyphs />
         {falloff?.value === 1 && (
-          <p className="text-[10px] leading-relaxed text-white/50">
+          <p className="text-[10px] leading-relaxed text-[var(--text-3)]">
             Along axis gives zero rotation in the plane through the center. Use Uniform to bow a flat ring or grid.
           </p>
         )}

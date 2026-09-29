@@ -19,7 +19,7 @@ const EYEBROW_CLASSES =
 // The one CTA treatment: cyan pill, dark text, glow + lift on hover. Spec
 // timing (box-shadow .5s / transform .3s) needs the raw transition property.
 const CTA_PILL_CLASSES =
-  "inline-flex h-[52px] items-center justify-center whitespace-nowrap rounded-[99px] bg-[var(--lp-accent)] px-9 text-[17px] font-semibold text-[#12141a] cursor-pointer [transition:box-shadow_.5s_ease,transform_.3s_ease] hover:shadow-[0_0_60px_rgba(158,232,245,0.5)] hover:-translate-y-0.5"
+  "inline-flex h-[52px] items-center justify-center whitespace-nowrap rounded-[99px] bg-[var(--lp-accent)] px-9 text-[17px] font-semibold text-[var(--on-accent)] cursor-pointer [transition:box-shadow_.5s_ease,transform_.3s_ease] hover:shadow-[0_0_60px_color-mix(in_srgb,var(--accent)_50%,transparent)] hover:-translate-y-0.5"
 
 /** The hero + closing CTA. Users with a REAL account resume their last
  *  project ("Continue creating"); everyone else - signed out OR riding an
@@ -125,7 +125,7 @@ export function LandingEditorial() {
             <Link
               href="/signup"
               onClick={() => track("nav_clicked", { from: "landing", to: "signup" })}
-              className="inline-flex h-9 items-center whitespace-nowrap rounded-[99px] bg-[var(--lp-text)] px-5 text-[15px] font-semibold text-[#12141a] transition-colors duration-300 hover:bg-[var(--lp-accent)] cursor-pointer"
+              className="inline-flex h-9 items-center whitespace-nowrap rounded-[99px] bg-[var(--lp-text)] px-5 text-[15px] font-semibold text-[var(--on-accent)] transition-colors duration-300 hover:bg-[var(--lp-accent)] cursor-pointer"
             >
               Sign up
             </Link>
@@ -178,7 +178,7 @@ export function LandingEditorial() {
                 // The source is already WebP q88; the default q75 re-encode
                 // softens the 11px inspector labels into mush.
                 quality={88}
-                className="block h-auto w-full rounded-[12px] border border-[rgba(255,255,255,0.07)] [transition:border-color_.5s] hover:border-[rgba(158,232,245,0.35)]"
+                className="block h-auto w-full rounded-[12px] border border-[color-mix(in_srgb,var(--text)_7%,transparent)] [transition:border-color_.5s] hover:border-[color-mix(in_srgb,var(--accent)_35%,transparent)]"
               />
             </div>
           </section>

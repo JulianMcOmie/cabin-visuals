@@ -232,7 +232,7 @@ export function SceneFxPreview({ plugin, settings, testId }: {
   return (
     <PreviewWindow height={PREVIEW_HEIGHT} testId={testId} title={`${plugin.name} — live preview`}>
       {failed ? (
-        <div className="flex h-full items-center justify-center text-[10px] text-white/30">
+        <div className="flex h-full items-center justify-center text-[10px] text-[var(--text-muted)]">
           preview unavailable
         </div>
       ) : (

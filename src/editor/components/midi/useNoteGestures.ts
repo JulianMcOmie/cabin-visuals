@@ -1,4 +1,4 @@
-import { RefObject, useCallback, useEffect, useRef, useState } from 'react'
+import { type SetStateAction, RefObject, useCallback, useEffect, useRef, useState } from 'react'
 import type { Block, Note } from '../../types'
 import type { MidiRow } from './types'
 import { clientToGrid, xToBeat, yToRowIndex, beatToX, rowIndexToY } from './coords'
@@ -77,12 +77,22 @@ export function useNoteGestures({
   snapEnabled,
 }: UseNoteGesturesOptions) {
   const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set())
-  const [drawingNote, setDrawingNote] = useState<Note | null>(null)
-  const [dragState, setDragState] = useState<DragState>(DRAG_NONE)
-  const dragStateRef = useRef(dragState)
-  dragStateRef.current = dragState
-  const drawingNoteRef = useRef(drawingNote)
-  drawingNoteRef.current = drawingNote
+  const [drawingNote, setDrawingNoteState] = useState<Note | null>(null)
+  const [dragState, setDragStateState] = useState<DragState>(DRAG_NONE)
+  const dragStateRef = useRef<DragState>(DRAG_NONE)
+  const drawingNoteRef = useRef<Note | null>(null)
+  // Native pointerup can arrive before React paints pointerdown. Gesture
+  // ownership and its latest draft must be synchronous, even under GPU load.
+  const setDragState = useCallback((next: SetStateAction<DragState>) => {
+    const value = typeof next === 'function' ? next(dragStateRef.current) : next
+    dragStateRef.current = value
+    setDragStateState(value)
+  }, [])
+  const setDrawingNote = useCallback((next: SetStateAction<Note | null>) => {
+    const value = typeof next === 'function' ? next(drawingNoteRef.current) : next
+    drawingNoteRef.current = value
+    setDrawingNoteState(value)
+  }, [])
   const didDragRef = useRef(false)
   // Notes to persist when the current gesture ends. Set during drag frames
   // (move/resize) and on alt-duplicate; committed once on pointer-up so the
@@ -339,7 +349,7 @@ export function useNoteGestures({
     window.addEventListener('pointermove', handleMove, { signal: controller.signal })
     window.addEventListener('pointerup', handleUp, { signal: controller.signal })
     window.addEventListener('pointercancel', handleUp, { signal: controller.signal })
-  }, [setCursor, gridRef, containerRef, placeDragGuideAtBeat, placeDragGuideAtClientX])
+  }, [setDragState, setDrawingNote, setCursor, gridRef, containerRef, placeDragGuideAtBeat, placeDragGuideAtClientX])
 
   // If the component unmounts mid-drag, tear the window listeners down
   useEffect(() => {
@@ -486,7 +496,7 @@ export function useNoteGestures({
     setCursor('default')
     placeDragGuideAtBeat(blockStartBeat + note.startBeat, pixelsPerBeat)
     beginGestureTracking('default')
-  }, [selectedNoteIds, notes, onNotesChange, setCursor, beginGestureTracking, gridRef, placeDragGuideAtBeat, blockStartBeat, pixelsPerBeat])
+  }, [setDragState, selectedNoteIds, notes, onNotesChange, setCursor, beginGestureTracking, gridRef, placeDragGuideAtBeat, blockStartBeat, pixelsPerBeat])
 
   // Handle note hover for cursor changes. stopPropagation keeps the grid's
   // own pointermove handler from firing afterward and resetting the cursor
@@ -569,7 +579,7 @@ export function useNoteGestures({
     })
     setCursor('default')
     beginGestureTracking('default')
-  }, [selectedNoteIds, rowHeight, rows, pixelsPerBeat, roundDownToStep, snapEnabled, quantize, blockStartBeat, initialTotalBeats, setCursor, beginGestureTracking, gridRef, placeDragGuideAtBeat])
+  }, [setDragState, setDrawingNote, selectedNoteIds, rowHeight, rows, pixelsPerBeat, roundDownToStep, snapEnabled, quantize, blockStartBeat, initialTotalBeats, setCursor, beginGestureTracking, gridRef, placeDragGuideAtBeat])
 
   // Keyboard handler (capture phase so editor consumes Delete/Esc before the panel).
   // Registered ONCE: it reads notes / selection / commit through `latest`, so a

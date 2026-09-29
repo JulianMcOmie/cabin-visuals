@@ -20,6 +20,7 @@
 // Prereqs (one-time):
 //   - dev server running (npm run dev) on http://localhost:3000
 //   - npx playwright install chromium
+//   - ffmpeg on PATH (local poster extraction; sharp encodes the WebP)
 //   - .env.local has NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
 //
 // Headed on purpose: a real GPU renders WebGL and encodes WebCodecs reliably,
@@ -30,6 +31,7 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { createClient } from '@supabase/supabase-js'
 import { faststart } from './lib/faststart.mjs'
+import { createInstrumentPoster, readInstrumentPosters, writeInstrumentPosters } from './lib/instrument-posters.mjs'
 
 // Load .env.local ourselves (a standalone script doesn't get Next's env loading).
 function loadEnv() {
@@ -110,6 +112,7 @@ try {
   const ids = await page.evaluate(() => window.__instrumentPreviewIds)
   const version = await page.evaluate(() => window.__instrumentPreviewVersion)
   const manifest = await loadManifest()
+  const posters = await readInstrumentPosters()
 
   // Decide what to (re)capture. Manifest values are "<version>-<timestamp>":
   // the version prefix is the staleness signal, and the timestamp makes every
@@ -141,6 +144,8 @@ try {
         continue
       }
       const bytes = faststart(Buffer.from(b64, 'base64'))
+      const captureVersion = `${version}-${Date.now()}`
+      const poster = await createInstrumentPoster(id, bytes, captureVersion)
       const { error } = await supabase.storage
         .from(BUCKET)
         .upload(`${id}.mp4`, bytes, {
@@ -155,7 +160,9 @@ try {
         console.log(`upload failed: ${error.message}`)
         continue
       }
-      manifest[id] = `${version}-${Date.now()}`
+      manifest[id] = captureVersion
+      posters[id] = poster
+      await writeInstrumentPosters(posters)
       console.log(`ok (${(bytes.length / 1024).toFixed(0)} KB)`)
       ok++
     } catch (err) {

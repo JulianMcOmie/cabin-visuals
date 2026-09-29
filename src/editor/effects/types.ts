@@ -40,6 +40,9 @@ export interface VisualEffect {
   id: string
   name: string
   category: EffectCategory
+  /** Atmosphere needs unwarped geometry depth: run before front overlays and
+   * screen effects. Relative order within this stage follows the effect rack. */
+  sceneStage?: 'atmosphere'
   /** Hidden from the add-effect menu (existing instances keep rendering). The
    *  base transform effects are deprecated in favor of the canonical track
    *  transform panel (core/transform.ts). */
@@ -60,6 +63,8 @@ export interface VisualEffect {
   applyTransform?: (group: Group, settings: Record<string, number>, time: number) => void
   /** Shader plugins: a GLSL fragment shader (screen-space; samples `tDiffuse`, sees
    *  `time`/`resolution` + a uniform per param). Applied as an FBO post-process pass. */
+  /** Multipass renderer contract; the device may emit a separate HDR light layer. */
+  multipass?: 'glow'
   fragmentShader?: string
   vertexShader?: string
   /** Material plugins: GLSL injected into the TARGET's own materials by

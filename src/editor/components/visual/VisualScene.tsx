@@ -1,5 +1,9 @@
-import { TrackPreviewRenderer, TrackPreviewRoot } from './TrackPreviewRenderer'
-import { Fragment, useEffect, useMemo, useRef, useSyncExternalStore, type ReactElement } from 'react'
+import { previewRuntime } from '../../core/visual/previewRuntime'
+import { TrackPreviewRenderer } from './TrackPreviewRenderer'
+import { useCameraFraming } from './useCameraFraming'
+
+import { hasSceneGlow, setSceneGlowHalo, renderSceneWithGlow } from './glowScene'
+import { Fragment, memo, useEffect, useMemo, useRef, useSyncExternalStore, type ReactElement } from 'react'
 import { createPortal, useFrame, useThree } from '@react-three/fiber'
 import {
   Mesh,
@@ -9,6 +13,9 @@ import {
   Float32BufferAttribute,
   Scene as ThreeScene,
   WebGLRenderTarget,
+  DepthTexture,
+  DepthStencilFormat,
+  UnsignedInt248Type,
   HalfFloatType,
   LinearFilter,
   AddEquation,
@@ -18,16 +25,15 @@ import {
   OneMinusSrcAlphaFactor,
   PlaneGeometry,
   ShaderMaterial,
-  PMREMGenerator,
   NoToneMapping,
   Vector2,
   Vector3,
   Vector4,
   AdditiveBlending,
   type Material,
+  type Object3D,
   type Texture,
 } from 'three'
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js'
 import { BloomEffect } from 'postprocessing'
 import { getCompositionLayers, getObjectState, getSceneBackdrop, getSceneFxOverrides, setMountedRenderScenes, subscribeObjects, getObjectList, isTrackActive, layerSceneIds, type ObjectListEntry } from '../../core/visual/VisualEngine'
@@ -35,6 +41,7 @@ import { resolveLook } from '../../core/visual/look'
 import { releaseCameraIfIdle } from '../../core/visual/cameraOwner'
 import { getEffect, PLUGIN_LIST } from '../../effects'
 import { effectiveEffectState } from '../../effects/automation'
+import { createFogUniforms, syncFogUniforms } from '../../effects/scene/fogRuntime'
 import type { CompositionLayer } from '../../core/directors'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
@@ -51,7 +58,7 @@ import { DEFAULT_SCENE_BACKGROUND, type Scene, type SceneGradient } from '../../
 import { ObjectRenderer } from './ObjectRenderer'
 import { InstancedObjectRenderer } from './InstancedObjectRenderer'
 import { FinalInvertMaskContext } from '../../core/visual/finalInvertMask'
-import { PassLightPool, refreshPosterLightDir, type LightingBudget } from '../../core/visual/sceneLights'
+import { PassLightPool, refreshPosterLightDir } from '../../core/visual/sceneLights'
 import { hoverGlowColor, hoverTargetsForTrack, rootSceneOf } from '../../core/visual/hoverTargets'
 import { isExportPinned } from '../../core/export/frameDriver'
 import { useUIStore } from '../../store/UIStore'
@@ -95,6 +102,9 @@ interface PartitionUniforms {
   index: { value: number }
   count: { value: number }
   aspect: { value: number }
+  crossfadeTexture: { value: Texture | null }
+  crossfadeMix: { value: number }
+  crossfadeAlpha: { value: Vector2 }
 }
 
 function disposeMountedScene(runtime: MountedScene) {
@@ -293,29 +303,17 @@ void main() {
   gl_FragColor = texture2D(tDiffuse, clamp(vUv + offset, 0.0, 1.0));
 }`
 
-/** The percussive counterpart: a triggered, single-strike displacement in one of
- *  four shapes, plus the channel split that makes a hit read as a hit
- *  (instruments/ImpactWarp.tsx owns the field, the split and the style enum). */
+/** One centered movement of the complete scene, with all channels together. */
 const IMPACT_WARP_FRAGMENT = `
 uniform sampler2D tDiffuse;
-uniform float style;
 uniform float amount;
-uniform vec2 dir;
-uniform float phase;
-uniform float size;
-uniform float seed;
-uniform float aspect;
 varying vec2 vUv;
 
 ${IMPACT_WARP_FIELD_GLSL}
 
 void main() {
-  vec2 offset = impactWarpOffset(vUv, style, amount, dir, phase, size, seed, aspect);
-  vec2 split = impactWarpSplit(offset);
-  vec4 mid = texture2D(tDiffuse, impactWarpWrap(vUv + offset));
-  float red = texture2D(tDiffuse, impactWarpWrap(vUv + offset + split)).r;
-  float blue = texture2D(tDiffuse, impactWarpWrap(vUv + offset - split)).b;
-  gl_FragColor = vec4(red, mid.g, blue, mid.a);
+  vec2 offset = impactWarpOffset(vUv, amount);
+  gl_FragColor = texture2D(tDiffuse, impactWarpWrap(vUv + offset));
 }`
 
 const FINAL_GRADE_FRAGMENT = `
@@ -441,6 +439,9 @@ function makeCompositorMaterial(invertBehind = false) {
     index: { value: 0 },
     count: { value: 1 },
     aspect: { value: 1 },
+    crossfadeTexture: { value: null },
+    crossfadeMix: { value: 1 },
+    crossfadeAlpha: { value: new Vector2(1, 1) },
   }
   const material = new MeshBasicMaterial({ transparent: true, depthTest: false, depthWrite: false })
   if (invertBehind) {
@@ -466,6 +467,9 @@ function makeCompositorMaterial(invertBehind = false) {
       partitionIndex: uniforms.index,
       partitionCount: uniforms.count,
       partitionAspect: uniforms.aspect,
+      crossfadeTexture: uniforms.crossfadeTexture,
+      crossfadeMix: uniforms.crossfadeMix,
+      crossfadeAlpha: uniforms.crossfadeAlpha,
     })
     shader.vertexShader = shader.vertexShader
       .replace('void main() {', 'varying vec2 vPartitionUv;\nvoid main() {')
@@ -482,9 +486,13 @@ uniform float partitionBlur;
 uniform float partitionIndex;
 uniform float partitionCount;
 uniform float partitionAspect;
+uniform sampler2D crossfadeTexture;
+uniform float crossfadeMix;
+uniform vec2 crossfadeAlpha;
 void main() {`)
       .replace('#include <map_fragment>', `
 #ifdef USE_MAP
+vec2 sceneUv = vPartitionUv;
 vec4 partitionSampled;
 if (partitionBlur > 0.0) {
   vec2 pb = vPartitionUv - vec2(0.5);
@@ -498,11 +506,19 @@ if (partitionBlur > 0.0) {
   vec2 step = vec2(dir.x / partitionAspect, dir.y) * partitionBlur;
   partitionSampled = vec4(0.0);
   for (int i = 0; i < 9; i++) {
-    partitionSampled += texture2D(map, vPartitionUv + step * (float(i) / 8.0 - 0.5));
+    partitionSampled += texture2D(map, sceneUv + step * (float(i) / 8.0 - 0.5));
   }
   partitionSampled /= 9.0;
 } else {
-  partitionSampled = texture2D(map, vPartitionUv);
+  partitionSampled = texture2D(map, sceneUv);
+}
+if (crossfadeMix < 1.0) {
+  vec4 outgoing = texture2D(crossfadeTexture, sceneUv);
+  outgoing.a *= crossfadeAlpha.x;
+  partitionSampled.a *= crossfadeAlpha.y;
+  vec4 blended = mix(vec4(outgoing.rgb * outgoing.a, outgoing.a),
+    vec4(partitionSampled.rgb * partitionSampled.a, partitionSampled.a), crossfadeMix);
+  partitionSampled = vec4(blended.a > 0.00001 ? blended.rgb / blended.a : vec3(0.0), blended.a);
 }
 diffuseColor *= partitionSampled;
 #endif
@@ -555,7 +571,7 @@ if (partitionSlice > 0.5) {
       )
     }
   }
-  material.customProgramCacheKey = () => invertBehind ? 'scene-partition-invert-v3' : 'scene-partition-v3'
+  material.customProgramCacheKey = () => invertBehind ? 'scene-partition-invert-v5' : 'scene-partition-v5'
   return material
 }
 
@@ -571,6 +587,8 @@ function applyCompositorLayer(
   index: number,
   texture: Texture,
   aspect: number,
+  sourceTexture?: Texture,
+  targetPresent = true,
 ) {
   const material = mesh.material as MeshBasicMaterial
   if (material.map !== texture) {
@@ -593,6 +611,9 @@ function applyCompositorLayer(
   uniforms.wedge.value = slice?.radial ? 1 : 0
   uniforms.flash.value = layer.flash ?? 0
   uniforms.blur.value = layer.blur ?? 0
+  uniforms.crossfadeTexture.value = sourceTexture ?? texture
+  uniforms.crossfadeMix.value = layer.crossfade?.mix ?? 1
+  uniforms.crossfadeAlpha.value.set(sourceTexture ? 1 : 0, targetPresent ? 1 : 0)
   if (layer.partition) {
     mesh.position.set(0, 0, -index * 0.001)
     mesh.scale.set(1, 1, 1)
@@ -607,41 +628,6 @@ function applyCompositorLayer(
   mesh.renderOrder = index
 }
 
-/** The per-pass light rig. `shadows` = give the key light a shadow map (see
- *  shadowScenes in VisualScene): only a scene with a casting instrument pays
- *  for the shadow pass. `budget` is the preview level's allowance: 'trimmed'
- *  drops the shadow pass, the area fill and the point lights; 'flat' renders
- *  nothing here at all - the pass's PassLightPool supplies the flat ambient
- *  (it syncs for every mounted scene, track-lit or not). */
-function lights(shadows: boolean, budget: LightingBudget) {
-  if (budget === 'flat') return null
-  const full = budget === 'full'
-  return (
-    <>
-      <ambientLight intensity={0.12} />
-      <hemisphereLight color="#dbeafe" groundColor="#170921" intensity={0.55} />
-      {full && <rectAreaLight position={[4, 4, 5]} rotation={[-0.62, 0.62, 0]} color="#fff7ed" intensity={6} width={5} height={5} />}
-      <directionalLight
-        position={[4, 7, 5]}
-        intensity={2.4}
-        castShadow={shadows && full}
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
-        shadow-camera-left={-10}
-        shadow-camera-right={10}
-        shadow-camera-top={10}
-        shadow-camera-bottom={-10}
-        shadow-camera-near={0.1}
-        shadow-camera-far={30}
-        shadow-bias={-0.0004}
-        shadow-normalBias={0.035}
-      />
-      {full && <pointLight position={[-4, 2, -3]} color="#60a5fa" intensity={7} distance={20} decay={2} />}
-      {full && <pointLight position={[3, -1, 3]} color="#fb7185" intensity={3.5} distance={16} decay={2} />}
-    </>
-  )
-}
-
 /**
  * Scene id → the track ids of every object using `instrumentId`, in resolve
  * order. The scene-wide post-process instruments (Bass Ripple, Color Filters,
@@ -651,21 +637,6 @@ function lights(shadows: boolean, budget: LightingBudget) {
  * occurrence, and these instruments post-process the whole scene once - running
  * a pass per copy would just apply the same filter several times over.
  */
-function postProcessTracksByScene(objects: readonly ObjectListEntry[], instrumentId: string) {
-  const byScene = new Map<string, string[]>()
-  const seen = new Set<string>()
-  for (const object of objects) {
-    if (object.instrumentId !== instrumentId) continue
-    const key = `${object.sceneId}:${object.trackId}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    const ids = byScene.get(object.sceneId) ?? []
-    ids.push(object.trackId)
-    byScene.set(object.sceneId, ids)
-  }
-  return byScene
-}
-
 /**
  * Scene id → the code instruments (instruments/code) that declare scene post
  * passes, in resolve order, de-duplicated by track like the built-in passes.
@@ -691,6 +662,21 @@ function codePostTracksByScene(objects: readonly ObjectListEntry[]) {
 const codePostDefaults = new WeakMap<CodeInstrumentSpec, SpecDefaults>()
 const codePostColors = new Map<string, ColorCache>()
 
+function postProcessTracksByScene(objects: readonly ObjectListEntry[], instrumentId: string) {
+  const byScene = new Map<string, string[]>()
+  const seen = new Set<string>()
+  for (const object of objects) {
+    if (object.instrumentId !== instrumentId) continue
+    const key = `${object.sceneId}:${object.trackId}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    const ids = byScene.get(object.sceneId) ?? []
+    ids.push(object.trackId)
+    byScene.set(object.sceneId, ids)
+  }
+  return byScene
+}
+
 /**
  * Every logical project scene stays mounted in its own literal THREE.Scene.
  * A second scene per runtime is the existing "In front" pass; a third holds
@@ -701,7 +687,11 @@ const codePostColors = new Map<string, ColorCache>()
  * come from preview or Scene Switcher, but multiple directors already append
  * simultaneous layers without a singular active-scene assumption.
  */
-export function VisualScene() {
+// memo: stable props, so a re-render of the panel above (the aspect glide after a
+// project opens, the fullscreen control's hover state) no longer re-runs
+// mountObjects over every copy; only its own subscriptions re-render it.
+export const VisualScene = memo(function VisualScene({ trackPreviews = true }: { trackPreviews?: boolean } = {}) {
+  useCameraFraming()
   const objects = useSyncExternalStore(subscribeObjects, getObjectList, getObjectList)
   const { gl, camera, size, invalidate } = useThree()
   // Fast Preview: every offscreen target shrinks by the level's factor and the
@@ -713,17 +703,12 @@ export function VisualScene() {
   // the targets and invalidates on the change).
   const targetScale = useRenderTargetScale()
   // Fast levels also spend lighting (see previewLighting); read here so the
-  // frame loop's pool syncs and the legacy rigs below agree on one budget.
+  // frame loop's light pools share one budget.
   const lighting = usePreviewLighting()
-  const environment = useMemo(() => {
-    const room = new RoomEnvironment()
-    const pmrem = new PMREMGenerator(gl)
-    const target = pmrem.fromScene(room, 0.04)
-    room.dispose()
-    pmrem.dispose()
-    return target
-  }, [gl])
-  const sceneKey = [...new Set(objects.map((o) => o.sceneId))].sort().join(',')
+  const atmosphereSceneKey = useProjectStore((s) => Object.values(s.scenes)
+    .filter((scene) => scene.effects?.some((fx) => getEffect(fx.pluginId)?.sceneStage === 'atmosphere'))
+    .map((scene) => scene.id).sort().join(','))
+  const sceneKey = [...new Set([...objects.map((o) => o.sceneId), ...atmosphereSceneKey.split(',').filter(Boolean)])].sort().join(',')
   // Incremental scene mounting: runtimes are keyed by scene id and REUSED when
   // the scene set changes. Rebuilding the whole map on every add/remove would
   // remount every scene's object portals and dispose their render targets
@@ -817,13 +802,7 @@ export function VisualScene() {
       fragmentShader: IMPACT_WARP_FRAGMENT,
       uniforms: {
         tDiffuse: { value: null as Texture | null },
-        style: { value: 0 },
         amount: { value: 0 },
-        dir: { value: new Vector2() },
-        phase: { value: 0 },
-        size: { value: 0.5 },
-        seed: { value: 0 },
-        aspect: { value: 1 },
       },
       depthTest: false,
       depthWrite: false,
@@ -878,6 +857,7 @@ export function VisualScene() {
       for (const p of plugin.params) {
         uniforms[p.key] = { value: typeof p.default === 'number' ? p.default : 0 }
       }
+      if (plugin.sceneStage === 'atmosphere') Object.assign(uniforms, createFogUniforms())
       sceneFxMaterials.set(plugin.id, new ShaderMaterial({
         vertexShader: COLOR_FILTER_VERTEX,
         fragmentShader: plugin.fragmentShader,
@@ -886,6 +866,13 @@ export function VisualScene() {
         depthWrite: false,
       }))
     }
+    const atmosphereCopy = new ShaderMaterial({
+      vertexShader: COLOR_FILTER_VERTEX,
+      fragmentShader: 'uniform sampler2D tDiffuse; varying vec2 vUv; void main() { gl_FragColor = texture2D(tDiffuse, vUv); }',
+      uniforms: { tDiffuse: { value: null } },
+      depthTest: false,
+      depthWrite: false,
+    })
     const hdrOptions = { minFilter: LinearFilter, magFilter: LinearFilter, type: HalfFloatType }
     const compositeTarget = new WebGLRenderTarget(1, 1, hdrOptions)
     // Production mip-chain bloom from `postprocessing`. It extracts luminance
@@ -954,6 +941,7 @@ export function VisualScene() {
       scene, invertScene, cam, meshes, invertMeshes,
       filterScene, filterCam, filterMesh, filterMaterial, warpMaterial, impactWarpMaterial, cropMaskMaterial, gradientMaterial,
       sceneFxMaterials, codePostMaterials, codeLayerMaterials,
+      atmosphereCopy,
       compositeTarget, bloomEffect, finalMaterial,
       hoverMaskTarget, hoverGlowMaterial,
     }
@@ -985,12 +973,9 @@ export function VisualScene() {
 
   useEffect(() => {
     for (const runtime of mounted.values()) {
-      runtime.base.environment = environment.texture
-      runtime.front.environment = environment.texture
     }
-  }, [environment, mounted])
-
-  useEffect(() => () => environment.dispose(), [environment])
+    invalidate()
+  }, [gl, mounted, invalidate])
 
   useEffect(() => {
     const roots = new Map<string, ThreeScene>()
@@ -1053,6 +1038,7 @@ export function VisualScene() {
     compositor.cropMaskMaterial.dispose()
     compositor.gradientMaterial.dispose()
     for (const material of compositor.sceneFxMaterials.values()) material.dispose()
+    compositor.atmosphereCopy.dispose()
     for (const material of compositor.codePostMaterials.values()) material.dispose()
     for (const material of compositor.codeLayerMaterials.values()) material.dispose()
     compositor.bloomEffect.dispose()
@@ -1074,14 +1060,35 @@ export function VisualScene() {
     [objects],
   )
 
-  const placementKey = useProjectStore((s) => objects.map((o) => {
-    const track = s.scenes[o.sceneId]?.tracks[o.trackId]
-    const onTop = isOnTopTrack(getInstrument(o.instrumentId), track?.params, track?.onTop)
-    const finalInvert = onTop
-      && o.instrumentId === 'textDisplay'
-      && (track?.params?.colorMode ?? 0) >= 0.5
-    return finalInvert ? 'I' : onTop ? 'F' : 'B'
-  }).join(''))
+  // Per TRACK on the store write, expanded per copy only when it changes: a
+  // copy's placement is its track's, the object list is one entry per copy
+  // (contiguous per track), and this selector runs on EVERY store write - a
+  // 58k-copy project rebuilt a 58k-char string per pointer move of a drag.
+  const trackPlacementKey = useProjectStore((s) => {
+    let out = ''
+    let prev: string | null = null
+    for (const o of objects) {
+      if (o.trackId === prev) continue
+      prev = o.trackId
+      const track = s.scenes[o.sceneId]?.tracks[o.trackId]
+      const onTop = isOnTopTrack(getInstrument(o.instrumentId), track?.params, track?.onTop)
+      const finalInvert = onTop
+        && o.instrumentId === 'textDisplay'
+        && (track?.params?.colorMode ?? 0) >= 0.5
+      out += finalInvert ? 'I' : onTop ? 'F' : 'B'
+    }
+    return out
+  })
+  const placementKey = useMemo(() => {
+    let out = ''
+    let prev: string | null = null
+    let t = -1
+    for (const o of objects) {
+      if (o.trackId !== prev) { prev = o.trackId; t++ }
+      out += trackPlacementKey[t]
+    }
+    return out
+  }, [objects, trackPlacementKey])
 
   // Which scenes actually have objects in the front / final-invert passes.
   // Most scenes have neither, and unconditionally rendering those passes cost
@@ -1099,30 +1106,6 @@ export function VisualScene() {
     }
     return m
   }, [objects, placementKey])
-
-  // Which scenes hold Light TRACKS in the document. Those scenes are lit by
-  // their tracks (mirrored per pass from the sceneLights registry) and the
-  // hardcoded legacy rig stands down; a scene with none - old fixtures,
-  // hand-built test documents - keeps the baked rig, so nothing ever renders
-  // unlit. A muted/faded light track still counts (going dark is what muting
-  // your lights means). String fingerprint, per the render-budget rule.
-  const lightTrackSceneKey = useProjectStore((s) => {
-    let out = ''
-    for (const [sceneId, scene] of Object.entries(s.scenes)) {
-      for (const trackId of Object.keys(scene.tracks)) {
-        const t = scene.tracks[trackId]
-        if (t.type === 'base' && t.instrumentId === 'light') {
-          out += sceneId + ','
-          break
-        }
-      }
-    }
-    return out
-  })
-  const lightTrackScenes = useMemo(
-    () => new Set(lightTrackSceneKey.split(',').filter(Boolean)),
-    [lightTrackSceneKey],
-  )
 
   // Which scenes hold a shadow-CASTING instrument (`castsShadows` on the def).
   // Only those get a shadow-mapped key light: three's shadow pass runs on
@@ -1178,24 +1161,35 @@ export function VisualScene() {
   }, [instrumentSetKey, mounted, invalidate])
   const precompilePass = (scene: ThreeScene) => {
     // Pass 1: every material as it is now.
-    const materials = gl.compile(scene, camera)
+    gl.compile(scene, camera)
     // Pass 2: the OTHER blend state. Fades flip `transparent` per frame
     // (applyMaterialOpacity), and three keys its program on the resulting
     // OPAQUE define, so a material's first fade compiled again mid-song.
     // Force-transparent materials never flip and are skipped.
-    const flipped: Material[] = []
-    for (const material of materials) {
-      if (material.userData[FORCE_TRANSPARENT_KEY] === true) continue
+    //
+    // ONE material per linked program stands in for all of them: programs are
+    // shared by cache key, so flipping every copy's material re-ran three's
+    // getParameters + cloneUniforms on each of them - a full second per
+    // precompile on an 1800-copy project - to link programs the first flip had
+    // already linked. gl.compile takes any Object3D as its subject (the scene
+    // argument only lends its lights), so each representative compiles through
+    // its own mesh instead of a second walk over every mesh in the scene.
+    const representatives = new Map<object, { object: Object3D; material: Material }>()
+    scene.traverse((object) => {
+      const materials = (object as Mesh).material as Material | Material[] | undefined
+      if (!materials) return
+      for (const material of Array.isArray(materials) ? materials : [materials]) {
+        if (material.userData[FORCE_TRANSPARENT_KEY] === true) continue
+        const program = (gl.properties.get(material) as { currentProgram?: object }).currentProgram
+        if (program && !representatives.has(program)) representatives.set(program, { object, material })
+      }
+    })
+    for (const { object, material } of representatives.values()) {
       material.transparent = !material.transparent
       material.needsUpdate = true
-      flipped.push(material)
-    }
-    if (flipped.length > 0) {
-      gl.compile(scene, camera)
-      for (const material of flipped) {
-        material.transparent = !material.transparent
-        material.needsUpdate = true
-      }
+      gl.compile(object, camera, scene)
+      material.transparent = !material.transparent
+      material.needsUpdate = true
     }
   }
 
@@ -1224,7 +1218,8 @@ export function VisualScene() {
     }
     try {
       const layers = getCompositionLayers()
-      // a layer's own scene plus any scenes its code shader samples (LayerShader.scenes)
+      // a layer's own scene, the scene it crossfades with, and any scenes its
+      // code shader samples (LayerShader.scenes)
       const requested = new Set(layers.flatMap(layerSceneIds))
 
       // Backdrop-only targets track exactly the requested-but-unmounted set:
@@ -1238,454 +1233,501 @@ export function VisualScene() {
         }
       }
 
-      for (const sceneId of requested) {
-        const runtime = mounted.get(sceneId)
-        if (!runtime) {
-          // Empty scene: no objects to draw, but its backdrop still composes.
-          let target = emptyBackdrops.get(sceneId)
-          if (!target) {
-            target = new WebGLRenderTarget(EMPTY_BACKDROP_TARGET_SIZE, EMPTY_BACKDROP_TARGET_SIZE, {
-              minFilter: LinearFilter,
-              magFilter: LinearFilter,
-              type: HalfFloatType,
-            })
-            emptyBackdrops.set(sceneId, target)
+      // Evaluate scene filters/director partitions on both core-only and full
+      // radiance. Bloom consumes the former, preserving unrelated HDR sources;
+      // the latter is tone-mapped once. This also respects nonlinear downstream
+      // scene effects without attempting to subtract an ungraded halo mask.
+      const glowRounds = hasSceneGlow([...requested].flatMap(id => {
+        const runtime = mounted.get(id)
+        return runtime ? [runtime.base, runtime.front] : []
+      })) ? 2 : 1
+      for (let glowRound = 0; glowRound < glowRounds; glowRound++) {
+        setSceneGlowHalo(glowRounds === 1 || glowRound === 1)
+        for (const sceneId of requested) {
+          const runtime = mounted.get(sceneId)
+          if (!runtime) {
+            // Empty scene: no objects to draw, but its backdrop still composes.
+            let target = emptyBackdrops.get(sceneId)
+            if (!target) {
+              target = new WebGLRenderTarget(EMPTY_BACKDROP_TARGET_SIZE, EMPTY_BACKDROP_TARGET_SIZE, {
+                minFilter: LinearFilter,
+                magFilter: LinearFilter,
+                type: HalfFloatType,
+              })
+              emptyBackdrops.set(sceneId, target)
+            }
+            const projectScene = useProjectStore.getState().scenes[sceneId]
+            gl.setRenderTarget(target)
+            gl.setClearColor(projectScene?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, projectScene?.backgroundTransparent ? 0 : 1)
+            gl.clear(true, true, true)
+            const emptyGradient = activeBackdropGradient(projectScene)
+            if (emptyGradient) paintBackdropGradient(emptyGradient)
+            continue
           }
           const projectScene = useProjectStore.getState().scenes[sceneId]
-          gl.setRenderTarget(target)
-          gl.setClearColor(projectScene?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, projectScene?.backgroundTransparent ? 0 : 1)
-          gl.clear(true, true, true)
-          const emptyGradient = activeBackdropGradient(projectScene)
-          if (emptyGradient) paintBackdropGradient(emptyGradient)
-          continue
-        }
-        const projectScene = useProjectStore.getState().scenes[sceneId]
-        // The engine's per-frame backdrop, so a colorizer on the scene
-        // instrument reaches the clear colour and the gradient stops (see
-        // VisualEngine's getSceneBackdrop). With no scene instrument it IS the
-        // document's own values, so this path is unchanged for every project
-        // that never presses ⌘⇧S.
-        const backdrop = getSceneBackdrop(sceneId)
-        const presence = passPresence.get(sceneId)
-        // Mirror the scene's Light-track anchors into each pass that will
-        // render (the base pool syncs unconditionally so deleted lights are
-        // removed), and refresh the Matte finish's key-light direction. All
-        // pure functions of this frame's already-composed transforms.
-        refreshPosterLightDir(sceneId)
-        const allowShadows = shadowScenes.has(sceneId)
-        runtime.lightPools[0].sync(sceneId, allowShadows, lighting)
-        if (presence?.front) runtime.lightPools[1].sync(sceneId, allowShadows, lighting)
-        if (presence?.invert) runtime.lightPools[2].sync(sceneId, allowShadows, lighting)
-        gl.setRenderTarget(runtime.target)
-        gl.setClearColor(
-          backdrop?.color ?? projectScene?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND,
-          (backdrop ? backdrop.transparent : projectScene?.backgroundTransparent) ? 0 : 1,
-        )
-        gl.clear(true, true, true)
-        const sceneGradient = backdrop ? backdrop.gradient : activeBackdropGradient(projectScene)
-        if (sceneGradient) paintBackdropGradient(sceneGradient)
-        if (precompileRef.current) {
-          precompilePass(runtime.base)
-          if (presence?.front) precompilePass(runtime.front)
-        }
-        gl.render(runtime.base, camera)
-        if (presence?.front) {
-          gl.clearDepth()
-          gl.render(runtime.front, camera)
-        }
-
-        // Scene-wide color filters are ordinary scene tracks whose held notes
-        // choose post-process modes. Multiple tracks chain in resolved order.
-        let filteredTexture: Texture = runtime.target.texture
-        let filterPass = 0
-
-        const drawFilter = (material: ShaderMaterial) => {
-          const output = runtime.filterTargets[filterPass % runtime.filterTargets.length]
-          compositor.filterMesh.material = material
-          material.uniforms.tDiffuse.value = filteredTexture
-          gl.setRenderTarget(output)
-          gl.setClearColor(0x000000, 0)
-          gl.clear(true, true, true)
-          gl.render(compositor.filterScene, compositor.filterCam)
-          filteredTexture = output.texture
-          filterPass++
-        }
-
-        // Positional warp runs BEFORE the colour filters: it decides where the
-        // pixels are, they decide what colour those pixels end up. Warping a
-        // graded image instead would drag the grade's own gradients around.
-        for (const trackId of bassRippleTrackIds.get(sceneId) ?? []) {
-          const ripple = resolveActiveBassRipple(getObjectState(trackId))
-          if (!ripple) continue
-          compositor.warpMaterial.uniforms.pattern.value = ripple.pattern
-          compositor.warpMaterial.uniforms.amount.value = ripple.amount
-          compositor.warpMaterial.uniforms.scale.value = ripple.scale
-          compositor.warpMaterial.uniforms.speed.value = ripple.speed
-          compositor.warpMaterial.uniforms.frequency.value = ripple.frequency
-          compositor.warpMaterial.uniforms.time.value = ripple.beat
-          compositor.warpMaterial.uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
-          drawFilter(compositor.warpMaterial)
-        }
-        // Impact Warp is the OUTERMOST positional gesture: it runs after the
-        // ripple, so a scene already rumbling gets punched as one image rather
-        // than the punch being fed into the rumble. Both still precede colour.
-        for (const trackId of impactWarpTrackIds.get(sceneId) ?? []) {
-          const hit = resolveActiveImpactWarp(getObjectState(trackId))
-          if (!hit) continue
-          const uniforms = compositor.impactWarpMaterial.uniforms
-          uniforms.style.value = hit.style
-          uniforms.amount.value = hit.amount
-          ;(uniforms.dir.value as Vector2).set(hit.dirX, hit.dirY)
-          uniforms.phase.value = hit.phase
-          uniforms.size.value = hit.size
-          uniforms.seed.value = hit.seed
-          uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
-          drawFilter(compositor.impactWarpMaterial)
-        }
-        for (const trackId of colorFilterTrackIds.get(sceneId) ?? []) {
-          const filter = resolveActiveColorFilter(getObjectState(trackId))
-          if (!filter) continue
-          compositor.filterMaterial.uniforms.mode.value = filter.mode
-          compositor.filterMaterial.uniforms.amount.value = filter.amount
-          compositor.filterMaterial.uniforms.time.value = filter.beat
-          drawFilter(compositor.filterMaterial)
-        }
-        // Strobe runs LAST of the scene's own passes: it is a flash over the
-        // finished look, not one more colour in the grade. Inverting a graded
-        // frame is the intent; grading an inverted one would tint the flash.
-        // A dark half-cycle resolves to null, so the pass simply does not run.
-        for (const trackId of strobeTrackIds.get(sceneId) ?? []) {
-          const strobe = resolveActiveStrobe(getObjectState(trackId))
-          if (!strobe) continue
-          compositor.filterMaterial.uniforms.mode.value = strobe.mode
-          compositor.filterMaterial.uniforms.amount.value = strobe.amount
-          compositor.filterMaterial.uniforms.time.value = strobe.beat
-          drawFilter(compositor.filterMaterial)
-        }
-        // Code-instrument post passes (instruments/code): shaders a code
-        // instrument drives from its own MIDI, run as PLAYED gestures after
-        // the built-in ones and before the scene's finished-look chain. A pass
-        // whose update() returns false is skipped (an idle pass is free); a
-        // throwing one is reported and skipped, never fatal to the frame.
-        for (const { trackId, def } of codePostTracks.get(sceneId) ?? []) {
-          const state = getObjectState(trackId)
-          if (!state || state.blackedOut) continue
-          // the newest spec for this id (a hot-swapped post pass runs at once)
-          const spec = latestSpec(def.id) ?? def.code
-          const passes: PostPass[] = Array.isArray(spec.post) ? spec.post : spec.post ? [spec.post] : []
-          if (passes.length === 0) continue
-          let defaults = codePostDefaults.get(spec)
-          if (!defaults) codePostDefaults.set(spec, defaults = specDefaults(spec.params))
-          let colors = codePostColors.get(trackId)
-          if (!colors) codePostColors.set(trackId, colors = new ColorCache())
-          const aspect = Math.max(0.0001, size.width / Math.max(1, size.height))
-          const postCtx: PostCtx = {
-            ...makeMusicCtx({
-              beat: state.beat, secPerBeat: state.secPerBeat, beatsPerBar: state.beatsPerBar,
-              params: state.params, stringParams: state.stringParams, notes: state.notes, active: state.activeNotes,
-            }, defaults, colors),
-            trackId,
-            energy: state.energy,
-            opacity: state.opacity,
-            aspect,
-            resolution: { width: runtime.target.width, height: runtime.target.height },
-          }
-          passes.forEach((pass, passIndex) => {
-            const key = `${def.id}#${passIndex}`
-            let material = compositor.codePostMaterials.get(key)
-            if (material && material.userData.codeSource !== pass.fragment) {
-              material.dispose()
-              material = undefined
-            }
-            if (!material) {
-              material = makePostMaterial(pass)
-              compositor.codePostMaterials.set(key, material)
-            }
-            let run: boolean | void = true
-            try {
-              run = pass.update?.(postCtx, material.uniforms)
-            } catch (err) {
-              reportCodeError(def.id, trackId, 'post', err, state.beat)
-              run = false
-            }
-            if (run === false) return
-            material.uniforms.uAspect.value = aspect
-            material.uniforms.uBeat.value = state.beat
-            ;(material.uniforms.uResolution.value as Vector2).set(runtime.target.width, runtime.target.height)
-            drawFilter(material)
-          })
-        }
-        // The scene EFFECT chain (Scene.effects - the scene instrument's
-        // effect channel, chain order = array order) runs after every
-        // post-process instrument: those are PLAYED gestures over the raw
-        // scene, this is the scene's finished LOOK - grade, lens, destruction
-        // - applied over their result. Only the Crop matte comes later, so the
-        // punched holes stay holes. Settings merge per-frame automation
-        // through effectiveEffectState (fx:<id>:<key> lanes on the scene
-        // instrument, sampled by the engine into getSceneFxOverrides), and
-        // amount 0 skips the pass entirely - an idle device is free.
-        const sceneChain = projectScene?.effects
-        if (sceneChain?.length) {
-          const fxOverrides = getSceneFxOverrides(sceneId)
-          const fxBeat = getBeatOverride() ?? useTimeStore.getState().currentBeat
-          for (const inst of sceneChain) {
-            const plugin = getEffect(inst.pluginId)
-            const material = plugin ? compositor.sceneFxMaterials.get(plugin.id) : undefined
-            if (!plugin || !material) continue
-            const { enabled, settings } = effectiveEffectState(inst, fxOverrides)
-            if (!enabled) continue
-            if (settings.amount !== undefined && settings.amount <= 0) continue
-            const uniforms = material.uniforms
-            uniforms.time.value = fxBeat
-            ;(uniforms.resolution.value as Vector2).set(runtime.target.width, runtime.target.height)
-            uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
-            for (const p of plugin.params) {
-              const u = uniforms[p.key]
-              if (u) u.value = settings[p.key] ?? (typeof p.default === 'number' ? p.default : 0)
-            }
-            drawFilter(material)
-          }
-        }
-        // The in-scene Crop mask runs after even the Strobe: it is a matte
-        // over the finished look, so every grade, warp and flash lands inside
-        // the visible slices - running earlier would fill the punched holes
-        // back in with whatever pass came after. Null resolve (no notes yet,
-        // muted, fully dry) skips the pass entirely.
-        for (const trackId of cropTrackIds.get(sceneId) ?? []) {
-          const mask = resolveActiveCropMask(getObjectState(trackId))
-          if (!mask) continue
-          const uniforms = compositor.cropMaskMaterial.uniforms
-          uniforms.sliceState.value = mask.sliceState
-          uniforms.count.value = mask.count
-          uniforms.angle.value = mask.angle
-          uniforms.wedge.value = mask.wedge ? 1 : 0
-          uniforms.flash.value = mask.flash
-          uniforms.blur.value = mask.blur
-          uniforms.wet.value = mask.wet
-          uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
-          drawFilter(compositor.cropMaskMaterial)
-        }
-        runtime.outputTexture = filteredTexture
-
-        // Final-invert text is isolated as a transparent mask. It is applied only
-        // after every requested scene layer has been composited below. With no
-        // invert objects the target just needs to BE transparent black: clear it
-        // once and skip the whole block until an invert object appears.
-        if (presence?.invert) {
-          gl.setRenderTarget(runtime.invertTarget)
-          gl.setClearColor(0x000000, 0)
-          gl.clear(true, true, true)
-          if (precompileRef.current) precompilePass(runtime.invert)
-          gl.render(runtime.invert, camera)
-          runtime.invertBlank = false
-        } else if (!runtime.invertBlank) {
-          gl.setRenderTarget(runtime.invertTarget)
-          gl.setClearColor(0x000000, 0)
-          gl.clear(true, true, true)
-          runtime.invertBlank = true
-        }
-      }
-      // Mounted scenes the composition did NOT request this frame (the other
-      // scenes of a multi-scene project) get the same walk against their own
-      // targets, so cutting to one later finds its programs linked.
-      if (precompileRef.current) {
-        for (const [sceneId, runtime] of mounted) {
-          if (requested.has(sceneId)) continue
+          // The engine's per-frame backdrop, so a colorizer on the scene
+          // instrument reaches the clear colour and the gradient stops (see
+          // VisualEngine's getSceneBackdrop). With no scene instrument it IS the
+          // document's own values, so this path is unchanged for every project
+          // that never presses ⌘⇧S.
+          const backdrop = getSceneBackdrop(sceneId)
           const presence = passPresence.get(sceneId)
+          // Mirror the scene's Light-track anchors into each pass that will
+          // render (the base pool syncs unconditionally so deleted lights are
+          // removed), and refresh the Matte finish's key-light direction. All
+          // pure functions of this frame's already-composed transforms.
+          refreshPosterLightDir(sceneId)
+          const allowShadows = shadowScenes.has(sceneId)
+          runtime.lightPools[0].sync(sceneId, allowShadows, lighting)
+          if (presence?.front) runtime.lightPools[1].sync(sceneId, allowShadows, lighting)
+          if (presence?.invert) runtime.lightPools[2].sync(sceneId, allowShadows, lighting)
+          const atmosphere = (projectScene?.effects ?? []).flatMap((inst) => {
+            const plugin = getEffect(inst.pluginId)
+            if (plugin?.sceneStage !== 'atmosphere') return []
+            const state = effectiveEffectState(inst, getSceneFxOverrides(sceneId))
+            const param = (key: string) => state.settings[key] ?? Number(plugin.params.find((p) => p.key === key)?.default ?? 0)
+            return state.enabled && param('amount') > 0 && param('density') > 0
+              ? [{ inst, settings: state.settings }] : []
+          })
+          // Allocate sampleable depth only for a scene that uses atmosphere.
+          // Depth-stencil preserves Overlap Shape's existing stencil contract.
+          if (atmosphere.length && !runtime.target.depthTexture) {
+            runtime.target.dispose()
+            runtime.target.depthTexture = new DepthTexture(runtime.target.width, runtime.target.height, UnsignedInt248Type)
+            runtime.target.depthTexture.format = DepthStencilFormat
+          }
           gl.setRenderTarget(runtime.target)
-          precompilePass(runtime.base)
-          if (presence?.front) precompilePass(runtime.front)
+          gl.setClearColor(
+            backdrop?.color ?? projectScene?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND,
+            (backdrop ? backdrop.transparent : projectScene?.backgroundTransparent) ? 0 : 1,
+          )
+          gl.clear(true, true, true)
+          const sceneGradient = backdrop ? backdrop.gradient : activeBackdropGradient(projectScene)
+          if (sceneGradient) paintBackdropGradient(sceneGradient)
+          if (precompileRef.current) {
+            precompilePass(runtime.base)
+            if (presence?.front) precompilePass(runtime.front)
+          }
+          renderSceneWithGlow(gl, runtime.base, camera)
+          // Atmosphere sees pristine world depth, before on-top objects clear it
+          // and image warps move pixels. Copy only color back; preserve both depth
+          // and stencil. Sampling an attachment while writing it is illegal in GL.
+          for (const { inst, settings } of atmosphere) {
+            const plugin = getEffect(inst.pluginId)!
+            const material = compositor.sceneFxMaterials.get(plugin.id)!
+            syncFogUniforms(material, runtime.base, camera, runtime.target.depthTexture!)
+            material.uniforms.time.value = getBeatOverride() ?? (previewRuntime.worker ? previewRuntime.beat : useTimeStore.getState().currentBeat)
+            for (const p of plugin.params) material.uniforms[p.key].value = settings[p.key] ?? p.default
+            material.uniforms.tDiffuse.value = runtime.target.texture
+            compositor.filterMesh.material = material
+            gl.setRenderTarget(runtime.filterTargets[0])
+            gl.clear(true, true, true)
+            gl.render(compositor.filterScene, compositor.filterCam)
+            compositor.atmosphereCopy.uniforms.tDiffuse.value = runtime.filterTargets[0].texture
+            compositor.filterMesh.material = compositor.atmosphereCopy
+            gl.setRenderTarget(runtime.target)
+            gl.render(compositor.filterScene, compositor.filterCam)
+          }
+          if (presence?.front) {
+            gl.clearDepth()
+            renderSceneWithGlow(gl, runtime.front, camera)
+          }
+
+          // Scene-wide color filters are ordinary scene tracks whose held notes
+          // choose post-process modes. Multiple tracks chain in resolved order.
+          let filteredTexture: Texture = runtime.target.texture
+          let filterPass = 0
+
+          const drawFilter = (material: ShaderMaterial) => {
+            const output = runtime.filterTargets[filterPass % runtime.filterTargets.length]
+            compositor.filterMesh.material = material
+            material.uniforms.tDiffuse.value = filteredTexture
+            gl.setRenderTarget(output)
+            gl.setClearColor(0x000000, 0)
+            gl.clear(true, true, true)
+            gl.render(compositor.filterScene, compositor.filterCam)
+            filteredTexture = output.texture
+            filterPass++
+          }
+
+          // Positional warp runs BEFORE the colour filters: it decides where the
+          // pixels are, they decide what colour those pixels end up. Warping a
+          // graded image instead would drag the grade's own gradients around.
+          for (const trackId of bassRippleTrackIds.get(sceneId) ?? []) {
+            const ripple = resolveActiveBassRipple(getObjectState(trackId))
+            if (!ripple) continue
+            compositor.warpMaterial.uniforms.pattern.value = ripple.pattern
+            compositor.warpMaterial.uniforms.amount.value = ripple.amount
+            compositor.warpMaterial.uniforms.scale.value = ripple.scale
+            compositor.warpMaterial.uniforms.speed.value = ripple.speed
+            compositor.warpMaterial.uniforms.frequency.value = ripple.frequency
+            compositor.warpMaterial.uniforms.time.value = ripple.beat
+            compositor.warpMaterial.uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
+            drawFilter(compositor.warpMaterial)
+          }
+          // Impact Warp is the OUTERMOST positional gesture: it runs after the
+          // ripple, so a scene already rumbling gets punched as one image rather
+          // than the punch being fed into the rumble. Both still precede colour.
+          for (const trackId of impactWarpTrackIds.get(sceneId) ?? []) {
+            const hit = resolveActiveImpactWarp(getObjectState(trackId))
+            if (!hit) continue
+            compositor.impactWarpMaterial.uniforms.amount.value = hit.amount
+            drawFilter(compositor.impactWarpMaterial)
+          }
+          for (const trackId of colorFilterTrackIds.get(sceneId) ?? []) {
+            const filter = resolveActiveColorFilter(getObjectState(trackId))
+            if (!filter) continue
+            compositor.filterMaterial.uniforms.mode.value = filter.mode
+            compositor.filterMaterial.uniforms.amount.value = filter.amount
+            compositor.filterMaterial.uniforms.time.value = filter.beat
+            drawFilter(compositor.filterMaterial)
+          }
+          // Strobe runs LAST of the scene's own passes: it is a flash over the
+          // finished look, not one more colour in the grade. Inverting a graded
+          // frame is the intent; grading an inverted one would tint the flash.
+          // A dark half-cycle resolves to null, so the pass simply does not run.
+          for (const trackId of strobeTrackIds.get(sceneId) ?? []) {
+            const strobe = resolveActiveStrobe(getObjectState(trackId))
+            if (!strobe) continue
+            compositor.filterMaterial.uniforms.mode.value = strobe.mode
+            compositor.filterMaterial.uniforms.amount.value = strobe.amount
+            compositor.filterMaterial.uniforms.time.value = strobe.beat
+            drawFilter(compositor.filterMaterial)
+          }
+          // Code-instrument post passes (instruments/code): shaders a code
+          // instrument drives from its own MIDI, run as PLAYED gestures after
+          // the built-in ones and before the scene's finished-look chain. A pass
+          // whose update() returns false is skipped (an idle pass is free); a
+          // throwing one is reported and skipped, never fatal to the frame.
+          for (const { trackId, def } of codePostTracks.get(sceneId) ?? []) {
+            const state = getObjectState(trackId)
+            if (!state || state.blackedOut) continue
+            // the newest spec for this id (a hot-swapped post pass runs at once)
+            const spec = latestSpec(def.id) ?? def.code
+            const passes: PostPass[] = Array.isArray(spec.post) ? spec.post : spec.post ? [spec.post] : []
+            if (passes.length === 0) continue
+            let defaults = codePostDefaults.get(spec)
+            if (!defaults) codePostDefaults.set(spec, defaults = specDefaults(spec.params))
+            let colors = codePostColors.get(trackId)
+            if (!colors) codePostColors.set(trackId, colors = new ColorCache())
+            const aspect = Math.max(0.0001, size.width / Math.max(1, size.height))
+            const postCtx: PostCtx = {
+              ...makeMusicCtx({
+                beat: state.beat, secPerBeat: state.secPerBeat, beatsPerBar: state.beatsPerBar,
+                params: state.params, stringParams: state.stringParams, notes: state.notes, active: state.activeNotes,
+              }, defaults, colors),
+              trackId,
+              energy: state.energy,
+              opacity: state.opacity,
+              aspect,
+              resolution: { width: runtime.target.width, height: runtime.target.height },
+            }
+            passes.forEach((pass, passIndex) => {
+              const key = `${def.id}#${passIndex}`
+              let material = compositor.codePostMaterials.get(key)
+              if (material && material.userData.codeSource !== pass.fragment) {
+                material.dispose()
+                material = undefined
+              }
+              if (!material) {
+                material = makePostMaterial(pass)
+                compositor.codePostMaterials.set(key, material)
+              }
+              let run: boolean | void = true
+              try {
+                run = pass.update?.(postCtx, material.uniforms)
+              } catch (err) {
+                reportCodeError(def.id, trackId, 'post', err, state.beat)
+                run = false
+              }
+              if (run === false) return
+              material.uniforms.uAspect.value = aspect
+              material.uniforms.uBeat.value = state.beat
+              ;(material.uniforms.uResolution.value as Vector2).set(runtime.target.width, runtime.target.height)
+              drawFilter(material)
+            })
+          }
+          // The scene EFFECT chain (Scene.effects - the scene instrument's
+          // effect channel, chain order = array order) runs after every
+          // post-process instrument: those are PLAYED gestures over the raw
+          // scene, this is the scene's finished LOOK - grade, lens, destruction
+          // - applied over their result. Only the Crop matte comes later, so the
+          // punched holes stay holes. Settings merge per-frame automation
+          // through effectiveEffectState (fx:<id>:<key> lanes on the scene
+          // instrument, sampled by the engine into getSceneFxOverrides), and
+          // amount 0 skips the pass entirely - an idle device is free.
+          const sceneChain = projectScene?.effects
+          if (sceneChain?.length) {
+            const fxOverrides = getSceneFxOverrides(sceneId)
+            const fxBeat = getBeatOverride() ?? (previewRuntime.worker ? previewRuntime.beat : useTimeStore.getState().currentBeat)
+            for (const inst of sceneChain) {
+              const plugin = getEffect(inst.pluginId)
+              if (plugin?.sceneStage === 'atmosphere') continue
+              const material = plugin ? compositor.sceneFxMaterials.get(plugin.id) : undefined
+              if (!plugin || !material) continue
+              const { enabled, settings } = effectiveEffectState(inst, fxOverrides)
+              if (!enabled) continue
+              if (settings.amount !== undefined && settings.amount <= 0) continue
+              const uniforms = material.uniforms
+              uniforms.time.value = fxBeat
+              ;(uniforms.resolution.value as Vector2).set(runtime.target.width, runtime.target.height)
+              uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
+              for (const p of plugin.params) {
+                const u = uniforms[p.key]
+                if (u) u.value = settings[p.key] ?? (typeof p.default === 'number' ? p.default : 0)
+              }
+              drawFilter(material)
+            }
+          }
+          // The in-scene Crop mask runs after even the Strobe: it is a matte
+          // over the finished look, so every grade, warp and flash lands inside
+          // the visible slices - running earlier would fill the punched holes
+          // back in with whatever pass came after. Null resolve (no notes yet,
+          // muted, fully dry) skips the pass entirely.
+          for (const trackId of cropTrackIds.get(sceneId) ?? []) {
+            const mask = resolveActiveCropMask(getObjectState(trackId))
+            if (!mask) continue
+            const uniforms = compositor.cropMaskMaterial.uniforms
+            uniforms.sliceState.value = mask.sliceState
+            uniforms.count.value = mask.count
+            uniforms.angle.value = mask.angle
+            uniforms.wedge.value = mask.wedge ? 1 : 0
+            uniforms.flash.value = mask.flash
+            uniforms.blur.value = mask.blur
+            uniforms.wet.value = mask.wet
+            uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
+            drawFilter(compositor.cropMaskMaterial)
+          }
+          runtime.outputTexture = filteredTexture
+
+          // Final-invert text is isolated as a transparent mask. It is applied only
+          // after every requested scene layer has been composited below. With no
+          // invert objects the target just needs to BE transparent black: clear it
+          // once and skip the whole block until an invert object appears.
           if (presence?.invert) {
             gl.setRenderTarget(runtime.invertTarget)
-            precompilePass(runtime.invert)
+            gl.setClearColor(0x000000, 0)
+            gl.clear(true, true, true)
+            if (precompileRef.current) precompilePass(runtime.invert)
+            renderSceneWithGlow(gl, runtime.invert, camera)
+            runtime.invertBlank = false
+          } else if (!runtime.invertBlank) {
+            gl.setRenderTarget(runtime.invertTarget)
+            gl.setClearColor(0x000000, 0)
+            gl.clear(true, true, true)
+            runtime.invertBlank = true
           }
         }
-        precompileRef.current = false
-      }
-
-      while (compositor.meshes.length < layers.length) {
-        const material = makeCompositorMaterial()
-        const geometry = makeCompositorGeometry()
-        setPartitionGeometry(geometry)
-        const mesh = new Mesh(geometry, material)
-        mesh.frustumCulled = false
-        compositor.meshes.push(mesh)
-        compositor.scene.add(mesh)
-      }
-      const layerAspect = Math.max(0.0001, size.width / Math.max(1, size.height))
-      compositor.meshes.forEach((mesh, i) => {
-        const layer = layers[i]
-        mesh.visible = !!layer
-        if (!layer) return
-        // An unmounted (empty) scene's layer composes its backdrop-only target.
-        const runtime = mounted.get(layer.sceneId)
-        const texture = runtime?.outputTexture ?? emptyBackdrops.get(layer.sceneId)?.texture
-        mesh.visible = !!texture
-        if (!texture) return
-        // The standard compositor material is remembered on the mesh so a
-        // layer that stops carrying a code shader gets it back.
-        const standard = (mesh.userData.standardMaterial ??= mesh.material) as MeshBasicMaterial
-        if (!layer.shader) {
-          if (mesh.material !== standard) mesh.material = standard
-          applyCompositorLayer(mesh, layer, i, texture, layerAspect)
-          return
+        // Mounted scenes the composition did NOT request this frame (the other
+        // scenes of a multi-scene project) get the same walk against their own
+        // targets, so cutting to one later finds its programs linked.
+        if (precompileRef.current) {
+          for (const [sceneId, runtime] of mounted) {
+            if (requested.has(sceneId)) continue
+            const presence = passPresence.get(sceneId)
+            gl.setRenderTarget(runtime.target)
+            precompilePass(runtime.base)
+            if (presence?.front) precompilePass(runtime.front)
+            if (presence?.invert) {
+              gl.setRenderTarget(runtime.invertTarget)
+              precompilePass(runtime.invert)
+            }
+          }
+          precompileRef.current = false
         }
-        // A code composition's own shader (instruments/code/composition.ts):
-        // a plain quad over the layer's viewport; the fragment does the rest.
-        const key = `${i}|${layer.shader.key}`
-        let material = compositor.codeLayerMaterials.get(key)
-        if (material && material.userData.codeSource !== layer.shader.fragment) {
-          material.dispose()
-          material = undefined
-        }
-        if (!material) {
-          material = makeLayerMaterial(layer.shader, layer.blendMode === 'add')
-          compositor.codeLayerMaterials.set(key, material)
-        }
-        mesh.material = material
-        const u = material.uniforms
-        u.tScene.value = texture
-        u.uOpacity.value = layer.opacity
-        u.uAspect.value = layerAspect
-        u.uBeat.value = getBeatOverride() ?? useTimeStore.getState().currentBeat
-        ;(u.uResolution.value as Vector2).set(size.width, size.height)
-        for (const [name, v] of Object.entries(layer.shader.uniforms ?? {})) {
-          const uni = u[name]
-          if (uni) assignUniformValue(uni, v)
-        }
-        for (const [name, sid] of Object.entries(layer.shader.scenes ?? {})) {
-          const uni = u[name]
-          if (uni) uni.value = mounted.get(sid)?.outputTexture ?? emptyBackdrops.get(sid)?.texture ?? null
-        }
-        setPartitionGeometry(mesh.geometry)
-        mesh.position.set(
-          -1 + layer.viewport.x * 2 + layer.viewport.width,
-          -1 + layer.viewport.y * 2 + layer.viewport.height,
-          -i * 0.001,
-        )
-        mesh.scale.set(layer.viewport.width, layer.viewport.height, 1)
-        mesh.renderOrder = i
-      })
 
-      const project = useProjectStore.getState()
-      const mainId = project.sceneOrder.find((id) => project.scenes[id]?.isMain)
-      const main = mainId ? project.scenes[mainId] : undefined
-      gl.setRenderTarget(compositor.compositeTarget)
-      gl.setClearColor(main?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, main?.backgroundTransparent ? 0 : 1)
-      gl.clear(true, true, true)
-      // Main's own backdrop shows wherever the scene layers don't cover
-      // (viewports, partitions) - it gets the gradient treatment too. The
-      // final to-screen pass repaints the whole frame from this target, so
-      // this is the only composite-level site that needs it.
-      const mainGradient = activeBackdropGradient(main)
-      if (mainGradient) paintBackdropGradient(mainGradient)
-      gl.render(compositor.scene, compositor.cam)
-
-      // Luminance-thresholded, multi-resolution bloom consumes the completed
-      // scene composite, so preview, directors, partitions and export all match.
-      // The frame's look (code instruments' look(), a composition's ctx.look()):
-      // bloom shape here, the grade's uniforms below. Defaults = no change.
-      const look = resolveLook(isTrackActive)
-      compositor.bloomEffect.luminanceMaterial.threshold = look.bloomThreshold
-      compositor.bloomEffect.mipmapBlurPass.radius = look.bloomRadius
-      compositor.bloomEffect.update(gl, compositor.compositeTarget, 0)
-      {
-        const u = compositor.finalMaterial.uniforms
-        u.bloomIntensity.value = look.bloom
-        u.uExposure.value = look.exposure
-        u.uSaturation.value = look.saturation
-        u.uContrast.value = look.contrast
-        u.uVignette.value = look.vignette
-        u.uGrain.value = look.grain
-        u.uAberration.value = look.aberration
-        ;(u.uTint.value as Vector3).set(look.tint[0], look.tint[1], look.tint[2])
-        u.uFade.value = look.fade
-        ;(u.uFadeColor.value as Vector3).set(look.fadeColor[0], look.fadeColor[1], look.fadeColor[2])
-      }
-
-      compositor.filterMesh.material = compositor.finalMaterial
-      compositor.finalMaterial.uniforms.tBloom.value = compositor.bloomEffect.texture
-      compositor.finalMaterial.uniforms.time.value = getBeatOverride() ?? useTimeStore.getState().currentBeat
-      // Color-exact instruments (the Crazy Edit template's photo slots / FX)
-      // reproduce external footage: with one in the composition the stylistic
-      // grade and the ACES tone map switch off for the frame, so drawn colors
-      // reach the screen verbatim. (Same instrument-id pattern as
-      // placementKey's textDisplay case.)
-      const rawGrade = objects.some((o) => o.instrumentId === 'photoSlot' || o.instrumentId === 'polyFx')
-      compositor.finalMaterial.uniforms.rawGrade.value = rawGrade ? 1 : 0
-      gl.toneMapping = rawGrade ? NoToneMapping : previousToneMapping
-      gl.setRenderTarget(previous)
-      gl.setClearColor(main?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, main?.backgroundTransparent ? 0 : 1)
-      gl.clear(true, true, true)
-      gl.render(compositor.filterScene, compositor.filterCam)
-
-      // The invert overlay is a fullscreen pass per layer over the finished
-      // frame; with no invert objects anywhere it composites blank textures,
-      // so skip it outright (the common case).
-      const anyInvert = layers.some((layer) => passPresence.get(layer.sceneId)?.invert)
-      if (anyInvert) {
-        while (compositor.invertMeshes.length < layers.length) {
-          const material = makeCompositorMaterial(true)
+        while (compositor.meshes.length < layers.length) {
+          const material = makeCompositorMaterial()
           const geometry = makeCompositorGeometry()
           setPartitionGeometry(geometry)
           const mesh = new Mesh(geometry, material)
           mesh.frustumCulled = false
-          compositor.invertMeshes.push(mesh)
-          compositor.invertScene.add(mesh)
+          compositor.meshes.push(mesh)
+          compositor.scene.add(mesh)
         }
-        compositor.invertMeshes.forEach((mesh, i) => {
+        const layerAspect = Math.max(0.0001, size.width / Math.max(1, size.height))
+        compositor.meshes.forEach((mesh, i) => {
           const layer = layers[i]
           mesh.visible = !!layer
           if (!layer) return
+          // An unmounted (empty) scene's layer composes its backdrop-only target.
           const runtime = mounted.get(layer.sceneId)
-          mesh.visible = !!runtime
-          if (!runtime) return
-          applyCompositorLayer(mesh, layer, i, runtime.invertTarget.texture, layerAspect)
-        })
-        gl.render(compositor.invertScene, compositor.cam)
-      }
-
-      // Shift-hover highlight - editor chrome, so it never reaches an export
-      // or a pinned capture (the frame driver's pin), and costs nothing while
-      // nothing is hovered. The hovered track's roots are re-rendered alone
-      // on a spare layer into the alpha mask (their own materials, so the
-      // silhouette is exactly what is on screen - lights are on layer 0, so
-      // they come out unlit, which the mask does not care about), then the
-      // glow pass dilates that mask over the finished frame.
-      const hover = useUIStore.getState().canvasHover
-      if (hover && !isExportPinned()) {
-        const roots = hoverTargetsForTrack(hover.trackId).filter((t) => t.sceneId === hover.sceneId)
-        const track = useProjectStore.getState().scenes[hover.sceneId]?.tracks[hover.trackId]
-        const layer = layers.find((l) => l.sceneId === hover.sceneId)
-        if (roots.length > 0 && track && layer) {
-          const maskScenes = new Set<ThreeScene>()
-          for (const root of roots) {
-            const scene = rootSceneOf(root.object)
-            if (scene) maskScenes.add(scene)
-            root.object.traverse((o) => o.layers.enable(HOVER_MASK_LAYER))
+          const texture = runtime?.outputTexture ?? emptyBackdrops.get(layer.sceneId)?.texture
+          mesh.visible = !!texture
+          if (!texture) return
+          // The standard compositor material is remembered on the mesh so a
+          // layer that stops carrying a code shader gets it back.
+          const standard = (mesh.userData.standardMaterial ??= mesh.material) as MeshBasicMaterial
+          if (!layer.shader) {
+            if (mesh.material !== standard) mesh.material = standard
+            applyCompositorLayer(mesh, layer, i, texture, layerAspect, layer.crossfade
+              ? mounted.get(layer.crossfade.sceneId)?.outputTexture ?? emptyBackdrops.get(layer.crossfade.sceneId)?.texture
+              : undefined)
+            return
           }
-          camera.layers.set(HOVER_MASK_LAYER)
-          gl.setRenderTarget(compositor.hoverMaskTarget)
-          gl.setClearColor(0x000000, 0)
-          gl.clear(true, true, true)
-          for (const scene of maskScenes) gl.render(scene, camera)
-          camera.layers.set(0)
-          for (const root of roots) root.object.traverse((o) => o.layers.disable(HOVER_MASK_LAYER))
-
-          const glow = compositor.hoverGlowMaterial
-          const hex = hoverGlowColor(track)
-          ;(glow.uniforms.color.value as Vector3).set(
-            parseInt(hex.slice(1, 3), 16) / 255,
-            parseInt(hex.slice(3, 5), 16) / 255,
-            parseInt(hex.slice(5, 7), 16) / 255,
+          // A code composition's own shader (instruments/code/composition.ts):
+          // a plain quad over the layer's viewport; the fragment does the rest.
+          const key = `${i}|${layer.shader.key}`
+          let material = compositor.codeLayerMaterials.get(key)
+          if (material && material.userData.codeSource !== layer.shader.fragment) {
+            material.dispose()
+            material = undefined
+          }
+          if (!material) {
+            material = makeLayerMaterial(layer.shader, layer.blendMode === 'add')
+            compositor.codeLayerMaterials.set(key, material)
+          }
+          mesh.material = material
+          const u = material.uniforms
+          u.tScene.value = texture
+          u.uOpacity.value = layer.opacity
+          u.uAspect.value = layerAspect
+          u.uBeat.value = getBeatOverride() ?? (previewRuntime.worker ? previewRuntime.beat : useTimeStore.getState().currentBeat)
+          ;(u.uResolution.value as Vector2).set(size.width, size.height)
+          for (const [name, v] of Object.entries(layer.shader.uniforms ?? {})) {
+            const uni = u[name]
+            if (uni) assignUniformValue(uni, v)
+          }
+          for (const [name, sid] of Object.entries(layer.shader.scenes ?? {})) {
+            const uni = u[name]
+            if (uni) uni.value = mounted.get(sid)?.outputTexture ?? emptyBackdrops.get(sid)?.texture ?? null
+          }
+          setPartitionGeometry(mesh.geometry)
+          mesh.position.set(
+            -1 + layer.viewport.x * 2 + layer.viewport.width,
+            -1 + layer.viewport.y * 2 + layer.viewport.height,
+            -i * 0.001,
           )
-          ;(glow.uniforms.viewport.value as Vector4).set(layer.viewport.x, layer.viewport.y, layer.viewport.width, layer.viewport.height)
-          compositor.filterMesh.material = glow
-          gl.setRenderTarget(previous)
-          gl.render(compositor.filterScene, compositor.filterCam)
+          mesh.scale.set(layer.viewport.width, layer.viewport.height, 1)
+          mesh.renderOrder = i
+        })
+
+        const project = useProjectStore.getState()
+        const mainId = project.sceneOrder.find((id) => project.scenes[id]?.isMain)
+        const main = mainId ? project.scenes[mainId] : undefined
+        gl.setRenderTarget(compositor.compositeTarget)
+        gl.setClearColor(main?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, main?.backgroundTransparent ? 0 : 1)
+        gl.clear(true, true, true)
+        // Main's own backdrop shows wherever the scene layers don't cover
+        // (viewports, partitions) - it gets the gradient treatment too. The
+        // final to-screen pass repaints the whole frame from this target, so
+        // this is the only composite-level site that needs it.
+        const mainGradient = activeBackdropGradient(main)
+        if (mainGradient) paintBackdropGradient(mainGradient)
+        gl.render(compositor.scene, compositor.cam)
+
+        // Luminance-thresholded, multi-resolution bloom consumes the completed
+        // scene composite, so preview, directors, partitions and export all match.
+        // The frame's look (code instruments' look(), a composition's ctx.look()):
+        // bloom shape here, the grade's uniforms below. Defaults = no change.
+        const look = resolveLook(isTrackActive)
+        if (glowRound === 0) {
+          compositor.bloomEffect.luminanceMaterial.threshold = look.bloomThreshold
+          compositor.bloomEffect.mipmapBlurPass.radius = look.bloomRadius
+          compositor.bloomEffect.update(gl, compositor.compositeTarget, 0)
         }
-      }
+        {
+          const u = compositor.finalMaterial.uniforms
+          u.bloomIntensity.value = look.bloom
+          u.uExposure.value = look.exposure
+          u.uSaturation.value = look.saturation
+          u.uContrast.value = look.contrast
+          u.uVignette.value = look.vignette
+          u.uGrain.value = look.grain
+          u.uAberration.value = look.aberration
+          ;(u.uTint.value as Vector3).set(look.tint[0], look.tint[1], look.tint[2])
+          u.uFade.value = look.fade
+          ;(u.uFadeColor.value as Vector3).set(look.fadeColor[0], look.fadeColor[1], look.fadeColor[2])
+        }
+        if (glowRounds === 2 && glowRound === 0) continue
+
+        compositor.filterMesh.material = compositor.finalMaterial
+        compositor.finalMaterial.uniforms.tBloom.value = compositor.bloomEffect.texture
+        compositor.finalMaterial.uniforms.time.value = getBeatOverride() ?? (previewRuntime.worker ? previewRuntime.beat : useTimeStore.getState().currentBeat)
+        // Color-exact instruments (the Crazy Edit template's photo slots / FX)
+        // reproduce external footage: with one in the composition the stylistic
+        // grade and the ACES tone map switch off for the frame, so drawn colors
+        // reach the screen verbatim. (Same instrument-id pattern as
+        // placementKey's textDisplay case.)
+        const rawGrade = objects.some((o) => o.instrumentId === 'photoSlot' || o.instrumentId === 'polyFx')
+        compositor.finalMaterial.uniforms.rawGrade.value = rawGrade ? 1 : 0
+        gl.toneMapping = rawGrade ? NoToneMapping : previousToneMapping
+        gl.setRenderTarget(previous)
+        gl.setClearColor(main?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, main?.backgroundTransparent ? 0 : 1)
+        gl.clear(true, true, true)
+        gl.render(compositor.filterScene, compositor.filterCam)
+
+        // The invert overlay is a fullscreen pass per layer over the finished
+        // frame; with no invert objects anywhere it composites blank textures,
+        // so skip it outright (the common case).
+        const anyInvert = layers.some((layer) => passPresence.get(layer.sceneId)?.invert || (layer.crossfade && passPresence.get(layer.crossfade.sceneId)?.invert))
+        if (anyInvert) {
+          while (compositor.invertMeshes.length < layers.length) {
+            const material = makeCompositorMaterial(true)
+            const geometry = makeCompositorGeometry()
+            setPartitionGeometry(geometry)
+            const mesh = new Mesh(geometry, material)
+            mesh.frustumCulled = false
+            compositor.invertMeshes.push(mesh)
+            compositor.invertScene.add(mesh)
+          }
+          compositor.invertMeshes.forEach((mesh, i) => {
+            const layer = layers[i]
+            mesh.visible = !!layer
+            if (!layer) return
+            const runtime = mounted.get(layer.sceneId)
+            const source = layer.crossfade ? mounted.get(layer.crossfade.sceneId) : undefined
+            const texture = runtime?.invertTarget.texture ?? source?.invertTarget.texture
+            mesh.visible = !!texture
+            if (!texture) return
+            applyCompositorLayer(mesh, layer, i, texture, layerAspect, source?.invertTarget.texture, !!runtime)
+          })
+          gl.render(compositor.invertScene, compositor.cam)
+        }
+
+        // Shift-hover highlight - editor chrome, so it never reaches an export
+        // or a pinned capture (the frame driver's pin), and costs nothing while
+        // nothing is hovered. The hovered track's roots are re-rendered alone
+        // on a spare layer into the alpha mask (their own materials, so the
+        // silhouette is exactly what is on screen - lights are on layer 0, so
+        // they come out unlit, which the mask does not care about), then the
+        // glow pass dilates that mask over the finished frame.
+        const hover = useUIStore.getState().canvasHover
+        if (hover && !isExportPinned()) {
+          const roots = hoverTargetsForTrack(hover.trackId).filter((t) => t.sceneId === hover.sceneId)
+          const track = useProjectStore.getState().scenes[hover.sceneId]?.tracks[hover.trackId]
+          const layer = layers.find((l) => l.sceneId === hover.sceneId)
+          if (roots.length > 0 && track && layer && !layer.crossfade) {
+            const maskScenes = new Set<ThreeScene>()
+            for (const root of roots) {
+              const scene = rootSceneOf(root.object)
+              if (scene) maskScenes.add(scene)
+              root.object.traverse((o) => o.layers.enable(HOVER_MASK_LAYER))
+            }
+            camera.layers.set(HOVER_MASK_LAYER)
+            gl.setRenderTarget(compositor.hoverMaskTarget)
+            gl.setClearColor(0x000000, 0)
+            gl.clear(true, true, true)
+            for (const scene of maskScenes) gl.render(scene, camera)
+            camera.layers.set(0)
+            for (const root of roots) root.object.traverse((o) => o.layers.disable(HOVER_MASK_LAYER))
+
+            const glow = compositor.hoverGlowMaterial
+            const hex = hoverGlowColor(track)
+            ;(glow.uniforms.color.value as Vector3).set(
+              parseInt(hex.slice(1, 3), 16) / 255,
+              parseInt(hex.slice(3, 5), 16) / 255,
+              parseInt(hex.slice(5, 7), 16) / 255,
+            )
+            ;(glow.uniforms.viewport.value as Vector4).set(layer.viewport.x, layer.viewport.y, layer.viewport.width, layer.viewport.height)
+            compositor.filterMesh.material = glow
+            gl.setRenderTarget(previous)
+            gl.render(compositor.filterScene, compositor.filterCam)
+          }
+        }
+      } // glowRounds
     } finally {
+      setSceneGlowHalo(true)
       gl.setRenderTarget(previous)
       gl.toneMapping = previousToneMapping
       gl.autoClear = previousAutoClear
@@ -1694,7 +1736,7 @@ export function VisualScene() {
 
   return (
     <>
-      <TrackPreviewRenderer />
+      {trackPreviews && <TrackPreviewRenderer immediate={typeof document === 'undefined'} />}
       {[...mounted.entries()].map(([sceneId, runtime]) => {
         // One pass with the index in hand (indexOf inside three filters was
         // O(n²) per render of this component).
@@ -1708,26 +1750,21 @@ export function VisualScene() {
         })
         return (
           <Fragment key={sceneId}>
-            {/* The legacy baked rig only lights scenes with NO Light tracks;
-                a scene that has them is lit by its tracks' mirrored pools
-                (see MountedScene.lightPools and the sync in the frame loop). */}
+            {/* Light tracks reach every pass through the mirrored light pools. */}
             {createPortal(
             <>
-              {lightTrackScenes.has(sceneId) ? null : lights(shadowScenes.has(sceneId), lighting)}
               {mountObjects(base, '')}
             </>,
             runtime.base,
             )}
             {createPortal(
             <>
-              {lightTrackScenes.has(sceneId) ? null : lights(shadowScenes.has(sceneId), lighting)}
               {mountObjects(front, ':front')}
             </>,
             runtime.front,
             )}
             {createPortal(
             <FinalInvertMaskContext.Provider value>
-              {lightTrackScenes.has(sceneId) ? null : lights(shadowScenes.has(sceneId), lighting)}
               {mountObjects(invert, ':invert')}
             </FinalInvertMaskContext.Provider>,
             runtime.invert,
@@ -1737,7 +1774,7 @@ export function VisualScene() {
       })}
     </>
   )
-}
+})
 
 /** Mount one pass's entries: instanced-capable tracks collapse their contiguous
  *  copy slice to ONE InstancedObjectRenderer (which may still render the
@@ -1752,28 +1789,26 @@ function mountObjects(list: readonly ObjectListEntry[], keySuffix: string) {
       const entries: ObjectListEntry[] = []
       for (let j = i; j < list.length && list[j].trackId === o.trackId; j++) entries.push(list[j])
       out.push(
-        <TrackPreviewRoot key={`${o.trackId}${keySuffix}:instanced`} sceneId={o.sceneId} trackId={o.trackId}>
-          <InstancedObjectRenderer
-            sceneId={o.sceneId}
-            trackId={o.trackId}
-            instrumentId={o.instrumentId}
-            entries={entries}
-            keySuffix={keySuffix}
-          />
-        </TrackPreviewRoot>,
+        <InstancedObjectRenderer
+          key={`${o.trackId}${keySuffix}:instanced`}
+          sceneId={o.sceneId}
+          trackId={o.trackId}
+          instrumentId={o.instrumentId}
+          entries={entries}
+          keySuffix={keySuffix}
+        />,
       )
       continue
     }
     out.push(
-      <TrackPreviewRoot key={`${o.trackId}:${o.visualCopyIndex}${keySuffix}`} sceneId={o.sceneId} trackId={o.trackId}>
-        <ObjectRenderer
-          sceneId={o.sceneId}
-          trackId={o.trackId}
-          instrumentId={o.instrumentId}
-          visualCopyIndex={o.visualCopyIndex}
-          maskSourceIds={o.maskSourceIds}
-        />
-      </TrackPreviewRoot>,
+      <ObjectRenderer
+        key={`${o.trackId}:${o.visualCopyIndex}${keySuffix}`}
+        sceneId={o.sceneId}
+        trackId={o.trackId}
+        instrumentId={o.instrumentId}
+        visualCopyIndex={o.visualCopyIndex}
+        maskSourceIds={o.maskSourceIds}
+      />,
     )
   }
   return out

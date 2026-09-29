@@ -1,3 +1,4 @@
+import { createRasterCanvas, type RasterCanvas } from './rasterCanvas'
 import { useEffect, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import { CanvasTexture, LinearFilter, Mesh, MeshBasicMaterial, SRGBColorSpace } from 'three'
@@ -29,7 +30,7 @@ import { CanvasTexture, LinearFilter, Mesh, MeshBasicMaterial, SRGBColorSpace } 
 export function useFullFrameCanvas(texHeight: number) {
   const { viewport } = useThree()
   const meshRef = useRef<Mesh>(null)
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const canvasRef = useRef<RasterCanvas | null>(null)
   const textureRef = useRef<CanvasTexture | null>(null)
   const lastKeyRef = useRef('')
   const lastNotesRef = useRef<unknown>(null)
@@ -40,7 +41,7 @@ export function useFullFrameCanvas(texHeight: number) {
   const texW = Math.max(256, Math.min(2048, Math.round((texHeight * aspect) / 64) * 64))
 
   useEffect(() => {
-    const canvas = document.createElement('canvas')
+    const canvas = createRasterCanvas()
     canvas.width = texW
     canvas.height = texHeight
     canvasRef.current = canvas

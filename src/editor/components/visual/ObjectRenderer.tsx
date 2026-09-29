@@ -1,10 +1,12 @@
-import { memo, Suspense, useEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { applyObjectTransition } from '../../core/visual/objectTransition'
+import { applyObjectPlacement } from '../../core/visual/applyObjectPlacement'
+import { previewRuntime } from '../../core/visual/previewRuntime'
+import { useContext, memo, Suspense, useEffect, useMemo, useRef } from 'react'
 import { Group, Matrix4 } from 'three'
 import { getInstrument } from '../../instruments'
 import { InstrumentPending } from '../../instruments/lazyInstrument'
 import { isFullFrameTrack } from '../../instruments/types'
-import { getObjectState, getVisualCopy } from '../../core/visual/VisualEngine'
+import { VisualEngineContext, useVisualEngine, useVisualFrame as useFrame } from '../../core/visual/VisualEngineContext'
 import { composeScreenAnchor } from '../../core/visual/screenAnchor'
 import { applyMaterialOpacity } from '../../core/visual/animatedOpacity'
 import { InstrumentCopyContext } from '../../core/visual/instrumentColor'
@@ -67,16 +69,18 @@ export const ObjectRenderer = memo(function ObjectRenderer({
    *  even with no shader effects of its own. */
   maskSourceIds?: readonly string[]
 }) {
+  const { getObjectState, getVisualCopy } = useVisualEngine()
+  const preview = useContext(VisualEngineContext)
   const def = getInstrument(instrumentId)
   const groupRef = useRef<Group>(null)
-  const ownEffects = useProjectStore((s) => s.scenes[sceneId]?.tracks[trackId]?.effects)
+  const ownEffects = useProjectStore((s) => (preview?.tracks ?? s.scenes[sceneId]?.tracks)?.[trackId]?.effects)
   // Ancestor GROUP tracks broadcast their effect chains to member objects. A
   // merged array can't be identity-stable across foreign edits, so this
   // subscribes to a FINGERPRINT (settings included - knob drags must repaint)
   // and merges via getState in the memo below; no group ancestors = the empty
   // string and the own-effects array passes through untouched.
-  const groupFxFingerprint = useProjectStore((s) => perStateOnce(s, `gfx|${sceneId}|${trackId}`, () => {
-    const tracks = s.scenes[sceneId]?.tracks
+  const groupFxFingerprint = useProjectStore((s) => perStateOnce(preview?.tracks ?? s, `gfx|${sceneId}|${trackId}`, () => {
+    const tracks = (preview?.tracks ?? s.scenes[sceneId]?.tracks)
     let out = ''
     for (let cur = tracks?.[trackId]?.parentId; cur != null; cur = tracks?.[cur]?.parentId) {
       const t = tracks?.[cur]
@@ -87,7 +91,7 @@ export const ObjectRenderer = memo(function ObjectRenderer({
   const plugins = useMemo(() => {
     const own = ownEffects ?? []
     if (!groupFxFingerprint) return own
-    const tracks = useProjectStore.getState().scenes[sceneId]?.tracks
+    const tracks = (preview?.tracks ?? useProjectStore.getState().scenes[sceneId]?.tracks)
     // Own chain first, then nearest group outward: a group's effects wrap
     // OUTSIDE the member's own (the group applies after its members).
     const merged = [...own]
@@ -96,12 +100,12 @@ export const ObjectRenderer = memo(function ObjectRenderer({
       if (t?.type === 'group' && t.effects?.length) merged.push(...t.effects)
     }
     return merged
-  }, [ownEffects, groupFxFingerprint, sceneId, trackId])
+  }, [ownEffects, groupFxFingerprint, sceneId, trackId, preview])
   // Shader instances whose 'enabled' is automated must stay MOUNTED while their
   // checkbox is off - the automation lane can switch them on mid-project. A
   // stable string of automated instance ids keeps the selector reference-clean.
-  const fxEnabledAutomated = useProjectStore((s) => perStateOnce(s, `fxa|${sceneId}|${trackId}`, () => {
-    const sceneTracks = s.scenes[sceneId]?.tracks
+  const fxEnabledAutomated = useProjectStore((s) => perStateOnce(preview?.tracks ?? s, `fxa|${sceneId}|${trackId}`, () => {
+    const sceneTracks = (preview?.tracks ?? s.scenes[sceneId]?.tracks)
     const t = sceneTracks?.[trackId]
     if (!t) return ''
     const ids: string[] = []
@@ -138,7 +142,7 @@ export const ObjectRenderer = memo(function ObjectRenderer({
   // the two branches at the bottom of this component renders. Only instruments
   // that declare `fullFrameParam` subscribe, so nothing else pays for it.
   const modeParams = useProjectStore((s) => def?.fullFrameParam
-    ? s.scenes[sceneId]?.tracks[trackId]?.params
+    ? (preview?.tracks ?? s.scenes[sceneId]?.tracks)?.[trackId]?.params
     : undefined)
   const isFullFrame = isFullFrameTrack(def, modeParams)
   const instrumentCopyContext = useMemo(() => ({
@@ -156,9 +160,9 @@ export const ObjectRenderer = memo(function ObjectRenderer({
   // registration is harmless.
   useEffect(() => {
     const g = groupRef.current
-    if (!g) return
+    if (!g || preview) return
     return registerHoverTarget({ sceneId, trackId, object: g, fullFrame: isFullFrame })
-  }, [sceneId, trackId, isFullFrame])
+  }, [sceneId, trackId, isFullFrame, preview])
 
   useFrame(({ camera }) => {
     const g = groupRef.current
@@ -175,23 +179,29 @@ export const ObjectRenderer = memo(function ObjectRenderer({
     // "hidden" object would otherwise carve its invisible silhouette out of
     // anything drawn behind it (the visibility-mover ghost-wall artifact).
     g.visible = !!state && !state.blackedOut && fade > 0.001
-    if (state) applyMaterialOpacity(g, fade)
+    // A hidden copy costs nothing: no placement math here, and three's
+    // per-pass updateMatrixWorld skips its whole subtree (the walk does not
+    // check `visible`, only this flag - and a few thousand hidden copies were
+    // most of that walk). Re-enabled the frame it shows again, before render.
+    g.matrixWorldAutoUpdate = g.visible
+    if (!g.visible) return
+    applyMaterialOpacity(g, fade)
     if (isFullFrame) {
       // Camera-facing screen anchor (see core/visual/screenAnchor.ts): the
       // occurrence's VisualCopy transform applies inside screen space, so an
       // identity copy pins the viewport-filling plane exactly as before and
       // translated/scaled copies move as screen-space layers.
       composeScreenAnchor(camera.position, camera.quaternion, visualCopy?.transform, _composed)
-      _composed.decompose(g.position, g.quaternion, g.scale)
+      if (state?.objectMotion) applyObjectTransition(_composed, state.objectMotion)
+      applyObjectPlacement(g, _composed)
     } else if (state) {
-      const beat = getBeatOverride() ?? useTimeStore.getState().currentBeat
+      const beat = getBeatOverride() ?? (previewRuntime.worker ? previewRuntime.beat : useTimeStore.getState().currentBeat)
       const effectScale = evaluatePostMoverScale(scaleInstances, state.effectOverrides, beat)
       composePostMoverScale(state.world, visualCopy?.transform, effectScale, _composed)
-      _composed.decompose(g.position, g.quaternion, g.scale)
       // The instrument's size lives OUTSIDE the world matrix (see VisualEngine):
       // it scales the mesh itself, applied inside the mover/copy layout, so
       // movers and child tracks work in unscaled placement space.
-      g.scale.multiplyScalar(state.meshScale)
+      applyObjectPlacement(g, _composed, state.meshScale)
     }
   })
 
@@ -204,7 +214,7 @@ export const ObjectRenderer = memo(function ObjectRenderer({
   const Component = def?.component
   const bare = useMemo(() => Component
     ? (
-      <SceneIdContext.Provider value={sceneId}>
+      <SceneIdContext.Provider value={preview ? null : sceneId}>
         <InstrumentCopyContext.Provider value={instrumentCopyContext}>
           <Suspense fallback={<InstrumentPending />}>
             <Component trackId={trackId} />
@@ -212,7 +222,7 @@ export const ObjectRenderer = memo(function ObjectRenderer({
         </InstrumentCopyContext.Provider>
       </SceneIdContext.Provider>
     )
-    : null, [Component, instrumentCopyContext, trackId, sceneId])
+    : null, [Component, instrumentCopyContext, trackId, sceneId, preview])
   if (!def || !bare) return null
   const instrument = materialInstances.length > 0
     ? <MaterialWrapper trackId={trackId} plugins={materialInstances}>{bare}</MaterialWrapper>
@@ -230,7 +240,7 @@ export const ObjectRenderer = memo(function ObjectRenderer({
     // scene (this group's useFrame) already composes the copy transform.
     const frame = <group ref={groupRef}>{instrument}</group>
     return needsShaderPath
-      ? <ShaderWrapper trackId={trackId} sceneId={sceneId} plugins={shaderInstances} postMoverScalePlugins={[]} maskSourceIds={maskSourceIds}>{frame}</ShaderWrapper>
+      ? <ShaderWrapper trackId={trackId} sceneId={preview ? undefined : sceneId} plugins={shaderInstances} postMoverScalePlugins={[]} maskSourceIds={maskSourceIds}>{frame}</ShaderWrapper>
       : frame
   }
 
@@ -247,7 +257,7 @@ export const ObjectRenderer = memo(function ObjectRenderer({
     return (
       <ShaderWrapper
         trackId={trackId}
-        sceneId={sceneId}
+        sceneId={preview ? undefined : sceneId}
         visualCopyIndex={visualCopyIndex}
         plugins={shaderInstances}
         postMoverScalePlugins={scaleInstances}

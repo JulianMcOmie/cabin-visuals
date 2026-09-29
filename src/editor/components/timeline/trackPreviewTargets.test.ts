@@ -29,14 +29,17 @@ test('missing targets and malformed subtree cycles terminate without inventing o
   assert.deepEqual([...trackPreviewTargets('group', cyclic)], ['a'])
 })
 
-test('group devices include only preceding members; scene devices see scene objects', () => {
+test('group devices include every member regardless of row order; scene devices see scene objects', () => {
   const grouped = {
     ...tracks,
     group: { ...tracks.group, childIds: ['a', 'device', 'b'] },
     a: { ...tracks.a, childIds: [] },
     device: { ...tracks.device, parentId: 'group' },
   }
-  assert.deepEqual([...trackPreviewTargets('device', grouped)], ['a'])
+  assert.deepEqual([...trackPreviewTargets('device', grouped)], ['a', 'b'])
+  assert.deepEqual([...trackPreviewTargets('device', {
+    ...grouped, group: { ...grouped.group, childIds: ['device', 'a', 'b'] },
+  })], ['a', 'b'])
   assert.deepEqual([...trackPreviewTargets('device', {
     ...grouped, device: { ...grouped.device, parentId: 'scene-track:test' },
   })], ['a', 'b'])

@@ -23,6 +23,7 @@ test('every layout splitter declares the one shared size param', () => {
     'grid',
     'line',
     'parametricPattern',
+    'path',
     'polyhedron',
     'radial',
     'scatter',

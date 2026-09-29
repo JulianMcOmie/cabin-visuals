@@ -1,3 +1,4 @@
+import { createRasterCanvas, type RasterCanvas, type RasterContext } from '../core/visual/rasterCanvas'
 import { useEffect, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import { CanvasTexture, LinearFilter, Mesh, MeshBasicMaterial } from 'three'
@@ -167,8 +168,8 @@ function mixRgb(a: Rgb, b: Rgb, t: number): Rgb {
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
 }
 
-function makeCanvas(w: number, h: number): HTMLCanvasElement {
-  const c = document.createElement('canvas')
+function makeCanvas(w: number, h: number): RasterCanvas {
+  const c = createRasterCanvas()
   c.width = w
   c.height = h
   return c
@@ -238,23 +239,23 @@ const SEARCH_EPS = 1e-6
 function MidiRollVisual({ trackId }: { trackId: string }) {
   const { viewport, invalidate } = useThree()
   const meshRef = useRef<Mesh>(null)
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const canvasRef = useRef<RasterCanvas | null>(null)
   const textureRef = useRef<CanvasTexture | null>(null)
   // Bloom pipeline surfaces: full-res emissive, half+quarter downsamples,
   // and four blur-octave scratch canvases (two at half res, two at quarter).
-  const emissiveRef = useRef<HTMLCanvasElement | null>(null)
+  const emissiveRef = useRef<RasterCanvas | null>(null)
   const bloomRef = useRef<{
-    half: HTMLCanvasElement
-    quarter: HTMLCanvasElement
-    octaves: HTMLCanvasElement[]
+    half: RasterCanvas
+    quarter: RasterCanvas
+    octaves: RasterCanvas[]
   } | null>(null)
   // 2D contexts, fetched once with their canvases rather than per frame.
   const ctxsRef = useRef<{
-    ctx: CanvasRenderingContext2D
-    ectx: CanvasRenderingContext2D
-    hctx: CanvasRenderingContext2D
-    qctx: CanvasRenderingContext2D
-    octx: CanvasRenderingContext2D[]
+    ctx: RasterContext
+    ectx: RasterContext
+    hctx: RasterContext
+    qctx: RasterContext
+    octx: RasterContext[]
   } | null>(null)
   // True while the emissive layer holds anything: it is cleared only when it
   // does, and the bloom chain runs only when this frame drew into it - a
@@ -287,7 +288,7 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
     const qctx = bloom.quarter.getContext('2d')
     const octx = bloom.octaves.map((c) => c.getContext('2d'))
     ctxsRef.current = ctx && ectx && hctx && qctx && octx.every(Boolean)
-      ? { ctx, ectx, hctx, qctx, octx: octx as CanvasRenderingContext2D[] }
+      ? { ctx, ectx, hctx, qctx, octx: octx as RasterContext[] }
       : null
     emissiveDirtyRef.current = false
 
@@ -970,7 +971,7 @@ function MidiRollVisual({ trackId }: { trackId: string }) {
     // Dev-only pixel probe (see "renderer bugs: probe first"): exposes the
     // raw layers so a console/Playwright check can tell whether an artifact
     // is in OUR canvases or added downstream by the render pipeline.
-    if (process.env.NODE_ENV !== 'production') {
+    if (process.env.NODE_ENV !== 'production' && 'document' in globalThis) {
       ;(window as unknown as Record<string, unknown>).__midiRollDebug = { main: canvas, emissive, bloom }
     }
   })

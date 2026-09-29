@@ -1,5 +1,7 @@
 'use client'
 
+import { growthEntry } from './knobValueParsing'
+
 // Bespoke settings for the Line splitter, following
 // docs/instrument-panel-design-guide.md. The Radial splitter's console is the
 // nearest sibling (same subject, a LAYOUT) and this panel keeps its shape:
@@ -7,8 +9,8 @@
 // 1. A live preview window: the splitter's REAL resolve() (no notes - the
 //    resting formation is the panel's claim; MIDI mutes copies out of it)
 //    applied to generic cubes, drawn with a plain 2D canvas - no r3f, because
-//    a panel <Canvas> stays black until the transport plays (see the renderers
-//    CLAUDE.md) and a layout is exactly the thing you dial in while paused.
+//    a few hundred painter-sorted quads need no GPU scene (see the renderers
+//    CLAUDE.md).
 //    Drag orbits it; until touched it turns on its own. No readouts or
 //    captions in the window: the knobs already say the numbers.
 // 2. Two console rows of three: what the run IS - COPIES / SPACING (primary) /
@@ -186,7 +188,7 @@ function FormationPreview({ settings }: { settings: LineSettings }) {
       ref={hostRef}
       data-testid="line-formation-preview"
       title="Drag to orbit"
-      className="relative w-full cursor-grab touch-none select-none overflow-hidden border-b border-white/[0.06] active:cursor-grabbing"
+      className="relative w-full cursor-grab touch-none select-none overflow-hidden border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] active:cursor-grabbing"
       style={{ height: PREVIEW_HEIGHT, background: ROOM }}
       onPointerDown={(event) => {
         event.preventDefault()
@@ -228,6 +230,8 @@ function GrowthKnob({ b }: { b: NumBinding }) {
       accent={ACCENT}
       bipolar
       format={(v) => `×${Math.pow(2, v).toFixed(2)}`}
+      entry={growthEntry}
+      onExactChange={(v) => b.set(Math.pow(2, v))}
       onChange={(v) => b.set(Number(Math.pow(2, v).toFixed(2)))}
     />
   )
@@ -285,13 +289,13 @@ function LineConsole({ bound }: { bound: LineBindings }) {
             <button
               aria-expanded={showMore}
               onClick={() => setShowMore((v) => !v)}
-              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 hover:text-white/60"
+              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-[var(--text-muted)] hover:text-[var(--text-3)]"
             >
               {showMore ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
               MORE
             </button>
             {showMore && (
-              <div className="mt-1.5 rounded-md border border-white/[0.06] bg-black/25 p-2">
+              <div className="mt-1.5 rounded-md border border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] p-2">
                 <ParameterList parameters={rest} />
               </div>
             )}

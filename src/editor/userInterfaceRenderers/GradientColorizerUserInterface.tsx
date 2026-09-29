@@ -1,5 +1,7 @@
 'use client'
 
+import { percentEntry } from './knobValueParsing'
+
 // Bespoke settings for the Gradient colorizer, migrated to
 // docs/instrument-panel-design-guide.md on the console kit (./console),
 // borrowing Figma's gradient editor as the mental model: the hero is the RAMP
@@ -14,7 +16,7 @@
 // The accent is DERIVED: mid-ramp of the current blend, so the console lights
 // with the gradient itself (the same spirit as accent-follows-color-param).
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import { gradientAccent } from '../utils/gradientAccent'
 import { GradientPathEditor } from './GradientPathEditor'
 import { ArrowLeftRight } from 'lucide-react'
@@ -23,7 +25,7 @@ import {
 } from '../core/visualCopies/gradientColorizer'
 import {
   bindPanel,
-  ColorWheelPopover,
+  ColorPicker,
   Console,
   ControlRow,
   Knob,
@@ -34,46 +36,13 @@ import {
 } from './console'
 import type { UserInterfaceRendererDefinition } from './types'
 
-/** One gradient stop: a round swatch anchored to an end of the ramp, opening
- *  the shared color wheel. Open state + outside-click close follow the
- *  ColorWheelPill idiom (the pill itself brings its own caption layout, which
- *  the ramp's ends have no room for). */
+/** A gradient stop uses the same picker as Colorizer, without its caption. */
 function StopSwatch({ bound, label, align }: {
   bound: ColorBinding
   label: string
   align: 'left' | 'right'
 }) {
-  const hostRef = useRef<HTMLDivElement>(null)
-  const [open, setOpen] = useState(false)
-
-  useEffect(() => {
-    if (!open) return
-    const controller = new AbortController()
-    window.addEventListener('pointerdown', (event) => {
-      if (!hostRef.current?.contains(event.target as Node)) setOpen(false)
-    }, { signal: controller.signal, capture: true })
-    window.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') setOpen(false)
-    }, { signal: controller.signal })
-    return () => controller.abort()
-  }, [open])
-
-  return (
-    <div ref={hostRef} className="relative">
-      <button
-        data-testid={`gradient-stop-${label.toLowerCase()}`}
-        aria-label={`Gradient color ${label}`}
-        aria-expanded={open}
-        title={`Color ${label} · ${bound.value}`}
-        onClick={() => setOpen((o) => !o)}
-        className="h-5 w-5 cursor-pointer rounded-full border-2 border-white/85 shadow-[0_1px_4px_rgba(0,0,0,.6)] active:scale-95"
-        style={{ background: bound.value }}
-      />
-      {/* Below the swatch: the stops sit at the very top of the panel, so an
-          upward popover would be clipped against the inspector's edge. */}
-      {open && <ColorWheelPopover value={bound.value} onChange={bound.set} align={align} edge="bottom" testId={`gradient-wheel-${label.toLowerCase()}`} />}
-    </div>
-  )
+  return <ColorPicker value={bound.value} onChange={bound.set} ariaLabel={`Gradient color ${label}`} align={align} size={20} pillTestId={`gradient-stop-${label.toLowerCase()}`} wheelTestId={`gradient-wheel-${label.toLowerCase()}`} />
 }
 
 export const GradientColorizerUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters, targetId }) => {
@@ -122,7 +91,7 @@ export const GradientColorizerUserInterfaceRenderer: UserInterfaceRendererDefini
       <div className="px-3 pb-1 pt-3">
         <div
           data-testid="gradient-ramp"
-          className="relative h-9 rounded-lg border border-white/15"
+          className="relative h-9 rounded-lg border border-[color-mix(in_srgb,var(--text)_15%,transparent)]"
           style={{ background: ramp }}
         >
           <div className="absolute inset-y-0 left-1.5 flex items-center">
@@ -139,7 +108,7 @@ export const GradientColorizerUserInterfaceRenderer: UserInterfaceRendererDefini
               aria-pressed={flipped}
               title="Flip A ↔ B"
               onClick={() => flip.set(flipped ? 0 : 1)}
-              className="pointer-events-auto flex h-5 w-5 items-center justify-center rounded-full border border-white/25 bg-black/45 text-white/85 backdrop-blur-sm hover:bg-black/60 active:scale-95"
+              className="pointer-events-auto flex h-5 w-5 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--text)_25%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_45%,transparent)] text-[var(--text)] backdrop-blur-sm hover:bg-[color-mix(in_srgb,var(--bg-canvas-deep)_60%,transparent)] active:scale-95"
             >
               <ArrowLeftRight size={10} />
             </button>
@@ -150,8 +119,8 @@ export const GradientColorizerUserInterfaceRenderer: UserInterfaceRendererDefini
       <div className="flex flex-col gap-2 px-3 pb-3 pt-1">
         {/* APPLY BY: which axis the ramp spreads along - the world, or the
             chain's copy order. */}
-        <label className="flex items-center justify-between text-xs text-white/60">Color by
-          <select aria-label="Color by" className="rounded bg-zinc-900 px-2 py-1 text-white" value={mode.value} onChange={e => mode.set(Number(e.target.value))}>
+        <label className="flex items-center justify-between text-xs text-[var(--text-3)]">Color by
+          <select aria-label="Color by" className="rounded bg-[var(--bg-panel)] px-2 py-1 text-[var(--text)]" value={mode.value} onChange={e => mode.set(Number(e.target.value))}>
             {mode.def.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </label>
@@ -167,7 +136,7 @@ export const GradientColorizerUserInterfaceRenderer: UserInterfaceRendererDefini
             <Knob b={span} label="SPAN" ariaLabel="Gradient span in world units" />
             <Knob b={offset} label="OFFSET" ariaLabel="Gradient center offset" />
           </div>}
-          <Knob b={amount} label="AMOUNT" ariaLabel="Gradient amount" large format={(v) => `${Math.round(v * 100)}%`} />
+          <Knob b={amount} label="AMOUNT" ariaLabel="Gradient amount" large entry={percentEntry} format={(v) => `${Math.round(v * 100)}%`} />
         </ControlRow>
 
         <More parameters={pool.rest()} label="MORE" className="" />

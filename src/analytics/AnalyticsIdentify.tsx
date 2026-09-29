@@ -2,8 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import { useAuth } from '../persistence/hooks/useAuth'
-import { usePathname } from 'next/navigation'
-import { syncSessionRecording, withPostHog } from './posthog'
+import { withPostHog } from './posthog'
 
 /**
  * Headless: bridges Supabase auth into PostHog so every event carries a stable
@@ -19,11 +18,6 @@ import { syncSessionRecording, withPostHog } from './posthog'
 export function AnalyticsIdentify() {
   const { user, loading, isAnonymous } = useAuth()
   const identified = useRef<string | null>(null)
-  // Replay is paused inside the editor (see posthog.ts) - re-evaluated on
-  // every client-side route change.
-  const pathname = usePathname()
-  useEffect(() => { syncSessionRecording(pathname ?? '/') }, [pathname])
-
   useEffect(() => {
     if (loading) return
     const realUserId = user && !isAnonymous ? user.id : null

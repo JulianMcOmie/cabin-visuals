@@ -1,14 +1,15 @@
+import { previewRuntime } from '../../core/visual/previewRuntime'
 import { useMemo, useRef, useEffect, type ReactNode } from 'react'
-import { useFrame, useThree, createPortal } from '@react-three/fiber'
+import { useThree, createPortal } from '@react-three/fiber'
 import {
-  Scene, Group, AmbientLight, DirectionalLight, PointLight, Matrix4, Mesh,
+  Scene, Group, Matrix4, Mesh,
   ShaderMaterial, WebGLRenderTarget, OrthographicCamera, PlaneGeometry, Vector2, LinearFilter,
   type IUniform, type Texture,
 } from 'three'
 import { useTimeStore } from '../../store/TimeStore'
 import { getBeatOverride } from '../../core/visual/beatOverride'
-import { getObjectState, getVisualCopy } from '../../core/visual/VisualEngine'
-import { FLAT_LIGHT_INTENSITY, PassLightPool, refreshPosterLightDir, sceneHasLightAnchors } from '../../core/visual/sceneLights'
+import { useVisualEngine, useVisualFrame as useFrame } from '../../core/visual/VisualEngineContext'
+import { PassLightPool, refreshPosterLightDir } from '../../core/visual/sceneLights'
 import { registerHoverTarget } from '../../core/visual/hoverTargets'
 import { applyMaterialOpacity } from '../../core/visual/animatedOpacity'
 import { getEffect } from '../../effects'
@@ -18,6 +19,9 @@ import { composePostMoverScale, evaluatePostMoverScale } from '../../core/visual
 import { CROP_MASK_FRAGMENT, resolveActiveCropMask, type ActiveCropMask } from '../../instruments/Crop'
 import { MAX_DIVISIONS as CROP_MAX_DIVISIONS } from '../../core/directors/crop'
 import { usePreviewLighting, useRenderTargetScale } from './useRenderTargetScale'
+import { glowSettings, glowIsNeutral } from '../../effects/shaders/glow'
+import { GLOW_VERTEX, type GlowPass } from './GlowPass'
+import { registerGlowSource, GLOW_CORE_OUTPUT, GLOW_HALO_OUTPUT, glowCoreBlend, glowHaloBlend, type GlowSource } from './glowScene'
 import { acquireShaderScratch, releaseShaderScratch, type ShaderScratch } from './shaderScratchPool'
 
 // Fullscreen-quad vertex shader: writes clip space directly, so a 2×2 plane always fills
@@ -27,19 +31,15 @@ const PASSTHROUGH_FRAG = 'uniform sampler2D tDiffuse; varying vec2 vUv; void mai
 
 // Scratch for composing the object's mesh-local size scale into the holder.
 const _meshScale = new Matrix4()
-// The FBO chain works in linear space; the main scene's render to the canvas applies
-// the sRGB output encoding, but this overlay (a raw ShaderMaterial) bypasses it - so it
-// must encode itself, or the object reads darker (looks like reduced opacity).
+// Legacy single-pass chains retain their existing output appearance. Glow
+// chains bypass this encoding: all their buffers and outputs stay linear HDR.
 const OUTPUT_FRAG = `
   uniform sampler2D tDiffuse;
   varying vec2 vUv;
   vec3 lin2srgb(vec3 c){
     return mix(c * 12.92, 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
   }
-  void main(){
-    vec4 t = texture2D(tDiffuse, vUv);
-    gl_FragColor = vec4(lin2srgb(t.rgb), t.a);
-  }
+  void main(){ vec4 t = texture2D(tDiffuse, vUv); gl_FragColor = vec4(lin2srgb(t.rgb), t.a); }
 `
 
 type PassEntry = { plugin: ReturnType<typeof getEffect>; mat: ShaderMaterial }
@@ -51,7 +51,11 @@ type Step =
   | { pass: null; eff: null; mask: ActiveCropMask }
 
 /**
- * Per-object screen-space shader chain (plan §4.6, Option A - ported from Excellent DAW).
+ * Per-object screen-space shader chain. Glow-containing chains defer to
+ * glowScene: visible-source capture, a depth-bearing core and separate halo.
+ * Other chains retain the legacy behavior described below.
+ *
+ * Legacy chain (plan §4.6, Option A - ported from Excellent DAW):
  * The object is rendered - with its world transform - into an offscreen scene/FBO, each
  * shader plugin runs as a fullscreen post pass (ping-pong FBOs), and the result is drawn
  * as a clip-space fullscreen overlay (depth-test off) over the 3D scene. So a shaded object
@@ -75,10 +79,7 @@ export function ShaderWrapper({
   children,
 }: {
   trackId: string
-  /** The project scene this occurrence belongs to. When that scene has Light
-   *  tracks, the offscreen rig mirrors THEM (sceneLights registry) instead of
-   *  its legacy hand-built light set, so an effect-chained object is lit the
-   *  same as its unwrapped neighbors. Absent = always the legacy set. */
+  /** The project scene whose Light tracks illuminate this offscreen pass. */
   sceneId?: string
   /** Which VisualCopy occurrence this wrapper renders (composed into the holder).
    *  Full-frame occurrences OMIT it: their placement group inside the offscreen
@@ -94,31 +95,16 @@ export function ShaderWrapper({
   maskSourceIds?: readonly string[]
   children: ReactNode
 }) {
+  const { getObjectState, getVisualCopy } = useVisualEngine()
   const { gl, camera, size, scene: parentScene } = useThree()
   const outMeshRef = useRef<Mesh>(null)
+  const haloMeshRef = useRef<Mesh>(null)
+  const hasGlow = plugins.some(p => getEffect(p.pluginId)?.multipass === 'glow')
 
   // Offscreen render rig: scene (+ lights + a world-transform holder), ping-pong targets,
   // a fullscreen-quad pass rig, and the shared output uniform.
   const rig = useMemo(() => {
     const scene = new Scene()
-    // The legacy hand-built light set, kept for scenes with no Light tracks
-    // (and for callers with no sceneId). Grouped so the track-light path can
-    // stand it down with one visibility flip.
-    // The point lights sit in their own sub-group: the 'trimmed' lighting
-    // budget (Fast preview) stands them down and keeps ambient + directional.
-    const legacyLights = new Group()
-    legacyLights.add(new AmbientLight(0xffffff, 0.5))
-    const dir = new DirectionalLight(0xffffff, 1.2); dir.position.set(4, 4, 4); legacyLights.add(dir)
-    const legacyFills = new Group()
-    const key = new PointLight(0x818cf8, 3); key.position.set(-4, -2, 3); legacyFills.add(key)
-    const rim = new PointLight(0xf0abfc, 1.5); rim.position.set(3, 3, -4); legacyFills.add(rim)
-    legacyLights.add(legacyFills)
-    scene.add(legacyLights)
-    // The 'flat' budget's ambient for callers with no sceneId (no pool sync
-    // runs for them); sceneId callers get the pool's own.
-    const flatLight = new AmbientLight(0xffffff, FLAT_LIGHT_INTENSITY)
-    flatLight.visible = false
-    scene.add(flatLight)
     const holder = new Group(); holder.matrixAutoUpdate = false; scene.add(holder)
 
     // `own` holds the chain's final output; when no pass is active this frame
@@ -132,12 +118,12 @@ export function ShaderWrapper({
     const quad = new Mesh(new PlaneGeometry(2, 2))
     quadScene.add(quad)
 
-    const outUniforms: Record<string, IUniform> = { tDiffuse: { value: null as Texture | null } }
-    return { scene, legacyLights, legacyFills, flatLight, holder, own, quadScene, quadCam, quad, outUniforms }
+    const outUniforms: Record<string, IUniform> = { tDiffuse: { value: null as Texture | null }, tDepth: { value: null }, tOriginal: { value: null }, delta: { value: 0 } }
+    const haloUniforms = { tDiffuse: { value: null }, tCore: { value: null } }
+    return { scene, holder, own, quadScene, quadCam, quad, outUniforms, haloUniforms }
   }, [])
 
-  // Mirrored Light-track set for the offscreen scene (no shadows, matching the
-  // legacy set). Slots empty until the scene actually has light anchors.
+  // Mirror authored Light tracks into the offscreen scene, without shadows.
   const lightPool = useMemo(() => new PassLightPool(rig.scene), [rig])
   useEffect(() => () => lightPool.dispose(), [lightPool])
   const lighting = usePreviewLighting()
@@ -173,7 +159,7 @@ export function ShaderWrapper({
         mat: new ShaderMaterial({
           vertexShader: plugin?.vertexShader ?? QUAD_VERT,
           fragmentShader: plugin?.fragmentShader ?? PASSTHROUGH_FRAG,
-          uniforms, depthTest: false, depthWrite: false,
+          uniforms, depthTest: false, depthWrite: false, toneMapped: false,
         }),
       })
     }
@@ -183,6 +169,9 @@ export function ShaderWrapper({
   // One shared material for the crop mask passes: sources run sequentially and
   // their uniforms are rewritten just before each pass, the same way
   // VisualScene's scene-wide cropMaskMaterial is shared across scenes.
+  const passthrough = useMemo(() => new ShaderMaterial({vertexShader: QUAD_VERT, fragmentShader: PASSTHROUGH_FRAG, uniforms: {tDiffuse: {value: null}}, depthTest:false, depthWrite:false, toneMapped:false}), [])
+  useEffect(() => () => passthrough.dispose(), [passthrough])
+
   const hasMaskSources = (maskSourceIds?.length ?? 0) > 0
   const maskMaterial = useMemo(() => {
     if (!hasMaskSources) return null
@@ -207,8 +196,8 @@ export function ShaderWrapper({
   useEffect(() => () => { maskMaterial?.dispose() }, [maskMaterial])
 
   useEffect(() => {
-    rig.own.setSize(targetW, targetH)
-  }, [targetW, targetH, rig])
+    rig.own.setSize(hasGlow ? 1 : targetW, hasGlow ? 1 : targetH)
+  }, [targetW, targetH, rig, hasGlow])
 
   // The shared scratch set is borrowed lazily on the first frame that needs a
   // pass and swapped for the right-sized set when the target size moves; the
@@ -217,20 +206,38 @@ export function ShaderWrapper({
   const stepsRef = useRef<Step[]>([])
   useEffect(() => () => {
     rig.own.dispose()
+    rig.quad.geometry.dispose()
     if (scratchRef.current) { releaseShaderScratch(scratchRef.current); scratchRef.current = null }
   }, [rig])
   useEffect(() => () => { passes.forEach((p) => p.mat.dispose()) }, [passes])
+
+  const glowEntry = useMemo(() => ({
+    trackId, scene: rig.scene, holder: rig.holder, active: false, emitsHalo: false, dirty: false,
+    coreMesh: null!, haloMesh: null!, batchKey: null, nativeCore: false, nativeSource: false,
+    width: targetW, height: targetH, run: () => {},
+  } as GlowSource), [trackId, rig, targetW, targetH])
+  useEffect(() => {
+    if (!hasGlow || !outMeshRef.current || !haloMeshRef.current) return
+    glowEntry.coreMesh = outMeshRef.current; glowEntry.haloMesh = haloMeshRef.current
+    return registerGlowSource(parentScene, glowEntry)
+  }, [hasGlow, parentScene, glowEntry])
 
   useFrame(() => {
     // Per-copy state for a staggered occurrence, so the offscreen pass renders
     // the copy's own world/meshScale/effect overrides on its own clock.
     const state = getObjectState(trackId, visualCopyIndex)
     if (outMeshRef.current) outMeshRef.current.visible = !!state && !state.blackedOut
+    if (hasGlow) {
+      const copy = visualCopyIndex === undefined ? undefined : getVisualCopy(trackId, visualCopyIndex)
+      glowEntry.active = !!state && !state.blackedOut && state.opacity * (copy?.opacity ?? 1) > 0.001
+      glowEntry.dirty = true
+      if (!glowEntry.active) return
+    }
     if (!state || state.blackedOut) return
 
     // Same clock rule as VisualBeatSync: exports drive time through the beat
     // override while the transport stays frozen.
-    const beat = getBeatOverride() ?? useTimeStore.getState().currentBeat
+    const beat = getBeatOverride() ?? (previewRuntime.worker ? previewRuntime.beat : useTimeStore.getState().currentBeat)
 
     // Inherit the mounting scene's env map so env-driven materials (Texturizer
     // chrome/glass) keep their reflections inside the offscreen pass.
@@ -238,14 +245,8 @@ export function ShaderWrapper({
       rig.scene.environment = parentScene.environment
     }
 
-    // Scenes with Light tracks light this pass with THOSE; the legacy
-    // hand-built set only serves scenes that have none.
-    const trackLit = !!sceneId && sceneHasLightAnchors(sceneId)
-    rig.legacyLights.visible = !trackLit && lighting !== 'flat'
-    rig.legacyFills.visible = lighting === 'full'
-    rig.flatLight.visible = !sceneId && lighting === 'flat'
     if (sceneId) {
-      if (trackLit) refreshPosterLightDir(sceneId)
+      refreshPosterLightDir(sceneId)
       lightPool.sync(sceneId, false, lighting)
     }
 
@@ -280,7 +281,7 @@ export function ShaderWrapper({
     steps.length = 0
     for (const inst of plugins) {
       const eff = effectiveEffectState(inst, state?.effectOverrides)
-      if (!eff.enabled) continue
+      if (!eff.enabled || (inst.pluginId === 'glow' && glowIsNeutral(eff.settings))) continue
       const pass = passes.get(inst.id)
       if (!pass) continue
       steps.push({ pass, eff, mask: null })
@@ -294,9 +295,53 @@ export function ShaderWrapper({
     const stepCount = steps.length
 
     let scratch = scratchRef.current
-    if (stepCount > 0 && (!scratch || scratch.src.width !== targetW || scratch.src.height !== targetH)) {
+    if (stepCount > (hasGlow ? 1 : 0) && (!scratch || scratch.src.width !== targetW || scratch.src.height !== targetH)) {
       if (scratch) releaseShaderScratch(scratch)
-      scratch = scratchRef.current = acquireShaderScratch(targetW, targetH)
+      scratch = scratchRef.current = acquireShaderScratch(targetW, targetH, hasGlow)
+    }
+
+    if (hasGlow) {
+      const only = steps.length === 1 && steps[0].pass?.plugin?.multipass === 'glow' ? steps[0] : null
+      const settings = only?.eff ? glowSettings(only.eff.settings) : null
+      glowEntry.emitsHalo = steps.some(s => s.pass?.plugin?.multipass === 'glow' && glowSettings(s.eff!.settings).strength > 0)
+      glowEntry.nativeSource = steps.length === 0 || !!settings
+      glowEntry.nativeCore = steps.length === 0 || !!settings && settings.coreBrightness === 1 && settings.coreWhite === 0
+      glowEntry.batchKey = settings ? trackId + ':' + JSON.stringify(settings) : null
+      glowEntry.run = (renderer, input, output, halo, glow: GlowPass) => {
+        let tex = input
+        if (!steps.length) {
+          rig.quad.material = passthrough
+          passthrough.uniforms.tDiffuse.value = tex
+          renderer.setRenderTarget(output); renderer.clear(true, false, false); renderer.render(rig.quadScene, rig.quadCam)
+          return
+        }
+        for (let i = 0; i < steps.length; i++) {
+          const step = steps[i]
+          const target = i === steps.length - 1 ? output : (i % 2 === 0 ? scratch!.ping : scratch!.pong)
+          if (step.pass?.plugin?.multipass === 'glow') {
+            glow.render(renderer, tex, target, step.eff!.settings, halo)
+          } else {
+            let material: ShaderMaterial
+            if (step.pass) {
+              material = step.pass.mat
+              material.uniforms.tDiffuse.value = tex
+              material.uniforms.time.value = beat
+              material.uniforms.resolution.value.set(targetW, targetH)
+              for (const pd of step.pass.plugin?.params ?? []) material.uniforms[pd.key].value = step.eff!.settings[pd.key] ?? pd.default
+            } else {
+              material = maskMaterial!
+              const mask = step.mask!, u = material.uniforms
+              u.tDiffuse.value = tex; u.sliceState.value = mask.sliceState; u.count.value = mask.count
+              u.angle.value = mask.angle; u.wedge.value = mask.wedge ? 1 : 0; u.flash.value = mask.flash
+              u.blur.value = mask.blur; u.wet.value = mask.wet; u.aspect.value = targetW / targetH
+            }
+            rig.quad.material = material
+            renderer.setRenderTarget(target); renderer.clear(true, false, false); renderer.render(rig.quadScene, rig.quadCam)
+          }
+          tex = target.texture
+        }
+      }
+      return
     }
 
     // Render the object into the source target: the wrapper's own when no pass
@@ -358,13 +403,20 @@ export function ShaderWrapper({
         <planeGeometry args={[2, 2]} />
         <shaderMaterial
           vertexShader={QUAD_VERT}
-          fragmentShader={OUTPUT_FRAG}
+          fragmentShader={hasGlow ? GLOW_CORE_OUTPUT : OUTPUT_FRAG}
           uniforms={rig.outUniforms}
           transparent
-          depthTest={false}
+          depthTest={hasGlow}
           depthWrite={false}
+          toneMapped={false}
+          {...(hasGlow ? glowCoreBlend : {})}
         />
       </mesh>
+      {hasGlow && <mesh ref={haloMeshRef} frustumCulled={false} renderOrder={1000}>
+        <planeGeometry args={[2, 2]} />
+        <shaderMaterial vertexShader={GLOW_VERTEX} fragmentShader={GLOW_HALO_OUTPUT} uniforms={rig.haloUniforms}
+          transparent depthTest={false} depthWrite={false} toneMapped={false} {...glowHaloBlend} />
+      </mesh>}
     </>
   )
 }

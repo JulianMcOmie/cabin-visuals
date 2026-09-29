@@ -1,5 +1,7 @@
 'use client'
 
+import { periodEntry } from './knobValueParsing'
+
 // Bespoke settings for the Tunnel splitter, following
 // docs/instrument-panel-design-guide.md (Approach's panel is the nearest
 // sibling — both stream copies down the camera axis): a full-bleed panel washed
@@ -114,7 +116,7 @@ function TunnelPreview({ settings }: { settings: TunnelSettings }) {
   return (
     <div
       data-testid="tunnel-preview"
-      className="relative h-[150px] overflow-hidden border-b border-white/[0.06]"
+      className="relative h-[150px] overflow-hidden border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)]"
       style={{ background: ROOM }}
     >
       {/* The camera sits exactly where the splitter's defaults assume the stage
@@ -149,7 +151,7 @@ function BoundKnob({ bound, label, large = false, bipolar = false }: {
       value={bound.value}
       min={definition.min}
       max={definition.max}
-      step={definition.step}
+      step={definition.step} integer={definition.integer}
       defaultValue={definition.default}
       curve={definition.curve ?? 1}
       label={label}
@@ -162,8 +164,8 @@ function BoundKnob({ bound, label, large = false, bipolar = false }: {
   )
 }
 
-/** The SYNC rate knob: turns in DETENT INDICES so the musical divisions sit
- *  evenly on the arc, converted back to stored rings-per-beat on the way out. */
+/** The shared knob spaces the musical detents evenly while keeping stored
+ *  rings-per-beat values and beat-period entry at the public boundary. */
 function SyncRateKnob({ bound }: { bound: UserInterfaceParameter }) {
   const definition = bound.definition
   if (!isNumberParam(definition) || typeof bound.value !== 'number') return null
@@ -172,11 +174,13 @@ function SyncRateKnob({ bound }: { bound: UserInterfaceParameter }) {
   const onGrid = TUNNEL_SYNC_DETENTS[index] === value
   return (
     <LaserKnob
-      value={index}
-      min={0}
-      max={TUNNEL_SYNC_DETENTS.length - 1}
-      step={1}
-      defaultValue={tunnelSyncDetentIndex(definition.default)}
+      value={value}
+      min={definition.min}
+      max={definition.max}
+      step={definition.step} integer={definition.integer}
+      defaultValue={definition.default}
+      detents={TUNNEL_SYNC_DETENTS}
+      entry={periodEntry(1, onGrid)}
       label="RATE"
       ariaLabel="Sync rate, beats per ring"
       accent={CORRIDOR}
@@ -184,13 +188,8 @@ function SyncRateKnob({ bound }: { bound: UserInterfaceParameter }) {
       bipolar
       // An off-grid (automated) value keeps an honest numeric readout until
       // the knob is touched and snaps it to a division.
-      format={(knobIndex) => (onGrid
-        ? tunnelSyncDetentLabel(TUNNEL_SYNC_DETENTS[Math.round(knobIndex)] ?? 0)
-        : formatKnobValue(value, 0.05))}
-      onChange={(knobIndex) => {
-        const detent = TUNNEL_SYNC_DETENTS[clamp(Math.round(knobIndex), 0, TUNNEL_SYNC_DETENTS.length - 1)]
-        if (detent !== value) bound.setValue(detent)
-      }}
+      format={(rate) => onGrid ? tunnelSyncDetentLabel(rate) : formatKnobValue(rate, 0.05)}
+      onChange={bound.setValue}
     />
   )
 }
@@ -208,7 +207,7 @@ function CountStepper({ bound, label }: { bound: UserInterfaceParameter; label: 
       aria-label={`${direction < 0 ? 'Fewer' : 'More'}: ${definition.label}`}
       disabled={direction < 0 ? value <= definition.min : value >= definition.max}
       onClick={() => bound.setValue(clamp(value + direction, definition.min, definition.max))}
-      className="flex h-[16px] w-[16px] items-center justify-center rounded-[3px] border border-white/10 bg-black/30 font-mono text-[10px] leading-none text-white/45 hover:text-white/80 disabled:opacity-25 disabled:hover:text-white/45"
+      className="flex h-[16px] w-[16px] items-center justify-center rounded-[3px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_30%,transparent)] font-mono text-[10px] leading-none text-[var(--text-3)] hover:text-[var(--text-2)] disabled:opacity-25 disabled:hover:text-[var(--text-3)]"
     >
       {direction < 0 ? '−' : '+'}
     </button>
@@ -218,10 +217,10 @@ function CountStepper({ bound, label }: { bound: UserInterfaceParameter; label: 
     <div className="flex flex-col items-center gap-1">
       <div className="flex items-center gap-1">
         {step(-1)}
-        <span className="w-[18px] text-center font-mono text-[11px] tabular-nums text-white/75">{value}</span>
+        <span className="w-[18px] text-center font-mono text-[11px] tabular-nums text-[var(--text-2)]">{value}</span>
         {step(1)}
       </div>
-      <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">{label}</span>
+      <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">{label}</span>
     </div>
   )
 }
@@ -240,7 +239,7 @@ function Segmented({ bound, label, shortLabels, testId }: {
 
   return (
     <div className="flex flex-col items-center gap-1" data-testid={testId}>
-      <div className="flex overflow-hidden rounded-md border border-white/10">
+      <div className="flex overflow-hidden rounded-md border border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
         {definition.options.map((option) => {
           const active = option.value === selected
           return (
@@ -251,7 +250,7 @@ function Segmented({ bound, label, shortLabels, testId }: {
               title={option.label}
               onClick={() => bound.setValue(option.value)}
               className={`flex h-[22px] min-w-[30px] items-center justify-center px-1.5 text-[8px] font-bold tracking-[0.1em] ${
-                active ? 'text-black' : 'bg-black/25 text-white/40 hover:text-white/70'
+                active ? 'text-black' : 'bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] text-[var(--text-3)] hover:text-[var(--text-2)]'
               }`}
               style={active ? { background: CORRIDOR } : undefined}
             >
@@ -260,7 +259,7 @@ function Segmented({ bound, label, shortLabels, testId }: {
           )
         })}
       </div>
-      <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">{label}</span>
+      <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">{label}</span>
     </div>
   )
 }
@@ -325,7 +324,7 @@ export const TunnelSplitterUserInterfaceRenderer: UserInterfaceRendererDefinitio
             <CountStepper bound={bound.rings} label="RINGS" />
           </div>
         </div>
-        <div className="flex items-end gap-3 border-t border-white/[0.05] px-4 pt-2.5">
+        <div className="flex items-end gap-3 border-t border-[color-mix(in_srgb,var(--text)_5%,transparent)] px-4 pt-2.5">
           {synced
             ? <SyncRateKnob bound={bound.syncRingsPerBeat} />
             : <BoundKnob bound={bound.speed} label="SPEED" large bipolar />}
@@ -350,13 +349,13 @@ export const TunnelSplitterUserInterfaceRenderer: UserInterfaceRendererDefinitio
             <button
               aria-expanded={showMore}
               onClick={() => setShowMore((v) => !v)}
-              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 hover:text-white/60"
+              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-[var(--text-muted)] hover:text-[var(--text-3)]"
             >
               {showMore ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
               MORE
             </button>
             {showMore && (
-              <div className="mt-1.5 rounded-md border border-white/[0.06] bg-black/25 p-2">
+              <div className="mt-1.5 rounded-md border border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] p-2">
                 <ParameterList parameters={unplaced} />
               </div>
             )}

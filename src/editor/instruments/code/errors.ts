@@ -56,8 +56,11 @@ export function clearCodeErrors(): void {
   changed()
 }
 
-if (typeof window !== 'undefined') {
-  const w = window as unknown as Record<string, unknown>
+// The page's hooks for `cabin errors`. Guard on `document`, not `typeof window`:
+// Next constant-folds that to true inside the preview worker's chunks, where
+// touching `window` throws (core/visual/CLAUDE.md).
+if (typeof document !== 'undefined') {
+  const w = globalThis as unknown as Record<string, unknown>
   w.__cabinCodeErrors = listCodeErrors
   w.__cabinClearCodeErrors = clearCodeErrors
 }

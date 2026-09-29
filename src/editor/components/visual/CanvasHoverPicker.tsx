@@ -1,9 +1,7 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
-import { Raycaster, Vector2, type Scene } from 'three'
-import { getCompositionLayers, getMountedRenderScenes } from '../../core/visual/VisualEngine'
-import { layersUnderPoint, type HitPass } from '../../core/visual/hoverPickCore'
-import { pickHoverTarget } from '../../core/visual/hoverTargets'
+import { pickRenderedTrack } from '../../core/visual/previewPicking'
+import { pickInWorker } from '../../core/visual/previewRuntime'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { useTimeStore } from '../../store/TimeStore'
@@ -30,53 +28,32 @@ import { useCommentsStore } from '../../review/commentsStore'
  */
 export function CanvasHoverPicker() {
   const { gl, camera, invalidate } = useThree()
-  const raycaster = useRef(new Raycaster()).current
-  const ndc = useRef(new Vector2()).current
 
   useEffect(() => {
     const canvas = gl.domElement
-    // Points/lines need a pick tolerance or a particle field is unhoverable.
-    raycaster.params.Points.threshold = 0.12
-    raycaster.params.Line.threshold = 0.06
-
+    let generation = 0, selectionGeneration = 0
     const clear = () => {
+      generation++
       useUIStore.getState().setCanvasHover(null)
       canvas.style.cursor = ''
     }
 
-    /** Which pass scene a root's scene is, from the mounted scene map. */
-    const passOf = (scene: Scene | null): HitPass | undefined => {
-      if (!scene) return undefined
-      for (const [key, mounted] of getMountedRenderScenes()) {
-        if (mounted !== scene) continue
-        const pass = key.slice(key.lastIndexOf(':') + 1)
-        return pass === 'front' || pass === 'invert' ? pass : 'base'
-      }
-      return undefined
-    }
-
-    const pickAt = (clientX: number, clientY: number): { trackId: string; sceneId: string } | null => {
+    const pickAt = async (clientX: number, clientY: number, select = false) => {
       const rect = canvas.getBoundingClientRect()
       if (rect.width <= 0 || rect.height <= 0) return null
-      const nx = (clientX - rect.left) / rect.width
-      const ny = 1 - (clientY - rect.top) / rect.height
-      if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return null
-      for (const layer of layersUnderPoint(getCompositionLayers(), nx, ny)) {
-        ndc.set(layer.ndcX, layer.ndcY)
-        raycaster.setFromCamera(ndc, camera)
-        const hit = pickHoverTarget(raycaster, layer.sceneId, passOf)
-        if (hit) return { trackId: hit.trackId, sceneId: layer.sceneId }
-      }
-      return null
+      const nx = (clientX - rect.left) / rect.width, ny = 1 - (clientY - rect.top) / rect.height
+      return await (pickInWorker(nx, ny, select) ?? pickRenderedTrack(camera, nx, ny))
     }
 
     // Comment mode (review/commentsStore) behaves like Shift-hover - you see
     // what you'd pin a comment on - and a click opens the composer there.
     const commenting = () => useCommentsStore.getState().mode
 
-    const onMove = (e: PointerEvent) => {
+    const onMove = async (e: PointerEvent) => {
       if (!e.shiftKey && !commenting()) { clear(); return }
-      const hit = pickAt(e.clientX, e.clientY)
+      const stamp = ++generation
+      const hit = await pickAt(e.clientX, e.clientY)
+      if (stamp !== generation) return
       const prev = useUIStore.getState().canvasHover
       if (hit?.trackId !== prev?.trackId || hit?.sceneId !== prev?.sceneId) {
         useUIStore.getState().setCanvasHover(hit)
@@ -88,15 +65,16 @@ export function CanvasHoverPicker() {
     const onLeave = () => { clear(); invalidate() }
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Shift') return
-      if (e.type === 'keyup' && useUIStore.getState().canvasHover) { clear(); invalidate() }
+      if (e.type === 'keyup') { clear(); invalidate() }
     }
 
-    const onDoubleClick = (e: MouseEvent) => {
+    const onDoubleClick = async (e: MouseEvent) => {
       if (!e.shiftKey) return
-      const hit = pickAt(e.clientX, e.clientY)
-      if (!hit) return
       e.preventDefault()
       e.stopPropagation()
+      const stamp = ++selectionGeneration
+      const hit = await pickAt(e.clientX, e.clientY, true)
+      if (stamp !== selectionGeneration || !hit) return
       const project = useProjectStore.getState()
       const ui = useUIStore.getState()
       // The object may belong to a scene other than the one being edited
@@ -111,14 +89,16 @@ export function CanvasHoverPicker() {
       ui.revealTrack(hit.trackId)
     }
 
-    const onDown = (e: PointerEvent) => {
+    const onDown = async (e: PointerEvent) => {
       if (!commenting() || e.button !== 0) return
-      const hit = pickAt(e.clientX, e.clientY)
-      const rect = canvas.getBoundingClientRect()
+      // Claim the click now - after the (worker) pick resolves it's too late.
       e.preventDefault()
       e.stopPropagation()
+      const rect = canvas.getBoundingClientRect()
+      const beat = useTimeStore.getState().currentBeat
+      const hit = await pickAt(e.clientX, e.clientY)
       useCommentsStore.getState().openComposer({
-        beat: useTimeStore.getState().currentBeat,
+        beat,
         trackId: hit?.trackId,
         sceneId: hit?.sceneId,
         screen: { x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height },
@@ -135,6 +115,7 @@ export function CanvasHoverPicker() {
     window.addEventListener('blur', onLeave)
     return () => {
       canvas.removeEventListener('pointerdown', onDown)
+      generation++; selectionGeneration++
       canvas.removeEventListener('pointermove', onMove)
       canvas.removeEventListener('pointerleave', onLeave)
       canvas.removeEventListener('dblclick', onDoubleClick)
@@ -142,7 +123,7 @@ export function CanvasHoverPicker() {
       window.removeEventListener('blur', onLeave)
       clear()
     }
-  }, [gl, camera, invalidate, raycaster, ndc])
+  }, [gl, camera, invalidate])
 
   return null
 }

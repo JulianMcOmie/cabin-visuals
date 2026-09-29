@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { Matrix4 } from 'three'
 import type { ResolvedNote } from '../visual/types'
 import {
   evaluateVisibilityOpacity,
@@ -7,6 +8,10 @@ import {
   type VisibilitySettings,
 } from './visibility'
 import { resolveVisualCopies } from './resolveVisualCopies'
+import { identityVisualCopy } from './identityVisualCopy'
+import { isGpuOperationSupported } from './gpuOperations'
+import { compileParticlePlan, particlePlanCopy } from './particlePlan'
+import { sharedLocalLayout } from './sharedLocalLayout'
 
 const defaults: VisibilitySettings = {
   grouping: 0,
@@ -114,4 +119,67 @@ test('visibility MIDI rows label indices, count groups, or the single All row', 
   assert.deepEqual(groupRows.map((row) => row.label), ['Group 1 of 4', 'Group 2 of 4', 'Group 3 of 4', 'Group 4 of 4'])
   const allRows = visibilityMover.midiRows!({ ...defaults, grouping: -1 }, { priorCount: 8 })
   assert.deepEqual(allRows, [{ pitch: 127, label: 'All copies' }])
+})
+
+test('shared visibility matches independent ADSR evaluation for every mapping and arbitrary seeks', () => {
+  const notes = [note(.4, 126, 1.3), note(-.3, 127, .1), note(0, 127, 2), note(.2, 125, 0),
+    note(.1, 124, -.2), note(0, -5, 2), note(0, 126.5, 4), note(0, 128, 4)]
+  const input = identityVisualCopy()
+  input.opacity = .37
+  input.transform.makeRotationZ(.3).setPosition(2, -1, .7)
+  input.colorShift = { hue: .2, saturation: -.1, lightness: .3, tint: '#AbCdEf', tintAmount: .4,
+    tintPerceptual: true, huePerceptual: true }
+  for (const grouping of [-2, -1, 0, 10, 20, 25, 12.5, 33.333333, .0001, 1000]) {
+    for (const envelope of [{ attackBeats: .3, decayBeats: .4, sustainLevel: .35, releaseBeats: .7 },
+      { attackBeats: 0, decayBeats: .2, sustainLevel: 1.3, releaseBeats: 0 },
+      { attackBeats: -.2, decayBeats: -.1, sustainLevel: -.4, releaseBeats: .5 }]) {
+      const settings = { grouping, ...envelope }, entry = visibilityMover.resolve({ settings, notes })
+      for (const beat of [-1, 0, .15, .3, .6, 1.8, 2, 2.35, 8, .6]) {
+        const operation = entry.gpuOperationAtBeat!(beat)
+        assert.ok(isGpuOperationSupported(operation))
+        assert.ok(operation.parameters.length < 100)
+        for (const count of [1, 3, 22, 133, 1048576]) {
+          for (const index of [...new Set([0, 1, 2, 15, 132, Math.floor(count / 2), count - 1])].filter(index => index < count)) {
+            const actual = entry.apply(input, { beat, index, count })[0]
+            close(actual.opacity, input.opacity * evaluateVisibilityOpacity(notes, beat, index, count, settings))
+            assert.deepEqual(actual.transform.elements, input.transform.elements)
+            assert.deepEqual(actual.colorShift, input.colorShift)
+          }
+        }
+      }
+    }
+  }
+})
+
+test('each-index opacity uses exact sparse keys beyond float integer precision and ignores invalid rows', () => {
+  const index = 16777217, settings = { ...defaults, releaseBeats: 0 }
+  const notes = [note(0, 127-index, 4), note(0, 126.5, 4), note(0, 128, 4)]
+  const entry = visibilityMover.resolve({ settings, notes })
+  const operation = entry.gpuOperationAtBeat!(1)
+  assert.ok(isGpuOperationSupported(operation))
+  assert.equal(operation.parameters.length, 31)
+  for (const current of [0, 1, index - 1, index, index + 1]) {
+    const actual = entry.apply(identityVisualCopy(), { beat: 1, index: current, count: 33554432 })[0]
+    assert.equal(actual.opacity, evaluateVisibilityOpacity(notes, 1, current, 33554432, settings))
+  }
+})
+
+test('visibility retains full million-copy execution with sparse All, group and index data', () => {
+  const prefix = sharedLocalLayout({ transforms: Array.from({ length: 32 }, () => new Matrix4()),
+    opacities: Array.from({ length: 32 }, () => .8) })
+  const forbidden = () => { throw new Error('Visibility must not expand the particle prefix') }
+  const level = { ...prefix, apply: forbidden }
+  const notes = [note(0, 127, 4), note(0, 125, 4), note(0, 127-1048575, 4)]
+  for (const grouping of [-1, 25, 0]) {
+    const settings = { ...defaults, grouping }, entry = visibilityMover.resolve({ settings, notes })
+    const plan = compileParticlePlan([level, level, level, level, { ...entry, apply: forbidden }], 0, .5)
+    assert.ok(plan)
+    assert.equal(plan.count, 1048576)
+    assert.equal(plan.cpuPrefix, undefined)
+    assert.ok(plan.matrices.length < 10000)
+    for (const index of [0, 1, 2, 262143, 262144, 524288, 1048575]) {
+      const copy = particlePlanCopy(plan, index)!
+      close(copy.opacity, .8 ** 4 * evaluateVisibilityOpacity(notes, .5, index, plan.count, settings))
+    }
+  }
 })

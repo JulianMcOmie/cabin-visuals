@@ -1,14 +1,15 @@
 'use client'
 
+import { numberEntry } from './knobValueParsing'
+
 // Bespoke settings for the Radial splitter, built from the console kit
 // (./console) to docs/instrument-panel-design-guide.md (the Grid splitter's
 // panel is the nearest sibling - same subject, a LAYOUT):
 //
 // 1. A live preview window: the splitter's REAL resolve() (no notes - the
 //    resting formation is the panel's claim; MIDI bends it) applied to generic
-//    cubes, drawn with a plain 2D canvas - no r3f, because a panel <Canvas>
-//    stays black until the transport plays (see the renderers CLAUDE.md) and a
-//    layout is exactly the thing you dial in while paused. Drag orbits it;
+//    cubes, drawn with a plain 2D canvas - no r3f, because a few hundred
+//    painter-sorted quads need no GPU scene (see the renderers CLAUDE.md). Drag orbits it;
 //    until touched it turns on its own. No readouts or captions in the window:
 //    the knobs already say the numbers.
 // 2. Three rows, in the order the ring is built: the geometry knobs (COPIES /
@@ -246,7 +247,7 @@ function KindSegmented({ b, caption, labels, testId }: {
 }) {
   return (
     <div className="flex flex-col items-center gap-1" data-testid={testId}>
-      <div className="flex overflow-hidden rounded-md border border-white/10">
+      <div className="flex overflow-hidden rounded-md border border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
         {b.def.options.map((option) => {
           const active = option.value === b.value
           return (
@@ -257,7 +258,7 @@ function KindSegmented({ b, caption, labels, testId }: {
               title={`${b.def.label}: ${option.label}`}
               onClick={() => b.set(option.value)}
               className={`flex h-[22px] min-w-[30px] items-center justify-center px-1.5 text-[8px] font-bold tracking-[0.1em] ${
-                active ? 'text-black' : 'bg-black/25 text-white/40 hover:text-white/70'
+                active ? 'text-black' : 'bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] text-[var(--text-3)] hover:text-[var(--text-2)]'
               }`}
               style={active ? { background: ACCENT } : undefined}
             >
@@ -266,7 +267,7 @@ function KindSegmented({ b, caption, labels, testId }: {
           )
         })}
       </div>
-      <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">{caption}</span>
+      <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">{caption}</span>
     </div>
   )
 }
@@ -360,9 +361,9 @@ function RadialConsole({ bound }: { bound: RadialBindings }) {
           it on, matching the definition (a stored growth is inert until then).
           Spiral makes this four knobs, so it WRAPS like the rings row below. */}
       <ControlRow className="flex-wrap justify-center gap-x-5 gap-y-2 px-4 pt-2">
-        <Knob b={sweep} label="SWEEP" format={(v) => `${Math.round(v)}°`} />
+        <Knob b={sweep} label="SWEEP" entry={numberEntry('°')} format={(v) => `${Math.round(v)}°`} />
         <Knob b={rise} label="RISE" bipolar />
-        <Knob b={tilt} label="TILT" bipolar format={(v) => `${Math.round(v)}°`} />
+        <Knob b={tilt} label="TILT" bipolar entry={numberEntry('°')} format={(v) => `${Math.round(v)}°`} />
         {spiral ? <Knob b={growth} label="GROWTH" /> : null}
       </ControlRow>
       {/* RINGS and, once there is more than one, the four independent per-ring
@@ -375,7 +376,7 @@ function RadialConsole({ bound }: { bound: RadialBindings }) {
         {stacked ? <Knob b={ringSpacing} label="SPACING" bipolar /> : null}
         {stacked ? <Knob b={ringSize} label="SCALE" /> : null}
         {stacked ? <Knob b={ringDepth} label="DEPTH" bipolar /> : null}
-        {stacked ? <Knob b={ringTwist} label="TWIST" bipolar format={(v) => `${Math.round(v)}°`} /> : null}
+        {stacked ? <Knob b={ringTwist} label="TWIST" bipolar entry={numberEntry('°')} format={(v) => `${Math.round(v)}°`} /> : null}
       </ControlRow>
       <div className="flex flex-wrap items-start justify-center gap-4 px-4 pb-3 pt-2.5">
         {shape ? <KindSegmented b={shape} caption="SHAPE" testId="radial-shape" /> : null}

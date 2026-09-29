@@ -1,5 +1,7 @@
 'use client'
 
+import { percentEntry } from './knobValueParsing'
+
 // Bespoke settings for the Visibility mover (definition id 'visibility'),
 // rebuilt to docs/instrument-panel-design-guide.md (Laser Sphere is the
 // reference): a live preview of a dummy object being gated by the REAL
@@ -115,7 +117,7 @@ function FadePreview({ a, d, s, r }: { a: number; d: number; s: number; r: numbe
     <div
       data-testid="visibility-fade-preview"
       title="Drag to orbit"
-      className="relative h-[118px] cursor-grab overflow-hidden border-b border-white/[0.06] active:cursor-grabbing"
+      className="relative h-[118px] cursor-grab overflow-hidden border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] active:cursor-grabbing"
       style={{ background: ROOM }}
     >
       <PreviewCanvas dpr={[1, 2]} camera={{ position: [0, 1.1, 3.6], fov: 40 }} gl={{ antialias: true, alpha: true }}>
@@ -309,7 +311,7 @@ function EnvelopeEditor({
     <div
       ref={hostRef}
       data-testid="visibility-envelope-editor"
-      className="relative h-[96px] select-none overflow-hidden border-b border-white/[0.06]"
+      className="relative h-[96px] select-none overflow-hidden border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)]"
       style={{ background: ROOM }}
     >
       <div
@@ -354,7 +356,7 @@ function EnvelopeEditor({
             aria-valuetext={handle.label}
             data-testid={handle.testId}
             title={`${handle.label} · drag · double-click to reset`}
-            className="absolute z-10 h-[10px] w-[10px] -translate-x-1/2 -translate-y-1/2 touch-none select-none rounded-full border border-white/70 outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+            className="absolute z-10 h-[10px] w-[10px] -translate-x-1/2 -translate-y-1/2 touch-none select-none rounded-full border border-[color-mix(in_srgb,var(--text)_70%,transparent)] outline-none focus-visible:ring-2 focus-visible:ring-white/60"
             style={{
               left: `${handle.x}%`,
               top: `${handle.y}%`,
@@ -387,13 +389,14 @@ function EnvelopeKnob({ parameter: bound, label, format, suffix }: {
       value={bound.value}
       min={definition.min}
       max={definition.max}
-      step={definition.step}
+      step={definition.step} integer={definition.integer}
       defaultValue={definition.default}
       curve={definition.curve ?? 1}
       label={label}
       ariaLabel={definition.label}
       accent={EMERALD}
       format={format}
+      entry={format === asPercent ? percentEntry : undefined}
       suffix={suffix}
       onChange={bound.setValue}
     />
@@ -448,13 +451,13 @@ export const VisibilityMoverUserInterfaceRenderer: UserInterfaceRendererDefiniti
             <button
               aria-expanded={showMore}
               onClick={() => setShowMore((value) => !value)}
-              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 hover:text-white/60"
+              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-[var(--text-muted)] hover:text-[var(--text-3)]"
             >
               {showMore ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
               MORE
             </button>
             {showMore && (
-              <div className="mt-1.5 rounded-md border border-white/[0.06] bg-black/25 p-2">
+              <div className="mt-1.5 rounded-md border border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] p-2">
                 <ParameterList parameters={unplaced} />
               </div>
             )}

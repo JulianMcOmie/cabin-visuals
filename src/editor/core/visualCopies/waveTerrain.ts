@@ -186,7 +186,9 @@ export function evaluateWaveHeight(
 
 export const waveTerrainMover: MoverOrSplitterDefinition<WaveTerrainSettings> = {
   id: 'waveTerrain',
+  particleExecution: { fallback: 'unported', reason: 'The legacy world-space surface displacement and conjugation have not been ported to a GPU operation.' },
   label: 'Wave Terrain',
+  extras: true,
   kind: 'mover',
   identityColor: WAVE_TERRAIN_COLOR,
   params: [
@@ -224,6 +226,7 @@ export const waveTerrainMover: MoverOrSplitterDefinition<WaveTerrainSettings> = 
   strictMidiRows: true,
   resolve({ settings, notes }) {
     return {
+      maxOutputCount: 1,
       apply(visualCopy, { beat, placementTransform }) {
         const placedTransform = placementTransform
           ? placementTransform.clone().multiply(visualCopy.transform)

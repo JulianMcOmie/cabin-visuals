@@ -71,3 +71,27 @@ test('a drag-remap onto a count param seeds the integer grid too', () => {
   assert.equal(st().tracks[laneId].targetParam, 'copies')
   assert.deepEqual(st().tracks[laneId].automationRange, { integer: true })
 })
+
+test('new lanes choose semantic combination defaults and retain user choices on retarget and save', async () => {
+  const { serialize } = await import('../../persistence/serialize')
+  hydrate(emptyDocument())
+  st().addTrack(splitter('s'))
+  for (const [key, combine] of [['copies', 'override'], ['size', 'multiply'], ['tfX', 'sum']] as const) {
+    st().addAutomationTrack('s', key, key)
+    const id = st().tracks.s.childIds.at(-1)!
+    assert.equal(st().tracks[id].automationCombine, combine)
+  }
+  // The menu can pass numeric metadata's answer without importing component
+  // registries into ProjectStore (Grid's depth is a count, not a dimension).
+  st().addAutomationTrack('s', 'depth', 'Depth', { integer: true, combine: 'override' })
+  const id = st().tracks.s.childIds.at(-1)!
+  assert.equal(st().tracks[id].automationCombine, 'override')
+  st().setAutomationCombine(id, 'sum')
+  st().setAutomationTarget(id, 'size', 'Size', true)
+  assert.equal(st().tracks[id].automationCombine, 'sum')
+  st().remapAutomationTarget(id, [{ key: 'copies', label: 'Copies', integer: true }], true)
+  assert.equal(st().tracks[id].automationCombine, 'sum')
+  const expected = st().tracks.s.childIds.map(id => st().tracks[id].automationCombine)
+  hydrate(JSON.parse(JSON.stringify(serialize())))
+  assert.deepEqual(st().tracks.s.childIds.map(id => st().tracks[id].automationCombine), expected)
+})

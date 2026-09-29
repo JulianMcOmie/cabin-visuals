@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { Matrix4 } from 'three'
 import type { Block, Track } from '../../types'
 import { resolveProject, type ProjectSnapshot } from './resolve'
 import { resolveVisualCopies } from '../visualCopies/resolveVisualCopies'
+import { identityVisualCopy } from '../visualCopies/identityVisualCopy'
 
 // Child order routes spatial tf* automation (resolve.ts's weave step): a lane
 // ABOVE a splitter animates each copy in place (the splitter duplicates the
@@ -143,4 +145,122 @@ test('non-spatial lanes stay overlays wherever they sit', () => {
   const obj = resolveObj([opacity, instrument, gridChild('split', 2, 2)])
   assert.deepEqual(obj.automations.map((a) => a.param).sort(), ['size', 'tfOpacity'])
   assert.equal(obj.moverAndSplitterChain.length, 1)
+})
+
+test('duplicate spatial lanes in one chain slot combine in child order', () => {
+  const first = { ...rotLane('a', 'tfRotY', [{ pitch: 72, startBeat: 0 }]), automationCombine: 'sum' as const }
+  const last = { ...rotLane('b', 'tfRotY', [{ pitch: 60, startBeat: 0 }]), automationCombine: 'override' as const }
+  const obj = resolveObj([first, last, gridChild('split', 2, 2)])
+  assert.equal(obj.automations.length, 0)
+  assert.deepEqual(xBasis(resolveVisualCopies(obj.moverAndSplitterChain, 0)), [[1, 0, 0], [1, 0, 0]])
+  const reversed = resolveObj([last, first, gridChild('split', 2, 2)])
+  assert.deepEqual(xBasis(resolveVisualCopies(reversed.moverAndSplitterChain, 0)), [[0, 0, -1], [0, 0, -1]])
+})
+
+test('spatial automation declares one immutable local transform with exact apply parity', () => {
+  for (const param of ['tfX', 'tfY', 'tfZ', 'tfRotX', 'tfRotY', 'tfRotZ', 'tfSize']) {
+    const lane = rotLane('lane', param, [{ pitch: 36, startBeat: 0 }, { pitch: 72, startBeat: 4 }])
+    const obj = resolveObj([lane, gridChild('split', 2, 2)])
+    const entry = obj.moverAndSplitterChain.find(item => item.localTransformCount === 1)!
+    assert.ok(entry)
+    assert.equal(entry.localSlotMotion, true)
+    const input = identityVisualCopy()
+    input.transform.makeRotationZ(.4).setPosition(3, -4, 2)
+    for (const beat of [0, 2, 4, -1, 2, 0]) {
+      const [local] = entry.localTransformsAtBeat!(beat)
+      const before = local.elements.slice()
+      const expected = entry.apply(input, { beat, index: 10, count: 20 })[0].transform
+      assert.deepEqual(input.transform.clone().multiply(local).elements, expected.elements)
+      assert.deepEqual(local.elements, before)
+    }
+  }
+})
+
+test('automated shared parent appearance and slot-dependent child motion forward compact proofs', () => {
+  const obj = track({ id: 'obj', instrumentId: 'particle', childIds: ['split'] })
+  const split = track({ id: 'split', type: 'splitter', splitterId: 'approach', parentId: 'obj',
+    childIds: ['size', 'mover'], inputValues: { density: 4, speed: 3, size: 2 } })
+  const size = track({ id: 'size', type: 'automation', parentId: 'split', targetParam: 'size',
+    blocks: [keyframeBlock([{ pitch: 36, startBeat: 0 }, { pitch: 48, startBeat: 4 }])] })
+  for (const moverId of ['symmetricMotion', 'symmetricRotation']) {
+    const mover = track({ id: 'mover', type: 'mover', moverId, parentId: 'split', childIds: ['angle'],
+      inputValues: { mode: 2, motion: 1, twist: 31, fold: 21, angle: 1 } })
+    const angle = track({ id: 'angle', type: 'automation', parentId: 'mover', targetParam: 'angle',
+      blocks: [keyframeBlock([{ pitch: 40, startBeat: 0 }, { pitch: 50, startBeat: 4 }])] })
+    const graph = resolveProject({ tracks: { obj, split, size, mover, angle }, rootTrackIds: ['obj'], bpm: 120, beatsPerBar: 4 })
+    const [entry] = graph.objects[0].moverAndSplitterChain
+    assert.ok(entry.framedLocalTransformsAtBeat)
+    assert.equal(entry.framedLayoutUsesPlacement, true)
+    assert.ok(entry.structuralVariants!.every(variant => variant.framedLocalTransformsAtBeat))
+    const placement = new Matrix4().makeScale(2, 3, 4).setPosition(2, -3, 1)
+    for (const beat of [.7, 2, 4, -1, .7]) {
+      const compact = entry.framedLocalTransformsAtBeat(beat, placement)
+      const input = identityVisualCopy()
+      input.transform.makeRotationX(.3).setPosition(2, 1, -3)
+      input.opacity = .7; input.colorShift.hue = .2
+      const reference = entry.applyFramed!(input, { beat, index: 300, count: 1000, placementTransform: placement })
+      assert.equal(reference.length, compact.frames.length)
+      reference.forEach((copy, i) => {
+        const matrix = input.transform.clone().multiply(compact.frames[i])
+        matrix.elements.forEach((value, j) => assert.ok(Math.abs(value - copy.visualCopy.transform.elements[j]) < 1e-9))
+        assert.equal(copy.visualCopy.opacity, .7 * (compact.opacities?.[i] ?? 1))
+        assert.equal(copy.visualCopy.colorShift.hue, .2)
+        if (copy.internalTransform) compact.internals[i]!.elements.forEach((value, j) =>
+          assert.ok(Math.abs(value - copy.internalTransform!.elements[j]) < 1e-9))
+      })
+    }
+  }
+})
+
+test('a Radial rotation automation lane resolves to correlated compact frame metadata', () => {
+  const obj = track({ id: 'obj', instrumentId: 'particle', childIds: ['radial', 'after'] })
+  const radial = track({ id: 'radial', type: 'splitter', splitterId: 'radial', parentId: 'obj',
+    childIds: ['lane'], inputValues: { copies: 4, radius: 2, tilt: 23 } })
+  const lane = { ...rotLane('lane', 'tfRotY', [{ pitch: 60, startBeat: 0 }, { pitch: 84, startBeat: 4 }]), parentId: 'radial' }
+  const after = gridChild('after', 3, .5)
+  const graph = resolveProject({ tracks: { obj, radial, lane, after }, rootTrackIds: ['obj'], bpm: 120, beatsPerBar: 4 })
+  const chain = graph.objects[0].moverAndSplitterChain
+  assert.equal(chain.length, 2)
+  const entry = chain.find(item => item.framedLocalTransformsAtBeat)!
+  assert.ok(entry, 'nested TF rotation retains its count-one contract')
+  for (const beat of [0, 2, 4, -1, 2, 0]) {
+    const compact = entry.framedLocalTransformsAtBeat!(beat)
+    const reference = entry.applyFramed!(identityVisualCopy(), { beat, index: 0, count: 1 })
+    assert.equal(compact.frames.length, 4)
+    reference.forEach((copy, i) => {
+      const actual = compact.frames[i].clone().multiply(compact.internals[i] ?? new Matrix4())
+      const expected = copy.visualCopy.transform.clone().multiply(copy.internalTransform ?? new Matrix4())
+      actual.elements.forEach((value, j) => assert.ok(Math.abs(value - expected.elements[j]) < 1e-9))
+    })
+  }
+})
+
+test('automated nested Movers preserve count-one proof while parent Radial count MIDI changes', () => {
+  for (const motion of [0, 1, 2]) {
+    const obj = track({ id: 'obj', instrumentId: 'particle', childIds: ['radial'] })
+    const radial = track({ id: 'radial', type: 'splitter', splitterId: 'radial', parentId: 'obj',
+      childIds: ['mover'], inputValues: { copies: 4, radius: 2, tilt: 23 },
+      blocks: [keyframeBlock([{ pitch: 37, startBeat: 1 }, { pitch: 43, startBeat: 3 }])] })
+    const mover = track({ id: 'mover', type: 'mover', moverId: 'mover', parentId: 'radial',
+      childIds: ['angle'], inputValues: { motion, mode: 1 } })
+    const angle = track({ id: 'angle', type: 'automation', parentId: 'mover', targetParam: 'angleZ',
+      blocks: [keyframeBlock([{ pitch: 36, startBeat: 0 }, { pitch: 60, startBeat: 4 }])] })
+    const graph = resolveProject({ tracks: { obj, radial, mover, angle }, rootTrackIds: ['obj'], bpm: 120, beatsPerBar: 4 })
+    const [entry] = graph.objects[0].moverAndSplitterChain
+    assert.ok(entry.framedLocalTransformsAtBeat)
+    assert.ok(entry.structuralVariants?.every(variant => variant.framedLocalTransformsAtBeat))
+    for (const beat of [0, 2, 4, -1, 2, 0]) {
+      const compact = entry.framedLocalTransformsAtBeat!(beat)
+      assert.equal(compact.frames.length, beat === 2 ? 2 : beat === 4 ? 8 : 4)
+      const reference = entry.applyFramed!(identityVisualCopy(), { beat, index: 0, count: 1 })
+      reference.forEach((copy, index) => {
+        assert.deepEqual(compact.frames[index].elements, copy.visualCopy.transform.elements)
+        assert.equal(!!compact.internals[index], !!copy.internalTransform)
+        compact.internals[index]?.elements.forEach((value, i) => {
+          assert.ok(Math.abs(value - copy.internalTransform!.elements[i]) < 1e-12,
+            'affine metadata differs only by inverse roundoff')
+        })
+      })
+    }
+  }
 })

@@ -47,7 +47,11 @@
 
 import { Matrix4 } from 'three'
 import { warpChainBeat } from './resolveVisualCopies'
-import type { FramedVisualCopy, MoverOrSplitter, MoverOrSplitterContext, VisualCopy } from './types'
+import { identityVisualCopy } from './identityVisualCopy'
+import { memoByBeat } from './beatMemo'
+import { withCopyEvaluation } from './evaluationMemo'
+import { entryMaxOutputCount } from './maxOutputCount'
+import type { FramedLocalTransforms, FramedVisualCopy, MoverOrSplitter, MoverOrSplitterContext, SharedLocalLayout, VisualCopy } from './types'
 
 /** A child result still tied to the parent slot whose frame it moves: `copy`'s
  *  transform is the slot's transform in the splitter's frame with every child
@@ -58,10 +62,71 @@ interface SlotLocalCopy {
 }
 
 const DEGENERATE_DETERMINANT = 1e-12
+// Recursive appearance programs currently share a flattened local subtree.
+// Bound its construction before sampling: outer occurrences share this table,
+// but arbitrary nested products must not silently materialize on the CPU.
+const MAX_RECURSIVE_LOCAL_SLOTS = 4096
 
 function isDegenerate(transform: Matrix4): boolean {
   const determinant = transform.determinant()
   return !Number.isFinite(determinant) || Math.abs(determinant) < DEGENERATE_DETERMINANT
+}
+
+/** These are semantic guarantees, not single-beat probes. In particular a
+ * count lane that happens to have one slot now is not a count-neutral child. */
+function plainLocalLayout(entry: MoverOrSplitter): boolean {
+  const legacy = !!(entry.localTransforms || entry.localTransformsAtBeat)
+  const shared = !!(entry.localLayout || entry.localLayoutAtBeat)
+  return legacy !== shared
+    && !entry.rootTransform && !entry.rootTransformAtBeat && !entry.framedLocalTransformsAtBeat && !entry.gpuOperationAtBeat
+    && !entry.applyFramed && !entry.emitsCopyClocks
+    && (entry.structuralVariants?.every(plainLocalLayout) ?? true)
+}
+
+function localSlotCountOne(entry: MoverOrSplitter): boolean {
+  if (entry.applyFramed || entry.emitsCopyClocks || entry.framedLocalTransformsAtBeat) return false
+  if (entry.localSlotMotion) return entry.structuralVariants?.every(localSlotCountOne) ?? true
+  const root = !!(entry.rootTransform || entry.rootTransformAtBeat)
+  const local = !!(entry.localTransforms || entry.localTransformsAtBeat)
+  const shared = !!(entry.localLayout || entry.localLayoutAtBeat)
+  const count = entry.localTransformsAtBeat ? entry.localTransformCount : entry.localTransforms?.length
+  const sharedCount = entry.localLayoutAtBeat ? entry.localLayoutCount : entry.localLayout?.transforms.length
+  return Number(root) + Number(local) + Number(shared) === 1
+    && (root || (local && count === 1) || (shared && sharedCount === 1 && !entry.localLayoutUsesPlacement))
+    && (entry.structuralVariants?.every(localSlotCountOne) ?? true)
+}
+
+function gpuAppearanceChild(entry: MoverOrSplitter): boolean {
+  return !!entry.gpuAppearanceOnly && !!entry.gpuOperationAtBeat
+    && !entry.applyFramed && !entry.emitsCopyClocks && !entry.framedLocalTransformsAtBeat
+    && !entry.localTransforms && !entry.localTransformsAtBeat
+    && !entry.localLayout && !entry.localLayoutAtBeat && !entry.rootTransform && !entry.rootTransformAtBeat
+    && (entry.structuralVariants?.every(gpuAppearanceChild) ?? true)
+}
+
+type AppearanceStage = NonNullable<FramedLocalTransforms['appearanceStages']>[number]
+type CapturedAppearance = {
+  operation: AppearanceStage['operation']
+  sampleFrames: Matrix4[]
+  inputIndices: number[]
+  inputCount: number
+  active: number[]
+}
+
+function recursiveLocalChild(entry: MoverOrSplitter): boolean {
+  if (entryMaxOutputCount(entry) === undefined) return false
+  const framed = !!entry.framedLocalTransformsAtBeat && !!entry.applyFramed
+    && entry.framedTransformUsesPlacement === false && !entry.emitsCopyClocks
+    && !entry.localTransforms && !entry.localTransformsAtBeat && !entry.localLayout && !entry.localLayoutAtBeat
+    && !entry.rootTransform && !entry.rootTransformAtBeat && !entry.gpuOperationAtBeat
+  const local = plainLocalLayout(entry) && !entry.localLayoutUsesPlacement
+  return (framed || local) && (entry.structuralVariants?.every(variant =>
+    recursiveLocalChild(variant) || localSlotCountOne(variant) || gpuAppearanceChild(variant)) ?? true)
+}
+
+function parentLayout(entry: MoverOrSplitter, beat: number, placement?: Matrix4): SharedLocalLayout {
+  return entry.localLayoutAtBeat?.(beat, placement) ?? entry.localLayout
+    ?? { transforms: entry.localTransformsAtBeat?.(beat) ?? entry.localTransforms! }
 }
 
 /**
@@ -74,6 +139,7 @@ export function splitterWithChildChain(
   children: MoverOrSplitter[],
 ): MoverOrSplitter {
   if (children.length === 0) return splitter
+  const hasLocalParent = plainLocalLayout(splitter)
 
   /** The shared evaluation: the splitter's slots, and per output the slot's
    *  transform in the splitter's frame with the child chain's deltas
@@ -84,10 +150,11 @@ export function splitterWithChildChain(
    *  lane or a nested child must not silently lose its offsets) - the child
    *  chain itself still runs at the incoming beat, since children are internal
    *  to the device rather than below it. */
-  function evaluate(visualCopy: VisualCopy, context: MoverOrSplitterContext): {
+  function evaluate(visualCopy: VisualCopy, context: MoverOrSplitterContext, framed = false, appearanceStages?: CapturedAppearance[]): {
     slots: VisualCopy[]
     slotTimes: readonly FramedVisualCopy[] | null
     outputs: SlotLocalCopy[] | null
+    slotInverses: (Matrix4 | null)[] | null
   } {
     const framedSlots = splitter.applyFramed?.call(splitter, visualCopy, context)
     // A raw definition's applyFramed never carries an internalTransform (only
@@ -102,10 +169,17 @@ export function splitterWithChildChain(
         : framed.visualCopy)
       : splitter.apply(visualCopy, context)
     const slotTimes = framedSlots ?? null
-    if (slots.length === 0) return { slots, slotTimes, outputs: [] }
+    if (slots.length === 0) return { slots, slotTimes, outputs: [], slotInverses: null }
     const previous = visualCopy.transform
-    if (isDegenerate(previous)) return { slots, slotTimes, outputs: null }
-    const previousInverse = previous.clone().invert()
+    if (isDegenerate(previous)) return { slots, slotTimes, outputs: null, slotInverses: null }
+    const declaredLocals = hasLocalParent
+      ? parentLayout(splitter, context.beat, context.placementTransform).transforms : undefined
+    const exactLocals = declaredLocals?.length === slots.length ? declaredLocals : undefined
+    // A proven local layout already owns S_i. Reconstructing it as P^-1(P S_i)
+    // introduces cancellation and can flip the singular-slot guard near 1e-12
+    // as an unrelated upstream frame rotates. Use its exact declared matrix;
+    // unproven parents keep the generic extraction and its existing semantics.
+    const previousInverse = exactLocals ? null : previous.clone().invert()
     // The splitter's frame in the world: the object's placement composed with
     // everything above the splitter in the chain. World-placed children
     // conjugate their world deltas through it, so the motion they add lands
@@ -113,45 +187,145 @@ export function splitterWithChildChain(
     const childPlacement = context.placementTransform
       ? context.placementTransform.clone().multiply(previous)
       : previous.clone()
-    let locals: SlotLocalCopy[] = slots.map((slot, index) => ({
-      copy: {
-        transform: previousInverse.clone().multiply(slot.transform),
-        opacity: slot.opacity,
-        colorShift: { ...slot.colorShift },
-      },
-      slot: index,
-    }))
+    // Every descendant of a slot uses the same frame inverse. Keep it once
+    // per slot, before the children fan out, rather than invert it per output.
+    // The immediate-fold path does not need this separate frame at all.
+    const slotInverses = framed ? new Array<Matrix4 | null>(slots.length) : null
+    let locals: SlotLocalCopy[] = slots.map((slot, index) => {
+      const transform = exactLocals ? exactLocals[index].clone() : previousInverse!.clone().multiply(slot.transform)
+      if (slotInverses) slotInverses[index] = isDegenerate(transform) ? null : transform.clone().invert()
+      return {
+        copy: { transform, opacity: slot.opacity, colorShift: { ...slot.colorShift } },
+        slot: index,
+      }
+    })
     for (const child of children) {
+      const captureAppearance = !!appearanceStages && gpuAppearanceChild(child)
+      if (captureAppearance) appearanceStages!.push({
+        operation: child.gpuOperationAtBeat!(context.beat),
+        sampleFrames: locals.map(local => local.copy.transform.clone()),
+        inputIndices: locals.map((_, index) => index), inputCount: locals.length,
+        active: locals.map(() => 1),
+      })
+      const captureNested = !!appearanceStages && !localSlotCountOne(child) && recursiveLocalChild(child)
+      const nestedFrame = captureNested ? child.framedLocalTransformsAtBeat?.(context.beat) : undefined
+      const nestedLayout = captureNested && !nestedFrame ? parentLayout(child, context.beat) : undefined
+      const lifted: CapturedAppearance[] = (nestedFrame?.appearanceStages ?? []).map(stage => ({
+        operation: stage.operation, sampleFrames: [], inputIndices: [], active: [],
+        inputCount: stage.inputCount ?? nestedFrame!.frames.length,
+      }))
       const count = locals.length
       const formation = locals.map((local) => local.copy)
       const anchored = child.composition === 'chainRoot'
-      locals = locals.flatMap(({ copy, slot }, index) => {
+      const next: SlotLocalCopy[] = []
+      const outputInputs: number[] = []
+      const childContext: MoverOrSplitterContext = {
+        beat: context.beat, index: 0, count, formation, placementTransform: childPlacement,
+      }
+      const incomingInverse = anchored ? null : new Matrix4()
+      for (let index = 0; index < count; index++) {
+        const { copy, slot } = locals[index]
         const incoming = copy.transform
-        return child
-          .apply(copy, {
-            beat: context.beat,
-            index,
-            count,
-            formation,
-            placementTransform: childPlacement,
-          })
-          .map((result) => {
-            // Chain-root deltas are already anchored on the splitter frame's
-            // axes; LOCAL deltas are re-anchored about the splitter's origin
-            // (t⁻¹·out·t) so e.g. a rotation orbits the formation. A
-            // degenerate incoming transform (Approach's scale-zero slots) has
-            // nothing to re-anchor against; the copy is invisible anyway.
-            const transform = anchored || isDegenerate(incoming)
-              ? result.transform
-              : incoming.clone().invert().multiply(result.transform).multiply(incoming)
-            return { copy: { ...result, transform }, slot }
-          })
-      })
+        childContext.index = index
+        // The appearance interpreter runs later at the actual incoming parent
+        // frame, not at this identity proof sample. Still perform the original
+        // anchoring arithmetic for its unchanged transform: cancellation near
+        // a singular slot can affect the next child's branch.
+        const nestedActive = !isDegenerate(incoming)
+        const nestedTable = nestedFrame ? (nestedActive ? nestedFrame.frames : nestedFrame.bareFrames) : nestedLayout?.transforms
+        const nestedOpacities = nestedFrame ? (nestedActive ? nestedFrame.opacities : nestedFrame.bareOpacities) : nestedLayout?.opacities
+        const nestedHues = nestedFrame ? (nestedActive ? nestedFrame.hueShifts : nestedFrame.bareHueShifts) : nestedLayout?.hueShifts
+        const results = captureAppearance ? [copy] : nestedTable ? nestedTable.map((matrix, slot) => {
+          const transform = incoming.clone().multiply(matrix)
+          if (nestedActive && nestedFrame?.internals[slot]) transform.multiply(nestedFrame.internals[slot]!)
+          return { transform, opacity: copy.opacity * (nestedOpacities?.[slot] ?? 1),
+            colorShift: { ...copy.colorShift, hue: copy.colorShift.hue + (nestedHues?.[slot] ?? 0) } }
+        }) : child.apply(copy, childContext)
+        // A local child can emit many outputs from one input. Its anchoring
+        // inverse and singularity are properties of that input, not each output.
+        const reanchor = incomingInverse && results.length > 0 && !isDegenerate(incoming)
+        if (reanchor) incomingInverse.copy(incoming).invert()
+        for (let resultIndex = 0; resultIndex < results.length; resultIndex++) {
+          const result = results[resultIndex]
+          // Chain-root deltas are already anchored on the splitter frame's
+          // axes; LOCAL deltas are re-anchored about the splitter's origin
+          // (t⁻¹·out·t) so e.g. a rotation orbits the formation. A
+          // degenerate incoming transform (Approach's scale-zero slots) has
+          // nothing to re-anchor against; the copy is invisible anyway.
+          const transform = reanchor
+            ? incomingInverse!.clone().multiply(result.transform).multiply(incoming)
+            : result.transform
+          next.push({ copy: { ...result, transform }, slot })
+          outputInputs.push(index)
+          for (let stageIndex = 0; stageIndex < lifted.length; stageIndex++) {
+            const source = nestedFrame!.appearanceStages![stageIndex], target = lifted[stageIndex]
+            const active = nestedActive && (source.active?.[resultIndex] ?? 1) === 1
+            target.active.push(active ? 1 : 0)
+            target.sampleFrames.push(active ? incoming.clone().multiply(source.sampleFrames[resultIndex]) : new Matrix4())
+            target.inputIndices.push(active ? source.inputIndices?.[resultIndex] ?? resultIndex : 0)
+          }
+        }
+      }
+      if (appearanceStages) {
+        // Earlier color stages keep their original domains when this child
+        // fans out. Each descendant inherits the ancestor's sample and index.
+        for (const stage of appearanceStages) {
+          stage.sampleFrames = outputInputs.map(index => stage.sampleFrames[index])
+          stage.inputIndices = outputInputs.map(index => stage.inputIndices[index])
+          stage.active = outputInputs.map(index => stage.active[index])
+        }
+        appearanceStages.push(...lifted)
+      }
+      locals = next
     }
-    return { slots, slotTimes, outputs: locals }
+    return { slots, slotTimes, outputs: locals, slotInverses }
+  }
+
+  function framedCopies(visualCopy: VisualCopy, context: MoverOrSplitterContext, appearanceStages?: CapturedAppearance[]): FramedVisualCopy[] {
+    const { slots, slotTimes, outputs, slotInverses } = evaluate(visualCopy, context, true, appearanceStages)
+    // The parent slot's TIME channel rides every output derived from it - a
+    // child splitter's fan-out inherits its slot's clock, as the kernel
+    // would have it inherit down a chain.
+    const timeOf = (slot: number): Pick<FramedVisualCopy, 'beatOffset' | 'birthBeat'> | null => {
+      const time = slotTimes?.[slot]
+      if (!time || (time.beatOffset === undefined && time.birthBeat === undefined)) return null
+      return { beatOffset: time.beatOffset, birthBeat: time.birthBeat }
+    }
+    if (!outputs) return slots.map((copy, slot) => ({ visualCopy: copy, ...timeOf(slot) }))
+    return outputs.map(({ copy, slot }): FramedVisualCopy => {
+      const frame = slots[slot].transform
+      const slotInverse = slotInverses![slot]
+      // The frame is the splitter's own unmoved output; the child deltas
+      // become internal motion, re-expressed inside the slot's frame:
+      // frame · internal = prev · deltas · slot. A degenerate SLOT
+      // (Approach grows copies from scale zero) has no inverse to split
+      // against, so that copy folds immediately - invisible at scale zero.
+      if (!slotInverse) {
+        return {
+          visualCopy: {
+            transform: visualCopy.transform.clone().multiply(copy.transform),
+            opacity: copy.opacity,
+            colorShift: copy.colorShift,
+          },
+          ...timeOf(slot),
+        }
+      }
+      return {
+        visualCopy: {
+          transform: frame.clone(),
+          opacity: copy.opacity,
+          colorShift: copy.colorShift,
+        },
+        internalTransform: slotInverse.clone().multiply(copy.transform),
+        ...timeOf(slot),
+      }
+    })
   }
 
   const wrapper: MoverOrSplitter = {
+    cachePolicy: splitter.cachePolicy === 'static' && !splitter.emitsCopyClocks
+      && children.every((child) => child.cachePolicy === 'static' && !child.emitsCopyClocks)
+      ? 'static' : undefined,
     apply(visualCopy, context) {
       // The immediate fold: time fields drop here exactly as the emitting
       // definition's own `apply` drops them - unobservable as a last entry.
@@ -163,47 +337,7 @@ export function splitterWithChildChain(
         colorShift: copy.colorShift,
       }))
     },
-    applyFramed(visualCopy, context) {
-      const { slots, slotTimes, outputs } = evaluate(visualCopy, context)
-      // The parent slot's TIME channel rides every output derived from it - a
-      // child splitter's fan-out inherits its slot's clock, as the kernel
-      // would have it inherit down a chain.
-      const timeOf = (slot: number): Pick<FramedVisualCopy, 'beatOffset' | 'birthBeat'> | null => {
-        const time = slotTimes?.[slot]
-        if (!time || (time.beatOffset === undefined && time.birthBeat === undefined)) return null
-        return { beatOffset: time.beatOffset, birthBeat: time.birthBeat }
-      }
-      if (!outputs) return slots.map((copy, slot) => ({ visualCopy: copy, ...timeOf(slot) }))
-      const previousInverse = visualCopy.transform.clone().invert()
-      return outputs.map(({ copy, slot }): FramedVisualCopy => {
-        const frame = slots[slot].transform
-        const slotLocal = previousInverse.clone().multiply(frame)
-        // The frame is the splitter's own unmoved output; the child deltas
-        // become internal motion, re-expressed inside the slot's frame:
-        // frame · internal = prev · deltas · slot. A degenerate SLOT
-        // (Approach grows copies from scale zero) has no inverse to split
-        // against, so that copy folds immediately - invisible at scale zero.
-        if (isDegenerate(slotLocal)) {
-          return {
-            visualCopy: {
-              transform: visualCopy.transform.clone().multiply(copy.transform),
-              opacity: copy.opacity,
-              colorShift: copy.colorShift,
-            },
-            ...timeOf(slot),
-          }
-        }
-        return {
-          visualCopy: {
-            transform: frame.clone(),
-            opacity: copy.opacity,
-            colorShift: copy.colorShift,
-          },
-          internalTransform: slotLocal.clone().invert().multiply(copy.transform),
-          ...timeOf(slot),
-        }
-      })
-    },
+    applyFramed: framedCopies,
   }
   // A time remap is object-wide wherever it sits, so a Freeze child of a
   // splitter must still reach computeAtBeat; deltas sum, same as a chain.
@@ -213,6 +347,14 @@ export function splitterWithChildChain(
   // The wrapped splitter's clocks ride this wrapper's applyFramed (slotTimes),
   // so the structural declaration must ride with them.
   if (splitter.emitsCopyClocks) wrapper.emitsCopyClocks = true
+  const parentBound = entryMaxOutputCount(splitter)
+  const childBounds = children.map(entryMaxOutputCount)
+  if (parentBound !== undefined && childBounds.every((count): count is number => count !== undefined)) {
+    // A singular incoming frame skips every child. Even a child that emits
+    // zero results therefore cannot reduce the upper bound below bare slots.
+    const bound = parentBound * Math.max(1, childBounds.reduce((product, count) => product * count, 1))
+    if (Number.isSafeInteger(bound)) wrapper.maxOutputCount = bound
+  }
   // A child splitter (or an automated child) changes the copy count, so the
   // structural probe needs the composed entry at every variant rank - unlike
   // frames, which never change counts and skip their wrapper.
@@ -227,6 +369,71 @@ export function splitterWithChildChain(
         children.map((child) => child.structuralVariants?.[rank] ?? child),
       ),
     )
+  }
+  const recursiveFanout = children.some(child => !localSlotCountOne(child) && !gpuAppearanceChild(child))
+  const boundedRecursiveTable = !recursiveFanout || (wrapper.maxOutputCount !== undefined
+    && wrapper.maxOutputCount <= MAX_RECURSIVE_LOCAL_SLOTS)
+  if (hasLocalParent && boundedRecursiveTable
+    && children.every(child => localSlotCountOne(child) || gpuAppearanceChild(child) || recursiveLocalChild(child))) {
+    if (recursiveFanout) wrapper.framedRequiresInvertibleInput = true
+    wrapper.framedTransformUsesPlacement = !!splitter.localLayoutUsesPlacement
+    // Identity sampling is bounded by this splitter's local subtree. It deliberately
+    // uses the reference anchoring path: a child Orbit's root-transform proof
+    // does not change its existing composition declaration or nested semantics.
+    const sample = (beat: number, placementTransform?: Matrix4) => withCopyEvaluation(() => {
+      const bare = parentLayout(splitter, beat, placementTransform)
+      const appearanceStages: CapturedAppearance[] = []
+      const framed = framedCopies(identityVisualCopy(), { beat, index: 0, count: 1, placementTransform }, appearanceStages)
+      // Matrix4.invert can round the homogeneous identity to 1 +/- epsilon.
+      // These declared layouts/motions are affine; canonicalize only that
+      // inversion noise in the sampled metadata, leaving the reference path
+      // and any genuinely non-affine matrix untouched.
+      const affineSample = (matrix: Matrix4) => {
+        const e = matrix.elements
+        if (e[3] !== 0 || e[7] !== 0 || e[11] !== 0 || Math.abs(e[15] - 1) > 64 * Number.EPSILON) return matrix
+        if (e[15] === 1) return matrix
+        const result = matrix.clone()
+        result.elements[15] = 1
+        return result
+      }
+      const opacities = framed.map(copy => copy.visualCopy.opacity)
+      const hueShifts = framed.map(copy => copy.visualCopy.colorShift.hue)
+      return {
+        ...(recursiveFanout ? { requiresInvertibleInput: true as const } : {}),
+        frames: framed.map(copy => affineSample(copy.visualCopy.transform)),
+        internals: framed.map(copy => copy.internalTransform ? affineSample(copy.internalTransform) : null),
+        bareFrames: bare.transforms,
+        ...(appearanceStages.length ? { appearanceStages: appearanceStages.map(stage => ({
+          ...stage, sampleFrames: stage.sampleFrames.map(affineSample),
+        })) } : {}),
+        // Shared count-one children may multiply opacity or add hue. Those
+        // operations compose immediately; a degenerate incoming frame keeps
+        // only the parent's original appearance and skips every child.
+        ...(opacities.some(value => value !== 1) ? { opacities } : {}),
+        ...(hueShifts.some(value => value !== 0) ? { hueShifts } : {}),
+        ...(bare.opacities ? { bareOpacities: bare.opacities } : {}),
+        ...(bare.hueShifts ? { bareHueShifts: bare.hueShifts } : {}),
+      }
+    })
+    if (splitter.localLayoutUsesPlacement || children.some(child =>
+      child.gpuAppearanceOnly && child.gpuOperationUsesPlacement || child.framedLayoutUsesPlacement)) {
+      wrapper.framedLayoutUsesPlacement = true
+      // A camera-facing local layout may change when object placement changes
+      // at a paused beat. Keep one immutable sample and compare matrix values,
+      // because callers may edit the same Matrix4 instance in place.
+      let cached: { beat: number; placement?: number[]; layout: FramedLocalTransforms } | undefined
+      wrapper.framedLocalTransformsAtBeat = (beat, placement) => {
+        const elements = placement?.elements
+        if (!cached || !Object.is(cached.beat, beat)
+          || (elements ? !cached.placement || elements.some((value, i) => !Object.is(value, cached!.placement![i]))
+            : cached.placement !== undefined)) {
+          cached = { beat, placement: elements?.slice(), layout: sample(beat, placement) }
+        }
+        return cached.layout
+      }
+    } else {
+      wrapper.framedLocalTransformsAtBeat = memoByBeat(sample)
+    }
   }
   return wrapper
 }

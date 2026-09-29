@@ -25,7 +25,7 @@ export function PreviewWindow({ height = 148, rounded = false, title, testId, cl
       data-testid={testId}
       title={title}
       style={{ height }}
-      className={`relative overflow-hidden border-b border-white/[0.06] bg-[#05070c] ${rounded ? 'rounded-t-[9px]' : ''} ${className}`}
+      className={`relative overflow-hidden border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[var(--bg-canvas-deep)] ${rounded ? 'rounded-t-[9px]' : ''} ${className}`}
     >
       {children}
     </div>

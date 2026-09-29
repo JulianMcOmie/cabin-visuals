@@ -57,14 +57,14 @@ test('a target the new parent has is left untouched', () => {
   assert.equal(st().tracks.l, before, 'no write at all')
 })
 
-test('a param a sibling lane already drives counts as unavailable', () => {
+test('a param a sibling lane already drives remains available', () => {
   seed()
   st().addTrack(lane('m', 'b', 'tfX'))
   st().setTrackParent('m', 'b')
   st().setTrackParent('l', 'b')
   st().remapAutomationTarget('l', B_TARGETS, false)
-  // tfX is taken by sibling m - the fallback lands on the next free option.
-  assert.equal(st().tracks.l.targetParam, 'other')
+  // Duplicate targets are valid even after dragging to a new parent.
+  assert.equal(st().tracks.l.targetParam, 'tfX')
   assert.equal(st().tracks.l.name, 'l', 'rename=false keeps the custom name')
 })
 

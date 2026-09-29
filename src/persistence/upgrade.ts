@@ -21,7 +21,7 @@ import type { AudioClip } from '../editor/store/AudioStore'
 const LEGACY_SCENE_BACKGROUND = '#000000'
 
 /** Bump when the document shape changes, and append the matching step below. */
-export const CURRENT_VERSION = 20
+export const CURRENT_VERSION = 23
 
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
@@ -833,6 +833,173 @@ UPGRADES[19] = (raw) => {
     )),
     audioTracks: preserve(doc.audioTracks ?? {}),
   }
+}
+
+// v20 → v21: Glow v2 intentionally replaces the old disk-blur aesthetic.
+// Keep automation identity and remap its renamed keys; source brightness stays
+// independent of the halo. Legacy size was 0..1, new radius is authored pixels.
+UPGRADES[20] = (raw) => {
+  const doc = raw as unknown as ProjectDocument
+  const migrate = (tracks: Record<string, Track>) => {
+    const glowIds = new Set(Object.values(tracks).flatMap(t => (t.effects ?? []).filter(e => e.pluginId === 'glow').map(e => e.id)))
+    return Object.fromEntries(Object.entries(tracks).map(([id, track]) => {
+      let targetParam = track.targetParam
+      let automationRange = track.automationRange
+      if (targetParam?.startsWith('fx:')) {
+        const sep = targetParam.lastIndexOf(':')
+        if (glowIds.has(targetParam.slice(3, sep))) {
+          const key = targetParam.slice(sep + 1)
+          if (key === 'amount') { targetParam = targetParam.slice(0, sep + 1) + 'strength'; automationRange = { min: 0, max: 3, ...automationRange } }
+          if (key === 'size') {
+            targetParam = targetParam.slice(0, sep + 1) + 'radius'
+            const radius = (v: number) => 6 + 84 * Math.max(0, Math.min(1, v)) ** 2
+            automationRange = { ...automationRange, min: radius(automationRange?.min ?? 0), max: radius(automationRange?.max ?? 1) }
+          }
+        }
+      }
+      if (!track.effects?.some(e => e.pluginId === 'glow') && targetParam === track.targetParam && automationRange === track.automationRange) return [id, track]
+      return [id, { ...track, ...(targetParam ? { targetParam } : {}), ...(automationRange ? { automationRange } : {}), effects: track.effects?.map(e => {
+        if (e.pluginId !== 'glow') return e
+        const { amount = .8, size = .35, ...rest } = e.settings
+        return { ...e, settings: { strength: amount, radius: 6 + 84 * size * size, spread: .4, source: 0, threshold: .35, softness: .35, tintMix: 0, tintHue: 220, tintSaturation: .8, coreBrightness: 1, coreWhite: 0, stretch: 1, angle: 0, ...rest } }
+      }) }]
+    }))
+  }
+  return { ...raw, scenes: Object.fromEntries(Object.entries(doc.scenes).map(([id, scene]) => [id, { ...scene, tracks: migrate(scene.tracks) }])), audioTracks: migrate(doc.audioTracks ?? {}) }
+}
+
+// v21 → v22: retire Mod Synth. Keep the track and its authored arrangement as
+// a basic cube, instead of leaving an unknown instrument that renders nothing.
+// Independent voice envelopes have no equivalent on 3D Shape and are dropped.
+// Strip abandoned racks/wardrobe entries even after a prior instrument swap.
+UPGRADES[21] = (raw) => {
+  const doc = raw as unknown as ProjectDocument
+  const migrate = (tracks: Record<string, Track>) => Object.fromEntries(
+    Object.entries(tracks).map(([id, track]) => {
+      const legacy = track as Track & { synthMods?: unknown }
+      const retired = track.instrumentId === 'modSynth'
+      if (!retired && !('synthMods' in legacy) && !track.paramsByInstrument?.modSynth) return [id, track]
+      const { synthMods: _rack, ...next } = legacy
+      if (next.paramsByInstrument?.modSynth) {
+        const { modSynth: _stash, ...kept } = next.paramsByInstrument
+        if (Object.keys(kept).length) next.paramsByInstrument = kept
+        else delete next.paramsByInstrument
+      }
+      if (retired) {
+        next.instrumentId = 'cube'
+        if (next.name === 'Mod Synth') next.name = '3D Shape'
+        const { color, ...strings } = next.stringParams ?? {}
+        next.stringParams = { ...strings, geometry: 'cube', baseColor: color || '#f5b455' }
+        next.params = { ...next.params, size: next.params?.size ?? 1 }
+      }
+      return [id, next]
+    }),
+  )
+  return {
+    ...raw,
+    scenes: Object.fromEntries(Object.entries(doc.scenes).map(([id, scene]) =>
+      [id, { ...scene, tracks: migrate(scene.tracks) }],
+    )),
+    audioTracks: migrate(doc.audioTracks ?? {}),
+  }
+}
+
+// v22 → v23: scenes no longer start with a light rig. Remove only complete,
+// unchanged seeded groups; any authored settings, children or incoming routing
+// keep the whole rig. These literals are frozen independently of live defaults.
+UPGRADES[22] = (raw) => {
+  const doc = raw as unknown as ProjectDocument
+  interface SeedLight {
+    name: string
+    color: string
+    params: Record<string, number>
+    stringParams?: Record<string, string>
+  }
+
+  const seeds: SeedLight[] = [
+    {
+      // <ambientLight intensity={0.12}> + <hemisphereLight #dbeafe/#170921 0.55>
+      name: 'Ambience',
+      color: '#93c5fd',
+      params: { type: 3, intensity: 0.55, flat: 0.12, bulb: 0 },
+      stringParams: { color: '#dbeafe', groundColor: '#170921' },
+    },
+    {
+      // The shadow-casting key: <directionalLight [4,7,5] intensity 2.4>
+      name: 'Key Light',
+      color: '#fde68a',
+      params: { type: 2, intensity: 2.4, castShadow: 1, bulb: 0, tfX: 4, tfY: 7, tfZ: 5 },
+      stringParams: { color: '#ffffff' },
+    },
+    {
+      // <rectAreaLight [4,4,5] rot [-0.62, 0.62, 0]rad #fff7ed intensity 6, 5x5>
+      name: 'Fill Panel',
+      color: '#fed7aa',
+      params: {
+        type: 4, intensity: 6, width: 5, height: 5, bulb: 0,
+        tfX: 4, tfY: 4, tfZ: 5, tfRotX: -35.52, tfRotY: 35.52,
+      },
+      stringParams: { color: '#fff7ed' },
+    },
+    {
+      // <pointLight [-4,2,-3] #60a5fa intensity 7 distance 20 decay 2>
+      name: 'Cool Fill',
+      color: '#60a5fa',
+      params: { type: 0, intensity: 7, distance: 20, decay: 2, bulb: 0, tfX: -4, tfY: 2, tfZ: -3 },
+      stringParams: { color: '#60a5fa' },
+    },
+    {
+      // <pointLight [3,-1,3] #fb7185 intensity 3.5 distance 16 decay 2>
+      name: 'Warm Rim',
+      color: '#fb7185',
+      params: { type: 0, intensity: 3.5, distance: 16, decay: 2, bulb: 0, tfX: 3, tfY: -1, tfZ: 3 },
+      stringParams: { color: '#fb7185' },
+    },
+  ]
+
+  const same = (a: unknown, b: unknown): boolean => {
+    if (a === b) return true
+    if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false
+    if (Array.isArray(a) !== Array.isArray(b)) return false
+    const left = Object.entries(a).filter(([, value]) => value !== undefined)
+    const right = Object.entries(b).filter(([, value]) => value !== undefined)
+    return left.length === right.length && left.every(([key, value]) =>
+      Object.hasOwn(b, key) && same(value, (b as Record<string, unknown>)[key]),
+    )
+  }
+  const scenes = Object.fromEntries(Object.entries(doc.scenes).map(([sceneId, scene]) => {
+    if (scene.isMain) return [sceneId, scene]
+    const removed = new Set<string>()
+    for (const groupId of scene.rootTrackIds) {
+      const group = scene.tracks[groupId]
+      if (!group || group.childIds.length !== seeds.length) continue
+      if (!same(group, {
+        id: groupId, name: 'Lighting', type: 'group', instrumentId: '',
+        color: '#eab308', muted: false, solo: false, blocks: [], childIds: group.childIds,
+      })) continue
+      const unchanged = seeds.every((seed, i) => same(scene.tracks[group.childIds[i]], {
+        id: group.childIds[i], name: seed.name, type: 'base', instrumentId: 'light',
+        params: seed.params, stringParams: seed.stringParams, color: seed.color,
+        muted: false, solo: false, blocks: [], parentId: groupId, childIds: [],
+      }))
+      if (!unchanged) continue
+      const ids = new Set([groupId, ...group.childIds])
+      const referenced = Object.values(scene.tracks).some((track) => !ids.has(track.id) && (
+        (track.parentId && ids.has(track.parentId))
+        || track.childIds.some((id) => ids.has(id))
+        || track.targets?.some((target) => target.scope.kind !== 'tag' && ids.has(target.scope.id))
+        || track.switcherBindings?.some((binding) => ids.has(binding.childTrackId))
+      )) || scene.sceneTrackChildIds?.some((id) => ids.has(id))
+      if (!referenced) for (const id of ids) removed.add(id)
+    }
+    if (!removed.size) return [sceneId, scene]
+    return [sceneId, {
+      ...scene,
+      tracks: Object.fromEntries(Object.entries(scene.tracks).filter(([id]) => !removed.has(id))),
+      rootTrackIds: scene.rootTrackIds.filter((id) => !removed.has(id)),
+    }]
+  }))
+  return { ...raw, scenes }
 }
 
 /**

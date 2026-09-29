@@ -21,6 +21,7 @@ import { framedMoverOrSplitter } from '../visualCopies/moverFrame'
 import { splitterWithChildChain } from '../visualCopies/splitterChildChain'
 import type { MoverOrSplitter } from '../visualCopies/types'
 import { structuralCopyCount } from '../visualCopies/resolveVisualCopies'
+import { memoizeEvaluation } from '../visualCopies/evaluationMemo'
 import { gatedMoverOrSplitter } from '../visualCopies/copyTargets'
 import { bypassGated } from '../visualCopies/bypass'
 import {
@@ -124,7 +125,7 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     // Burst mode: the notes become ADSR bursts aimed at their own pitch-value,
     // travelling from whatever value sits underneath (hence `base`).
     if (child.physics) {
-      out.push({ param, sourceTrackId: child.id, mode: 'linear', keyframes: [],
+      out.push({ param, sourceTrackId: child.id, combine: child.automationCombine, mode: 'linear', keyframes: [],
         physics: child.physics,
         physicsCurve: buildPhysicsCurve(extractKeyframes(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount, child.automationRange), child.physics,
           (automationOutputBounds(child.automationRange, pdef.min, pdef.max, 1).max - automationOutputBounds(child.automationRange, pdef.min, pdef.max, 1).min) * amount),
@@ -135,7 +136,7 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     if (child.burst) {
       out.push({
         param,
-        sourceTrackId: child.id,
+        sourceTrackId: child.id, combine: child.automationCombine,
         mode: 'linear',
         keyframes: [],
         burst: child.burst,
@@ -152,7 +153,7 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     if (child.noise) {
       out.push({
         param,
-        sourceTrackId: child.id,
+        sourceTrackId: child.id, combine: child.automationCombine,
         mode: 'linear',
         keyframes: [],
         noise: scaledNoise(child.noise, child.automationRange, pdef.min, pdef.max, amount, bounds),
@@ -167,7 +168,7 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     if (child.cycle) {
       out.push({
         param,
-        sourceTrackId: child.id,
+        sourceTrackId: child.id, combine: child.automationCombine,
         mode: 'linear',
         keyframes: [],
         cycle: child.cycle,
@@ -183,7 +184,7 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     if (child.force) {
       out.push({
         param,
-        sourceTrackId: child.id,
+        sourceTrackId: child.id, combine: child.automationCombine,
         mode: 'linear',
         keyframes: [],
         force: child.force,
@@ -202,7 +203,7 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     // keyframes; every other easing stays inside them and ignores the bounds.
     out.push({
       param,
-      sourceTrackId: child.id,
+      sourceTrackId: child.id, combine: child.automationCombine,
       mode: child.interpolation ?? 'linear',
       keyframes: extractKeyframes(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount, child.automationRange),
       splineTension: child.splineTension,
@@ -247,7 +248,7 @@ function sampleAutomationLanes(
   for (const lane of lanes) {
     // Only numeric params get lanes, so a string-valued setting can never be the
     // base here - fall back to the param's default if one somehow collides.
-    const underneath = settings[lane.param]
+    const underneath = values[lane.param] ?? settings[lane.param]
     const v = sampleAutomationLane(lane, beat, typeof underneath === 'number' ? underneath : lane.base ?? 0)
     if (!Number.isNaN(v)) values[lane.param] = v
   }
@@ -300,7 +301,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
     // pitch-value. The 0/1 'enabled' pseudo-param has no range to travel through,
     // so it stays a keyframe lane whatever the track says.
     if (child.physics && target.key !== 'enabled') {
-      out.push({ instanceId: target.instanceId, key: target.key, clockSkipEmitters,
+      out.push({ instanceId: target.instanceId, combine: child.automationCombine, key: target.key, clockSkipEmitters,
         mode: 'linear', keyframes: [], physics: child.physics,
         physicsCurve: buildPhysicsCurve(extractKeyframes(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount, child.automationRange), child.physics,
           (automationOutputBounds(child.automationRange, min, max, 1).max - automationOutputBounds(child.automationRange, min, max, 1).min) * amount),
@@ -310,7 +311,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
     }
     if (child.burst && target.key !== 'enabled') {
       out.push({
-        instanceId: target.instanceId,
+        instanceId: target.instanceId, combine: child.automationCombine,
         key: target.key,
         clockSkipEmitters,
         mode: 'linear',
@@ -327,7 +328,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
     // keyframe lane for the same reason (a 0/1 switch has no span to cycle).
     if (child.cycle && target.key !== 'enabled') {
       out.push({
-        instanceId: target.instanceId,
+        instanceId: target.instanceId, combine: child.automationCombine,
         key: target.key,
         clockSkipEmitters,
         mode: 'linear',
@@ -344,7 +345,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
     // does; 'enabled' stays keyframes (a 0/1 switch is not a body to push).
     if (child.force && target.key !== 'enabled') {
       out.push({
-        instanceId: target.instanceId,
+        instanceId: target.instanceId, combine: child.automationCombine,
         key: target.key,
         clockSkipEmitters,
         mode: 'linear',
@@ -365,7 +366,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
     // Bounds ride along for the spline's overshoot clamp - see the object-lane
     // branch above. The `enabled` pseudo-param's 0/1 bounds are its own.
     out.push({
-      instanceId: target.instanceId,
+      instanceId: target.instanceId, combine: child.automationCombine,
       key: target.key,
       clockSkipEmitters,
       mode: child.interpolation ?? 'linear',
@@ -373,6 +374,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
       splineTension: child.splineTension,
       min: bounds.min,
       max: bounds.max,
+      base,
     })
   }
   return out
@@ -661,27 +663,24 @@ function resolveOwnMoverOrSplitter(track: Track, p: ProjectSnapshot): MoverOrSpl
   const settings = mergeDefinitionSettings(def, track.inputValues, track.stringParams)
   const notes = flattenTrackNotes(track, p)
   const resolved = def.resolve({ settings, notes })
+  // Registered definitions close over immutable resolved document inputs and
+  // obey the pure-copy contract. Only definitions with an explicit static
+  // declaration may reuse outputs across different beats.
+  resolved.cachePolicy ??= 'beat'
   const automation = resolveAutomationLanes(track, def.params, p)
   if (automation.length === 0) return resolved
-  let cachedBeat = Number.NaN
-  let cached = resolved
-  const resolveAtBeat = (beat: number): MoverOrSplitter => {
-    if (beat !== cachedBeat) {
-      cachedBeat = beat
-      cached = def.resolve({ settings: { ...settings, ...sampleAutomationLanes(automation, beat, settings) }, notes })
-    }
-    return cached
-  }
+  const resolveAtBeat = memoizeEvaluation((beat: number): MoverOrSplitter =>
+    def.resolve({ settings: { ...settings, ...sampleAutomationLanes(automation, beat, settings) }, notes }))
   const wrapped: MoverOrSplitter = {
+    cachePolicy: 'beat',
     apply(visualCopy, context) {
       return resolveAtBeat(context.beat).apply(visualCopy, context)
     },
   }
   // A definition-level applyFramed (a time emitter - Stagger) must survive the
   // automation wrapper, or automating its knobs silently drops every copy's
-  // clock. Same per-beat memo as apply; below an emitter the memo degrades to
-  // one re-resolve per distinct copy clock per frame, which is correct and
-  // merely un-memoized.
+  // clock. Interleaved equal copy clocks share a resolution within this
+  // evaluation; nothing retains a history of past playback beats.
   if (resolved.applyFramed) {
     wrapped.applyFramed = (visualCopy, context) => {
       const entry = resolveAtBeat(context.beat)
@@ -711,9 +710,11 @@ function resolveOwnMoverOrSplitter(track: Track, p: ProjectSnapshot): MoverOrSpl
   const minOverlay: Record<string, number> = {}
   for (const lane of automation) {
     const underneath = settings[lane.param]
-    const bounds = automationLaneValueBounds(lane, typeof underneath === 'number' ? underneath : lane.base ?? 0)
-    maxOverlay[lane.param] = bounds.max
-    minOverlay[lane.param] = bounds.min
+    const base = typeof underneath === 'number' ? underneath : lane.base ?? 0
+    const low = automationLaneValueBounds(lane, minOverlay[lane.param] ?? base)
+    const high = automationLaneValueBounds(lane, maxOverlay[lane.param] ?? base)
+    maxOverlay[lane.param] = Math.max(low.max, high.max)
+    minOverlay[lane.param] = Math.min(low.min, high.min)
   }
   // A definition that itself rides a COUNT lane (visualCopies/countLane.ts)
   // returns entries carrying their OWN [max, min] variants bracketing the
@@ -727,6 +728,69 @@ function resolveOwnMoverOrSplitter(track: Track, p: ProjectSnapshot): MoverOrSpl
     maxResolved.structuralVariants?.[0] ?? maxResolved,
     minResolved.structuralVariants?.[1] ?? minResolved,
   ]
+  if (resolved.framedRequiresInvertibleInput || wrapped.structuralVariants.some(entry => entry.framedRequiresInvertibleInput)) {
+    wrapped.framedRequiresInvertibleInput = true
+  }
+  // Only definitions that explicitly guarantee a local affine layout may
+  // forward this contract through automation. Targets/frames drop it later.
+  if ((resolved.localTransforms || resolved.localTransformsAtBeat)
+    && wrapped.structuralVariants.every(entry => entry.localTransforms || entry.localTransformsAtBeat)) {
+    wrapped.localTransformsAtBeat = beat => {
+      const entry = resolveAtBeat(beat)
+      return entry.localTransformsAtBeat?.(beat) ?? entry.localTransforms!
+    }
+    const fixedCount = (entry: MoverOrSplitter) => entry.localTransformsAtBeat
+      ? entry.localTransformCount : entry.localTransforms?.length
+    const count = fixedCount(resolved)
+    if (count !== undefined && wrapped.structuralVariants.every(entry => fixedCount(entry) === count)) {
+      wrapped.localTransformCount = count
+    }
+  }
+  if ((resolved.rootTransform || resolved.rootTransformAtBeat)
+    && wrapped.structuralVariants.every(entry => entry.rootTransform || entry.rootTransformAtBeat)) {
+    wrapped.rootTransformAtBeat = beat => {
+      const entry = resolveAtBeat(beat)
+      return entry.rootTransformAtBeat?.(beat) ?? entry.rootTransform!
+    }
+  }
+  if ((resolved.localLayout || resolved.localLayoutAtBeat)
+    && wrapped.structuralVariants.every(entry => entry.localLayout || entry.localLayoutAtBeat)) {
+    wrapped.localLayoutAtBeat = (beat, placementTransform) => {
+      const entry = resolveAtBeat(beat)
+      return entry.localLayoutAtBeat?.(beat, placementTransform) ?? entry.localLayout!
+    }
+    wrapped.localLayoutUsesPlacement = !!resolved.localLayoutUsesPlacement
+      || wrapped.structuralVariants.some(entry => entry.localLayoutUsesPlacement)
+    const fixedCount = (entry: MoverOrSplitter) => entry.localLayoutAtBeat
+      ? entry.localLayoutCount : entry.localLayout?.transforms.length
+    const count = fixedCount(resolved)
+    if (count !== undefined && wrapped.structuralVariants.every(entry => fixedCount(entry) === count)) {
+      wrapped.localLayoutCount = count
+    }
+  }
+  if (resolved.localSlotMotion && wrapped.structuralVariants.every(entry => entry.localSlotMotion)) {
+    wrapped.localSlotMotion = true
+  }
+  // A parameter lane must not re-anchor an otherwise identical nested mover.
+  // Preserve a stable convention alongside its operation/layout metadata.
+  if (resolved.composition && wrapped.structuralVariants.every(entry => entry.composition === resolved.composition)) {
+    wrapped.composition = resolved.composition
+  }
+  const isGpuFamily = (entry: MoverOrSplitter) => !!entry.gpuOperationAtBeat
+    && !entry.applyFramed && !entry.emitsCopyClocks && !entry.framedLocalTransformsAtBeat
+    && !entry.localTransforms && !entry.localTransformsAtBeat
+    && !entry.localLayout && !entry.localLayoutAtBeat
+    && !entry.rootTransform && !entry.rootTransformAtBeat
+  if (isGpuFamily(resolved) && wrapped.structuralVariants.every(isGpuFamily)) {
+    wrapped.gpuOperationAtBeat = (beat, placementTransform) =>
+      resolveAtBeat(beat).gpuOperationAtBeat!(beat, placementTransform)
+    wrapped.gpuOperationUsesPlacement = !!resolved.gpuOperationUsesPlacement
+      || wrapped.structuralVariants.some(entry => entry.gpuOperationUsesPlacement)
+    if (resolved.gpuAppearanceOnly && wrapped.structuralVariants.every(entry => entry.gpuAppearanceOnly)) wrapped.gpuAppearanceOnly = true
+    if (resolved.gpuOperationPreservesDeterminant && wrapped.structuralVariants.every(entry => entry.gpuOperationPreservesDeterminant)) {
+      wrapped.gpuOperationPreservesDeterminant = true
+    }
+  }
   return wrapped
 }
 
@@ -793,13 +857,23 @@ function weaveSplitterTfLanes(track: Track, chain: MoverOrSplitter[], p: Project
   const anySolo = chainChildren.some((c) => c.solo)
   const woven: MoverOrSplitter[] = []
   let chainIndex = 0
+  const laneGroups = new Map<string, ResolvedAutomation[]>()
   for (const cid of track.childIds ?? []) {
     const child = p.tracks[cid]
     if (!child) continue
     const lane = laneBySource.get(cid)
     if (lane) {
       const base = track.params?.[lane.param] ?? transformDefault(lane.param)
-      woven.push(tfAutomationChainEntry(lane, base))
+      const key = `${chainIndex}:${lane.param}:${lane.clockSkipEmitters ?? ''}`
+      const existing = laneGroups.get(key)
+      if (existing) existing.push(lane)
+      else {
+        const group = [lane]
+        laneGroups.set(key, group)
+        const entry = tfAutomationChainEntry(group, base)
+        entry.clockSkipEmitters = lane.clockSkipEmitters
+        woven.push(entry)
+      }
     } else if (!child.muted && (!anySolo || child.solo)) {
       // A switcher child occupies SEVERAL slots of `chain` (its spliced span),
       // so the walk advances by its entry count, not by one.
@@ -875,6 +949,7 @@ function weaveTfAutomationLanes(
   const overlay: ResolvedAutomation[] = []
   // Keyed by how many chain entries precede the delta in the woven chain.
   const deltasByPosition = new Map<number, MoverOrSplitter[]>()
+  const laneGroups = new Map<string, ResolvedAutomation[]>()
   for (const lane of lanes) {
     const g = lane.sourceTrackId !== undefined ? gapByChildId.get(lane.sourceTrackId) : undefined
     if (g === undefined || g >= n || !SPATIAL_TF_PARAMS.has(lane.param)) {
@@ -882,7 +957,12 @@ function weaveTfAutomationLanes(
       continue
     }
     const base = track.params?.[lane.param] ?? transformDefault(lane.param)
-    const entry = tfAutomationChainEntry(lane, base)
+    const groupKey = `${g}:${lane.param}:${lane.clockSkipEmitters ?? ''}`
+    const existing = laneGroups.get(groupKey)
+    if (existing) { existing.push(lane); continue }
+    const group = [lane]
+    laneGroups.set(groupKey, group)
+    const entry = tfAutomationChainEntry(group, base)
     // The MIRROR moves this entry across the chain, so its clock must be routed
     // by the lane's own CHILD position, not by where the entry lands: a pattern
     // lane (above the emitter) mirrors below it and must still ride the copy
@@ -907,7 +987,7 @@ function weaveTfAutomationLanes(
 /** True when this mover/splitter belongs to a parent's chain rather than routing
  *  itself: a LOCAL entry of its parent instrument's chain, a FRAME entry of a
  *  parent mover/splitter (visualCopies/moverFrame.ts), a GROUP entry - a
- *  chain child of a group track, broadcast to the member objects above it (the
+ *  chain child of a group track, broadcast to all member objects (the
  *  group pass in resolveProject) - or a SWITCHER's device, which reaches the
  *  chain through its rack's span. Everything else (root level, or under an
  *  instrument the registry no longer knows) is a mover "without a parent": it
@@ -1001,7 +1081,7 @@ function priorChainPrefixes(trackId: string, p: ProjectSnapshot): MoverOrSplitte
   if (isChainChild(target, p)) {
     const parent = p.tracks[target.parentId!]
     if (!parent) return []
-    // A GROUP's chain child broadcasts to the member objects above it; one
+    // A GROUP's chain child broadcasts to all member objects; one
     // MIDI lane must serve all of them, so the row set uses the largest member
     // count. Per member: its own chain, then this group's entries above the
     // target. (Entries a nested inner group contributes in between are ignored
@@ -1031,7 +1111,7 @@ function priorChainPrefixes(trackId: string, p: ProjectSnapshot): MoverOrSplitte
           if (child.muted || (anySolo && !child.solo)) continue
           const entries = resolveChainChildEntries(child, p)
           entriesAbove.push(...(pastTarget ? entries.filter((e) => e.emitsCopyClocks) : entries))
-        } else if (!pastTarget) {
+        } else {
           collectObjects(cid)
         }
       }
@@ -1320,8 +1400,6 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
         videoPads: track.videoPads ? [...track.videoPads] : undefined,
         // Same contract for the Photo instrument's bank.
         photoPads: track.photoPads ? [...track.photoPads] : undefined,
-        // Same contract for the Mod Synth's modulator rack.
-        synthMods: track.synthMods ? [...track.synthMods] : undefined,
         scratchBase: identitySV(),
         tags,
         maskSourceIds: [],
@@ -1383,10 +1461,9 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
   }
 
   // Chain children of a GROUP track broadcast to the group's members: each
-  // mover/splitter child appends to the chain of every OBJECT descended from
-  // the member siblings ABOVE it (children read as a top-to-bottom pipeline,
-  // so an entry applies to what the group has already stacked; an entry above
-  // every member applies to nothing). Entries compose per member in the
+  // mover/splitter child appends to the chain of every member OBJECT, regardless
+  // of where member rows sit among the devices. Only device-to-device order
+  // defines the group's pipeline. Entries compose per member in the
   // member's own frame - "everyone gets the motion", not an orbit of the
   // group's origin; the group's own tf* transform and lanes are the
   // formation-as-one channel. Groups process deepest-first (reversed DFS), so
@@ -1402,12 +1479,12 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     const anySolo = chainChildren.some((c) => c.solo)
     // The scene instrument holds no members in its childIds - the scene's
     // objects stay at root in the document. Every object in the scene is a
-    // member, and they are all "above" it, so an entry anywhere in its chain
+    // member, so an entry anywhere in its chain
     // reaches all of them. (The scene node is FIRST in DFS, so it is the last
     // group this reversed walk visits: its entries land after every real
     // group's, which is the right nesting order for an outermost container.)
     const isSceneNode = isSceneTrackId(gid)
-    const membersAbove: ResolvedObject[] = isSceneNode ? [...objects] : []
+    const members = isSceneNode ? objects : objectsInSubtree(gid).map((id) => objectById.get(id)!)
     for (const cid of g.childIds ?? []) {
       const child = p.tracks[cid]
       if (!child) continue
@@ -1439,12 +1516,7 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
           backdropChain.push(...entries)
           continue
         }
-        for (const member of membersAbove) member.moverAndSplitterChain.push(...entries)
-      } else {
-        for (const oid of objectsInSubtree(cid)) {
-          const member = objectById.get(oid)
-          if (member) membersAbove.push(member)
-        }
+        for (const member of members) member.moverAndSplitterChain.push(...entries)
       }
     }
   }

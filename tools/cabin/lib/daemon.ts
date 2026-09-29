@@ -14,9 +14,9 @@ import path from 'path'
 import { spawn } from 'child_process'
 import { WebSocketServer } from 'ws'
 import { chromium, type Browser, type Page } from 'playwright'
-import { DAEMON_STATE, PROJECTS } from './paths'
+import { DAEMON_STATE } from './paths'
 import { audioMix } from './audio'
-import type { ProjectDocument } from '../../../src/persistence/types'
+import { loadDoc } from './project'
 import type { DocSkeleton } from '../../../src/editor/dev/renderHooks'
 
 const CHROME = process.env.CABIN_CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
@@ -82,7 +82,7 @@ async function openOn(project: string): Promise<Page> {
 
 /** The file's skeleton (bpm, scenes, track ids) - what the page must be showing. */
 function skeleton(project: string): DocSkeleton {
-  const doc = JSON.parse(fs.readFileSync(path.join(PROJECTS, project, 'project.json'), 'utf8')) as ProjectDocument
+  const doc = loadDoc(project) // upgraded, like the page's copy
   const scenes = doc.sceneOrder.filter((id) => doc.scenes[id])
   const codeIds = new Set<string>()
   for (const id of scenes) for (const t of Object.values(doc.scenes[id].tracks)) if (t.instrumentId?.includes('.')) codeIds.add(t.instrumentId)
@@ -164,7 +164,7 @@ async function handleStream(body: Json) {
   const fps = Number(body.fps ?? 30)
   const frames = Number(body.frames)
   const startBeat = Number(body.startBeat)
-  const doc = JSON.parse(fs.readFileSync(path.join(PROJECTS, project, 'project.json'), 'utf8'))
+  const doc = loadDoc(project)
   const fromSec = (startBeat * 60) / doc.bpm
   const durSec = frames / fps
   const mix = body.audio === false ? null : audioMix(doc, project, fromSec, durSec, 1)

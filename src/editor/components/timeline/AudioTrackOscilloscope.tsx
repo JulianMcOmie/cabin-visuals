@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react'
 import { getAudioEngine } from '../../core/audio/AudioEngine'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useTimeStore } from '../../store/TimeStore'
-import { AUDIO_WAVEFORM_COLOR } from '../../utils/trackColors'
 
 const SAMPLE_COUNT = 320
 const VIEWBOX_HEIGHT = 100
@@ -10,7 +9,7 @@ const MIDLINE = VIEWBOX_HEIGHT / 2
 const AMPLITUDE = 43
 
 /** Live waveform for one audio track, stretched across its timeline lane. */
-export function AudioTrackOscilloscope({ trackId }: { trackId: string }) {
+export function AudioTrackOscilloscope({ trackId, color }: { trackId: string; color: string }) {
   const traceRef = useRef<SVGPathElement>(null)
 
   useEffect(() => {
@@ -53,10 +52,9 @@ export function AudioTrackOscilloscope({ trackId }: { trackId: string }) {
       <path
         ref={traceRef}
         fill="none"
-        stroke={AUDIO_WAVEFORM_COLOR}
+        stroke={color}
         strokeWidth="1.5"
         vectorEffect="non-scaling-stroke"
-        style={{ filter: `drop-shadow(0 0 2px ${AUDIO_WAVEFORM_COLOR})` }}
       />
     </svg>
   )

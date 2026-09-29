@@ -4,10 +4,11 @@ import { Cabin } from './api'
 import { validateDoc } from './project'
 import { barBeat, parsePosition, parseRange } from './time'
 import type { ProjectDocument } from '../../../src/persistence/types'
+import { CURRENT_VERSION } from '../../../src/persistence/upgrade'
 
 function fresh(): Cabin {
   const doc: ProjectDocument = {
-    schemaVersion: 20, bpm: 120, beatsPerBar: 4, totalBars: 8,
+    schemaVersion: CURRENT_VERSION, bpm: 120, beatsPerBar: 4, totalBars: 8,
     scenes: {
       main: { id: 'main', name: 'Composite', isMain: true, backgroundColor: '#000', backgroundTransparent: false, tracks: {}, rootTrackIds: [] },
       s1: { id: 's1', name: 'Scene 1', isMain: false, backgroundColor: '#000', backgroundTransparent: false, tracks: {}, rootTrackIds: [] },

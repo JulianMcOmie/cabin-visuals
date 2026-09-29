@@ -59,7 +59,7 @@ import type { MoverOrSplitterDefinition } from './definitions'
 // corridor is a camera-relative illusion, so its geometry is measured from
 // where the lens actually is.
 import { TUNNEL_CAMERA_Z as CAMERA_Z, placementAxisScale } from './tunnel'
-import type { VisualCopy } from './types'
+import { sharedLocalLayout } from './sharedLocalLayout'
 import { DUPLICATE_TRAIL_COLOR } from './identityColors'
 
 /** The one row this definition answers: everything it does is one function. */
@@ -243,63 +243,31 @@ export const duplicateTrailSplitter: MoverOrSplitterDefinition<DuplicateTrailSet
     const speed = Math.max(0, settings.speed)
     const spawns = duplicateSpawnTimeline(notes, duplicateSpawnInterval(settings))
     const rainbow = settings.rainbow >= 0.5
-    return {
-      apply(visualCopy, { beat, placementTransform }) {
-        // Slot 0 is the object itself, untouched and always present: this
-        // splitter ADDS selves, it does not replace the one you placed.
-        const copies: VisualCopy[] = [{
-          transform: visualCopy.transform.clone(),
-          opacity: visualCopy.opacity,
-          colorShift: { ...visualCopy.colorShift },
-        }]
-        const newest = lastSpawnIndex(spawns, beat)
-        // The trail is world-metric: the renderer composes placement *
-        // transform, which would otherwise multiply the retreat by however
-        // large the instrument draws itself, so an object at half size would
-        // get a half-depth corridor. Only the OFFSET is normalised - each copy
-        // still renders at the object's own size times its own ramp.
-        const placementScale = placementAxisScale(placementTransform)
-        for (let age = 0; age < duplicates; age++) {
-          // Slot `age` holds the age-th most recent spawn. Slots therefore
-          // recycle as new copies are born (the same trade the Tunnel's wrap
-          // makes): the SET of copies on screen is continuous, but a
-          // downstream index-based mover sees the assignment shift.
-          const spawnIndex = newest - age
-          const spawnBeat = spawnIndex >= 0 ? spawns[spawnIndex] : null
-          if (spawnBeat === null) {
-            // Nothing born into this slot yet. It still has to exist - copy
-            // count is structural, so silence is opacity, never a missing slot.
-            copies.push({
-              transform: visualCopy.transform.clone(),
-              opacity: 0,
-              colorShift: { ...visualCopy.colorShift },
-            })
-            continue
-          }
-          const distance = Math.max(0, beat - spawnBeat) * speed
-          const { scale, opacity, progress } = duplicateStateAt(distance, reach, settings.size)
-          const transform = new Matrix4()
-            .makeScale(scale, scale, scale)
-            .setPosition(0, 0, -distance / placementScale[2])
-          // LOCAL composition (previous * delta), the chain default: a copy's
-          // transform is the reference frame for movers BELOW it, so a Burst
-          // under a Duplicate walks each copy along its own retreating axes.
-          copies.push({
-            transform: visualCopy.transform.clone().multiply(transform),
-            opacity: visualCopy.opacity * opacity,
-            colorShift: {
-              ...visualCopy.colorShift,
-              // A full turn spread over the trail, keyed to DISTANCE rather
-              // than slot index so a copy's hue drifts smoothly as it retreats
-              // instead of jumping each time the slots shift. Relative, so the
-              // rainbow rides on whatever colour the object already is; the
-              // original at slot 0 is never touched.
-              hue: visualCopy.colorShift.hue + (rainbow ? progress : 0),
-            },
-          })
+    return sharedLocalLayout((beat, placementTransform) => {
+      // Slot zero is the unmodified original; unspawned descendants remain
+      // structural slots with zero opacity, rather than disappearing.
+      const transforms = [new Matrix4()], opacities = [1], hueShifts = [0]
+      const newest = lastSpawnIndex(spawns, beat)
+      const placementScale = placementAxisScale(placementTransform)
+      for (let age = 0; age < duplicates; age++) {
+        // Slots hold newest-to-oldest births and recycle at every new spawn.
+        const spawnIndex = newest - age
+        const spawnBeat = spawnIndex >= 0 ? spawns[spawnIndex] : null
+        if (spawnBeat === null) {
+          transforms.push(new Matrix4()); opacities.push(0); hueShifts.push(0)
+          continue
         }
-        return copies
-      },
-    }
+        const distance = Math.max(0, beat - spawnBeat) * speed
+        const { scale, opacity, progress } = duplicateStateAt(distance, reach, settings.size)
+        // Only the world-metric offset divides out placement scale; the size
+        // remains relative to the incoming object and the delta stays LOCAL.
+        transforms.push(new Matrix4().makeScale(scale, scale, scale)
+          .setPosition(0, 0, -distance / placementScale[2]))
+        opacities.push(opacity)
+        // Relative hue follows distance, so it moves smoothly between births.
+        hueShifts.push(rainbow ? progress : 0)
+      }
+      return { transforms, opacities, ...(rainbow ? { hueShifts } : {}) }
+    }, { count: duplicates + 1, usesPlacement: true })
   },
 }

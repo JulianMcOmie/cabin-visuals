@@ -1,22 +1,23 @@
 import { create } from 'zustand'
+import { rescaleDrumMidi } from '../utils/drumMidi'
 import { getEffect } from '../effects'
 import { nextTrackColor, AUDIO_TRACK_COLOR } from '../utils/trackColors'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 // Capability checks only. core/directors is React-free; the store must NEVER
 // import instruments/index (components import stores - instant cycle).
 import { compositionDef, isCompositionTrack } from '../core/directors'
+import { defaultAutomationCombine, type AutomationCombine } from '../core/automationCombineDefaults'
 import { TRANSFORM_PARAM_DEFS } from '../core/transform'
 import { seedSceneBindings } from '../core/directors/sceneBindings'
 import { seedSwitcherBindings } from '../core/switcherBindings'
 import { SWITCHER_MODE_PARAM } from '../core/visualCopies/switcher'
 import { canBeSceneTrackChild, dematerializeSceneTrack, isSceneTrackId, sceneTrackId, sceneTrackView } from '../core/sceneTrack'
-import { defaultLightingTracks } from '../core/defaultLighting'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { AUTOMATION_AMOUNT_MAX, DEFAULT_PHYSICS, DEFAULT_BURST, DEFAULT_CYCLE, DEFAULT_FORCE, DEFAULT_NOISE, DEFAULT_SPLINE_TENSION, SPLINE_TENSION_MAX } from '../core/visual/automation'
 import type { ImportedMidiTrack } from '../core/midiImport'
 import type { AspectRatioId } from '../core/aspectRatios'
 import { placeTranscription, invertStrobeSpans, groupTimingIntoLines, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
-import { DEFAULT_SCENE_BACKGROUND, defaultSceneGradient, sceneBackdropMode, type SceneBackdropMode, type SceneGradient, type Scene, type Track, type Block, type Note, type AudioBlock, type AutomationMode, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type SynthMod, type Routing, type Marker } from '../types'
+import { DEFAULT_SCENE_BACKGROUND, defaultSceneGradient, sceneBackdropMode, type SceneBackdropMode, type SceneGradient, type Scene, type Track, type Block, type Note, type AudioBlock, type AutomationMode, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type Routing, type Marker } from '../types'
 import type { ProjectDocument } from '../../persistence/types'
 import { upgradeDocument } from '../../persistence/upgrade'
 import { useVideoStore } from './VideoStore'
@@ -435,7 +436,6 @@ export interface ProjectState {
   setSceneTrackEnabled: (sceneId: string, enabled: boolean) => void
   duplicateScene: (sceneId: string) => string | null
   deleteScene: (sceneId: string) => void
-  reorderScenes: (sceneIds: string[]) => void
   addTrack: (track: Track, atIndex?: number) => void
   addBlock: (trackId: string, block: Block) => void
   addBlocks: (trackId: string, blocks: Block[]) => void
@@ -443,7 +443,6 @@ export interface ProjectState {
   updateBlockNotes: (trackId: string, blockId: string, notes: Note[]) => void
   updateBlock: (trackId: string, blockId: string, updates: Partial<Block>) => void
   moveBlock: (fromTrackId: string, blockId: string, toTrackId: string) => void
-  deleteBlock: (trackId: string, blockId: string) => void
   deleteBlocks: (blockIds: Set<string>) => void
   splitBlocksAtBeat: (blockIds: Set<string>, beat: number) => Set<string> | null
   joinBlocks: (blockIds: Set<string>) => Set<string> | null
@@ -453,7 +452,6 @@ export interface ProjectState {
   /** Returns the new copy's id (for selection), or null if the source vanished. */
   insertTrackCopy: (srcId: string, parentId: string | null, index?: number) => string | null
   addTrackTree: (tree: Track[], atIndex?: number) => void
-  reorderRootTracks: (orderedIds: string[]) => void
   /** Re-parent a track: parentId=null makes it a root. `index` positions it among
    *  its new siblings (root list or the parent's childIds). No-op on a cycle. */
   setTrackParent: (trackId: string, parentId: string | null, index?: number) => void
@@ -504,8 +502,10 @@ export interface ProjectState {
    *  time. No-op if one already automates that param. Callers pass `integer` from
    *  the target param's def (the store can't read instrument defs - see the import
    *  note at the top): a count param's lane starts on the whole-number row grid
-   *  with stepped interpolation instead of the fractional spline. */
-  addAutomationTrack: (parentId: string, paramKey: string, paramLabel: string, opts?: { integer?: boolean }) => void
+   *  with stepped interpolation instead of the fractional spline. `combine`
+   *  carries the target metadata's creation policy from the menu; direct callers
+   *  fall back to the same policy using the key and available integer flag. */
+  addAutomationTrack: (parentId: string, paramKey: string, paramLabel: string, opts?: { integer?: boolean; combine?: AutomationCombine }) => void
   /** Add an `ability` child track under `parentId` for one of the parent instrument's
    *  abilities (opt-in). No-op if that ability already has a track. */
   addAbilityTrack: (parentId: string, abilityKey: string, abilityLabel: string) => void
@@ -532,9 +532,9 @@ export interface ProjectState {
   /** Put an automation lane in one of its four modes, in ONE action (so it is one
    *  undo step). Re-entering a mode starts from that mode's defaults. */
   setAutomationMode: (trackId: string, mode: AutomationMode) => void
+  setAutomationCombine: (trackId: string, mode: NonNullable<Track['automationCombine']>) => void
   /** Retarget an automation lane onto another of its parent's params (same
-   *  addressing as addAutomationTrack, fx: keys included). No-ops if a sibling
-   *  lane already drives that param. `rename` carries the new label onto the
+   *  addressing as addAutomationTrack, fx: keys included). `rename` carries the new label onto the
    *  lane's name (the caller passes true when the old name was the auto-name,
    *  so a user's custom name survives). `integer` mirrors addAutomationTrack's:
    *  a count target starts the reset range on the whole-number grid. */
@@ -556,7 +556,6 @@ export interface ProjectState {
   setTrackCopyTargets: (trackId: string, copyTargets: Track['copyTargets']) => void
   setTrackTags: (trackId: string, tags: string[]) => void
   /** Draw this object on top of everything (depth-ignored overlay). */
-  setTrackOnTop: (trackId: string, onTop: boolean) => void
   /** Set an audio track's output volume (linear gain, clamped to [0, 1.5]).
    *  Unity is stored as absence, like automationAmount. A volume-only change
    *  is applied as a live gain by the audio engine WITHOUT re-arming players
@@ -566,8 +565,6 @@ export interface ProjectState {
   setTrackVideoPads: (trackId: string, videoPads: VideoPad[]) => void
   /** Replace a Photo track's ordered photos (its bank). */
   setTrackPhotoPads: (trackId: string, photoPads: PhotoPad[]) => void
-  /** Replace a Mod Synth track's modulator rack. */
-  setTrackSynthMods: (trackId: string, synthMods: SynthMod[]) => void
   /** Create an audio track (top of the root tracks) holding one block at bar 0
    *  spanning the whole clip. The load pipeline's landing spot - files dropped
    *  on the track area end here; a project can hold several. Returns the new
@@ -601,9 +598,7 @@ export interface ProjectState {
    *  (one note per word) or whole lines at once (one note per grouped line). */
   setLyricGrouping: (trackId: string, grouping: 'words' | 'lines') => void
   // Lyric clips + style lanes (Text Display; core/visual/lyricClips.ts).
-  addLyricClip: (trackId: string, clip: Omit<LyricClip, 'id'>) => void
   updateLyricClip: (trackId: string, clipId: string, updates: Partial<Omit<LyricClip, 'id'>>) => void
-  removeLyricClip: (trackId: string, clipId: string) => void
   // (No duplicate action: alt-drag on a clip is the note gesture's own
   // duplicate, like every other note.)
   /** Rewrite ONE word in place (the note-editing path). Writes through to the
@@ -620,9 +615,7 @@ export interface ProjectState {
    *  over the template's). Every id is reminted, so re-applying can never
    *  collide. One set() = one undo step. */
   applyTemplate: (templateDoc: ProjectDocument) => void
-  addAudioBlock: (trackId: string, block: AudioBlock) => void
   updateAudioBlock: (trackId: string, blockId: string, updates: Partial<AudioBlock>) => void
-  deleteAudioBlock: (trackId: string, blockId: string) => void
   // Visual effects (plugins) on a track.
   addEffect: (trackId: string, pluginId: string) => void
   removeEffect: (trackId: string, instanceId: string) => void
@@ -653,14 +646,10 @@ const INVERT_FILTER_PITCH = 72
 function makeInitialScenes(): { scenes: Record<string, Scene>; sceneOrder: string[]; activeSceneId: string } {
   const mainId = crypto.randomUUID()
   const firstId = crypto.randomUUID()
-  // Every visual scene is born with the default "Lighting" group (the old
-  // hardcoded rig as editable tracks); Composite composes scenes and holds no
-  // objects, so it gets none.
-  const lighting = defaultLightingTracks()
   return {
     scenes: {
       [mainId]: { id: mainId, name: 'Composite', isMain: true, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: {}, rootTrackIds: [] },
-      [firstId]: { id: firstId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: lighting.tracks, rootTrackIds: [lighting.rootId] },
+      [firstId]: { id: firstId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: {}, rootTrackIds: [] },
     },
     sceneOrder: [mainId, firstId],
     activeSceneId: firstId,
@@ -808,7 +797,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     return {
       ...value,
       scenes: {
-        ...s.scenes,
+        ...(value.scenes ?? s.scenes),
         [active.id]: { ...active, ...scenePatch },
       },
       audioTracks,
@@ -822,9 +811,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
   activeSceneId: initial.activeSceneId,
   audioTracks: {},
   audioRootTrackIds: [],
-  // The flattened view must start as the active scene's view - the seeded
-  // Lighting group is born in the scene, and `{}` here would hide it until
-  // the first scene switch or hydrate.
+  // Include the active scene's virtual scene track from the first render.
   ...viewForScene(initial.scenes, initial.activeSceneId, {}, []),
   bpm: 120,
   beatsPerBar: 4,
@@ -842,8 +829,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     const id = crypto.randomUUID()
     rawSet((s) => {
       const visualCount = s.sceneOrder.filter((sid) => !s.scenes[sid]?.isMain).length
-      const lighting = defaultLightingTracks()
-      const scene: Scene = { id, name: `Scene ${visualCount + 1}`, isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: lighting.tracks, rootTrackIds: [lighting.rootId] }
+      const scene: Scene = { id, name: `Scene ${visualCount + 1}`, isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: {}, rootTrackIds: [] }
       const scenes = { ...s.scenes, [id]: scene }
       const mainId = s.sceneOrder.find((sid) => s.scenes[sid]?.isMain)
       if (mainId) {
@@ -1049,12 +1035,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     return { scenes, sceneOrder, activeSceneId, ...viewForScene(scenes, activeSceneId, s.audioTracks, s.audioRootTrackIds) }
   }),
 
-  reorderScenes: (sceneIds) => rawSet((s) => {
-    const main = s.sceneOrder.find((id) => s.scenes[id]?.isMain)
-    const valid = sceneIds.filter((id) => s.scenes[id] && !s.scenes[id].isMain)
-    return { sceneOrder: main ? [main, ...valid] : valid }
-  }),
-
   addTrack: (track, atIndex) =>
     set((s) => {
       // Hand-built tracks (console scripts, E2E) sometimes arrive without an id.
@@ -1184,18 +1164,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
             ...toTrack,
             blocks: [...toTrack.blocks, block],
           },
-        },
-      }
-    }),
-
-  deleteBlock: (trackId, blockId) =>
-    set((s) => {
-      const track = s.tracks[trackId]
-      if (!track) return s
-      return {
-        tracks: {
-          ...s.tracks,
-          [trackId]: { ...track, blocks: track.blocks.filter((b) => b.id !== blockId) },
         },
       }
     }),
@@ -1431,10 +1399,11 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
   },
 
   addTrackTree: (tree, atIndex) =>
-    set((s) => insertTrackTreeIntoState(s, tree, atIndex)),
-
-  reorderRootTracks: (orderedIds) =>
-    set({ rootTrackIds: orderedIds }),
+    set((s) => ({
+      ...insertTrackTreeIntoState(s, tree, atIndex),
+      totalBars: Math.min(MAX_TOTAL_BARS, Math.max(s.totalBars,
+        ...tree.flatMap(track => track.blocks.map(block => block.startBar + block.durationBars)))),
+    })),
 
   setTrackParent: (trackId, parentId, index) =>
     set((s) => {
@@ -1818,12 +1787,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     set((s) => {
       const parent = s.tracks[parentId]
       if (!parent) return s
-      // One automation lane per param - don't stack duplicates.
-      const exists = parent.childIds.some((cid) => {
-        const c = s.tracks[cid]
-        return c?.type === 'automation' && c.targetParam === paramKey
-      })
-      if (exists) return s
       const id = crypto.randomUUID()
       const track: Track = {
         id,
@@ -1831,6 +1794,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         type: 'automation',
         instrumentId: '',
         targetParam: paramKey,
+        automationCombine: opts?.combine ?? defaultAutomationCombine(paramKey, opts),
         // A new lane rides the spline: one C2 curve through every keyframe is
         // what a drawn phrase almost always wants, and the per-segment easings
         // stay one click away. Written EXPLICITLY rather than by moving the
@@ -1861,16 +1825,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       }
     }),
 
-  addLyricClip: (trackId, clip) =>
-    set((s) => {
-      const t = s.tracks[trackId]
-      if (!t || t.instrumentId !== 'textDisplay') return s
-      const host = lyricHostBlock(t, clip.startBeat, s.beatsPerBar)
-      if (!host) return s
-      const note = lyricClipNote(clip, crypto.randomUUID(), host, s.beatsPerBar)
-      return writeTrackBlockNotes(s, trackId, host.id, [...host.notes, note])
-    }),
-
   updateLyricClip: (trackId, clipId, updates) =>
     set((s) => {
       const t = s.tracks[trackId]
@@ -1885,15 +1839,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       if (updates.words !== undefined) next.lyric!.words = [...updates.words]
       if (updates.layout !== undefined) next.lyric!.layout = { ...updates.layout }
       return writeTrackBlockNotes(s, trackId, block.id, block.notes.map((n) => (n.id === clipId ? next : n)))
-    }),
-
-  removeLyricClip: (trackId, clipId) =>
-    set((s) => {
-      const t = s.tracks[trackId]
-      const found = t && findLyricClipNote(t, clipId)
-      if (!t || !found) return s
-      const { block } = found
-      return writeTrackBlockNotes(s, trackId, block.id, block.notes.filter((n) => n.id !== clipId))
     }),
 
   setLyricClipWord: (trackId, clipId, wordIndex, word) =>
@@ -2085,18 +2030,16 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       return { tracks: { ...s.tracks, [trackId]: next } }
     }),
 
+  setAutomationCombine: (trackId, mode) => set((s) => {
+    const track = s.tracks[trackId]
+    if (!track || track.type !== 'automation' || !['sum', 'multiply', 'override'].includes(mode)) return s
+    return { tracks: { ...s.tracks, [trackId]: { ...track, automationCombine: mode } } }
+  }),
+
   setAutomationTarget: (trackId, paramKey, paramLabel, rename, opts) =>
     set((s) => {
       const track = s.tracks[trackId]
       if (!track || track.type !== 'automation' || track.targetParam === paramKey) return s
-      // Same one-lane-per-param rule as addAutomationTrack: retargeting onto a
-      // param a sibling lane already drives would stack duplicates.
-      const parent = track.parentId ? s.tracks[track.parentId] : undefined
-      const taken = (parent?.childIds ?? []).some((cid) => {
-        const c = s.tracks[cid]
-        return !!c && c.id !== trackId && c.type === 'automation' && c.targetParam === paramKey
-      })
-      if (taken) return s
       // The row-spread config speaks the OLD param's value units; a stale
       // sub-range on a new param is nonsense, so it resets to the full span -
       // which for a COUNT target (the def's `integer` flag) is the
@@ -2119,14 +2062,8 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       if (!track || track.type !== 'automation') return s
       const parent = track.parentId ? s.tracks[track.parentId] : undefined
       if (!parent) return s
-      // Same one-lane-per-param rule as setAutomationTarget: a target a sibling
-      // lane already drives counts as unavailable here.
-      const taken = new Set((parent.childIds ?? [])
-        .map((cid) => s.tracks[cid])
-        .filter((c) => !!c && c.id !== trackId && c.type === 'automation')
-        .map((c) => c!.targetParam))
       const usable = (key: string | undefined) =>
-        !!key && !taken.has(key) && available.some((o) => o.key === key)
+        !!key && available.some((o) => o.key === key)
       const retarget = (option: { key: string; label: string; integer?: boolean }, previous: string | undefined): { tracks: Record<string, Track> } => {
         // Range resets like setAutomationTarget's: it speaks the old param's
         // units, and a COUNT target's full span is the whole-number grid.
@@ -2147,7 +2084,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         return retarget(option, undefined)
       }
       if (usable(track.targetParam)) return s
-      const fallback = available.find((o) => !taken.has(o.key))
+      const fallback = available[0]
       if (!fallback || fallback.key === track.targetParam) return s
       return retarget(fallback, track.previousTargetParam ?? track.targetParam)
     }),
@@ -2182,13 +2119,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       return { tracks: { ...s.tracks, [trackId]: { ...track, tags } } }
     }),
 
-  setTrackOnTop: (trackId, onTop) =>
-    set((s) => {
-      const track = s.tracks[trackId]
-      if (!track) return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, onTop } } }
-    }),
-
   setTrackVolume: (trackId, volume) =>
     set((s) => {
       const track = s.tracks[trackId]
@@ -2210,13 +2140,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       const track = s.tracks[trackId]
       if (!track) return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, photoPads } } }
-    }),
-
-  setTrackSynthMods: (trackId, synthMods) =>
-    set((s) => {
-      const track = s.tracks[trackId]
-      if (!track) return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, synthMods } } }
     }),
 
   addAudioTrack: (clip) => {
@@ -2272,6 +2195,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         tracks[id] = {
           id,
           name: t.name || `MIDI ${i + 1}`,
+          ...(t.drumMidi ? { drumMidi: t.drumMidi } : {}),
           type: 'base',
           // An imported MIDI file lands as a Midi Roll: the notes ARE the
           // visual, whatever their pitch range - swap the instrument after.
@@ -2796,18 +2720,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     })
   },
 
-  addAudioBlock: (trackId, block) =>
-    set((s) => {
-      const track = s.tracks[trackId]
-      if (track?.type !== 'audio') return s
-      return {
-        tracks: {
-          ...s.tracks,
-          [trackId]: { ...track, audioBlocks: [...(track.audioBlocks ?? []), block] },
-        },
-      }
-    }),
-
   updateAudioBlock: (trackId, blockId, updates) =>
     set((s) => {
       const track = s.tracks[trackId]
@@ -2831,18 +2743,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         || updates.startBar !== undefined
       if (!spanChanged) return { tracks }
       return { tracks: trimLoopsToSongEnd(tracks, songEndBars({ ...s, tracks })) }
-    }),
-
-  deleteAudioBlock: (trackId, blockId) =>
-    set((s) => {
-      const track = s.tracks[trackId]
-      if (!track?.audioBlocks) return s
-      return {
-        tracks: {
-          ...s.tracks,
-          [trackId]: { ...track, audioBlocks: track.audioBlocks.filter((b) => b.id !== blockId) },
-        },
-      }
     }),
 
   addEffect: (trackId, pluginId) =>
@@ -2959,7 +2859,30 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         tracks[id] = { ...t, blocks: [{ ...block, notes: [...block.notes, ...lyricClipNotes(lyricClips, 0)] }] }
         totalBars = Math.max(totalBars, durationBars)
       }
-      return tracks === s.tracks ? { bpm: next } : { bpm: next, tracks, totalBars }
+      // Every scene may contain extracted drums. Scale edited notes rather
+      // than rebuilding detections, so manual cleanup survives tempo changes.
+      let scenes = s.scenes
+      const audioBlocks = Object.values(s.audioTracks).flatMap((t) => t.audioBlocks ?? [])
+      for (const [sceneId, scene] of Object.entries(s.scenes)) {
+        const sourceTracks = sceneId === s.activeSceneId ? tracks : scene.tracks
+        let changed = sourceTracks
+        for (const [id, track] of Object.entries(sourceTracks)) {
+          if (!track.drumMidi) continue
+          const anchor = audioBlocks.find((b) => b.id === track.drumMidi!.audioBlockId)?.startBar ?? track.drumMidi.anchorBar
+          if (changed === sourceTracks) changed = { ...sourceTracks }
+          changed[id] = rescaleDrumMidi(track, next / s.bpm, anchor)
+          for (const block of changed[id].blocks) totalBars = Math.max(totalBars, Math.ceil(block.startBar + block.durationBars))
+        }
+        if (changed !== sourceTracks) {
+          if (sceneId === s.activeSceneId) tracks = changed
+          else {
+            if (scenes === s.scenes) scenes = { ...s.scenes }
+            scenes[sceneId] = { ...scene, tracks: changed }
+          }
+        }
+      }
+      return { bpm: next, ...(tracks === s.tracks ? {} : { tracks }),
+        ...(scenes === s.scenes ? {} : { scenes }), totalBars: Math.min(MAX_TOTAL_BARS, totalBars) }
     }),
 
   // Blocks past the new end are left alone (the timeline just ends sooner);

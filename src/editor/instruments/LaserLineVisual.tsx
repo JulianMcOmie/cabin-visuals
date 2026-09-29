@@ -2,7 +2,7 @@ import { useContext, useRef } from 'react'
 import { createPortal, useThree } from '@react-three/fiber'
 import { Color, DoubleSide, type Mesh, type PointLight, type ShaderMaterial } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
-import { getPeakVisualCopyOpacity, getVisualCopy } from '../core/visual/VisualEngine'
+import { useVisualEngine } from '../core/visual/VisualEngineContext'
 import { InstrumentCopyContext } from '../core/visual/instrumentColor'
 import { paramDefault } from './types'
 import { evaluateCoreAppearance } from './laserSphereCore'
@@ -37,6 +37,7 @@ void main() {
 
 /** A single shader emitter whose HDR edges feed the shared scene bloom. */
 export function LaserLine({ trackId }: { trackId: string }) {
+  const { getPeakVisualCopyOpacity, getVisualCopy } = useVisualEngine()
   const meshRef = useRef<Mesh>(null)
   const lightRef = useRef<PointLight>(null)
   const baseColor = useRef(new Color())

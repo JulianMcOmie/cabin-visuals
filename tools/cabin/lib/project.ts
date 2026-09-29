@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import type { ProjectDocument } from '../../../src/persistence/types'
+import { upgradeDocument } from '../../../src/persistence/upgrade'
 import { PROJECTS } from './paths'
 
 // A project on disk: projects/<name>/
@@ -55,7 +56,9 @@ export function listProjects(): string[] {
 export function loadDoc(name: string): ProjectDocument {
   const file = docPath(name)
   if (!fs.existsSync(file)) throw new Error(`no project "${name}" (${file}). Create it: cabin new ${name}`)
-  return JSON.parse(fs.readFileSync(file, 'utf8')) as ProjectDocument
+  // Always the app's current schema: an older file is migrated on read (the
+  // editor's own upgradeDocument) and the next write stores it current.
+  return upgradeDocument(JSON.parse(fs.readFileSync(file, 'utf8')))
 }
 
 export function loadMeta(name: string): CabinMeta {

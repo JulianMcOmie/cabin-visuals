@@ -15,7 +15,7 @@ import { Segmented } from './console/Segmented'
 import { More } from './console/More'
 import { usePreviewLoop } from './console/previewLoop'
 import { ParameterList } from './ParametersUserInterface'
-import { ColorWheelPopover, hexToHsv, hsvToHex } from './colorWheel'
+import { ColorPicker, hexToHsv, hsvToHex } from './colorWheel'
 import {
   WIREFRAME_SHAPES,
   wireframeGeometry,
@@ -88,22 +88,8 @@ function drawShapePreview(
 /** Quick hue ring around the current color; the center swatch opens the full
  *  standard editor (the shared wheel + brightness popover). */
 function HueRing({ value, onChange }: { value: string; onChange: (hex: string) => void }) {
-  const hostRef = useRef<HTMLDivElement>(null)
   const ringRef = useRef<HTMLDivElement>(null)
-  const [open, setOpen] = useState(false)
   const hsv = hexToHsv(value)
-
-  useEffect(() => {
-    if (!open) return
-    const controller = new AbortController()
-    window.addEventListener('pointerdown', (event) => {
-      if (!hostRef.current?.contains(event.target as Node)) setOpen(false)
-    }, { signal: controller.signal, capture: true })
-    window.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') setOpen(false)
-    }, { signal: controller.signal })
-    return () => controller.abort()
-  }, [open])
 
   const hueFromPointer = (clientX: number, clientY: number) => {
     const rect = ringRef.current?.getBoundingClientRect()
@@ -119,7 +105,7 @@ function HueRing({ value, onChange }: { value: string; onChange: (hex: string) =
   const markerAngle = (hsv.h - 90) * Math.PI / 180
 
   return (
-    <div ref={hostRef} className="relative ml-auto flex min-w-0 flex-col items-center">
+    <div className="relative ml-auto flex min-w-0 flex-col items-center">
       <div
         ref={ringRef}
         role="slider"
@@ -141,7 +127,7 @@ function HueRing({ value, onChange }: { value: string; onChange: (hex: string) =
         }}
       >
         <span
-          className="pointer-events-none absolute h-2 w-2 rounded-full border border-white/80"
+          className="pointer-events-none absolute h-2 w-2 rounded-full border border-[color-mix(in_srgb,var(--text)_80%,transparent)]"
           style={{
             left: `calc(50% + ${Math.cos(markerAngle) * 16}px - 4px)`,
             top: `calc(50% + ${Math.sin(markerAngle) * 16}px - 4px)`,
@@ -149,18 +135,11 @@ function HueRing({ value, onChange }: { value: string; onChange: (hex: string) =
           }}
         />
       </div>
-      <button
-        type="button"
-        aria-label="Open color editor"
-        aria-expanded={open}
-        title={`Color ${value}`}
-        onClick={() => setOpen((o) => !o)}
-        className="absolute top-[7px] left-1/2 h-[22px] w-[22px] -translate-x-1/2 cursor-pointer rounded-full border border-white/15 active:scale-95"
-        style={{ background: value }}
-      />
-      <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-white/40">COLOR</span>
-      <span className="font-mono text-[9px] uppercase text-white/70">{value}</span>
-      {open && <ColorWheelPopover value={value} onChange={onChange} align="right" edge="bottom" />}
+      <div className="absolute top-[7px] left-1/2 -translate-x-1/2">
+        <ColorPicker value={value} onChange={onChange} ariaLabel="Open color editor" size={22} />
+      </div>
+      <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">COLOR</span>
+      <span className="font-mono text-[9px] uppercase text-[var(--text-2)]">{value}</span>
     </div>
   )
 }
@@ -222,7 +201,7 @@ export const WireframeUserInterfaceRenderer: UserInterfaceRendererDefinition = (
             aria-pressed={index === selected}
             onClick={() => shape?.set(index)}
             className={`snap-start rounded-[7px] border p-[3px] text-center ${
-              index === selected ? 'bg-white/[0.05]' : 'border-white/[0.07] bg-white/[0.015] hover:border-white/30'
+              index === selected ? 'bg-[color-mix(in_srgb,var(--text)_5%,transparent)]' : 'border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--text)_1.5%,transparent)] hover:border-[color-mix(in_srgb,var(--text)_30%,transparent)]'
             }`}
             style={index === selected ? { borderColor: accent } : undefined}
           >
@@ -233,7 +212,7 @@ export const WireframeUserInterfaceRenderer: UserInterfaceRendererDefinition = (
                 else cellCanvases.current.delete(index)
               }}
             />
-            <div className="truncate pb-[2px] text-[9px] leading-tight text-white/50">{def.name}</div>
+            <div className="truncate pb-[2px] text-[9px] leading-tight text-[var(--text-3)]">{def.name}</div>
           </button>
         ))}
       </div>

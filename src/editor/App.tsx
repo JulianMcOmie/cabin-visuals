@@ -1,10 +1,17 @@
 'use client'
 
+import { setPreviewBackfillEditor } from '../persistence/previewBackfillActivity'
+import { useGradientEditing } from './userInterfaceRenderers/gradientEditing'
 import { GradientStageEditor } from './components/visual/GradientStageEditor'
+
+import { getFrameDriver } from './core/export/frameDriver'
+
 import dynamic from 'next/dynamic'
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import { InstantLink as Link } from '../components/instantNavigation'
 import { useSearchParams } from 'next/navigation'
+import { previewRuntime, subscribePreviewFrames } from './core/visual/previewRuntime'
+import { framePreparers } from './core/export/framePreparers'
 import { Canvas, useThree } from '@react-three/fiber'
 import { Play, Pause, Upload, Maximize, Minimize, Cloud, Pencil, Loader2 } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, type PanelImperativeHandle } from 'react-resizable-panels'
@@ -14,7 +21,7 @@ import { getPlaybackEngine } from './core/playback'
 import { useProjectStore, type ViewAspect } from './store/ProjectStore'
 import { ASPECT_RATIO_IDS, aspectRatioValue } from './core/aspectRatios'
 import { PREVIEW_QUALITIES, useUIStore, type PreviewQuality } from './store/UIStore'
-import { VisualScene } from './components/visual/VisualScene'
+import { PreviewSceneRenderer } from './components/visual/PreviewSceneRenderer'
 import { ExportDriver } from './components/visual/ExportDriver'
 import { RenderGovernor } from './components/visual/RenderGovernor'
 import { CanvasHoverPicker } from './components/visual/CanvasHoverPicker'
@@ -40,10 +47,13 @@ const ExportDialog = dynamic(() => import('./components/ExportDialog').then((m) 
 const SaveToCloudDialog = dynamic(() => import('./components/SaveToCloudDialog').then((m) => m.SaveToCloudDialog), { ssr: false })
 const PianoRollPanel = dynamic(() => import('./components/midi/PianoRollPanel').then((m) => m.PianoRollPanel), { ssr: false })
 const ConflictDialog = dynamic(() => import('./components/ConflictDialog').then((m) => m.ConflictDialog), { ssr: false })
+// Dev-only, and it drags previewCapture -> the export engine + muxer: a static
+// import put all of that in the production startup payload for a button that
+// never renders there.
+const PreviewCaptureButton = dynamic(() => import('./components/PreviewCaptureButton').then((m) => m.PreviewCaptureButton), { ssr: false })
 import { EditorSignupGate } from './components/EditorSignupGate'
 import { MediaFileDropLayer } from './components/MediaFileDropLayer'
 import { isExportSupported } from './core/export/support'
-import { PreviewCaptureButton } from './components/PreviewCaptureButton'
 import { TimelineArea } from './components/timeline/TimelineArea'
 import { SceneTabs } from './components/SceneTabs'
 import { usePlayback } from './hooks/usePlayback'
@@ -87,7 +97,7 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   // copies (transform + opacity) without reaching into an R3F scene graph.
   // getSceneBackdrop rides along because a scene colorizer's whole effect is a
   // clear colour - there is no object state to read it off (core/sceneTrack.ts).
-  ;(window as unknown as Record<string, unknown>).__cabinVisual = { getVisualCopies, getVisualCopyCount, getMountedRenderScenes, getCompositionLayers, getObjectState, getSceneBackdrop }
+  ;(window as unknown as Record<string, unknown>).__cabinVisual = { gradientEditing: useGradientEditing, getFrameDriver, framePreparers, getVisualCopies, getVisualCopyCount, getMountedRenderScenes, getCompositionLayers, getObjectState, getSceneBackdrop }
   // Load a saved document into the in-memory editor (perf probes replay real
   // projects through this; runs the same upgrade path a cloud open does).
   // Headless render entry points for the `cabin` CLI (dev/renderHooks.ts).
@@ -130,6 +140,10 @@ function glidePanelToggle(panelDomId: string) {
   const panel = document.querySelector<HTMLElement>('.visual-canvas-smooth')
   const root = panel?.querySelector<HTMLElement>('.visual-canvas-root')
   if (panel && root) {
+    // Narrow frames preserve width, so an oversized horizontal crop no
+    // longer has the same composition. Let those canvases follow layout.
+    const aspect = useProjectStore.getState().viewAspect
+    if (aspect === 'fill' || aspectRatioValue(aspect) < 16 / 9) return
     const bound = root.getBoundingClientRect().width + toggled.getBoundingClientRect().width
     panel.style.setProperty('--glide-canvas-w', `${bound}px`)
     holdClassForGlide(panel, 'canvas-glide-freeze')
@@ -184,17 +198,19 @@ function Scene({
   previewSceneId: string
   sourceCanvasRef: RefObject<HTMLCanvasElement | null>
 }) {
-  // Paused → 'demand': the render loop idles instead of redrawing a static
-  // frame 60×/s (heavy instruments were starving the editor UI even while
-  // paused). RenderGovernor requests single frames when an input changes.
-  const isPlaying = useTimeStore((s) => s.isPlaying)
+  // The worker owns preview cadence; the governor advances compatibility frames.
   return (
     // Geometry is antialiased in the offscreen pipeline; the backbuffer only displays its final quad.
-    <Canvas className="visual-canvas-root" shadows="soft" frameloop={isPlaying ? 'always' : 'demand'} dpr={[1, 2]} camera={{ position: [0, 0, 5], fov: 55 }} gl={{ antialias: false }}>
+    // preserveDrawingBuffer: PostHog's session replay captures this canvas on
+    // its own timer (a readback outside our render), which sees only a cleared
+    // buffer unless the frame is kept. The recorder forces the flag itself, but
+    // only on contexts created after it loads - and on a fresh /editor load
+    // this one exists first.
+    <Canvas className="visual-canvas-root" shadows="soft" frameloop="never" dpr={[1, 2]} camera={{ position: [0, 0, 5], fov: 55 }} gl={{ antialias: false, preserveDrawingBuffer: true }}>
       <color attach="background" args={['#09090b']} />
       <CanvasSourceBridge sourceRef={sourceCanvasRef} />
       <PreviewSceneSync sceneId={previewSceneId} />
-      <VisualBeatSync />
+      <VisualBeatSync sceneId={previewSceneId} sourceRef={sourceCanvasRef} />
       <ExportDriver />
       <RenderGovernor />
       <CanvasHoverPicker />
@@ -203,7 +219,7 @@ function Scene({
       {process.env.NODE_ENV === 'development' && <DevRenderStats />}
       {/* Suspense: instruments may load assets through useLoader. */}
       <Suspense fallback={null}>
-        <VisualScene />
+        <PreviewSceneRenderer />
       </Suspense>
     </Canvas>
   )
@@ -226,6 +242,7 @@ function VisualAmbientBleed({ sourceCanvasRef }: { sourceCanvasRef: RefObject<HT
 
     let frame = 0
     let lastPaint = 0
+    let lastAmbient: ImageData | null = null
     // The WebGL frame only changes while playing or for a beat after an edit /
     // scrub / resolve (RenderGovernor's demand frames). Copying it - and so
     // re-blurring the whole workspace layer - 15×/s while paused and idle was
@@ -241,7 +258,12 @@ function VisualAmbientBleed({ sourceCanvasRef }: { sourceCanvasRef: RefObject<HT
         const source = sourceCanvasRef.current
         if (source?.width && source.height) {
           try {
-            ctx.drawImage(source, 0, 0, bleed.width, bleed.height)
+            if (previewRuntime.rendering) {
+              if (previewRuntime.ambient && previewRuntime.ambient !== lastAmbient) {
+                ctx.putImageData(previewRuntime.ambient, 0, 0)
+                lastAmbient = previewRuntime.ambient
+              }
+            } else ctx.drawImage(source, 0, 0, bleed.width, bleed.height)
           } catch {
             // A temporarily unavailable video-backed WebGL frame should not
             // take down the editor; the previous ambient frame can stay put.
@@ -257,6 +279,7 @@ function VisualAmbientBleed({ sourceCanvasRef }: { sourceCanvasRef: RefObject<HT
     }
     frame = requestAnimationFrame(paint)
     const unsubProject = useProjectStore.subscribe(wake)
+    const unsubPreview = subscribePreviewFrames(wake)
     const unsubGraph = subscribeObjects(wake)
     const unsubTime = useTimeStore.subscribe(wake)
     const resize = new ResizeObserver(wake)
@@ -265,6 +288,7 @@ function VisualAmbientBleed({ sourceCanvasRef }: { sourceCanvasRef: RefObject<HT
       if (frame) cancelAnimationFrame(frame)
       unsubProject()
       unsubGraph()
+      unsubPreview()
       unsubTime()
       resize.disconnect()
     }
@@ -393,7 +417,7 @@ function CanvasTransportBar({
               else void playback.play()
             }}
             aria-label={isPlaying ? 'Pause' : 'Play'}
-            className="visualizer-glass-control flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-[rgba(16,19,28,0.8)] text-white/90 hover:text-white cursor-pointer"
+            className="visualizer-glass-control flex h-9 w-9 items-center justify-center rounded-full border border-[var(--border-strong)] bg-[color-mix(in_srgb,var(--bg-panel-raised)_80%,transparent)] text-[var(--text)] hover:text-[var(--accent-hover)] cursor-pointer"
           >
             {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="translate-x-px" />}
           </button>
@@ -430,7 +454,7 @@ function AspectPill({ open, setOpen, glass }: {
         title="Preview aspect ratio - see the visual as an export at that shape would compose it"
         className={`flex h-7 items-center gap-1.5 rounded-md px-2 @[530px]:px-2.5 font-mono text-[9px] uppercase tracking-wide text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer ${
           glass
-            ? 'visualizer-glass-control border border-[var(--border)] bg-[rgba(16,19,28,0.8)]'
+            ? 'visualizer-glass-control border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-panel-raised)_80%,transparent)]'
             : 'bg-[var(--bg-elevated)]'
         }`}
       >
@@ -677,7 +701,7 @@ function VisualPanel({
   // destination to the origin) and the rAF retarget swallows the glide whole.
   // Pin the old rect untransitioned, let it paint, then move.
   //
-  // `pin` is the canvas half, and it is not optional: an element that GROWS
+  // For wide frames, `pin` is the canvas half: an element that GROWS
   // ahead of the GL buffer is exactly the case object-fit: cover resolves by
   // scaling the frame UP, so a glide out to Fill visibly zoomed the picture
   // for its duration (shrinking only crops, which is why the artifact was
@@ -698,12 +722,14 @@ function VisualPanel({
   // anything at all in a pane taller than it is wide - does over-render the
   // height for the glide's duration: bounded and uniform, the same trade the
   // sidebar freeze documents.) It also spares the instrument tree
-  // ~24 re-renders per switch.
+  // ~24 re-renders per wide-frame switch. Narrow frames instead keep their
+  // horizontal coverage and extend vertically; they must resize through the
+  // glide, since center-cropping an oversized canvas would change that framing.
   const [glide, setGlide] = useState<{
     width: number
     height: number
     moving: boolean
-    pin: { width: number; height: number }
+    pin: { width: number; height: number } | null
   } | null>(null)
   const prevAspectRef = useRef(aspect)
   const boxRef = useRef<HTMLDivElement>(null)
@@ -721,7 +747,10 @@ function VisualPanel({
     const end = fitAspectBox(cw, ch, aspect)
     // The box is borderless, so its inner box - what the r3f root fills at
     // rest - is the box itself.
-    const pin = {
+    // Width-preserving framing must track the animated box; freezing a wide
+    // render would crop its sides and then jump to the extended view at settle.
+    const extendsVertically = Math.min(start.width / start.height, end.width / end.height) < 16 / 9 - 0.005
+    const pin = extendsVertically ? null : {
       width: Math.max(0, Math.max(start.width, end.width)),
       height: Math.max(0, Math.max(start.height, end.height)),
     }
@@ -753,8 +782,8 @@ function VisualPanel({
       onPointerMove={isMobile ? undefined : revealFullscreenControl}
       onPointerLeave={isMobile ? undefined : hideFullscreenControl}
       onClick={onCanvasTap}
-      className={`visual-canvas-smooth relative flex h-full items-center justify-center bg-[var(--bg-canvas-deep)] [container-type:size] ${glide ? 'aspect-canvas-pin' : ''}`}
-      style={glide
+      className={`visual-canvas-smooth relative flex h-full items-center justify-center bg-[var(--bg-canvas-deep)] [container-type:size] ${glide?.pin ? 'aspect-canvas-pin' : ''}`}
+      style={glide?.pin
         ? ({ '--aspect-canvas-w': `${glide.pin.width}px`, '--aspect-canvas-h': `${glide.pin.height}px` } as CSSProperties)
         : undefined}
     >
@@ -784,7 +813,7 @@ function VisualPanel({
           }}
           onBlur={hideFullscreenControl}
           title={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
-          className="visualizer-glass-control flex items-center justify-center w-6 h-6 rounded border border-[var(--border)] bg-[rgba(16,19,28,0.8)] text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer"
+          className="visualizer-glass-control flex items-center justify-center w-6 h-6 rounded border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-panel-raised)_80%,transparent)] text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer"
         >
           {isFullscreen ? <Minimize size={11} /> : <Maximize size={11} />}
         </button>
@@ -1364,21 +1393,20 @@ function BottomArea() {
   if (editingBlock) lastBlockRef.current = editingBlock
   // The roll rises over the timeline (Material 3 emphasized-decelerate, the
   // sidebar glide's curve) and sinks away on dismiss (M3's accelerate exit).
-  // The timeline stays mounted UNDER the roll only while it animates: at rest
-  // the old single-surface swap is preserved, because TimelineArea's
-  // whole-tracks subscription must not re-render beneath the roll's
-  // per-pointermove note edits (render budget, components/CLAUDE.md).
-  const [rollSettled, setRollSettled] = useState(false)
-  useEffect(() => {
-    if (!editing) setRollSettled(false)
-  }, [editing])
+  // The timeline stays MOUNTED under the roll the whole time. It used to be
+  // unmounted once the roll settled, to keep TimelineArea's whole-tracks
+  // subscription from re-rendering beneath per-pointermove note edits - but the
+  // roll commits once per gesture (useNoteGestures), so that re-render is one
+  // memoized row per edit, while the remount on dismiss rebuilt every row, note
+  // preview and live-preview stage synchronously inside the Escape keydown:
+  // 250-450ms of style recalc + DOM creation on a 50-track project.
   return (
     // overflow-CLIP: the roll slides in from y:'100%', which under `hidden`
     // gives this box a pane-height of vertical scroll range for the length of
     // the animation - a wheel or focus mid-slide banks it and the timeline
     // sits shifted afterwards. See src/editor/CLAUDE.md.
     <div className="relative h-full overflow-clip">
-      {(!editing || !rollSettled) && <TimelineArea />}
+      <TimelineArea />
       <MotionConfig reducedMotion="user">
         <AnimatePresence>
           {/* z-[80]: the timeline's own chrome stacks up to z-[70] (loop
@@ -1391,9 +1419,6 @@ function BottomArea() {
               animate={{ y: 0 }}
               exit={{ y: '100%', transition: { duration: 0.25, ease: [0.3, 0, 0.8, 0.15] } }}
               transition={{ duration: 0.4, ease: [0.05, 0.7, 0.1, 1] }}
-              onAnimationComplete={(target) => {
-                if (typeof target === 'object' && target !== null && 'y' in target && target.y === 0) setRollSettled(true)
-              }}
             >
               <PianoRollPanel frozenRef={lastBlockRef.current} />
             </motion.div>
@@ -1410,6 +1435,20 @@ function BottomArea() {
 type PlaybackControls = ReturnType<typeof usePlayback>
 
 export default function EditorApp() {
+  useEffect(() => {
+    const update = () => setPreviewBackfillEditor(true,
+      useTimeStore.getState().isPlaying || useUIStore.getState().modalOpen ||
+      !['saved', 'idle'].includes(useSaveStatus.getState().status))
+    update()
+    const stops = [
+      useTimeStore.subscribe((state, previous) => { if (state !== previous) update() }),
+      useUIStore.subscribe((state, previous) => { if (state.modalOpen !== previous.modalOpen) update() }),
+      useProjectStore.subscribe(update),
+      useSaveStatus.subscribe(update),
+      subscribePreviewFrames(update),
+    ]
+    return () => { stops.forEach(stop => stop()); setPreviewBackfillEditor(false) }
+  }, [])
   useProjectPersistence()
   // Dev-only: `?file=<name>` binds the editor to projects/<name>/project.json,
   // shared live with the `cabin` CLI (dev/useFileSync.ts). No-op otherwise.

@@ -17,6 +17,7 @@
 // becomes a bespoke file - that is the intended pressure valve, not a failure.
 
 import { type ComponentType } from 'react'
+import type { KnobValueCodec } from '../knobValueParsing'
 import { bindPanel } from './bindings'
 import { emitterHalo } from './accent'
 import { Console, ControlRow, GutterRow } from './Console'
@@ -43,6 +44,7 @@ export interface KnobSpec {
   bipolar?: boolean
   suffix?: string
   format?: (value: number) => string
+  entry?: KnobValueCodec
   /** Absence doesn't trip the fallback - REQUIRED for showIf-gated keys on
    *  the instrument branch (TrackEditor filters those before the panel). */
   optional?: boolean
@@ -189,6 +191,7 @@ export function consolePanel(spec: PanelSpec): UserInterfaceRendererDefinition {
                 bipolar={item.bipolar}
                 suffix={item.suffix}
                 format={item.format}
+                entry={item.entry}
               />
             )
           })

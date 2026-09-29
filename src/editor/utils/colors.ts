@@ -97,10 +97,9 @@ export function colorToHsl(color: string): HslColor | null {
   return { hue, saturation, lightness }
 }
 
-/** Vivid solid timeline MIDI: saturated track-hued bodies with dark note ink
+/** Vivid solid timeline clips: saturated track-hued bodies with dark note ink
  *  and quieter loop repeats. The pale title band shares the selection color.
- *  Selection keeps the fill; Block draws a crisp outline above loop sections.
- *  Audio retains its existing palette below. */
+ *  Selection keeps the fill; clips draw a crisp outline above their content. */
 export function vividMidiBlockPalette(color: string): MidiBlockPalette {
   const source = colorToOklch(color) ?? { l: 0.5, c: 0.08, h: 240 }
   const c = (target: number) => source.c > 0.02 ? target : 0

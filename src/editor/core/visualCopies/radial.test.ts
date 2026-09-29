@@ -702,3 +702,23 @@ test('facing the center aims each copy\'s forward axis at the ring center, in ev
   }
   assert.deepEqual(faceOn.map(upOf), [[0, 1, 0], [-1, 0, 0], [0, -1, 0], [1, 0, 0]])
 })
+
+test('resolved radial slot matrices stay private across inputs and count changes', () => {
+  const entry = radialSplitter.resolve({
+    settings: settings({ copies: 5, radius: 2, tilt: 27, facing: 1, rings: 2, ringTwist: 19, ringSize: 0.8 }),
+    notes: [note(2, 38), note(4, 40)],
+  })
+  const input = identityVisualCopy()
+  input.transform.makeRotationY(0.4).multiply(new Matrix4().makeScale(-2, 0.7, 1.3))
+  const context = { beat: 3, index: 0, count: 1 }
+  const original = entry.apply(input, context)
+  const snapshot = original.map((copy) => copy.transform.elements.slice())
+  original[0].transform.makeTranslation(100, 100, 100)
+  original[0].colorShift.hue = 0.9
+  entry.apply(identityVisualCopy(), { ...context, beat: 5 })
+  const repeated = entry.apply(input, context)
+  assert.equal(repeated.length, 6, 'three MIDI-selected slots in each ring')
+  repeated.forEach((copy, i) => assert.deepEqual(copy.transform.elements, snapshot[i]))
+  assert.equal(repeated[0].colorShift.hue, 0)
+  assert.equal(input.colorShift.hue, 0)
+})

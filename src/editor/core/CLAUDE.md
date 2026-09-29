@@ -39,16 +39,12 @@ A lane carrying an `automationRange` reshapes that through `pitchToValueRanged`,
 
 A COUNT param (`integer: true` on its NumberParamDef — copies, rows, columns, mirrors, sides, segments) makes INT the lane's CREATION default: `addAutomationTrack` (and both retarget paths) seeds `automationRange: { integer: true }` plus `'step'` interpolation, so a fresh lane on Copies shows one row per whole number (1–32 → 32 rows) and jumps at each keyframe instead of splining through 6.4 copies. The same grid is the splitters' own MIDI vocabulary — `core/visualCopies/countLane.ts` decodes pitches identically, which is the reason the two must never drift.
 
-## defaultLighting.ts — the seeded light rig
+## lightingTracks.ts — lighting-only tracks
 
-`defaultLightingTracks()` builds the "Lighting" group of five Light-instrument
-tracks (fresh ids per call) that every visual scene is born with - the old
-hardcoded VisualScene rig's exact values as editable tracks. Three creation
-paths call it (ProjectStore's `makeInitialScenes` + `addScene`, persistence's
-`emptyDocument`); persistence UPGRADES[17] carries its own frozen copy for old
-saves. `isLightingOnlyTrack` is the timeline's "a scene wearing only lights is
-still empty" predicate. Values here and in the upgrade step are intentionally
-duplicated - a shipped step never chases a live module.
+Scenes start with no light tracks. `isLightingOnlyTrack` is the timeline's
+"a scene containing only lights is still empty" predicate. Persistence
+UPGRADES[22] removes complete, unchanged legacy default rigs while preserving
+custom lighting; the historical seeding step UPGRADES[17] stays frozen.
 
 ## loopRegion.ts / midiImport.ts
 
@@ -78,3 +74,13 @@ Composition params are automatable like any other track's: `compositionAutomatab
 `videoTime.ts` / `photoTime.ts`: pure `(beat, notes) → what's on screen` (which pad, and for video the in-clip time). No DOM/three — this purity is what makes scrub/pause/export land identical frames. Pads answer fixed base pitch 48 upward; the MIDI editor shows labelled rows so pitches are never user-facing. `decodeEngine.ts` keeps each pad's in-point frames warm so triggers land next display tick. `videoUploads.ts`/`photoUploads.ts`/`videoSource.ts`/`photoSource.ts` handle bytes (Supabase bucket + session cache) behind refs; only serializable descriptors reach the stores.
 
 Export video frame-exactness comes from a registered frame preparer (see export/CLAUDE.md).
+
+## Extracted drum MIDI
+
+`utils/drumDetection.ts` is heuristic band-onset detection, run in a browser
+worker. `utils/extractDrumMidi.ts` shares upload/separation/analysis across the
+three audio track buttons. `utils/drumMidi.ts` owns seconds-to-beats placement
+and tempo rescaling of edited blocks. Track's optional `drumMidi` metadata must
+survive import/serialization: BPM changes rescale current notes in all scenes,
+never recreate them from detections. Audio trims are applied at insertion only.
+See `docs/drum-midi.md` for provider/cache contracts and validation limits.

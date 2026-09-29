@@ -1,9 +1,13 @@
 # src/editor/userInterfaceRenderers — registered settings UIs
 
+For an ordinary instrument panel, start with [the supported settings path](../../../docs/add-an-instrument.md#reuse-the-settings-library)
+and the [console kit exports](console/index.ts). The feature notes below are
+conditional references for custom panels, not prerequisite reading for `panelSpec`.
+
 The inspector panel (in `TrackEditor.tsx`) renders a track's settings through a REGISTERED renderer instead of hardcoding layouts. A renderer is a component `({ targetId, parameters })` where each `UserInterfaceParameter` arrives with `{ definition, value, setValue }` — the canonical update path is already bound; renderers never write stores directly.
 
 Three registries:
-- **Object instruments** (`index.ts`, keyed by `UserInterfaceRendererId` from `ids.ts`): every instrument def explicitly names one via `userInterfaceRenderer`. `'parameters'` is the generic auto-generated list (`ParametersUserInterface.tsx`); the rest are bespoke (Cube, TextDisplay, Video…).
+- **Object instruments** (`index.ts`, keyed by `UserInterfaceRendererId` from `ids.ts`): every instrument def explicitly names one via `userInterfaceRenderer`, but a declared `panelSpec` takes precedence and needs no registry entry. `'parameters'` is the generic auto-generated list (`ParametersUserInterface.tsx`); the rest are bespoke (Cube, TextDisplay, Video…).
 - **Movers/splitters and effects** (`bespokeRegistries.ts`, keyed by definition/plugin id): registration is OPTIONAL — a missing entry falls back to the generic ParamControl list in TrackEditor.
 - Automation tracks use `AutomationUserInterface.tsx` directly; word-formation lanes use `WordFormationUserInterface.tsx` directly (both are plain presentational components TrackEditor binds, not registry entries).
 
@@ -26,12 +30,22 @@ changes on every frame of an animation, and a bare Canvas gets both failure mode
 viewport had: three writes inline px on the canvas element per `setSize` through a
 ResizeObserver → React round-trip, so the element visibly STEPS inside its smoothly-moving
 window; and resizing a WebGL drawing buffer CLEARS it, so a preview that isn't looping
-(see the black-until-play note below) goes black or stale for the rest of the glide.
-`PreviewCanvas` fixes both — `.preview-canvas-smooth` (globals.css) hands the canvas
-geometry to CSS so layout can't lag, and its `ResizeSync` advances THAT root synchronously
-pre-paint on every size change. Same cure as `VisualPanel`'s in editor/App.tsx.
+goes black or stale for the rest of the glide. `PreviewCanvas` fixes both —
+`.preview-canvas-smooth` (globals.css) hands the canvas geometry to CSS so layout can't
+lag, and its `ResizeSync` advances THAT root synchronously pre-paint on every size change.
+Same cure as `VisualPanel`'s in editor/App.tsx.
 
-**A panel's live 3D preview may not animate until the transport PLAYS.** Observed 2026-07-29 on both Impact Scatter's and Conveyor's previews: the canvas is created and sized, but `useFrame` never fires while paused, so the window stays BLACK — hitting play starts it, pausing freezes the last frame. Likely because r3f's render loop is global and the main canvas runs `frameloop='demand'` (RenderGovernor), so once the loop stops nothing restarts it for a panel root that mounted later. It is app-wide, not a panel bug: **smoke-test previews with the transport running** before suspecting your own preview code.
+**`PreviewCanvas` is a demand root that books its own frames.** r3f runs ONE loop for every
+root on the page, and it spins at display rate for as long as any root is `frameloop='always'`
+(r3f's default) — so a bare `<Canvas>` in the inspector defeated the main viewport's demand
+mode and a paused editor rendered its 130px preview forever; the same mechanism produced the
+old "black until play" bug (a root mounted while the loop was parked never got the
+`invalidate()` that restarts it). `PreviewCanvas` therefore mounts `frameloop='demand'` and
+invalidates itself at ~30fps (the `usePreviewLoop` cadence) only while on screen and in a
+visible tab; its first invalidate wakes a fresh root, so previews render while paused. A
+preview whose picture is static (Scene settings' stage) passes `animate={false}` and renders
+only on prop changes and control input. A `useFrame` that reads `clock` keeps working — the
+clock runs in demand mode — it just samples at 30fps.
 
 `AutomationUserInterface.tsx` is the second panel built to the guide (after Laser Sphere): a live window onto the lane — the easing curve, the real seeded wobble, or a grabbable ADSR — over a segmented MODE control and a knob row. Its window is drawn with the engine's own samplers (`easeFraction`, `sampleNoiseLane`, `sampleLane`) so the picture can't drift from playback, and its emission comes from three stacked strokes of the same path rather than a blur filter (a stretched viewBox smears blurs anisotropically). Its AMOUNT fader is the panel's one sanctioned slider: a lane-level gain (mode-independent, so it sits below whichever mode console is up) with its lit fill growing from a 100% center detent — the horizontal-throw sibling of LaserKnob's `bipolar` rule that neutral must never read as half-on. The curve/noise windows scale with it, using the same math resolve.ts applies, so the plot stays the real signal.
 
@@ -65,9 +79,46 @@ Its **Rows·Range console** says two things the param defs don't. MIN/MAX travel
 - **A grid panel busts the ~240px height budget and that is a real cost, not a rounding error.** 4 rows × 3 knobs plus a preview lands near 450px, and the inspector pane opens around 300px — half the console starts below the fold. It scrolls and the pane drags, but reach for a disclosure first; only go to a grid when the caller has explicitly asked for everything visible at once.
 - Its preview runs the mover's real `resolve()` with **NO NOTES**, which is the claim the mover makes (passive choreography, MIDI as accent). A preview that needs notes to move would be hiding the actual behaviour.
 - The preview frames by **HEIGHT, not width** — the subject is a disc in a short wide window, and fitting the width pushes the top and bottom off-frame. (Conveyor frames by width for the opposite reason: its subject is a line.) Same per-frame re-derivation from `gl.domElement.client*` as Conveyor, for the same reason.
-- **A stepped (detent) knob is a LaserKnob driven in INDEX units**, not a new control: its spin knobs walk `RADIAL_MOTION_SPIN_DETENTS` by binding `value`/`min`/`max`/`step` to `0…detents.length−1`/`1` and converting index⟷rate in the wrapper's `format`/`onChange` — evenly spaced clicks on the arc regardless of how non-uniform the underlying values are, and `bipolar` still works when the zero detent is the middle index. The keyboard nudge in laserKnob.tsx is `max(3%, one step)` for exactly this case; don't shrink it back.
+- **A stepped (detent) knob is a LaserKnob with `detents`**, not a new control: pass the real value/bounds and `RADIAL_MOTION_SPIN_DETENTS`; the shared interaction hook maps to index positions internally — evenly spaced clicks on the arc regardless of how non-uniform the underlying values are. `bipolar` still works when the zero detent is the middle index. The shared keyboard nudge is `max(3%, one detent)` so a coarse knob never reads as stuck. Keep unit conversion in the readout/entry codec, not the gesture handlers.
 
-Building blocks — use these, don't hand-roll controls: **the console kit in `console/` first** (see above), then the plain-value primitives it wraps: `ParameterControl.tsx` exports `ParamControl` (dispatches on param type), `ParamSlider` (drag + curve + fine-step behavior), `ParamToggle`, `ParamStepper` (small integer counts as −/+ around a detent strip — segment/facet counts, where a smooth slider makes the exact value a hunt), `ParamHueSlider` (a radians hue param on a rainbow track); `colorWheel.tsx` is the shared color picker in TWO shapes — `ColorWheelPill` + `ColorWheelPopover` (a swatch that opens a floating HSV wheel: the default, and what the kit's bound `ColorPill` wraps) and **`ColorField`** (the same picker laid FLAT and always open — captioned header with live hex, hue rail, saturation/brightness field; plain values in/out, no bound kit wrapper yet). Reach for the field when the color IS the panel's subject and the popover would cover the very preview you are judging, or when two colors must be editable at once: stacking two `ColorField`s is how SceneSettingsPanel edits a gradient's stops with no selector between them. It costs ~85px per color against the pill's ~50px, so it is a deliberate trade, not the new default; `laserKnob.tsx` is the guide's console knob (`LaserKnob`, plain numbers in/out — the layer to bind when the value is NOT a `UserInterfaceParameter`: an ADSR field, a mover input; otherwise use the kit's bound `Knob`). Two options on it exist for grid panels: **`bipolar`** anchors the arc at 12 o'clock and grows it either way, which is mandatory for a signed rate (a half-lit ring for zero reads as half ON); and passing **`label=""`** drops the caption row entirely, for a panel that labels its rows and columns instead. The kit `Knob` also takes **`detents`** (uneven allowed stops driven in index units — Radial Motion's pattern, folded in). Respect `showIf` gating (already handled if you go through ParamControl). See `docs/instrument-panel-design-guide.md` for the visual language.
+**Knob behavior and exact values (2026-09-08).** `useKnobInteraction.ts` owns
+pointer capture/ownership/cancel, drag mapping, curves, detents, reset and keyboard
+nudges. `LaserKnob` and the distinct Shock, Rotate and Kaleidoscope skins use it;
+the camera numeric cells, Pixel Blast meters, Color Filters bar and Symmetry count
+use its gesture options too. Keep intentional geometry in the skin, not another
+copy of the gesture handlers. All ordinary bound knobs still go through the kit.
+
+`KnobValue.tsx` is the shared numeric readout/editor: double-click its **number**
+(or focus it and press Enter/F2) to type; double-click the **knob face** still resets.
+Enter and valid blur/Tab commit once, Escape cancels, invalid Enter retains the
+focused draft with an error, invalid blur discards it. Drafts don't write params;
+unchanged drafts don't round their existing values. Typed finite in-range values
+bypass the drag grid/curve rounding, so narrow settings stay precise. Count-only
+controls keep their existing integer setter; `integer` definitions reject fractional entry. Disabled knobs reject every input.
+
+A display formatter is NOT reversible. Pair transformed readouts with an `entry`
+codec from `knobValueParsing.ts` (also forwarded by kit Knob and PanelSpec): percent
+is /100, Hue Rotate degrees are /360, Line Growth is log2, musical beat periods are
+reciprocal rates, and Scene FX's note fractions use a quarter note per beat.
+Unscaled `suffix` works automatically. Codecs seed from full precision, not the
+rounded readout; decimal/exponent/fraction tokens must parse completely. Detent
+knobs now pass REAL values and their `detents` into LaserKnob, which alone maps
+positions to indices; exact entry can set off-grid values without silently snapping.
+Tunnel's off-grid number is rings/beat; Radial Motion's off-grid number is degrees/beat
+(the degree sign explicitly selects that unit). Those historical readouts remain. Scene FX keeps note fractions and shows the actual
+custom denominator for off-grid rates rather than the nearest detent.
+
+Nested draggable readouts must pass `draggable` to KnobValue: the shared hook captures
+the pointer on the readout button, so its double-click keeps targeting the number.
+Capturing on its parent retargets clicks to the parent and accidentally resets it.
+
+Verification: `knobValue.test.ts` covers parsing/conversions/ranges, drag math and an
+AST audit of every named knob/dial wrapper. `node scripts/test-knobs.mjs` runs real
+Chromium pointer, keyboard, entry and cancellation checks across the skins and kit;
+it omits only the unrelated GPU preview/frame hook so the fixture doesn't boot the
+whole rendering engine. Generic ParameterControl readouts use the same editor too.
+
+Building blocks — use these, don't hand-roll controls: **the console kit in `console/` first** (see above), then the plain-value primitives it wraps: `ParameterControl.tsx` exports `ParamControl` (dispatches on param type), `ParamSlider` (drag + curve + fine-step behavior), `ParamToggle`, `ParamStepper` (small integer counts as −/+ around a detent strip — segment/facet counts, where a smooth slider makes the exact value a hunt), `ParamHueSlider` (a radians hue param on a rainbow track); `colorWheel.tsx` exports **`ColorPicker`**, the Colorizer's current-color circle opening its HSV wheel and hex input. It owns open state, top-layer placement, outside-click/Escape dismissal and keyboard isolation for every color input. `ColorWheelPill` only adds the console label/hex layout; the kit's bound `ColorPill` wraps it. Use the plain picker in compact rows and gradient stops, and the pill in console/Scene rows. Scene gradients show one pill per stop. Preset colors and numeric hue shortcuts can accompany it, but do not add native color inputs, embedded fields, or another popup host; `laserKnob.tsx` is the guide's console knob (`LaserKnob`, plain numbers in/out — the layer to bind when the value is NOT a `UserInterfaceParameter`: an ADSR field, a mover input; otherwise use the kit's bound `Knob`). Two options on it exist for grid panels: **`bipolar`** anchors the arc at 12 o'clock and grows it either way, which is mandatory for a signed rate (a half-lit ring for zero reads as half ON); and passing **`label=""`** drops the caption row entirely, for a panel that labels its rows and columns instead. The kit `Knob` also takes **`detents`** (uneven allowed stops driven in index units — Radial Motion's pattern, folded in). Respect `showIf` gating (already handled if you go through ParamControl). See `docs/instrument-panel-design-guide.md` for the visual language.
 
 **Live shader previews**: `KaleidoSolidUserInterface.tsx` imports the instrument's exported GLSL (`KALEIDO_FIELD_GLSL`) and runs it in a small raw-WebGL canvas, rather than redrawing an impression of it in SVG — so the preview cannot drift from what renders. It evaluates the field over an orthographic sphere: the object-space direction at each pixel of a front-facing sphere is just `(x, y, sqrt(1-x²-y²))`. Three things this depends on:
 
@@ -100,10 +151,9 @@ palette was built around them - they just import them now.)
 
 **A panel whose subject is MOTION should use plain DOM transforms, not r3f.**
 `ImpactPulseMoverUserInterface` animates its subject with `element.style.transform` off
-one rAF loop rather than a `<Canvas>`, precisely because of the black-until-play note
-above: a size punch is exactly the thing you need to watch while the transport is
-parked. Reach for a canvas only when the preview genuinely needs shaders, lighting, or
-real geometry.
+one rAF loop rather than a `<Canvas>`: a size punch needs no lighting, and a DOM transform
+is the cheaper picture. Reach for a canvas only when the preview genuinely needs shaders,
+lighting, or real geometry.
 
 `MoverUserInterface.tsx` extends that pattern to full 3D: its window is a FIELD of
 nine seeds run through the definition's real `resolve()` on a looping demo phrase,
@@ -187,8 +237,7 @@ selected track loses it, or the panel renders a body with no tab lit.
 **A panel whose subject is a LAYOUT can preview with a plain 2D canvas.**
 `GridSplitterUserInterface` runs the splitter's real `resolve()` (no notes)
 and draws the copies as painter-sorted cube faces on a `<canvas>` with its own
-rAF - no r3f, because a panel `<Canvas>` stays black until the transport plays
-(see above) and a layout is exactly what you dial in while paused. It re-reads
+rAF - no r3f, because a few hundred flat quads need no GPU scene. It re-reads
 `clientWidth/Height` per frame instead of using a ResizeObserver (those starve
 in a hidden pane), and drops to a point cloud past a few hundred copies.
 
@@ -215,18 +264,14 @@ with COPIES/SPACING while GROWTH drops to the modifier row, and Tunnel's geometr
 gained a fourth knob and therefore `flex-wrap` — four knobs plus its stepper column
 overrun a narrow inspector pane, and a fixed-size knob row CLIPS rather than shrinking.
 
-**A `ColorWheelPopover` anchor owes two decisions, and both are about what CLIPS
-it.** Text Display's per-lane colour chip (`LaneColorSwatch`, 2026-08-21 — the eight
-preset swatches are quick looks, the chip is any colour at all) is the worked example.
-It opens `edge="bottom"` because the thing you judge a lane colour against is the live
-name preview at the TOP of that card, and the default upward popover covers it. And it
-sits FIRST in a wrapping swatch row rather than last, because the card renders in two
-hosts and the tighter one — the piano roll's sidecar, `w-[236px] overflow-y-auto`, and
-**a box that scrolls on one axis scrolls on both** — leaves a trailing chip with no
-predictable x to open from: hugging either edge puts the ~158px popover outside one host
-or the other. Pinned to the row's start with `align="left"` it always opens inward.
-Dismissal (outside pointerdown / Escape) is the shared `useColorPopoverDismiss` hook in
-`colorWheel.tsx` — `ColorWheelPill` uses it too, so a second anchor cannot drift.
+**All freely chosen colors go through `ColorPicker`.** Text Display's preset
+swatches remain shortcuts; its custom chip uses the same current-color circle as
+Colorizer. `align="left"` keeps compact lane rows opening inward. The shared popup
+uses the browser top layer to escape scroll clipping, chooses above/below from
+available viewport space, and clamps horizontally. Keep the popup inside the
+picker's DOM host: outside-pointer dismissal relies on that ancestry. Keyboard
+events inside the popup are isolated from editor shortcuts; Escape dismissal is
+captured before that isolation.
 
 **SVG can only say INTERSECTION by nesting clipPaths, and that is enough to preview a
 set operation honestly.** `OverlapShapeUserInterface`'s counted preview paints one group
@@ -261,3 +306,8 @@ The canvas uses the actual colorizer resolve and shared color-shift function,
 on the visibility-gated preview loop at a labelled demo 120 BPM. Its clock is
 illustrative, independent of transport. Speed is an optional binding because
 of `showIf`; future unclaimed parameters remain reachable through More.
+
+Glow's console (`GlowEffectUserInterface.tsx`) keeps Strength/Radius/Spread in
+one row; source/color/core/stretch live in the disclosure. Presets write the
+same bound settings as knobs (all editable). Effect settings are numeric, so
+its tint uses hue/saturation/blend rather than an unsupported string color.

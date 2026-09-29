@@ -92,6 +92,9 @@ export const instrument = defineInstrument<State>({
 - `particles({ count, seed, vertex, header, fragment, uniforms, hardness })` - GPU
   point clouds: a GLSL snippet sets `pos`, `size`, `color` from `aSeed` (vec4),
   `aIndex`, `uBeat`, `uSec` + your uniforms; `tick(beat, sec, px)` per frame.
+  A point under one pixel at the render size draws at one pixel with its alpha
+  scaled by its true area, so small renders (audits, thumbnails) keep the
+  full-size frame's brightness.
   References: `innuendo/chladni.ts` (Newton-settled sand), `orb.ts`.
 - `GLSL.noise` (snoise, snoise3, fbm, hash11/12/31), `GLSL.rotate`, `GLSL.screen`
   (toCentered/toUv/shapeR), `GLSL.pointSprite`.
@@ -135,8 +138,17 @@ export const instrument = defineInstrument<State>({
   every edit re-execute them under HMR - an empty store or a projectless engine.
 - **Hot swap** (`code/live.ts`): `defineInstrument` publishes its spec; the view
   (`CodeInstrumentView`, one per id) reads the newest spec every frame and
-  re-runs setup when it changed. `useInstrumentFrame`'s `extra` signature
+  re-runs setup when it changed. `useInstrumentFrame`'s `dependency` signature
   carries the spec so a swap repaints while paused.
+- **Main thread only.** The editor preview normally evaluates and renders in a
+  worker (core/visual/CLAUDE.md); a project using any code instrument or
+  composition previews on the main thread instead (`mainThreadInstruments.ts`,
+  filled by register.tsx). Loop/track previews mount the same view under their
+  own engine (`VisualEngineContext`): there it draws, but never claims the
+  editor's camera or sets its look.
+- Modules the preview worker also loads (anything VisualScene imports - the
+  code runtime included) must not touch `window` at load: Next folds
+  `typeof window` to true in worker chunks. Guard on `document`.
 - Editing engine/registry modules still re-creates singletons; `?file=`
   sessions reload the page then (`dev/hmrReload.ts`).
 

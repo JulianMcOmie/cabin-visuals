@@ -1,5 +1,8 @@
 'use client'
 
+import { useShallow } from 'zustand/react/shallow'
+import type { MidiBlockView } from './multiBlock'
+
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEventHandler, type ReactNode } from 'react'
 import { X, ChevronDown, Waves, Dices, TrendingUp, Zap } from 'lucide-react'
 import { useUIStore, MIDI_ROW_HEIGHT_MIN, MIDI_ROW_HEIGHT_MAX, type EditingBlockRef } from '../../store/UIStore'
@@ -54,11 +57,11 @@ function ToolbarSelect({ value, onChange, title, children }: {
         value={value}
         onChange={onChange}
         title={title}
-        className="appearance-none h-5 pl-1.5 pr-[18px] rounded bg-zinc-800/70 hover:bg-zinc-700/70 text-[10px] text-zinc-300 outline-none cursor-pointer "
+        className="appearance-none h-5 pl-1.5 pr-[18px] rounded bg-[var(--bg-panel-raised)]/70 hover:bg-[var(--bg-elevated)]/70 text-[10px] text-[var(--text-2)] outline-none cursor-pointer "
       >
         {children}
       </select>
-      <ChevronDown size={10} className="absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-500" />
+      <ChevronDown size={10} className="absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-muted)]" />
     </div>
   )
 }
@@ -77,7 +80,7 @@ function ToolbarSlider({ label, title, value, min, max, step, accent, onChange }
 }) {
   return (
     <div className="flex flex-shrink-0 items-center gap-1" title={title}>
-      <span className="text-[10px] text-zinc-600">{label}</span>
+      <span className="text-[10px] text-[var(--text-muted)]">{label}</span>
       <input
         type="range"
         min={min}
@@ -108,6 +111,7 @@ interface AutomationInfo {
   paramMin: number
   paramMax: number
   kind: 'value' | 'toggle'
+  valueLabels?: Readonly<Record<number, string>>
 }
 
 /** Trigger-lane editor context: rows are interchangeable slots (pitch is ignored
@@ -187,8 +191,27 @@ function quantizeLabel(beats: number, beatsPerBar: number): string {
 export function PianoRollPanel({ frozenRef }: { frozenRef?: EditingBlockRef | null } = {}) {
   const storeEditingBlock = useUIStore((s) => s.editingBlock)
   const editingBlock = storeEditingBlock ?? frozenRef ?? null
+  const openedRefs = useUIStore(s => s.editingBlocks)
+  const refs = useMemo(() => openedRefs.length ? openedRefs : editingBlock ? [editingBlock] : [], [openedRefs, editingBlock])
+  const openedTracks = useProjectStore(useShallow(s => refs.map(ref => s.tracks[ref.trackId])))
+  const liveViews = useMemo(() => refs.flatMap((ref, index) => {
+    const track = openedTracks[index]
+    const blockIndex = track?.blocks.findIndex(block => block.id === ref.blockId) ?? -1
+    return track && blockIndex >= 0 ? [{ trackId: track.id, name: `${track.name} · Block ${blockIndex + 1}`,
+      color: resolveTrackDisplayColor(track), block: track.blocks[blockIndex] }] : []
+  }), [refs, openedTracks])
+  const lastViews = useRef<MidiBlockView[]>([])
+  if (storeEditingBlock && liveViews.length) lastViews.current = liveViews
+  const blockViews = storeEditingBlock ? liveViews : lastViews.current
+  const scrollPosition = useRef<{ left: number; top: number } | null>(null)
+  const groupKey = refs.map(ref => ref.blockId).join(':')
+  const previousGroup = useRef(groupKey)
+  if (storeEditingBlock && previousGroup.current !== groupKey) {
+    previousGroup.current = groupKey
+    scrollPosition.current = null
+  }
   const setEditingBlock = useUIStore((s) => s.setEditingBlock)
-  // Subscribe to the edited track and its parent only - never the whole tracks
+  // In addition to opened tracks, subscribe to the active track and its parent - never the whole tracks
   // record, whose identity changes on EVERY project edit and would re-render
   // the entire piano roll per pointermove of any timeline gesture.
   const liveTrack = useProjectStore((s) => (editingBlock ? s.tracks[editingBlock.trackId] : undefined))
@@ -209,8 +232,11 @@ export function PianoRollPanel({ frozenRef }: { frozenRef?: EditingBlockRef | nu
   // frozen: the store is already closed, and the block legitimately may not
   // exist any more (deleting a block is one of the ways the roll dismisses).
   useEffect(() => {
-    if (storeEditingBlock && !liveBlock) setEditingBlock(null)
-  }, [storeEditingBlock, liveBlock, setEditingBlock])
+    if (storeEditingBlock && !liveBlock) {
+      const remaining = liveViews.map(view => ({ trackId: view.trackId, blockId: view.block.id }))
+      useUIStore.getState().setEditingBlocks(remaining)
+    }
+  }, [storeEditingBlock, liveBlock, liveViews])
 
   // Esc closes (MidiEditor consumes Esc first when notes are selected)
   useEffect(() => {
@@ -255,7 +281,7 @@ export function PianoRollPanel({ frozenRef }: { frozenRef?: EditingBlockRef | nu
         automation = { paramLabel: `${plugin?.name ?? 'Effect'} · On/Off`, paramMin: 0, paramMax: 1, kind: 'toggle' }
       } else {
         const pd = plugin?.params.find((p) => p.key === fx.key)
-        if (pd && isNumberParam(pd)) automation = { paramLabel: `${plugin?.name} · ${pd.label}`, paramMin: pd.min, paramMax: pd.max, kind: 'value' }
+        if (pd && isNumberParam(pd)) automation = { paramLabel: `${plugin?.name} · ${pd.label}`, paramMin: pd.min, paramMax: pd.max, kind: 'value', valueLabels: pd.valueLabels }
         else if (pd?.type === 'boolean') automation = { paramLabel: `${plugin?.name} · ${pd.label} · On/Off`, paramMin: 0, paramMax: 1, kind: 'toggle' }
       }
     } else {
@@ -287,14 +313,14 @@ export function PianoRollPanel({ frozenRef }: { frozenRef?: EditingBlockRef | nu
               ? compositionAutomatableParams(compositionDef(parent.instrumentId))
               : undefined
       const pdef = parentParams?.find((p) => p.key === track.targetParam)
-      if (pdef && isNumberParam(pdef)) automation = { paramLabel: pdef.label, paramMin: pdef.min, paramMax: pdef.max, kind: 'value' }
+      if (pdef && isNumberParam(pdef)) automation = { paramLabel: pdef.label, paramMin: pdef.min, paramMax: pdef.max, kind: 'value', valueLabels: pdef.valueLabels }
       else if (pdef?.type === 'boolean') automation = { paramLabel: `${pdef.label} · On/Off`, paramMin: 0, paramMax: 1, kind: 'toggle' }
     }
   }
 
   return (
     <PianoRollContent
-      key={block.id}
+      key={groupKey}
       trackId={track.id}
       trackName={track.name}
       trackColor={resolveTrackDisplayColor(track)}
@@ -302,6 +328,8 @@ export function PianoRollPanel({ frozenRef }: { frozenRef?: EditingBlockRef | nu
       automation={automation}
       trigger={trigger}
       block={block}
+      blockViews={blockViews}
+      scrollPosition={scrollPosition}
       onClose={() => setEditingBlock(null)}
     />
   )
@@ -318,10 +346,12 @@ interface PianoRollContentProps {
   /** Set for trigger/region lanes - a short set of interchangeable rows shows. */
   trigger?: TriggerInfo
   block: Block
+  blockViews: MidiBlockView[]
+  scrollPosition: React.MutableRefObject<{ left: number; top: number } | null>
   onClose: () => void
 }
 
-function PianoRollContent({ trackId, trackName, trackColor, noteColor, automation, trigger, block, onClose }: PianoRollContentProps) {
+function PianoRollContent({ trackId, trackName, trackColor, noteColor, automation, trigger, block, blockViews, scrollPosition, onClose }: PianoRollContentProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const totalBars = useProjectStore((s) => s.totalBars)
   const bpm = useProjectStore((s) => s.bpm)
@@ -449,12 +479,13 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const automationMin = automation?.paramMin
   const automationMax = automation?.paramMax
   const automationRange = track?.automationRange
+  const automationValueLabels = automation?.valueLabels
   const triggerRowLabel = trigger?.rowLabel
   const computedRows = useMemo(() => {
     const resolvedRows = automationKind !== undefined
       ? automationKind === 'toggle'
         ? generateToggleRows(notePitches, trackColor)
-        : generateValueRows(automationMin!, automationMax!, notePitches, trackColor, undefined, automationRange)
+        : generateValueRows(automationMin!, automationMax!, notePitches, trackColor, undefined, automationRange, automationValueLabels)
       : triggerRowLabel !== undefined
         ? generateTriggerRows(triggerRowLabel, midiNoteBaseColor(noteColor ?? trackColor), notePitches)
         : videoPadLabels
@@ -490,12 +521,17 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
       resolvedRows.unshift({ pitch: PITCH_LYRIC_CLIP, label: 'Lyric clips', color: trackColor })
     }
     return { rows: resolvedRows, rowsAreEmpty }
-  }, [automationKind, automationMin, automationMax, automationRange, triggerRowLabel, videoPadLabels, photoPadLabels, defRows, declaredStrict, isTextRoll, noteColor, trackColor, notePitches])
+  }, [automationKind, automationMin, automationMax, automationRange, automationValueLabels, triggerRowLabel, videoPadLabels, photoPadLabels, defRows, declaredStrict, isTextRoll, noteColor, trackColor, notePitches])
   // A note moving onto a pitch no other note holds changes the fingerprint,
   // but on a declared vocabulary (where that pitch is already a row) the
   // generated rows come back equal - so hand out the PREVIOUS array whenever
   // the new one says the same thing, and the roll's memos hold through the drag.
-  const rows = useStableRows(computedRows.rows)
+  const ownRows = useStableRows(computedRows.rows)
+  const contextPitchKey = blockViews.flatMap(view => view.block.id === block.id ? [] : view.block.notes.map(note => note.pitch)).sort((a, b) => a - b).join(',')
+  const rows = useStableRows(useMemo(() => blockViews.length > 1
+    ? [...ownRows, ...generateInstrumentRows(ownRows, contextPitchKey ? contextPitchKey.split(',').map(Number) : [], trackColor).slice(ownRows.length)]
+    : ownRows, [ownRows, contextPitchKey, blockViews.length, trackColor]))
+
   const rowsAreEmpty = computedRows.rowsAreEmpty
   // What the note keys MEAN on these rows. A value lane's rows are param
   // values, not pitches, so the keys spread across the range instead of sitting
@@ -517,15 +553,21 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   // absolute beats), so the editor shows exactly what plays. '∅' marks an
   // orphan - a note with no clip word under it.
   const textTrack = !automation && !trigger && track?.type === 'base' && track.instrumentId === 'textDisplay' ? track : null
+  // The two word memos below key on the track's BLOCKS and style lanes, never
+  // the track object: a param knob tick re-mints the track while its notes are
+  // untouched, and keying on the track rebuilt every note's element (457 on a
+  // lyric track) per pointermove of any inspector drag.
+  const textBlocks = textTrack?.blocks
+  const textStyleLanes = textTrack?.styleLanes
   // Words resolve from the LIVE local note state for the edited block (drags
   // stream through `notes` before they commit), so a dragged note keeps its
   // word all the way through the gesture - alt-drag copies included, whose
   // fresh ids the store hasn't seen yet. Other blocks come from the store.
   const noteWords = useMemo(() => {
-    if (!textTrack) return undefined
-    const laneCount = resolveStyleLanes(textTrack.styleLanes).length
+    if (!textBlocks) return undefined
+    const laneCount = resolveStyleLanes(textStyleLanes).length
     const stream: { id: string; beat: number; pitch: number }[] = []
-    for (const b of textTrack.blocks) {
+    for (const b of textBlocks) {
       if (b.id === block.id) continue
       const blockStart = b.startBar * beatsPerBar
       for (const n of b.notes) {
@@ -541,7 +583,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
       }
     }
     stream.sort((a, b) => a.beat - b.beat)
-    const resolved = resolveLyricWords(stream, trackLyricClips(textTrack.blocks, beatsPerBar), laneCount)
+    const resolved = resolveLyricWords(stream, trackLyricClips(textBlocks, beatsPerBar), laneCount)
     const map: Record<string, string> = {}
     stream.forEach((n, i) => { map[n.id] = resolved[i].entry?.text ?? '∅' })
     // A CLIP note wears its whole phrase, through the very same note-label
@@ -551,7 +593,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
       if (isLyricClipNote(n)) map[n.id] = n.lyric?.words.join(' ') ?? ''
     }
     return map
-  }, [textTrack, beatsPerBar, notes, block.id, block.startBar])
+  }, [textBlocks, textStyleLanes, beatsPerBar, notes, block.id, block.startBar])
   // The roll's sidecar subject: a style lane (click a gutter row) or a lyric
   // clip (click it in the sections strip). One at a time - the sidecar shows
   // whichever was picked last; picking it again closes.
@@ -568,22 +610,22 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const setLyricClipWord = useProjectStore((s) => s.setLyricClipWord)
   const updateLyricClip = useProjectStore((s) => s.updateLyricClip)
   const onNoteWordEdit = useMemo(() => {
-    if (!textTrack) return undefined
+    if (!textBlocks) return undefined
     return (noteId: string, word: string) => {
       const trimmed = word.trim()
       if (!trimmed) return
       // A clip note IS the phrase, so retyping it rewrites its own words - no
       // slot binding to chase.
-      const clipNote = textTrack.blocks.flatMap((b) => b.notes).find((n) => n.id === noteId && isLyricClipNote(n))
+      const clipNote = textBlocks.flatMap((b) => b.notes).find((n) => n.id === noteId && isLyricClipNote(n))
       if (clipNote) {
         updateLyricClip(trackId, noteId, { words: trimmed.split(/\s+/).filter(Boolean) })
         return
       }
       // Re-run the binding to find WHICH clip slot this note owns, then write
       // the word back into the clip - the single visible home of the text.
-      const laneCount = resolveStyleLanes(textTrack.styleLanes).length
+      const laneCount = resolveStyleLanes(textStyleLanes).length
       const stream: { id: string; beat: number; pitch: number }[] = []
-      for (const b of textTrack.blocks) {
+      for (const b of textBlocks) {
         const blockStart = b.startBar * beatsPerBar
         for (const n of b.notes) {
           if (laneIndexForPitch(n.pitch, laneCount) >= 0) {
@@ -594,7 +636,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
       stream.sort((a, b) => a.beat - b.beat)
       const idx = stream.findIndex((n) => n.id === noteId)
       if (idx < 0) return
-      const clips = trackLyricClips(textTrack.blocks, beatsPerBar)
+      const clips = trackLyricClips(textBlocks, beatsPerBar)
       const resolved = resolveLyricWords(stream, clips, laneCount)
       const r = resolved[idx]
       const clip = clips[r.clipIndex]
@@ -607,7 +649,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
         : clip.words.length
       setLyricClipWord(trackId, clip.id, wordIndex, trimmed)
     }
-  }, [textTrack, beatsPerBar, setLyricClipWord, updateLyricClip, trackId])
+  }, [textBlocks, textStyleLanes, beatsPerBar, setLyricClipWord, updateLyricClip, trackId])
 
   // On open: scroll horizontally to just before the block starts, and vertically
   // to the block's first note (the earliest by time), or C4 if the block is empty.
@@ -615,6 +657,12 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
     if (hasScrolledRef.current || !containerRef.current) return
     const scrollContainer = containerRef.current.querySelector('.overflow-auto')
     if (!scrollContainer) return
+    if (scrollPosition.current) {
+      scrollContainer.scrollLeft = scrollPosition.current.left
+      scrollContainer.scrollTop = scrollPosition.current.top
+      hasScrolledRef.current = true
+      return
+    }
 
     // Vertical: center on the first note's pitch (or C4 when empty).
     const firstNote = notes.length > 0
@@ -630,8 +678,8 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
     // otherwise place the block start a one-bar lead-in from the left edge.
     const gridLeft = useUIStore.getState().midiLabelWidth + PLAYHEAD_TRIANGLE_HALF
     const currentBeat = useTimeStore.getState().currentBeat
-    const blockStartBeat = block.startBar * beatsPerBar
-    const blockEndBeat = blockStartBeat + block.durationBars * beatsPerBar
+    const blockStartBeat = Math.min(block.startBar, ...blockViews.map(view => view.block.startBar)) * beatsPerBar
+    const blockEndBeat = Math.max(block.startBar + block.durationBars, ...blockViews.map(view => view.block.startBar + view.block.durationBars)) * beatsPerBar
     if (currentBeat >= blockStartBeat && currentBeat < blockEndBeat) {
       const playheadPx = gridLeft + currentBeat * midiPixelsPerBeat
       scrollContainer.scrollLeft = Math.max(0, playheadPx - scrollContainer.clientWidth / 2)
@@ -646,23 +694,32 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   }, [])
 
   return (
-    <div ref={containerRef} className="flex flex-col h-full border-t border-zinc-800">
+    <div ref={containerRef} className="flex flex-col h-full border-t border-[var(--border)]">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 h-8 px-3 bg-zinc-900/60 border-b border-zinc-800 flex-shrink-0">
+      <div className="flex items-center gap-2 h-8 px-3 bg-[var(--bg-panel)]/60 border-b border-[var(--border)] flex-shrink-0">
         <button
           onClick={onClose}
           title="Close (Esc)"
           data-midi-close=""
-          className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 "
+          className="flex items-center justify-center w-5 h-5 rounded bg-[var(--bg-panel-raised)] hover:bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] "
         >
           <X size={12} />
         </button>
+
+        {blockViews.length > 1 && <select aria-label="Active MIDI block" value={block.id}
+          className="h-5 max-w-48 rounded bg-zinc-800 px-1 text-[10px] text-zinc-200"
+          onChange={event => {
+            const view = blockViews.find(view => view.block.id === event.target.value)
+            if (view) useUIStore.getState().focusEditingBlock({ trackId: view.trackId, blockId: view.block.id })
+          }}>
+          {blockViews.map(view => <option key={view.block.id} value={view.block.id}>{view.name} · Bar {view.block.startBar + 1}</option>)}
+        </select>}
 
         <button
           onClick={() => setSnapEnabled(!snapEnabled)}
           title={snapEnabled ? 'Snap to grid (on)' : 'Snap to grid (off)'}
           className={`px-2 h-5 rounded text-[10px] font-medium cursor-pointer ${
-            snapEnabled ? '' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
+            snapEnabled ? '' : 'text-[var(--text-muted)] hover:text-[var(--text-2)] hover:bg-[var(--bg-panel-raised)]'
           }`}
           style={snapEnabled ? { background: accent.pillBg, color: accent.pillText } : undefined}
         >
@@ -676,9 +733,9 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
           onClick={() => setMidiVimEnabled(!midiVimEnabled)}
           title={midiVimEnabled ? 'midi vim is on — Esc leaves it, ? lists the keys' : 'midi vim: type notes from the keyboard (double-tap Shift)'}
           className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded font-mono text-[11px] leading-none cursor-pointer ${
-            midiVimEnabled ? '' : 'text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300'
+            midiVimEnabled ? '' : 'text-[var(--text-muted)] hover:bg-[var(--bg-panel-raised)] hover:text-[var(--text-2)]'
           }`}
-          style={midiVimEnabled ? { background: VIM_ACCENT, color: '#0b0d12' } : undefined}
+          style={midiVimEnabled ? { background: VIM_ACCENT, color: 'var(--on-accent)' } : undefined}
           aria-pressed={midiVimEnabled}
         >
           ⌶
@@ -698,11 +755,11 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
 
         {automation && (
           <>
-            <div className="w-px h-4 bg-zinc-800" />
+            <div className="w-px h-4 bg-[var(--bg-panel-raised)]" />
             {/* The lane's MODE, the same three the settings panel shows: value
                 keyframes on a curve, seeded noise gates, or ADSR bursts. The
                 mode's own controls follow it in the toolbar. */}
-            <div className="flex flex-shrink-0 items-center gap-[2px] rounded bg-zinc-800/50 p-[2px]">
+            <div className="flex flex-shrink-0 items-center gap-[2px] rounded bg-[var(--bg-panel-raised)]/50 p-[2px]">
               {MODE_OPTIONS.map((option) => {
                 const active = option.value === mode
                 return (
@@ -711,7 +768,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
                     onClick={() => setAutomationMode(trackId, option.value)}
                     title={option.title}
                     className={`flex items-center gap-1 px-1.5 h-[18px] rounded-[3px] text-[10px] font-medium cursor-pointer ${
-                      active ? '' : 'text-zinc-500 hover:text-zinc-300'
+                      active ? '' : 'text-[var(--text-muted)] hover:text-[var(--text-2)]'
                     }`}
                     style={active ? { background: accent.pillBg, color: accent.pillText } : undefined}
                   >
@@ -754,14 +811,14 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
                 <button
                   onClick={() => setTrackNoise(trackId, { ...noise, seed: Math.floor(Math.random() * 1e9) })}
                   title="Re-roll the noise (new random take; each take replays identically)"
-                  className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                  className="flex items-center justify-center w-5 h-5 rounded bg-[var(--bg-panel-raised)] hover:bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer"
                 >
                   <Dices size={11} />
                 </button>
               </>
             ) : (
               <>
-                <span className="text-[10px] text-zinc-600" title="Interpolation between keyframes">Interp</span>
+                <span className="text-[10px] text-[var(--text-muted)]" title="Interpolation between keyframes">Interp</span>
                 <ToolbarSelect
                   value={interpolation}
                   onChange={(e) => setTrackInterpolation(trackId, e.target.value as InterpolationMode)}
@@ -779,7 +836,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
         <div className="flex-1" />
 
         <div className="flex items-center gap-1.5" title="Horizontal zoom (Alt+scroll sideways)">
-          <span className="text-[10px] text-zinc-600">H</span>
+          <span className="text-[10px] text-[var(--text-muted)]">H</span>
           <input
             type="range"
             min={5}
@@ -792,7 +849,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
           />
         </div>
         <div className="flex items-center gap-1.5" title="Vertical zoom (Alt+scroll)">
-          <span className="text-[10px] text-zinc-600">V</span>
+          <span className="text-[10px] text-[var(--text-muted)]">V</span>
           <input
             type="range"
             min={MIDI_ROW_HEIGHT_MIN}
@@ -821,6 +878,9 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
         <EmptyRollBlank trackColor={trackColor} />
       ) : (
       <MidiEditor
+        key={block.id}
+        blockViews={blockViews}
+        scrollPosition={scrollPosition}
         trackId={trackId}
         trackColor={trackColor}
         blockStartBeat={block.startBar * beatsPerBar}

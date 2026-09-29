@@ -157,13 +157,14 @@ export function resolveStyleLanes(stored?: StyleLane[]): StyleLane[] {
 
 // ── Text entries (moved verbatim from TextDisplay.tsx) ──────────────────────
 // One display unit: a word, a grouped `!phrase!`, or one `|syl|` of a word.
-// Syllable entries render as a highlighted slice of the full word's layout.
+// Syllables share the full word layout, revealing a prefix or just one slice.
 
 export interface TextEntry {
   text: string
   layoutText: string
   syllableStart: number
   syllableCount: number
+  syllableIndex?: number
   cacheKey: string
 }
 
@@ -171,7 +172,7 @@ export function singleTextEntry(text: string): TextEntry {
   return { text, layoutText: text, syllableStart: 0, syllableCount: 1, cacheKey: text }
 }
 
-function entriesForWord(raw: string): TextEntry[] {
+function entriesForWord(raw: string, mode: 'build' | 'single'): TextEntry[] {
   if (!raw.includes('|')) return [singleTextEntry(raw)]
 
   const parts = raw.split('|').filter((p) => p.length > 0)
@@ -180,20 +181,22 @@ function entriesForWord(raw: string): TextEntry[] {
   const layoutText = parts.join('')
   const entries: TextEntry[] = []
   let start = 0
-  for (const part of parts) {
+  for (const [syllableIndex, part] of parts.entries()) {
+    const text = mode === 'single' ? part : layoutText.slice(0, start + part.length)
     entries.push({
-      text: part,
+      text,
       layoutText,
-      syllableStart: start,
+      syllableStart: mode === 'single' ? start : 0,
       syllableCount: parts.length,
-      cacheKey: `${layoutText}|${start}|${part}`,
+      syllableIndex,
+      cacheKey: `${mode}|${layoutText}|${start}|${text}`,
     })
     start += part.length
   }
   return entries
 }
 
-function parsePipeAwareSegment(segment: string): TextEntry[] {
+function parsePipeAwareSegment(segment: string, mode: 'build' | 'single'): TextEntry[] {
   const result: TextEntry[] = []
   let i = 0
 
@@ -203,12 +206,11 @@ function parsePipeAwareSegment(segment: string): TextEntry[] {
 
     if (segment[i] === '|') {
       const close = segment.indexOf('|', i + 1)
-      if (close !== -1) {
+      // A pipe-enclosed phrase is one note; a pipe-enclosed word can keep
+      // going with more syllables, so consume that whole token below.
+      if (close !== -1 && /\s/.test(segment.slice(i + 1, close))) {
         const grouped = segment.slice(i + 1, close).trim()
-        if (grouped) {
-          if (/\s/.test(grouped)) result.push(singleTextEntry(grouped))
-          else result.push(...entriesForWord(grouped))
-        }
+        if (grouped) result.push(singleTextEntry(grouped))
         i = close + 1
         continue
       }
@@ -216,25 +218,25 @@ function parsePipeAwareSegment(segment: string): TextEntry[] {
 
     const start = i
     while (i < segment.length && !/\s/.test(segment[i])) i++
-    result.push(...entriesForWord(segment.slice(start, i)))
+    result.push(...entriesForWord(segment.slice(start, i), mode))
   }
 
   return result
 }
 
 /** Parse free text into display entries: whitespace separates words, `!...!`
- *  keeps a phrase together as one entry, `|inside|` a word splits syllables,
- *  and `|... ...|` groups words. (TextDisplay's classic grammar, unchanged.) */
-export function parseTextEntries(text: string): TextEntry[] {
+ *  keeps a phrase in one layout (pipes inside it split its reveal), pipes
+ *  inside a word split syllables, and `|... ...|` groups words in one entry. */
+export function parseTextEntries(text: string, mode: 'build' | 'single' = 'build'): TextEntry[] {
   const result: TextEntry[] = []
   const parts = text.split('!')
   for (let i = 0; i < parts.length; i++) {
     if (i % 2 === 1) {
-      // Inside !...!: the whole run is one entry.
+      // Inside !...!: the whole run shares one layout, with optional pipe steps.
       const grouped = parts[i].trim()
-      if (grouped) result.push(singleTextEntry(grouped))
+      if (grouped) result.push(...entriesForWord(grouped, mode))
     } else {
-      result.push(...parsePipeAwareSegment(parts[i]))
+      result.push(...parsePipeAwareSegment(parts[i], mode))
     }
   }
   return result
@@ -243,7 +245,7 @@ export function parseTextEntries(text: string): TextEntry[] {
 /** A clip's words expanded to display entries (each `|syl|la|ble|` word costs
  *  one note per syllable, exactly like the old Text param did). */
 export function clipEntries(clip: LyricClip): TextEntry[] {
-  return parseTextEntries(clip.words.join(' '))
+  return parseTextEntries(clip.words.join(' '), clip.layout?.pipeMode ?? 'build')
 }
 
 // ── Resolution: which note sings which word, in which style ─────────────────
@@ -260,6 +262,9 @@ export interface ResolvedLyricWord {
   slotIndex: number
   /** The clip's total entry count (seats reserved for layout math). */
   totalSlots: number
+  /** Syllables share one layout seat, while slotIndex still counts notes. */
+  layoutSlotIndex: number
+  totalLayoutSlots: number
   layout: LyricClipLayout
 }
 
@@ -286,6 +291,13 @@ export function resolveLyricWords(
 ): ResolvedLyricWord[] {
   const ordered = clips && clips.length ? sortedClips(clips) : []
   const entryLists = ordered.map(clipEntries)
+  const seatLists = entryLists.map((entries) => {
+    let seat = -1
+    return entries.map((entry) => {
+      if (!entry.syllableIndex) seat++
+      return seat
+    })
+  })
   const used = new Array<number>(ordered.length).fill(0)
 
   return notes.map((n) => {
@@ -297,7 +309,7 @@ export function resolveLyricWords(
       else if (c.startBeat > n.beat) break
     }
     if (clipIndex < 0) {
-      return { entry: null, laneIndex, clipIndex: -1, slotIndex: -1, totalSlots: 0, layout: FALLBACK_LAYOUT }
+      return { entry: null, laneIndex, clipIndex: -1, slotIndex: -1, totalSlots: 0, layoutSlotIndex: -1, totalLayoutSlots: 0, layout: FALLBACK_LAYOUT }
     }
     const slot = used[clipIndex]++
     const entries = entryLists[clipIndex]
@@ -307,9 +319,42 @@ export function resolveLyricWords(
       clipIndex,
       slotIndex: entries[slot] ? slot : -1,
       totalSlots: entries.length,
+      layoutSlotIndex: seatLists[clipIndex][slot] ?? -1,
+      totalLayoutSlots: (seatLists[clipIndex].at(-1) ?? -1) + 1,
       layout: ordered[clipIndex].layout ?? FALLBACK_LAYOUT,
     }
   })
+}
+
+/** One reserved position per word/phrase. Pick its latest sung syllable,
+ *  or its first future syllable when reserving space. Entry indices stay
+ *  untouched for piano-roll editing and note binding. */
+export function lyricLayoutWordIndices(words: readonly ResolvedLyricWord[], clipIndex: number, sungCount: number): number[] {
+  const seats = new Map<number, number>()
+  words.forEach((word, i) => {
+    if (word.clipIndex !== clipIndex || !word.entry) return
+    const seat = word.layoutSlotIndex
+    if (!seats.has(seat) || i < sungCount) seats.set(seat, i)
+  })
+  return [...seats.values()]
+}
+
+/** Shared defaults keep saved clips and the editor's controls in agreement. */
+export function resolveLyricLayout(layout: LyricClipLayout) {
+  const finite = (value: number | undefined, fallback: number, min: number, max: number) =>
+    Number.isFinite(value) ? Math.max(min, Math.min(max, value!)) : fallback
+  return {
+    ...layout,
+    fontScale: finite(layout.fontScale, 1, 0.1, 4),
+    width: finite(layout.width, 1, 0.1, 2),
+    height: finite(layout.height, 1, 0.1, 2),
+    wordSpacing: finite(layout.wordSpacing, 1, 0, 4),
+    lineSpacing: finite(layout.lineSpacing, 1, 0.25, 3),
+    cols: Math.round(finite(layout.cols, 2, 1, 12)),
+    rotation: finite(layout.rotation, 0, -180, 180),
+    align: layout.align ?? 'center',
+    pipeMode: layout.pipeMode ?? 'build',
+  }
 }
 
 // ── Transcription → clips ───────────────────────────────────────────────────
@@ -380,7 +425,7 @@ export interface ClipSlotOffset {
  */
 export function clipSlotOffset(layout: LyricClipLayout, slot: number, total: number): ClipSlotOffset | null {
   if (layout.kind === 'grid') {
-    const cols = Math.max(1, Math.round(layout.cols ?? 2))
+    const cols = resolveLyricLayout(layout).cols
     const rows = Math.max(1, Math.ceil(total / cols))
     const col = slot % cols
     const row = Math.floor(slot / cols)
@@ -388,7 +433,7 @@ export function clipSlotOffset(layout: LyricClipLayout, slot: number, total: num
   }
   if (layout.kind === 'circle') {
     const n = Math.max(1, total)
-    const a = -Math.PI / 2 + (slot / n) * Math.PI * 2
+    const a = -Math.PI / 2 + (slot / n) * Math.PI * 2 + resolveLyricLayout(layout).rotation * Math.PI / 180
     return { x: Math.cos(a), y: -Math.sin(a), z: 0 }
   }
   return null

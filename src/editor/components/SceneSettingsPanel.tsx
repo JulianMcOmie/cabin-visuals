@@ -12,20 +12,18 @@
 // Below the stage, the backdrop IS a choice - fill, gradient, or nothing - so
 // it reads as a segmented deck whose three segments always wear their NAME and
 // their real preview (an unlabelled swatch can only be read by clicking it).
-// Under the deck, one anatomy in every state: a captioned `ColorField` laid
-// flat in the panel. Fill has one (BACKGROUND); gradient has the SAME control
-// twice, FROM stacked over TO, both live at once - no selector deciding which
-// one a drag lands on - with the angle knob and the kind below them. Nothing
-// floats: the old wheel popover opened over the very stage you were judging.
+// Under the deck, shared Colorizer circles edit the background or each gradient
+// stop. Each opens the same top-layer wheel; angle and kind stay below them.
 // The stage holds ONE height across all three modes, so reaching for a
 // gradient no longer re-lays the console out under the pointer. The CSS
 // gradient previews here are pixel-honest - the renderer's backdrop shader
 // mixes the same stops in sRGB, exactly as CSS does.
 
-import { Canvas } from '@react-three/fiber'
 import { Grid, OrbitControls } from '@react-three/drei'
 import { useProjectStore } from '../store/ProjectStore'
-import { ColorField, withAlpha } from '../userInterfaceRenderers/colorWheel'
+import { withAlpha } from '../userInterfaceRenderers/colorWheel'
+import { SceneColorSwatch } from './SceneColorSwatch'
+import { PreviewCanvas } from '../userInterfaceRenderers/console'
 import { LaserKnob } from '../userInterfaceRenderers/laserKnob'
 import { defaultSceneGradient, sceneBackdropMode, type Scene, type SceneGradient, type SceneGradientKind } from '../types'
 
@@ -98,7 +96,12 @@ function StagePreview({ scene }: { scene: Scene }) {
       // pushes into it (see src/editor/CLAUDE.md). Note the r3f <Canvas>
       // wrapper INSIDE carries its own inline overflow:hidden, which this does
       // not reach - reachable only via a `style` prop on the Canvas.
-      className="relative h-[132px] cursor-grab overflow-clip border-b border-white/[0.06] active:cursor-grabbing"
+      //
+      // The stage is a still: PreviewCanvas (demand root, no frame loop) renders
+      // it on mount, on a backdrop change and while OrbitControls damp - an
+      // always-on loop here kept the whole editor's r3f loop running at display
+      // rate for as long as nothing was selected.
+      className="relative h-[132px] cursor-grab overflow-clip border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] active:cursor-grabbing"
       // The checkerboard is the "nothing behind this" of the compositor - it
       // only shows when the canvas actually clears to alpha. A gradient
       // backdrop paints here in CSS while the canvas stays alpha: same stops,
@@ -108,7 +111,7 @@ function StagePreview({ scene }: { scene: Scene }) {
         backgroundSize: '16px 16px',
       } : mode === 'gradient' ? { background: cssGradient(gradient) } : { background: scene.backgroundColor }}
     >
-      <Canvas dpr={[1, 2]} camera={{ position: [0, 1.9, 5.6], fov: 38 }} gl={{ antialias: true, alpha: true }}>
+      <PreviewCanvas animate={false} dpr={[1, 2]} camera={{ position: [0, 1.9, 5.6], fov: 38 }} gl={{ antialias: true, alpha: true }}>
         {/* The room's walls ARE the setting being edited: attach the scene's
             real backdrop as clear color, or nothing at all when transparent
             or gradient - the div behind the canvas shows through, same as
@@ -136,7 +139,7 @@ function StagePreview({ scene }: { scene: Scene }) {
           minPolarAngle={0.15}
           maxPolarAngle={Math.PI * 0.55}
         />
-      </Canvas>
+      </PreviewCanvas>
       {/* No wordmark. The stage carried an etched "SCENE" as identity-in-the-
           surface; with the name already on the tab rail it was a caption over
           the picture, and the picture is the point. */}
@@ -178,7 +181,7 @@ function BackdropDeck({ scene }: { scene: Scene }) {
   ]
 
   return (
-    <div className="flex w-full items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.04] p-0.5">
+    <div className="flex w-full items-center gap-0.5 rounded-full border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--text)_4%,transparent)] p-0.5">
       {segments.map(({ kind, label, testId, ariaLabel, title, swatch }) => (
         <button
           key={kind}
@@ -191,11 +194,11 @@ function BackdropDeck({ scene }: { scene: Scene }) {
           // user can drag narrow - let them shrink rather than wrap a label
           // onto a second line and grow the pill.
           className={`flex h-6 min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 overflow-hidden rounded-full px-2 text-[10px] font-semibold whitespace-nowrap ${
-            mode === kind ? 'bg-[var(--bg-elevated)] text-white/85' : 'text-white/40 hover:bg-white/[0.05] hover:text-white/70'
+            mode === kind ? 'bg-[var(--bg-elevated)] text-[var(--text)]' : 'text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)] hover:text-[var(--text-2)]'
           }`}
         >
           <span
-            className={`h-3.5 w-3.5 flex-none rounded-full border border-white/20 ${mode === kind ? '' : 'opacity-50'}`}
+            className={`h-3.5 w-3.5 flex-none rounded-full border border-[color-mix(in_srgb,var(--text)_20%,transparent)] ${mode === kind ? '' : 'opacity-50'}`}
             style={swatch}
           />
           {label}
@@ -205,11 +208,8 @@ function BackdropDeck({ scene }: { scene: Scene }) {
   )
 }
 
-/** Gradient's editor: the fill control REPEATED - FROM stacked over TO, both
- *  armed, so editing the second stop costs reaching for it and nothing else -
- *  then the angle knob and the kind, centered, below both. Radial has no angle,
- *  so the knob dims instead of vanishing: the rows never reflow under the
- *  pointer. */
+/** Each gradient stop has its own shared picker. Radial has no angle, so the
+ * knob dims instead of vanishing and reflowing the controls. */
 function GradientControls({ scene }: { scene: Scene }) {
   const setSceneBackgroundGradient = useProjectStore((s) => s.setSceneBackgroundGradient)
   const gradient = scene.backgroundGradient ?? defaultSceneGradient()
@@ -224,24 +224,14 @@ function GradientControls({ scene }: { scene: Scene }) {
 
   return (
     <div data-testid="scene-gradient-controls">
-      <div className="px-4 pb-3">
-        <ColorField
-          value={gradient.from}
-          onChange={(hex) => setSceneBackgroundGradient(scene.id, { from: hex })}
-          label="From"
-          ariaLabel="Gradient start color"
-          testId="scene-gradient-from-field"
-        />
-      </div>
-      <div className="px-4 pb-3">
-        <ColorField
-          value={gradient.to}
-          onChange={(hex) => setSceneBackgroundGradient(scene.id, { to: hex })}
-          label="To"
-          ariaLabel="Gradient end color"
-          testId="scene-gradient-to-field"
-        />
-      </div>
+      <SceneColorSwatch
+        key={scene.id}
+        background={cssGradient(gradient)}
+        colors={[
+          { label: 'From', value: gradient.from, onChange: (from) => setSceneBackgroundGradient(scene.id, { from }) },
+          { label: 'To', value: gradient.to, onChange: (to) => setSceneBackgroundGradient(scene.id, { to }) },
+        ]}
+      />
       <div className="flex justify-center pb-1.5">
         <div
           className={gradient.kind === 'radial' ? 'pointer-events-none opacity-30' : ''}
@@ -262,7 +252,7 @@ function GradientControls({ scene }: { scene: Scene }) {
         </div>
       </div>
       <div className="flex justify-center pb-3">
-        <div className="flex items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.04] p-0.5">
+        <div className="flex items-center gap-0.5 rounded-full border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--text)_4%,transparent)] p-0.5">
           {kinds.map(({ kind, label, title }) => (
             <button
               key={kind}
@@ -272,8 +262,8 @@ function GradientControls({ scene }: { scene: Scene }) {
               onClick={() => setSceneBackgroundGradient(scene.id, { kind })}
               className={`h-5 cursor-pointer rounded-full px-2.5 text-[9px] ${
                 gradient.kind === kind
-                  ? 'bg-[var(--bg-elevated)] font-semibold text-white/85'
-                  : 'font-medium text-white/40 hover:bg-white/[0.05]'
+                  ? 'bg-[var(--bg-elevated)] font-semibold text-[var(--text)]'
+                  : 'font-medium text-[var(--text-3)] hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)]'
               }`}
             >
               {label}
@@ -317,20 +307,16 @@ export function SceneSettingsPanel({ scene }: { scene: Scene }) {
         <BackdropDeck scene={scene} />
       </div>
       {mode === 'color' && (
-        <div className="px-4 pb-3">
-          <ColorField
-            value={scene.backgroundColor}
-            onChange={(hex) => setSceneBackgroundColor(scene.id, hex)}
-            label="Background"
-            ariaLabel="Backdrop color"
-            testId="scene-backdrop-field"
-          />
-        </div>
+        <SceneColorSwatch
+          key={scene.id}
+          background={scene.backgroundColor}
+          colors={[{ label: 'Background', value: scene.backgroundColor, onChange: (hex) => setSceneBackgroundColor(scene.id, hex) }]}
+        />
       )}
       {mode === 'gradient' && <GradientControls scene={scene} />}
       {mode === 'transparent' && (
         // The one state with no header: there is no color to name.
-        <p className="px-4 pb-4 text-center text-[11px] text-white/45 select-none">
+        <p className="px-4 pb-4 text-center text-[11px] text-[var(--text-3)] select-none">
           Rendering with transparent background
         </p>
       )}

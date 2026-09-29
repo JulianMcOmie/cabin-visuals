@@ -47,14 +47,16 @@ export function loadPostHog(): Promise<PostHog | null> {
       capture_pageview: 'history_change',
       capture_pageleave: true,
     })
-    // Session replay costs the EDITOR dearly: rrweb's mutation observer
-    // watches thousands of per-frame style writes (note glows, playhead),
-    // and its canvas capture ("Record canvas" in the PostHog project settings
-    // - a REMOTE toggle, not client config) ran createImageBitmap + drawImage
-    // on the WebGL canvas every snapshot - together ~half the main thread
-    // during playback in a CPU profile of a real project. Recording is
-    // therefore paused for the whole /editor route (syncSessionRecording);
-    // marketing/projects/auth pages still record.
+    // Session replay records EVERY route, the editor and its WebGL canvas
+    // included - Julia's call (2026-09-08): seeing how people actually use
+    // the editor is worth what it costs. And it costs: rrweb's mutation
+    // observer watches thousands of per-frame style writes, a full snapshot
+    // of a big timeline is ~200 ms, and canvas capture reads the visualizer
+    // back every snapshot. Canvas capture is "Record canvas" in the PostHog
+    // project settings - a REMOTE toggle, not client config - and the main
+    // Canvas keeps preserveDrawingBuffer on so those reads see a frame
+    // (App.tsx). Turn replay off per route with disable_session_recording if
+    // it ever has to go again.
     instance = posthog
     return instance
   })()
@@ -66,14 +68,4 @@ export function loadPostHog(): Promise<PostHog | null> {
 export function withPostHog(fn: (ph: PostHog) => void): void {
   if (instance) { fn(instance); return }
   void loadPostHog().then((ph) => { if (ph) fn(ph) })
-}
-
-/** Pause replay inside the editor, resume everywhere else. Called on every
- *  route change by AnalyticsIdentify (which is mounted in the root layout). */
-export function syncSessionRecording(pathname: string): void {
-  withPostHog((ph) => {
-    const inEditor = pathname.startsWith('/editor')
-    if (inEditor) ph.stopSessionRecording()
-    else if (!ph.sessionRecordingStarted()) ph.startSessionRecording()
-  })
 }

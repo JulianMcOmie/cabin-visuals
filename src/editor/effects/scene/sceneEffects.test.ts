@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { PLUGIN_LIST } from '../index'
+import { createFogUniforms } from './fogRuntime'
 
 // The scene-effect contract (effects/types.ts): a scene device is a fragment
 // shader over tDiffuse whose AMOUNT param at 0 is a passthrough (the runtime
@@ -35,6 +36,7 @@ test('params and shader uniforms agree in both directions', () => {
       assert.ok(declared.has(p.key), `${plugin.id}: param '${p.key}' is not a shader uniform`)
     }
     const wired = new Set([...plugin.params.map((p) => p.key), 'tDiffuse', 'time', 'resolution', 'aspect'])
+    if (plugin.sceneStage === 'atmosphere') for (const key of Object.keys(createFogUniforms())) wired.add(key)
     for (const name of declared) {
       assert.ok(wired.has(name), `${plugin.id}: uniform '${name}' is never driven`)
     }

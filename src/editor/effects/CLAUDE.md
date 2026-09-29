@@ -84,6 +84,50 @@ kinds=glyphs · size=compact). Four things are load-bearing:
   Rate knobs on the two re-seeding devices step the shared musical ladder in
   `scene/rate.ts` and read out in note values (`1/16`), not raw multipliers.
 
+## Liquid Glass
+
+`scene/liquidGlass.ts` adds a rounded, screen-positioned glass panel over the
+finished scene through the ordinary Scene FX chain. Width/height are fractions
+of the frame; position ±1 reaches the frame edges, positive Y is up, and rotation
+is in degrees. The signed-distance field uses frame-height units so corners,
+bevels and frost stay circular at every aspect ratio. Refraction includes a
+beveled rim, a mild lens magnification and beat-driven waves; Flow 0 freezes the
+waves. More exposes placement, rotation, waves, sheen and fringe. Multiple
+instances compose in rack order, and every numeric control supports scene FX
+automation. The scene alpha is preserved, including transparent holes.
+
+`node scripts/perf/liquid-glass-smoke.mjs` checks production WebGL pixels and
+the WebGL1 inspector shader, including bypass, control liveness, exterior/alpha
+preservation, direct/backward seeks and portrait framing. Its source texture
+must use LinearFilter without mipmaps, matching the compositor render targets:
+mipmapped texture reads after spatial shader branches have undefined implicit
+derivatives and can make an otherwise deterministic shader fail seek checks.
+
+## Atmospheric Fog
+
+`scene/fog.ts` is a scene device with `sceneStage: 'atmosphere'`. Unlike image
+filters it runs after base geometry, before on-top overlays and all screen
+warps/grades. It needs original camera depth, so moving it within the rack only
+changes its order relative to other atmosphere devices. VisualScene lazily
+attaches a depth-stencil texture, renders into a spare filter target, then copies
+COLOR back without clearing depth/stencil (Overlap Shape depends on stencil).
+Never sample the depth attachment while writing to that same render target.
+
+`fogRuntime.ts` samples the actual base-pass light rig after `PassLightPool.sync`:
+placement, note flashes, mute, preview lighting budgets and legacy rigs therefore
+agree with the surface lighting. It uses 32 deterministic ray samples and at most
+eight non-ambient lights; ambient is accumulated separately. Spot cones and range
+falloff are supported; area lights use a finite-area approximation. Geometry depth
+terminates camera rays, but the volume does not sample light shadow maps (no
+occluder-cast volumetric shadows). Drift uses the beat only. The console uses the
+main viewport instead of the 2D SceneFxPreview, which has no depth or light rig.
+`node scripts/perf/fog-smoke.mjs` verifies the production GLSL with real depth on
+WebGL: colors/motion/mute, exact dry bypass, seek-back and foreground occlusion.
+For an editor smoke test with worker rendering active, inspect
+`window.__previewRuntime.ambient` after its beat/revision updates. Advancing
+`window.__three` manually can clear the main canvas while the actual VisualScene
+lives in the worker; that blank capture is not the worker's rendered frame.
+
 ## Writing a `deform` effect
 
 `deform/` holds the one shipped device (Deformer: 12 operations × 4 drives × 4 falloffs
@@ -169,3 +213,41 @@ Gotchas:
 - **A shader's GLSL lives in a TS template literal — a stray backtick in a GLSL comment silently ends the string** and Turbopack reports it as "Parsing ecmascript source code failed" pointing at the comment, not as a shader problem. Escape them (`\``) or avoid them. Run `npx tsc --noEmit` after editing shader source; the build catches it instantly, the browser just shows a build overlay.
 - **A screen-space shader pass is frame-relative, and objects are a small part of the frame.** Any spatial constant you pick has to be calibrated against a REAL instrument, not a test shape that fills the frame — otherwise the whole pattern lands inside its own innermost feature and reads as one soft blob. This is invisible in an offscreen harness and obvious in `/editor`. For a surface-locked pattern that travels with the mesh instead, see `instruments/KaleidoSolid.tsx` (object-space field injected into a lit material) — that is a different tool, not an effect.
 - Anything animated must be a continuous function of `time` — a `fract()`-based position wraps and the shape visibly teleports. Drive drift with `sin()` around a stratified base instead.
+
+## Glow v2 (2026-09)
+
+`shaders/glow.ts` declares `multipass: 'glow'`, not a fragment-only fallback.
+`components/visual/GlowPass.ts` extracts premultiplied linear emission, filters
+three Gaussian scales through anisotropic prefiltered targets, and composes an
+independent core. `glowScene.ts` captures source contributions in the REAL scene:
+non-source draws keep depth, alpha discard and sort order, but blend zero source
+radiance. This is essential for translucent occluders; a shared depth-only
+prepass incorrectly extinguishes sources behind transparent depth writers and
+misses opaque-looking non-depth-writing foregrounds. Blend/hook state restores
+in finally blocks; never replace an instrument's material to make emission.
+
+Glow-only objects draw their original geometry in the scene; core changes add
+the visible radiance difference so foreground transparency stays intact.
+Other chains retain array order and use a depth-bearing core output plus an
+additive halo delta. Only a lone active Glow with identical effective settings
+on the same track batches copies; masks/other shader passes prevent batching.
+Shader scratch has separate byte/HDR pool keys, so existing non-Glow effects
+retain their legacy appearance while Glow chains remain half-float end to end.
+
+The final compositor evaluates core-only and full radiance through the SAME
+scene filters/partitions; global bloom consumes core-only, then the full frame
+receives bloom and one final tone map. There is a real extra composition cost
+when local halos are active; this preserves nonlinear downstream scene effects
+without blooming the halo again. Strength 0 with a neutral core skips filtering.
+
+Future depth fog belongs in `GlowPass.emissionStage`, after extraction and
+before blur: Whole Object normalizes chroma, so applying attenuation before
+extraction would undo it. This hook leaves source/core untouched. Emission is
+scratch data valid until the next render; callers needing persistence copy it.
+Scene depth cannot locate every translucent/non-depth-writing emitter, so a
+future spatial fog implementation must supply that depth representation.
+There is no volumetric scattering or surface illumination in this device.
+
+Validation: `scripts/perf/glow-validation.mjs` runs real WebGL pixel assertions;
+`glow-editor.mjs` exercises the editor, chain order, presets and export driver.
+Both write captures/results under `artifacts/glow/`.

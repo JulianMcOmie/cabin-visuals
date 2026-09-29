@@ -217,7 +217,7 @@ export function PhotoSetupScreen({
             </>
           ) : phase.kind === 'error' ? (
             <>
-              <p className="mx-auto m-0 max-w-[380px] text-[13px] leading-relaxed text-[#d68383]">{phase.message}</p>
+              <p className="mx-auto m-0 max-w-[380px] text-[13px] leading-relaxed text-[var(--danger)]">{phase.message}</p>
               <button
                 onClick={() => setPhase({ kind: 'pick' })}
                 className="flex h-9 items-center justify-center rounded bg-[var(--accent)] px-5 text-[13px] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] cursor-pointer"

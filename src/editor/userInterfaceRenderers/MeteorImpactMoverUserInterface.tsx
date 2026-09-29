@@ -237,7 +237,7 @@ function AxisSelector({ b }: { b: SelectBinding }) {
   const SHORT: Record<number, string> = { 2: 'FACE', 1: 'GROUND', 0: 'SIDE' }
   return (
     <div className="flex flex-col items-center gap-1">
-      <div className="flex overflow-hidden rounded-md border border-white/10">
+      <div className="flex overflow-hidden rounded-md border border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
         {b.def.options.map((option) => {
           const active = option.value === selected
           return (
@@ -248,7 +248,7 @@ function AxisSelector({ b }: { b: SelectBinding }) {
               title={option.label}
               onClick={() => b.set(option.value)}
               className={`px-1.5 py-1 text-[7px] font-bold tracking-[0.08em] ${
-                active ? 'text-black' : 'bg-black/25 text-white/40 hover:text-white/70'
+                active ? 'text-black' : 'bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] text-[var(--text-3)] hover:text-[var(--text-2)]'
               }`}
               style={active ? { background: EMBER } : undefined}
             >
@@ -257,7 +257,7 @@ function AxisSelector({ b }: { b: SelectBinding }) {
           )
         })}
       </div>
-      <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">AXIS</span>
+      <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">AXIS</span>
     </div>
   )
 }

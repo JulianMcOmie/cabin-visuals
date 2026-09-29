@@ -83,7 +83,7 @@ function FringePad({ offset, angle }: { offset: NumberBound; angle: NumberBound 
       {/* faint direction ray from center */}
       <span
         aria-hidden="true"
-        className="absolute left-1/2 top-1/2 h-0 border-t border-dashed border-white/20"
+        className="absolute left-1/2 top-1/2 h-0 border-t border-dashed border-[color-mix(in_srgb,var(--text)_20%,transparent)]"
         style={{
           width: `${(k * 1.7).toFixed(1)}px`,
           transform: `rotate(${((Math.atan2(dy, dx) * 180) / Math.PI).toFixed(1)}deg)`,
@@ -100,8 +100,8 @@ function FringePad({ offset, angle }: { offset: NumberBound; angle: NumberBound 
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" style={{ mixBlendMode: 'screen' }}>
         <LensGlyph color="#2bff5b" />
       </div>
-      <span className="absolute bottom-1 left-1.5 font-mono text-[7px] text-white/35">OFF {offset.value.toFixed(3)}</span>
-      <span className="absolute bottom-1 right-1.5 font-mono text-[7px] text-white/35">{Math.round((angle.value * 180) / Math.PI)}°</span>
+      <span className="absolute bottom-1 left-1.5 font-mono text-[7px] text-[var(--text-muted)]">OFF {offset.value.toFixed(3)}</span>
+      <span className="absolute bottom-1 right-1.5 font-mono text-[7px] text-[var(--text-muted)]">{Math.round((angle.value * 180) / Math.PI)}°</span>
     </div>
   )
 }

@@ -4,6 +4,14 @@ The pipeline: **resolve** (document → graph, on edits) → **computeAtBeat** (
 
 ## VisualEngine.ts — module singleton, deliberately NOT a store
 
+`VisualEngineInstance.ts` owns the implementation inside `createVisualEngine()`.
+`VisualEngine.ts` preserves the main singleton API. Timeline stage previews create
+independent instances; instrument/render hooks read `useVisualEngine()` and register
+`useVisualFrame()` from `VisualEngineContext` so preview reads are isolated and
+parked stages skip per-frame work. Outside a provider these use the main singleton.
+Keep all mutable evaluator state inside the factory; never share scratch state
+between the main scene and stage instances.
+
 Per-frame state must never trigger React re-renders; renderers pull it from `useFrame` via `getObjectState(trackId)` / `getVisualCopy(trackId, index)`. The ONLY React-visible signal is the structural object list (`subscribeObjects`/`getObjectList`), republished on resolve — one `ObjectListEntry` per VisualCopy occurrence, so `VisualScene` reconciles mounts only when structure changes, never per frame.
 
 - One `ResolvedGraph` per scene; `setProject` reuses a scene's graph when its inputs are referentially unchanged (`graphInputs` map). Below that, `resolveProject` reuses **per-track** resolutions (WeakMap keyed on the object track's ref, validated against its subtree refs + tempo — see the cache block in resolve.ts): a one-note edit re-resolves one track, not the scene (~0.1ms vs ~3ms at 30 dense tracks, and the gap widens with project size). Cached entries are never emitted directly — each resolve emits a shallow copy with its own chain array and scratchBase, so global-mover appends and the solo pool stay per-resolve. `resolveReuse.test.ts` pins the invalidation rules; anything NEW a per-object resolver reads must land in `resolveDeps` or edits to it won't re-resolve. Dev builds trace each debounced resolve: `performance.getEntriesByName('cabin:setProject')`.
@@ -40,12 +48,12 @@ into the wrong slot. `bypassRuntime.test.ts` pins the 0 case, `switcherRuntime.t
 the N case (including a tf lane weaving against a rack, asserted as transparency rather
 than as an index).
 
-**GROUP tracks** (`type: 'group'`) resolve to placement nodes (`ResolvedGraph.groups`), never objects: per frame `computeAtBeat` interleaves them among the objects at their DFS slot (`afterObjectIndex`) so a group's world matrix (tf\* params + their lanes, sampled per frame) is composed before any member reads it, and its `tfOpacity` accumulates through `inheritedOpacities` onto member objects (objects pass the value through without adding their own — nested-object behavior is unchanged). A group's mover/splitter children broadcast at resolve: each appends to the chain of every member OBJECT above it in the group's child order, per member in the member's own frame (deepest group first, so a member chain reads [own chain, inner group entries, outer group entries, global movers]). `isChainChild` counts group children, so they never route through `targets`. A broadcast Freeze warps each member; the group's own placement always samples the real beat.
+**GROUP tracks** (`type: 'group'`) resolve to placement nodes (`ResolvedGraph.groups`), never objects: per frame `computeAtBeat` interleaves them among the objects at their DFS slot (`afterObjectIndex`) so a group's world matrix (tf\* params + their lanes, sampled per frame) is composed before any member reads it, and its `tfOpacity` accumulates through `inheritedOpacities` onto member objects (objects pass the value through without adding their own — nested-object behavior is unchanged). A group's mover/splitter children broadcast at resolve: each appends to the chain of every member OBJECT regardless of member row position, per member in the member's own frame (deepest group first, so a member chain reads [own chain, inner group entries, outer group entries, global movers]). `isChainChild` counts group children, so they never route through `targets`. A broadcast Freeze warps each member; the group's own placement always samples the real beat.
 
 **THE SCENE INSTRUMENT** (`core/sceneTrack.ts` — read its header first) reaches the resolver as an ordinary `group` track at the front of the roots, so the group machinery above carries its `tf*` and its automation lanes for free. Three things are bespoke, all in `resolveProject`:
 
 1. **It parents every ROOT object and root group** (`parentId: track.parentId ?? sceneTrack?.id`) — nothing is nested under it in the document, so the implicit parenting is what makes its transform move the scene as one. Stamped on the EMITTED object, never on the cached `base`: the per-track cache is keyed on the track's own ref, and toggling ⌘⇧S changes neither the track nor its subtree, so baking it in would leave every cached object claiming a stale parent. It never parents itself.
-2. **Its chain broadcasts to every object in the scene**, not to "members above" — it holds no members. It is FIRST in DFS, hence last in the reversed group walk, so its entries land after every real group's: the right nesting order for an outermost container.
+2. **Its chain broadcasts to every object in the scene** — it holds no explicit members. It is FIRST in DFS, hence last in the reversed group walk, so its entries land after every real group's: the right nesting order for an outermost container.
 3. **A COLORIZER on it paints the BACKDROP**, and is kept out of every object chain (`ResolvedGraph.backdropChain`). This is the one place `def.kind` steers resolution — the visualCopies guide calls it a UI-only discriminator — and the exception is deliberate: objects already have colorizers on their own track, on a group, and via a routed global entry, while the backdrop had **no** beat-driven route at all. `computeAtBeat` evaluates the chain once per frame (copy 0 only — a backdrop is one surface, so a splitter there multiplies objects and nothing here) and `getSceneBackdrop(sceneId)` is what `VisualScene` clears and paints the gradient with. `shiftHex` mirrors `instrumentColor.ts`'s order and both hue regimes exactly, so a colorizer cannot mean one thing on a cube and another on the wall behind it. A transparent backdrop is left alone; both gradient stops travel through ONE shift. "Grade the whole scene, objects included" is the scene EFFECT chain's job, not this one.
 
 ## automation.ts — one lane, five modes
@@ -166,7 +174,7 @@ Bounds for structural budgets are exact here — the table IS every value the la
 can emit, so `automationLaneValueBounds` just walks it.
 
 Automation lanes are RETARGETABLE from the panel (`setAutomationTarget`):
-same one-lane-per-param rule as creation, `automationRange` resets (its
+duplicate targets are allowed, `automationRange` resets (its
 min/max speak the old param's units), and the lane renames only when it still
 wore the auto-name.
 
@@ -328,9 +336,9 @@ reference port. Facts that cost time to establish:
   the per-scene poster key-light direction (`posterLightDir` hands out a shared
   Vector3 that `refreshPosterLightDir` re-aims at the first live directional
   light; poster materials hold it by reference). `LightingBudget` is the fast-preview
-  allowance every pass pool and legacy rig honours (`previewLighting` in UIStore maps
+  allowance every pass pool honours (`previewLighting` in UIStore maps
   Fast → 'trimmed': no shadow pass, ambient + directional only; Fastest → 'flat': one
-  white ambient at π so surfaces show bare albedo; export pins 'full' via
+  white ambient at π while an authored light shines, so surfaces show bare albedo; export pins 'full' via
   `usePreviewLighting`). Switching budgets recompiles the lit programs once - fewer
   lights in the scene IS the saving, the resolution scale never touched them.
   `sceneContext.ts` is the SceneIdContext instruments read to find their scene.
@@ -339,7 +347,194 @@ reference port. Facts that cost time to establish:
 - `noteWindow.ts` — bisected windows over a sorted note stream, for the per-frame consumers that used to scan every note of an object per frame (`activeNotes` in computeAtBeat, `evaluatePulse`, the splitter mute rows in `visualCopies/splitterMidi.ts`). Each caller still applies its own exact predicate inside the window, so the answers are bit-identical to the full scans (`noteWindow.test.ts` pins that against verbatim copies of the old evaluators). It leans on `flattenBlocks` sorting by beat; an unsorted array falls back to the whole range, so hand-built fixtures still work. The window range it returns is ONE shared object - read it before asking for another.
 - `instrumentColor.ts` — applies VisualCopy colorShift to instrument color params (`InstrumentCopyContext`). The only place that knows both the object's own color and the copy's absolute `tint`, so the tint mix happens here, before the relative HSL offsets. `tintPerceptual` chooses how that mix walks: `Color.lerp` (default) runs in LINEAR light and so overshoots perceived brightness at partial amounts, while `mixOklabLinearRgb` tracks it honestly — see the visualCopies guide for why that reads as "the flash goes white". `huePerceptual` does the same for the relative hue channel: set, the turn happens in OKLCH (`rotateHueOklabLinearRgb`, lightness and chroma held) and offsetHSL is left only the saturation/lightness offsets — an HSL hue sweep pulses in brightness twice a turn, which is what makes Hue Rotate's whole-wheel automation viable. Anything added to `colorShift` must also enter `instrumentFrame`'s signature buffer, or a paused edit won't repaint; both perceptual flags are in there for exactly that reason (flipping MIX or CIRCLE at a frozen beat has to repaint).
 - `screenAnchor.ts` / `postMoverScale.ts` / `fullFrameCanvas.ts` — screen-space anchoring, scale lifted outside mover chains, full-frame canvas plumbing.
+- `cameraFraming.ts` keeps the 16:9 composition's width in narrower frames by
+  expanding vertical FOV. `VisualScene` calls `useCameraFraming` for both worker
+  preview and main/export, refreshing R3F's viewport with the projection.
+  Camera and Camera Orbit must use `setSceneCameraFov`: the authored FOV is held
+  separately in a camera-keyed WeakMap so resize/export/remount never compounds
+  the adjustment. Isolated library cameras keep their original framing. Do not
+  implement this with camera zoom: R3F's perspective viewport ignores zoom,
+  which would leave full-frame planes undersized. Validate with
+  `scripts/perf/camera-framing.mjs` (default camera, both rigs, round trips/export).
 - `framePixels.ts` — pixel-authored details use a 1080-tall reference frame so preview, fullscreen and export have the same proportions. Raw point shaders read `framePixelScale` in `onBeforeRender`: use the CURRENT draw viewport, since Fast Preview and hover/effect passes use smaller targets than the canvas. `frameLineResolution` replaces Line2's default hook (which overwrites resolution with the logical canvas size); `configureFramePointsMaterial` corrects Three's stock canvas-height/DPR assumptions. World-space meshes need no correction. Keep actual texel-sampling resolutions (FXAA, grain) separate from authored detail sizes.
 - `finalInvertMask.ts`, `animatedColor.ts`, `animatedOpacity.ts`, `fonts.ts` — final-pass invert, color/opacity tweening helpers, font loading.
 
 Tests are colocated; run via `npm run test:visual`.
+
+## Combining automation lanes
+
+`Track.automationCombine` is explicit on newly created lanes; absence means
+legacy `override`, including after save/load (tracks persist whole). The shared
+`sampleAutomationLane` returns the combined value: sum adds to the accumulated
+parameter, multiply treats the authored value as a literal factor, override replaces
+it. Empty/inactive lanes return NaN and are skipped. Bursts depart from 0 for sum,
+1 for multiply, and the accumulated value for override. Amount scales the lane
+output before combining; combined values are not clamped to the parameter range
+(existing consumers retain their opacity/count/size constraints).
+
+Overlay lanes fold in `childIds` order, top to bottom, starting at the stored knob.
+Mover structural bounds fold both endpoints in the same order, including negative
+factors. Spatial lanes at the same chain position, param and copy clock fold into
+one delta; crossing a mover/splitter keeps separate spatial stages, each relative
+to the panel pose. Override replaces the value within its stage, not transforms
+applied in other stages. Keep all samplers (including paramAtBeat) folding every
+lane, never returning the first match or reusing the original base for each lane.
+
+Creation defaults are centralized in `core/automationCombineDefaults.ts`, using
+stable parameter keys and numeric metadata passed by `automationTargetsForParent`
+through the add menu. Counts (integer metadata takes precedence), effect On/Off,
+timing and unknown absolute controls use Override. Dimensions/size/scale and
+level controls use Multiply unless their definition defaults to zero. Position,
+rotation, phase/hue and signed offsets use Sum. Effect namespaces are stripped
+before classification. Defaults apply only to creation: retargeting, duplication,
+loading and user mode choices retain the stored mode. New target families belong
+in this pure policy, never in a sampler or a saved-document fallback.
+
+## Asynchronous editor preview
+
+`VisualBeatSync` only marks preview work dirty in store listeners. `LatestPreview`
+keeps one request in flight and one replaceable dirty flag; it reads/clones the
+latest snapshot at dispatch, not during a note gesture. Continuous edits make
+progress without a trailing debounce. `preview.worker.ts` boots the evaluator
+and `previewWorkerRuntime.tsx` owns a separate R3F root and OffscreenCanvas for
+worker-safe instruments (`previewProtocol.ts`). That root renders the real
+VisualScene compositor and the local-chain track thumbnails. Raster text, emoji,
+film cards, particles' word sprites, MIDI Roll, photos and WebCodecs video use
+OffscreenCanvas/worker fonts. Media RPC resolves session File/Blob or signed URLs
+on the editor thread; decoding stays in the worker. Async decode arrivals wake
+paused previews, including the rolling video buffer past its initial head cache.
+
+All currently registered visual instruments have worker paths, including PhotoSlot
+(ImageBitmap assets, raster sprites, paused asset wakeups and export readiness)
+and Oscilloscope (fixed 1024-sample windows, 4KiB per RPC). Audio decoding and
+playback stay on main; `waveformWindow.ts` shares exact sampling math with
+AudioEngine. In-flight equal queries are deduplicated and each mounted scope
+retains only its current window. Audio edits increment preview revision, so gain,
+trim, mute and solo changes repaint even at a static beat. No whole PCM buffer
+crosses the thread boundary.
+
+`previewPicking.ts` runs the same raycast/layer math on the owning renderer.
+Pointer moves replace one pending pick, piggybacked on the next preview request;
+late answers are ignored after pointer leave/Shift release. Worker camera matrices
+are mirrored for DOM gradient handles; frame notifications update their projection
+without advancing main WebGL. Picking and gradient editing keep worker rendering.
+
+Unknown future instruments fail closed until audited. Missing OffscreenCanvas
+keeps worker evaluation and main rendering; worker startup/runtime failure falls
+back to both on main. These platform compatibility paths cannot provide full
+input/render independence.
+
+Code instruments and compositions (instruments/custom, one file each) exist only
+on the editor thread: `code/register.tsx` registers them at runtime and lists
+their ids in `mainThreadInstruments.ts`. A project that uses one previews with
+both evaluation and rendering on main - the worker-failure path, entered and left
+per document revision in VisualBeatSync (`previewRuntime.mainThread`); removing
+the last one hands the worker a fresh document. Export and the cabin daemon
+always evaluate on main. Moving them into the worker means registering the
+generated lists, their hot swap and the world services (lanes, camera claim,
+look) inside `preview.worker.ts`.
+
+The main Canvas always has `frameloop="never"`. `RenderGovernor` alone advances
+compatibility frames in later tasks, with an adaptive cooldown and pending-input
+check; export advances directly. `PreviewSceneRenderer` unmounts the duplicate
+main-thread scene tree while worker GL is active, so thousands of copy selectors
+cannot run synchronously inside a MIDI edit. Canvas Shift picking also stays in
+the worker, and never changes the rendering mode of a Shift MIDI gesture.
+
+Worker graphs contain executable functions and never cross the boundary.
+`captureFrame`/`applyFrame` transfer evaluated data, restore Matrix4 prototypes,
+retain static note/automation identities between unchanged-document frames, and
+publish the React object list only when its structure changes. The worker's beat
+also drives compositor/effect time in the compatibility renderer: sampling the
+newer transport beat there would mix two different frames.
+
+Finished pixels, thumbnail readbacks and the ambient downsample are computed in
+the worker. **Do not replace the pixel handoff with a GPU ImageBitmap attached to
+the DOM without measuring Chromium Commit tasks.** In the dense Wormhole probe,
+JS presentation cost was under 1ms yet main-thread compositor commits stalled
+for ~150ms against the next worker GL frame. CPU pixel transfer plus a worker
+cooldown avoids sharing that busy GL surface. A saturated software GPU can still
+stall browser compositing: workers do not give the UI a separate physical GPU.
+Likewise, one synchronous compatibility render cannot be preempted by a timer.
+
+Export pin invalidates outstanding preview replies, resolves the current document
+(including an edit whose preview is unfinished), mounts the main scene, then
+`FrameDriver.prepare` waits for lazy instruments, resolves the export composition,
+flushes canvas effects, primes one unencoded frame at the exact initial beat,
+and waits for its mount/font work before frame 0. No transport advances and no
+encoded frame is skipped. Video export awaits the clip's actual arm promise
+instead of a 50ms guess. Preview supersamples small viewports; pinned export uses
+its requested native resolution, so pixel comparison must account for that. Preview jobs are
+paused while pinned; unpin requests the latest document and unchanged transport
+beat. Export never drops a requested frame or inherits preview throttling.
+Before async media preparers, `FrameDriver.prepareFrame(beat)` resolves the exact
+beat (including per-copy clocks); PhotoSlot and waveform preparers must read these
+states rather than the previous exported frame. Geometry-only exports avoid this
+extra preparation. `useInstrumentFrame` accepts an optional external dependency
+stamp for async assets/audio that change without a visual document/beat edit.
+
+Next 15 Turbopack's dev-worker refresh stub returns undefined from component
+signature wrappers, erasing `memo(function Component)` exports. The worker
+bootstrap installs identity signatures BEFORE dynamically loading React modules;
+production has no refresh wrappers. Keep this bootstrap ahead of all React imports.
+Next app-client bundles also constant-fold `typeof window` as present inside worker
+chunks. Use document/globalThis capability guards for raster/DPR paths.
+
+Validation: `npm run test:visual`, `npx tsc --noEmit`, and
+`BASE=http://localhost:<port> node scripts/perf/responsive-preview.mjs`.
+`MODE=compat` measures the same workload with worker evaluation and main-thread
+rendering. The probe uses three max-detail Wormholes, real MIDI drag/place/scroll,
+checks final paused notes and pixels, and compares worker output with a pinned
+export frame. Its CPU profile and compositor trace go to `/private/tmp`.
+
+`useNoteGestures` keeps drag ownership and the draft note in synchronous refs.
+Native pointerup may arrive before React paints pointerdown; mirroring refs only
+from render drops quick note placement under load. The browser probe deliberately
+uses a zero-delay right-button down/up and checks the persisted note count.
+
+Additional browser checks: `scripts/perf/worker-media.mjs` covers eight instrument
+cases, seeks, gain edits, PhotoSlot styles and export repeats;
+`scripts/perf/worker-interactions.mjs` covers worker picking and gradient dragging.
+
+`INSTRUMENTS=cube EXPORT_SCALE=2 node scripts/perf/worker-media.mjs` compares
+textured gloss at the preview compositor resolution. PMREM targets contain GPU-only
+pixels: create and dispose them in the same effect so StrictMode replay regenerates
+them. A memoized target disposed by an effect can silently lose its reflections.
+Starfield sprites, FundamentalGeometry grain, Glass Roll and the shared
+CanvasBloom buffers use the raster canvas helper. `scripts/perf/worker-registry.mjs` renders all registered instruments in
+the worker; a capability allowlist alone does not catch DOM-only raster code.
+
+Worker FrameCommit waits for passive effects before advancing. A layout-effect
+gate can cache an empty cold-start frame before scene resources attach.
+`worker-cold-start.mjs` injects a visible initial document at the worker protocol
+boundary and checks that a paused preview settles without any later document edit.
+It also runs against production builds, which omit editor debug hooks.
+
+
+## Shared calculations and preview transport
+
+The engine retains one `createVisualCopyEvaluator` per track (see
+`visualCopies/CLAUDE.md`) and opens one synchronous calculation scope per frame.
+Staggered object states are assembled once per equal offset, birth, and complete
+emitter-checkpoint sequence. Equal total lag alone is insufficient because lanes
+can skip different emitters. Strictly ordered distinct offsets bypass grouping entirely. A numeric offset
+lookup handles ordinary sharing; only routing variants need a serialized key. Per-slot owned scratch stays separate
+from the published slots, which may alias, so later clock divergence cannot
+mutate another copy's state. Renderers must treat engine states as read-only.
+
+`previewFrameCodec.ts` separates static object fields from changing frame values
+and packs copy transforms/colors into an encoder-owned Float64 buffer. Static
+metadata reuse is based on the receiver's acknowledged frame, not the last frame
+sent. A reset, changed session/revision, or discarded reply forces fresh metadata.
+Keep newly added ObjectState fields in the codec's appropriate field list and
+preserve optional-field presence and shared-state identity in round-trip tests.
+Worker `FrameCommit` retains the scene element between beat-only commits while
+keeping its passive-effect barrier; do not move that barrier to a layout effect.
+
+- Particle Stream batching and presentation: `directParticleScene.ts` admits
+  bounded shared-clock fields plus ordinary lighting to direct presentation.
+  After decoding a worker frame, pass the current scene documents explicitly to
+  `isDirectParticleScene`: the receiving engine has not resolved that document
+  locally yet. Testing only `particlePlans.has(trackId)` excludes stream fields
+  and even default lighting. Full editor verification and limits are recorded in
+  [Particle Stream field validation](../../../../docs/performance/particle-stream-fields.md).

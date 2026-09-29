@@ -12,6 +12,7 @@ import type { MoverOrSplitterDefinition } from './definitions'
 import { noteDisablesSplitterSlot, splitterMidiRows } from './splitterMidi'
 import { applySplitterSize, splitterSize, SPLITTER_SIZE_PARAM } from './splitterSize'
 import { POLYHEDRON_COLOR } from './identityColors'
+import { sharedLocalLayout } from './sharedLocalLayout'
 
 export interface PolyhedronSettings {
   /** Index into POLYHEDRON_SHAPES. */
@@ -159,14 +160,10 @@ export const polyhedronSplitter: MoverOrSplitterDefinition<PolyhedronSettings> =
         .setPosition(outward.x * radius, outward.y * radius, outward.z * radius)
       return applySplitterSize(slot, size)
     })
-    return {
-      apply(visualCopy, { beat }) {
-        return transforms.map((transform, slot) => ({
-          transform: visualCopy.transform.clone().multiply(transform),
-          opacity: noteDisablesSplitterSlot(notes, beat, slot, count) ? 0 : visualCopy.opacity,
-          colorShift: { ...visualCopy.colorShift },
-        }))
-      },
-    }
+    if (notes.length === 0) return sharedLocalLayout({ transforms })
+    return sharedLocalLayout(beat => ({
+      transforms,
+      opacities: transforms.map((_, slot) => noteDisablesSplitterSlot(notes, beat, slot, count) ? 0 : 1),
+    }), { count })
   },
 }

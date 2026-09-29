@@ -1,5 +1,7 @@
 'use client'
 
+import { ColorPicker } from './colorWheel'
+
 // Bespoke settings for the Stars warp starfield: a live starfield strip up top
 // (density, dot size, tint, background, and ground all read straight from the
 // bound params), then SKY / MOTION / GROUND sections. Presentation only - every
@@ -148,20 +150,18 @@ function StarfieldPreview({
         />
       )}
       {bgBound && typeof bgBound.value === 'string' && (
-        <label
+        <div
           className="absolute bottom-1 right-1 flex cursor-pointer items-center gap-1 rounded border border-[var(--border)] bg-[var(--bg-panel)] px-1 py-0.5"
           title="Background color"
         >
-          <span className="h-2.5 w-2.5 rounded-[2px] border border-[var(--border-strong)]" style={{ background: bgBound.value }} />
           <span className="text-[8px] font-semibold tracking-[0.06em] text-[var(--text-muted)]">BG</span>
-          <input
-            type="color"
-            aria-label="Background color"
+          <ColorPicker
+            ariaLabel="Background color"
             value={bgBound.value}
-            onChange={(e) => bgBound.setValue(e.target.value)}
-            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            onChange={(hex) => bgBound.setValue(hex)}
+            size={24}
           />
-        </label>
+        </div>
       )}
     </div>
   )
@@ -249,12 +249,11 @@ export const StarsUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ pa
                 <div className="mb-[13px] grid grid-cols-[100px_1fr] items-center gap-2.5">
                   <span className="truncate text-[11px] text-[var(--text-3)]">Ground Color</span>
                   <div className="flex justify-end">
-                    <input
-                      type="color"
-                      aria-label="Ground color"
+                    <ColorPicker
+                      ariaLabel="Ground color"
                       value={groundColor.value}
-                      onChange={(e) => groundColor.setValue(e.target.value)}
-                      className="h-5 w-8 flex-shrink-0 cursor-pointer rounded border border-[var(--border)] bg-transparent active:scale-95"
+                      onChange={(hex) => groundColor.setValue(hex)}
+                      size={24}
                     />
                   </div>
                 </div>

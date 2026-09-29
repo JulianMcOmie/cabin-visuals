@@ -2,140 +2,110 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { ResolvedNote } from '../core/visual/types'
 import {
-  IMPACT_STYLE_RUPTURE,
-  IMPACT_STYLE_SHOCKWAVE,
-  IMPACT_WARP_PITCH,
-  impactEnvelope,
-  impactShoveDirection,
-  resolveActiveImpactWarp,
+  IMPACT_WARP_PITCH, IMPACT_WARP_SECONDS, IMPACT_WARP_DEFAULT,
+  impactEnvelope, impactWarpInstrument, resolveActiveImpactWarp,
 } from './ImpactWarp'
 
 function note(beat: number, pitch = IMPACT_WARP_PITCH, velocity = 1, durationBeats = 1): ResolvedNote {
   return { beat, pitch, durationBeats, velocity, blockStartBeat: 0, blockEndBeat: 64 }
 }
-
-function stateAt(beat: number, notes: ResolvedNote[], params: Record<string, number> = {}) {
-  return {
-    beat,
-    notes,
-    // Impact is pinned to full scale so the envelope assertions read as plain
-    // fractions; the shipped default is 0.7.
-    params: { impact: 1, release: 1, ...params },
-    opacity: 1,
-    blackedOut: false,
-  }
+function stateAt(seconds: number, notes = [note(0)], params: Record<string, number> = {}) {
+  return { beat: seconds * 2, secPerBeat: 0.5, notes, params: { impact: 1, ...params }, opacity: 1, blackedOut: false }
 }
+const amountAt = (seconds: number, notes?: ResolvedNote[]) => resolveActiveImpactWarp(stateAt(seconds, notes))?.amount ?? 0
+const peak = IMPACT_WARP_SECONDS * 0.13
 
-test('the attack is instantaneous - full displacement on the very frame of the hit', () => {
-  const notes = [note(4)]
-  assert.equal(resolveActiveImpactWarp(stateAt(3.99, notes)), null)
-  assert.equal(resolveActiveImpactWarp(stateAt(4, notes))?.amount, 1)
+test('single Impact control retains its saved automation key and default', () => {
+  assert.deepEqual(impactWarpInstrument.params.map(p => p.key), ['impact'])
+  assert.equal(IMPACT_WARP_DEFAULT, 0.7)
+  const base = stateAt(peak)
+  assert.deepEqual(resolveActiveImpactWarp(base), resolveActiveImpactWarp({ ...base, params: { ...base.params, style: 3, release: 0.01, size: 1 } }))
 })
 
-test('the envelope rebounds through zero and settles at the end of release', () => {
-  // Zero crossing a third of the way in (three quarters of a cosine cycle).
-  assert.ok(Math.abs(impactEnvelope(1 / 3)) < 1e-12)
-  // Past it the displacement is negative: the frame swings back the other way.
-  assert.ok(impactEnvelope(0.5) < 0)
-  assert.ok(impactEnvelope(2 / 3) < 0)
-  // The rebound is a fraction of the strike, not a second strike of its own.
-  assert.ok(Math.abs(impactEnvelope(2 / 3)) < 0.2)
-  assert.equal(impactEnvelope(1), 0)
-  assert.equal(impactEnvelope(1.5), 0)
+test('the attack starts at rest, rises smoothly and carries a broad recovery', () => {
+  assert.equal(amountAt(-0.01), 0)
+  assert.equal(amountAt(0), 0)
+  assert.ok(amountAt(1 / 60) > 0 && amountAt(1 / 60) < 0.05)
+  assert.ok(amountAt(peak) > 0.7)
+  assert.ok(amountAt(0.25) > amountAt(peak) / 2)
+  assert.ok(amountAt(0.4) < amountAt(0.25))
 })
 
-test('a note ignores its own duration - length is not a parameter of a strike', () => {
-  const long = resolveActiveImpactWarp(stateAt(0.2, [note(0, IMPACT_WARP_PITCH, 1, 8)]))
-  const short = resolveActiveImpactWarp(stateAt(0.2, [note(0, IMPACT_WARP_PITCH, 1, 0.01)]))
-  assert.deepEqual(long, short)
-})
-
-test('release scales the whole recovery, in beats', () => {
-  const notes = [note(0)]
-  // Same normalized age, so the same displacement, at twice the beat distance.
-  const quick = resolveActiveImpactWarp(stateAt(0.25, notes, { release: 1 }))?.amount
-  const slow = resolveActiveImpactWarp(stateAt(0.5, notes, { release: 2 }))?.amount
-  assert.ok(quick !== undefined && Math.abs(quick - (slow ?? 0)) < 1e-12)
-  // And the hit is over exactly one release after it landed.
-  assert.equal(resolveActiveImpactWarp(stateAt(2, notes, { release: 2 })), null)
-})
-
-test('a roll compounds - it stays pinned where a single hit would already be decaying', () => {
-  const roll = [note(0), note(0.05), note(0.1), note(0.15), note(0.2)]
-  const single = resolveActiveImpactWarp(stateAt(0.2, [note(0)]))!.amount
-  const stacked = resolveActiveImpactWarp(stateAt(0.2, roll))!.amount
-  assert.ok(single < 0.5)
-  assert.ok(stacked > single)
-  // Saturated rather than unbounded: a dense roll cannot displace the frame
-  // further than one maximum-strength hit does.
-  assert.equal(stacked, 1)
-})
-
-test('velocity scales the hit', () => {
-  const soft = resolveActiveImpactWarp(stateAt(0, [note(0, IMPACT_WARP_PITCH, 0.25)]))!.amount
-  assert.equal(soft, 0.25)
-  // 0-127 velocities are accepted on the same scale as 0-1 ones.
-  assert.equal(resolveActiveImpactWarp(stateAt(0, [note(0, IMPACT_WARP_PITCH, 127)]))!.amount, 1)
-})
-
-test('Impact and track opacity both scale the hit', () => {
-  const notes = [note(0)]
-  assert.equal(resolveActiveImpactWarp(stateAt(0, notes, { impact: 0.5 }))!.amount, 0.5)
-  const dimmed = { ...stateAt(0, notes), opacity: 0.5 }
-  assert.equal(resolveActiveImpactWarp(dimmed)!.amount, 0.5)
-})
-
-test('consecutive hits never shove the frame the same way twice', () => {
-  const directions = Array.from({ length: 12 }, (_, index) => impactShoveDirection(index))
-  for (const direction of directions) {
-    assert.ok(Math.abs(Math.hypot(direction.x, direction.y) - 1) < 1e-12)
-  }
-  for (let index = 1; index < directions.length; index++) {
-    const dot = directions[index].x * directions[index - 1].x + directions[index].y * directions[index - 1].y
-    // 137.5 degrees apart: nowhere near a repeat.
-    assert.ok(dot < 0.5)
+test('envelope joins have continuous position, velocity and acceleration', () => {
+  const h = 1e-5
+  for (const t of [0, 0.13, 0.66, 1]) {
+    const leftSlope = (impactEnvelope(t) - impactEnvelope(t - h)) / h
+    const rightSlope = (impactEnvelope(t + h) - impactEnvelope(t)) / h
+    assert.ok(Math.abs(leftSlope - rightSlope) < 1e-4, `velocity at ${t}`)
+    const leftAcceleration = (impactEnvelope(t) - 2 * impactEnvelope(t - h) + impactEnvelope(t - 2 * h)) / h ** 2
+    const rightAcceleration = (impactEnvelope(t + 2 * h) - 2 * impactEnvelope(t + h) + impactEnvelope(t)) / h ** 2
+    assert.ok(Math.abs(leftAcceleration - rightAcceleration) < 0.6, `acceleration at ${t}`)
   }
 })
 
-test('a hit keeps its shove direction as the playhead passes later notes', () => {
-  const notes = [note(0), note(4)]
-  const alone = resolveActiveImpactWarp(stateAt(0, [note(0)]))!
-  const withFuture = resolveActiveImpactWarp(stateAt(0, notes))!
-  assert.equal(withFuture.dirX, alone.dirX)
-  assert.equal(withFuture.dirY, alone.dirY)
+test('one restrained rebound settles exactly to rest', () => {
+  const values = Array.from({ length: 1001 }, (_, i) => impactEnvelope(i / 1000))
+  assert.ok(Math.min(...values) >= -0.0600001)
+  assert.ok(impactEnvelope(0.66) < -0.059)
+  const signs = values.filter(v => Math.abs(v) > 1e-8).map(v => Math.sign(v))
+  assert.equal(signs.filter((v, i) => i > 0 && v !== signs[i - 1]).length, 1)
+  assert.equal(amountAt(IMPACT_WARP_SECONDS), 0)
+  assert.equal(amountAt(5), 0)
 })
 
-test('shockwave weakens monotonically as its ring crosses the frame', () => {
-  const notes = [note(0)]
-  const params = { release: 2, style: IMPACT_STYLE_SHOCKWAVE }
-  const at = (beat: number) => resolveActiveImpactWarp(stateAt(beat, notes, params))!
-  const strengths = [0, 0.5, 1, 1.5].map((beat) => at(beat).amount)
-  for (let i = 1; i < strengths.length; i++) {
-    // No rebound: a wave passing through does not spring back the other way.
-    assert.ok(strengths[i] > 0)
-    assert.ok(strengths[i] < strengths[i - 1])
+test('duration is ignored, including after note-off', () => {
+  assert.deepEqual(amountAt(0.25, [note(0, 60, 1, 8)]), amountAt(0.25, [note(0, 60, 1, 0.01)]))
+})
+
+test('physical timing stays consistent across tempos', () => {
+  for (const seconds of [0.025, peak, 0.3, 0.6, 0.8]) {
+    for (const bpm of [40, 60, 120, 240, 300]) {
+      const state = { ...stateAt(seconds), secPerBeat: 60 / bpm, beat: seconds * bpm / 60 }
+      assert.ok(Math.abs((resolveActiveImpactWarp(state)?.amount ?? 0) - amountAt(seconds)) < 1e-12)
+    }
   }
-  // And the ring's travel is the phase, so it is still crossing the frame at the
-  // point the deformation styles have already settled.
-  assert.equal(at(1.5).phase, 0.75)
 })
 
-test('the freshest hit owns the shockwave phase and the rupture seed', () => {
-  const notes = [note(0), note(1)]
-  const state = stateAt(1.5, notes, { release: 4, style: IMPACT_STYLE_RUPTURE })
-  const hit = resolveActiveImpactWarp(state)!
-  assert.equal(hit.phase, 0.125)
-  assert.equal(hit.seed, 1)
-  assert.equal(hit.style, IMPACT_STYLE_RUPTURE)
+test('dense rolls compound smoothly and remain bounded', () => {
+  const roll = Array.from({ length: 100 }, (_, i) => note(i * 0.001))
+  assert.ok(amountAt(peak, roll) > amountAt(peak))
+  assert.ok(amountAt(peak, roll) < 1)
+  assert.ok(amountAt(0.56, roll) < 0 && amountAt(0.56, roll) > -0.1, 'even dense rolls have a restrained rebound')
+  // Adding an onset cannot reset the position or jump to the peak.
+  const notes = [note(0), note(0.4)]
+  assert.equal(amountAt(0.2, notes), amountAt(0.2, [note(0)]))
+  assert.ok(Math.abs(amountAt(0.200001, notes) - amountAt(0.2, notes)) < 1e-4)
 })
 
-test('unrecognized pitches and future notes never hit the scene', () => {
-  assert.equal(resolveActiveImpactWarp(stateAt(0.5, [note(0, 40)])), null)
-  assert.equal(resolveActiveImpactWarp(stateAt(0, [note(8)])), null)
+test('velocity remains expressive and accepts normalized or MIDI values', () => {
+  assert.ok(amountAt(peak, [note(0, 60, 0.25)]) < amountAt(peak) / 2)
+  assert.equal(amountAt(peak, [note(0, 60, 127)]), amountAt(peak))
+  assert.equal(amountAt(peak, [note(0, 60, 0)]), 0)
 })
 
-test('a blacked-out or fully transparent track hits nothing', () => {
-  const notes = [note(0)]
-  assert.equal(resolveActiveImpactWarp({ ...stateAt(0, notes), blackedOut: true }), null)
-  assert.equal(resolveActiveImpactWarp({ ...stateAt(0, notes), opacity: 0 }), null)
+test('Impact and track fades scale the whole gesture, zero is an exact bypass', () => {
+  for (const seconds of [peak, 0.3, 0.6]) {
+    const base = stateAt(seconds)
+    const full = resolveActiveImpactWarp(base)!.amount
+    assert.equal(resolveActiveImpactWarp({ ...base, params: { impact: 0.5 } })!.amount, full * 0.5)
+    assert.equal(resolveActiveImpactWarp({ ...base, opacity: 0.5 })!.amount, full * 0.5)
+    assert.equal(resolveActiveImpactWarp({ ...base, params: { impact: 0 } }), null)
+    assert.equal(resolveActiveImpactWarp({ ...base, opacity: 0 }), null)
+    assert.equal(resolveActiveImpactWarp({ ...base, blackedOut: true }), null)
+  }
+})
+
+test('future notes, other pitches and missing state are inert', () => {
+  assert.equal(amountAt(peak, [note(0, 40)]), 0)
+  assert.equal(amountAt(peak, [note(8)]), 0)
+  assert.equal(resolveActiveImpactWarp(undefined), null)
+})
+
+test('playback, reverse seeks and export frame stepping produce identical results', () => {
+  const notes = [note(0), note(0.25), note(0.5, 60, 0.4), note(2)]
+  const times = Array.from({ length: 180 }, (_, i) => i / 60)
+  const playback = times.map(t => amountAt(t, notes))
+  assert.deepEqual([...times].reverse().map(t => amountAt(t, notes)).reverse(), playback)
+  times.forEach((t, i) => assert.ok(Math.abs(amountAt(t, [...notes].reverse()) - playback[i]) < 1e-12))
+  for (const index of [113, 5, 64, 0, 28, 113]) assert.equal(amountAt(times[index], notes), playback[index])
 })

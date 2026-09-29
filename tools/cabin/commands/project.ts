@@ -46,6 +46,20 @@ export const projectCommands: CommandGroup = {
       },
     },
     {
+      name: 'upgrade', usage: '<name> | --all',
+      summary: "store a project in the app's current document schema (every read already migrates; this writes it)",
+      run(a) {
+        const all = a.flag('all')
+        for (const name of all ? listProjects() : [a.need('project name')]) {
+          const onDisk = (JSON.parse(fs.readFileSync(docPath(name), 'utf8')) as { schemaVersion?: number }).schemaVersion
+          const p = open(name) // loadDoc runs the app's upgradeDocument
+          const now = p.doc.schemaVersion
+          if (onDisk === now) { console.log(`${name}: already v${now}`); continue }
+          if (save(p, `upgrade v${onDisk} to v${now}`)) console.log(`${name}: v${onDisk} → v${now}`)
+        }
+      },
+    },
+    {
       name: 'open', usage: '<name> [--browser]', summary: 'the editor URL for the project',
       async run(a) {
         const browser = a.flag('browser')

@@ -66,7 +66,7 @@ function TypeSelector({ b }: { b: SelectBinding }) {
             aria-label={`${b.def.label}: ${option.label}`}
             onClick={() => b.set(option.value)}
             className={`flex min-w-0 cursor-pointer flex-col items-center gap-1 rounded-md border px-1 py-1.5 ${
-              active ? '' : 'border-white/[0.07] bg-white/[0.025] text-white/30 hover:bg-white/[0.06] hover:text-white/65'
+              active ? '' : 'border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--text)_2.5%,transparent)] text-[var(--text-muted)] hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-[var(--text-2)]'
             }`}
             style={active ? { borderColor: withAlpha(accent, 0.4), background: withAlpha(accent, 0.15), color: towardWhite(accent, 0.45) } : undefined}
           >
@@ -85,7 +85,7 @@ function CurveSelector({ b }: { b: SelectBinding }) {
   const selected = Math.round(b.value)
   return (
     <div className="flex flex-col items-center gap-1">
-      <div className="flex overflow-hidden rounded-md border border-white/10">
+      <div className="flex overflow-hidden rounded-md border border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
         {b.def.options.map((option) => {
           const active = option.value === selected
           return (
@@ -95,7 +95,7 @@ function CurveSelector({ b }: { b: SelectBinding }) {
               aria-pressed={active}
               aria-label={`${b.def.label}: ${option.label}`}
               onClick={() => b.set(option.value)}
-              className={`px-1 pb-0.5 pt-1 cursor-pointer ${active ? '' : 'bg-black/25 hover:bg-white/5'}`}
+              className={`px-1 pb-0.5 pt-1 cursor-pointer ${active ? '' : 'bg-[color-mix(in_srgb,var(--bg-canvas-deep)_25%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)]'}`}
               style={active ? { background: accent } : undefined}
             >
               <svg aria-hidden="true" width="16" height="14" viewBox="0 0 24 24" fill="none" strokeWidth="1.8" strokeLinecap="round" stroke={active ? '#000' : 'rgba(255,255,255,0.45)'}>
@@ -105,8 +105,8 @@ function CurveSelector({ b }: { b: SelectBinding }) {
           )
         })}
       </div>
-      <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">CURVE</span>
-      <span className="font-mono text-[9px] text-white/70">
+      <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)]">CURVE</span>
+      <span className="font-mono text-[9px] text-[var(--text-2)]">
         {b.def.options.find((option) => option.value === selected)?.label.toUpperCase() ?? ''}
       </span>
     </div>

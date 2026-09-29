@@ -17,7 +17,71 @@ One instrument track produces ONE opaque visual output; an ordered chain of move
   implements it contributes nothing itself; it answers "the device I am nested under is
   switched off at this beat". Only `bypass` does — see the section below.
 - **`warpBeat` is the one escape from space into time.** `apply` can only restate the copy it is handed — it cannot un-compute the instrument animation, automation or upstream motion already baked in below it, so freeze/reverse cannot be a transform. An entry may instead implement optional `warpBeat(realBeat) → beat`, and `computeAtBeat` evaluates that object's ENTIRE state at the result (energy, automation, localTransform, activeNotes, `state.beat`, and the whole chain). Object-wide, not a chain partition: the entry's position in the chain is irrelevant. Multiple entries compose by SUMMING deltas against the real beat (`warpChainBeat` in `resolveVisualCopies.ts`) — feeding one the other's output would make it read its own notes at the wrong times. Subtree scope comes free from a top-level mover's `targets` routing.
-- **The PER-COPY time channel is the other escape into time** (2026-08-24): a framed entry may emit `beatOffset`/`birthBeat` per output copy (`FramedVisualCopy`), and the kernel evaluates every entry BELOW it at `context.beat = beat − offset`, carrying `context.birthBeat` alongside. Where `warpBeat` remaps the WHOLE object, this partitions the chain's clock per copy — Stagger is the emitter (see its section). **CHILD POSITION routes the clock (2026-08-27)**: everything ABOVE the emitter in the user's pipeline is the pattern it replays per copy, everything AFTER it is a live overlay on the real timeline — `orderEmitterClocks` in core/visual/resolve.ts moves the emitters to the chain front (an emitter is space-neutral, so the move is transform-exact) and stamps every entry/lane with `clockSkipEmitters` (how many emitters sit above it, whose offsets the kernel subtracts back out of its clock via per-copy checkpoint suffixes — `copyClockShift`). A live entry still receives `birthBeat`, which is what keeps a Born-latching Colorizer below a Stagger working. Hand-built chains carry no stamps, so raw kernel semantics (everything below shifts) are unchanged for tests. The channel rides `applyFramed` because a time field dropped by `apply` is unobservable (offsets only steer entries below), and the framed-forwarding wrappers (copy targets, bypass, switcher gates) therefore pass it for free — their gated-off pass-throughs correctly carry no offset. Two seams needed real work and will bite again if forgotten: `splitterWithChildChain` builds slots via the splitter's OWN `applyFramed` and re-attaches each slot's time fields to its outputs (a Stagger wearing one tf lane would otherwise silently lose every clock), and `resolveOwnMoverOrSplitter`'s automation wrapper forwards `applyFramed` through its per-beat memo (an automated knob would otherwise strip the channel). Pattern entries below an emitter degrade every one-slot per-beat memo (tf lane entries, automated-entry re-resolves, switcher gates) to one recomputation per distinct copy clock per frame — correct, just un-memoized; live entries keep their memos.
+- **The PER-COPY time channel is the other escape into time** (2026-08-24): a framed entry may emit `beatOffset`/`birthBeat` per output copy (`FramedVisualCopy`), and the kernel evaluates every entry BELOW it at `context.beat = beat − offset`, carrying `context.birthBeat` alongside. Where `warpBeat` remaps the WHOLE object, this partitions the chain's clock per copy — Stagger is the emitter (see its section). **CHILD POSITION routes the clock (2026-08-27)**: everything ABOVE the emitter in the user's pipeline is the pattern it replays per copy, everything AFTER it is a live overlay on the real timeline — `orderEmitterClocks` in core/visual/resolve.ts moves the emitters to the chain front (an emitter is space-neutral, so the move is transform-exact) and stamps every entry/lane with `clockSkipEmitters` (how many emitters sit above it, whose offsets the kernel subtracts back out of its clock via per-copy checkpoint suffixes — `copyClockShift`). A live entry still receives `birthBeat`, which is what keeps a Born-latching Colorizer below a Stagger working. Hand-built chains carry no stamps, so raw kernel semantics (everything below shifts) are unchanged for tests. The channel rides `applyFramed` because a time field dropped by `apply` is unobservable (offsets only steer entries below), and the framed-forwarding wrappers (copy targets, bypass, switcher gates) therefore pass it for free — their gated-off pass-throughs correctly carry no offset. Two seams needed real work and will bite again if forgotten: `splitterWithChildChain` builds slots via the splitter's OWN `applyFramed` and re-attaches each slot's time fields to its outputs (a Stagger wearing one tf lane would otherwise silently lose every clock), and `resolveOwnMoverOrSplitter`'s automation wrapper forwards `applyFramed` through its per-beat memo (an automated knob would otherwise strip the channel). Pattern entries below an emitter can revisit interleaved clocks. TF lane entries and automated-entry re-resolves use evaluation-scoped maps so each distinct clock is calculated once in that evaluation; a one-slot memo elsewhere remains correct but may repeat work.
+
+## Calculation caching
+
+**Dance (`dance.ts` / `danceCurve.ts`) is a crossing score, not keyframes.**
+Pitches 60/62/64 select X/Y/Z; each axis alternates direction at note onsets,
+with zero position, nonzero speed and zero acceleration there. Integrated
+cubic velocity ramps share their turnaround distance, so both crossings and
+turns are C2 even with uneven spacing; travel shrinks when necessary. Its
+unit curves cache by immutable note-array identity independently of amplitude
+knobs, and apply uses binary searches plus the evaluation memo. Notes form one
+lane-wide phrase across clip edges; up to one beat of anticipation/settling
+is intentional (hard-gating at an onset would contradict a fast crossing).
+Duplicate onsets within 1e-6 beat coalesce. Note length/velocity are ignored.
+See `docs/dance-mover.md` for the boundary and automation limits.
+
+`evaluationMemo.ts` owns synchronous evaluation scopes. The engine opens one per
+frame; nested kernel/frame calls reuse it, and `finally` clears it. A memo's key
+must contain every varying input; resolved immutable settings belong in its
+closure. Conveyor travel, automated entry resolution, and TF automation deltas
+use beat keys. Mover frames additionally validate placement identity and all 16
+matrix elements. Memo outputs are read-only; direct `.apply` calls outside a scope
+calculate normally, and no history of playback beats accumulates.
+
+`createVisualCopyEvaluator` retains a track's last chain result and clocks. Only
+entries declaring `cachePolicy` participate: `beat` allows same-beat reuse;
+`static` additionally promises independence from beat and birth. Resolved registered
+definitions receive `beat` by default; unknown hand-built entries remain uncached.
+Entry identity, apply functions, clock routing, and placement values invalidate the
+cache. Fixed spatial layouts opt into `static`. An ordinary static prefix
+can be retained before an animated suffix; framed/time-emitting entries terminate
+that prefix so internal motion and clock propagation never fold prematurely.
+Returned arrays, copies, and matrices are immutable views. Slice the array before
+structural padding/truncation; never mutate a cached copy or matrix.
+
+Spatial splitters use `sharedLocalLayout` to derive BOTH `apply` and compact
+metadata from one immutable transform/opacity/hue table. Declare placement
+dependence explicitly; placement contents can change at a held beat. Static
+transform-only tables keep the lightweight `localTransforms` proof. Dynamic or
+appearance-bearing tables use `localLayout[AtBeat]`. Count lanes and parameter
+automation must forward their metadata and structural variants together.
+
+`localSlotMotion` is a stronger proof than caching: exactly one output, unchanged
+appearance, and no placement/birth dependency. It may read local transforms,
+index/count and formation transforms. A splitter can therefore sample such
+children once over its own slots, preserving correlated frame/internal motion.
+It does NOT make that mover a uniform sibling stage or authorize fanout. Shared
+count-one children with opacity/hue have their own local-layout contract; their
+active appearance must remain separate from bare parent factors when a singular
+incoming frame skips child evaluation. See `particlePlan.ts` and
+`docs/performance/shared-splitter-program.md` for compilation and limits.
+
+`gpuOperations.ts` owns the serializable copy-operation vocabulary;
+`gpuAppearance.ts` supplies ordered color/opacity operations and their CPU/GLSL
+interpreters. Define new count-one devices with `sharedGpuOperation` so reference
+evaluation and GPU data derive from one sampler. `maxOutputCount.ts` reads explicit cardinality proofs
+for bounded CPU prefixes. See [automation and mixed mover chains](../../../../docs/performance/automation-mover-program.md)
+for integration, measurements and fallback limits; the contracts live in `types.ts`.
+
+New registered movers, splitters and colorizers must preserve compact Particle
+execution. The registry-wide `particleExecution.test.ts` enforces this by default;
+existing limitations require a concrete definition-local `particleExecution`
+reason. This declaration never authorizes the compiler: only shared operation or
+layout proofs do. Follow the [authoring and wrapper contract](../../../../docs/performance/particle-execution-contract.md)
+when adding a definition or operation family.
 
 ## Structure
 
@@ -50,7 +114,8 @@ One instrument track produces ONE opaque visual output; an ordered chain of move
     palette default) is therefore left unclaimed in `identityColors.ts`. A param that
     resolves near-achromatic falls through to the lane's own cycle colour.
 - `bypass.ts` — the `parentGate` device: notes switch the device it is nested under OFF (or, flipped, on). Not a chain entry — see its own section below.
-- **Demoting a superseded definition is `legacy: true` on the def, not an id list in a picker** (All Movers, Motion). Both pickers read the flag and treat it differently on purpose: the LIBRARY files it into its shelf's Extras folder (`LEGACY_MOVER_IDS` in `LeftSidebar.tsx`, derived from the registry), while the track context menu's "Add mover / colorizer / splitter track" lists drop it entirely — a right-click menu is one flat list per kind, with no Extras drawer to hide a back-catalog entry in, so it would sit right beside the definition that replaced it. Never delete the definition: saved projects still resolve its id.
+- **Moving a supported device to Extras without deprecating it** uses `extras: true` on its definition. Impact, Rumble, and Motion file it under their own Extras subfolder; track add menus omit it. It stays registered, selectable from Extras, and fully supported. Use `legacy` only for superseded definitions.
+- **Demoting a superseded definition is `legacy: true` on the def, not an id list in a picker** (All Movers, Motion). Both pickers read the flag and treat it differently on purpose: the LIBRARY files it into its shelf's Extras folder (`EXTRAS_MOVER_IDS` in `LeftSidebar.tsx`, derived from the registry), while the track context menu's "Add mover / colorizer / splitter track" lists drop it entirely — a right-click menu is one flat list per kind, with no Extras drawer to hide a back-catalog entry in, so it would sit right beside the definition that replaced it. Never delete the definition: saved projects still resolve its id.
 - `resolveVisualCopies.ts` — evaluates a track's chain into `VisualCopy[]`; `identityVisualCopy.ts` — the 1-copy default.
 - `copyTargets.ts` — **which of the incoming copies a chain row acts on** (the
   inspector's Targets tab). The whole vocabulary is a slice count plus which slices
@@ -359,7 +424,47 @@ ZERO to its arrival size (an object flying at you, or receding away from you). B
 divide offsets by the placement scale to stay world-metric — see the war-story comment
 in `tunnel.ts` about a half-size instrument dragging the near end in front of the lens.
 
-Approach's NOTES mode carries a timing contract worth knowing before you touch it: a
+Approach's **Note flight** (`spawnMode: 2`) adds an explicit start/target XYZ path.
+Coordinates are offsets in the incoming copy's axes, compensated for placement
+scale; they are not absolute world positions. `flightBeats` is the lead BEFORE each
+onset, including notes in future blocks. Fly through (default `arrival: 0`) uses
+u³, extending that SAME polynomial past onset so velocity and acceleration never
+jump. Settle uses quintic smoothstep, reaching zero velocity/acceleration on the
+onset and holding there. `afterBeats` is the post-onset lifetime (independent of note
+duration), with a smooth fade over its final quarter. Size stays constant, leaving
+perspective to sell the whoosh. Both launch from rest with C2 continuity.
+
+`bend` adds a quadratic Bezier arc, expressed as `start + delta*s + 4*s*(1-s)*B`,
+where B is perpendicular to the start→target line and has length Bend. Bend
+direction rotates B around travel (0 = projected local X, 90 = perpendicular up;
+a near-X path falls back to projected Z). It is a SPATIAL curve, composed with
+the existing time progress, not a different timing ease. Continue the SAME
+polynomial after the target: clamping B there or switching straight to a tangent
+discards curvature and breaks acceleration continuity. Zero Bend defaults old
+paths to exactly straight. Coincident endpoints use a finite +Z bend frame.
+
+Note flight now honors **every note**, regardless of pitch, duration or velocity;
+velocity no longer scales its copies. First-fit allocation reuses idle slots and
+GROWS the structural pool to the peak overlap computed from the entire MIDI part
+at resolve time. It never steals/skips notes. Density remains only a minimum
+pool reservation for compatibility with automated Spawn/Density, and is hidden
+in this mode. More overlap costs more mounted copies; do not silently restore a
+cap. Timing automation's max/min structural probes cover this monotonic peak.
+It never assumes a particular camera plane for release, since paths may point
+sideways. Automating path/timing controls
+re-resolves the current trajectory, like every other splitter; C2 describes each
+fixed configuration, not arbitrary discontinuous parameter automation.
+
+Stream (0) and classic Notes (1) retain their previous defaults and math, so an
+old save with absent keys is unchanged. The panel's Note flight controls replace
+Speed/Distance/Direction/Near End/Density with Travel time, Bend, Bend direction,
+After arrival, Start and Target. Its demo uses one gem per note (the legacy ring
+would falsely teach group spawning), draws the actual spatial arc from a fixed
+angled camera (looking down the depth axis collapses the arc to a straight screen
+line), and leaves room for pre-roll and the entire post-arrival lifetime before
+wrapping. The stage camera is unaffected.
+
+Approach's classic NOTES mode carries a timing contract worth knowing before you touch it: a
 flight is centred on its note so the copy sits at the object's NORMAL placement
 (axial 0, `approachHomeProgress`) exactly ON the onset — it leads in from the distance
 BEFORE the note and carries on past the lens after. The note is the impact, not the
@@ -666,3 +771,21 @@ the stagger (single rows need no shift), and slot order/count lanes stay shared.
 All four compose locally, preserve incoming appearance, and use the shared
 SIZE knob after their position calculation. FormationSplitterUserInterface.tsx
 previews actual matrices with asymmetric motifs so mirror parity stays legible.
+
+
+## Polar Warp
+
+`polarWarp.ts` is a world-space mover: a held note gathers copy positions into
+an XY polar rose and compresses/stretches each affine basis along its petals.
+It uses the existing scene, group pipeline, global routing and copy targets;
+it preserves copy count, opacity and color. It warps object transforms, not
+individual vertices or scene pixels. Radius and physical response are internal
+constants; Attack and Release (beats) are the only params. MIDI uses Radial's
+1–32 count grid and largest simultaneous onset latch, relabelled as petals.
+Duration additionally gates attraction: the last held note starts Release;
+releasing another chord tone never changes the latched count. Invalid rows
+are ignored. Resolved spring segments carry velocity across retargets and
+close their tails exactly at the selected time, so recovery returns the input
+matrix unchanged and direct seeks equal playback. The panel previews the real
+resolver at a labelled demo 120 BPM. `applyObjectPlacement` preserves shear on
+the ordinary renderer, matching the instanced path's full matrix handling.

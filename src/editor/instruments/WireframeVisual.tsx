@@ -6,7 +6,7 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { frameLineResolution } from '../core/visual/framePixels'
 import { FORCE_TRANSPARENT_KEY, setAnimatedOpacity } from '../core/visual/animatedOpacity'
-import { getVisualCopy } from '../core/visual/VisualEngine'
+import { useVisualEngine } from '../core/visual/VisualEngineContext'
 import { InstrumentCopyContext } from '../core/visual/instrumentColor'
 import { paramDefault } from './types'
 import {
@@ -28,6 +28,7 @@ const SOLID_TILT = 0.45
 /** A shape drawn as thin lines: one crisp pass whose HDR color feeds the scene
  *  bloom, plus a wider additive underlay that thickens with GLOW. */
 export function Wireframe({ trackId }: { trackId: string }) {
+  const { getVisualCopy } = useVisualEngine()
   const groupRef = useRef<Group>(null)
   const copyContext = useContext(InstrumentCopyContext)
   const baseColor = useRef(new Color()).current

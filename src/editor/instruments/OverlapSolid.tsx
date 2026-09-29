@@ -17,7 +17,7 @@ import {
   type Mesh,
 } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
-import { getVisualCopy, getVisualCopyCount } from '../core/visual/VisualEngine'
+import { useVisualEngine } from '../core/visual/VisualEngineContext'
 import { InstrumentCopyContext } from '../core/visual/instrumentColor'
 import { POSTER_SHADING_GLSL } from './posterShading'
 import {
@@ -159,6 +159,7 @@ const _world = new Matrix4()
 const _scale = new Matrix4()
 
 function OverlapSolidVisual({ trackId }: { trackId: string }) {
+  const { getVisualCopy, getVisualCopyCount } = useVisualEngine()
   const copyContext = useContext(InstrumentCopyContext)
   const groupRef = useRef<Group>(null)
   const meshRef = useRef<Mesh>(null)

@@ -1,15 +1,16 @@
+import { previewRuntime } from '../../core/visual/previewRuntime'
 import { useEffect, useRef, type ReactNode } from 'react'
-import { useFrame } from '@react-three/fiber'
 import { Group } from 'three'
 import { useTimeStore } from '../../store/TimeStore'
 import { getBeatOverride } from '../../core/visual/beatOverride'
-import { getObjectState } from '../../core/visual/VisualEngine'
+import { useVisualEngine, useVisualFrame as useFrame } from '../../core/visual/VisualEngineContext'
 import { getEffect } from '../../effects'
 import { effectiveEffectState } from '../../effects/automation'
 import type { EffectInstance } from '../../types'
 
 /** One transform plugin on its own nested group, reset then re-applied each frame. */
 function SingleTransform({ trackId, instance, children }: { trackId: string; instance: EffectInstance; children: ReactNode }) {
+  const { getObjectState } = useVisualEngine()
   const groupRef = useRef<Group>(null)
   const plugin = getEffect(instance.pluginId)
   useFrame(() => {
@@ -25,7 +26,7 @@ function SingleTransform({ trackId, instance, children }: { trackId: string; ins
     // Same clock rule as VisualBeatSync: an export walk drives time through the
     // beat override while the transport stays frozen - reading currentBeat
     // alone would pin this effect to the parked playhead for the whole export.
-    plugin.applyTransform(g, eff.settings, getBeatOverride() ?? useTimeStore.getState().currentBeat)
+    plugin.applyTransform(g, eff.settings, getBeatOverride() ?? (previewRuntime.worker ? previewRuntime.beat : useTimeStore.getState().currentBeat))
   })
   return <group ref={groupRef}>{children}</group>
 }
@@ -34,6 +35,7 @@ function SingleTransform({ trackId, instance, children }: { trackId: string; ins
  *  enabled, restores the instrument's own materials while disabled. No transform
  *  reset - the group is purely a traversal root. */
 function SingleMaterial({ trackId, instance, children }: { trackId: string; instance: EffectInstance; children: ReactNode }) {
+  const { getObjectState } = useVisualEngine()
   const groupRef = useRef<Group>(null)
   const plugin = getEffect(instance.pluginId)
   useFrame(() => {
@@ -41,7 +43,7 @@ function SingleMaterial({ trackId, instance, children }: { trackId: string; inst
     if (!g || !plugin?.applyMaterial) return
     const eff = effectiveEffectState(instance, getObjectState(trackId)?.effectOverrides)
     if (!eff.enabled) { plugin.restoreMaterial?.(g); return }
-    plugin.applyMaterial(g, eff.settings, getBeatOverride() ?? useTimeStore.getState().currentBeat)
+    plugin.applyMaterial(g, eff.settings, getBeatOverride() ?? (previewRuntime.worker ? previewRuntime.beat : useTimeStore.getState().currentBeat))
   })
   // Removing the instance usually remounts the instrument subtree (the element
   // reparents), but restore anyway for the paths where the meshes survive.

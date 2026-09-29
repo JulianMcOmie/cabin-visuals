@@ -376,9 +376,9 @@ function MoverTargets({ track, cropMode }: { track: Track; cropMode?: boolean })
     r.scope.kind === 'tag' && allTags.includes(r.scope.tag) ? [r.scope.tag] : [])
   return (
     <div className="mb-4">
-      <p className="text-[11px] text-zinc-500 mb-2">Targets:</p>
+      <p className="text-[11px] text-[var(--text-muted)] mb-2">Targets:</p>
       {options.length === 0
-        ? <p className="text-[11px] text-zinc-600">No objects to target</p>
+        ? <p className="text-[11px] text-[var(--text-muted)]">No objects to target</p>
         : <TargetSelect options={options} selected={selected} onToggle={toggle} />}
       {routedTags.length > 0 && (
         <div className="mt-1.5 space-y-0.5">
@@ -528,7 +528,7 @@ export function TrackEditor() {
               className={`flex h-6 flex-1 min-w-0 items-center justify-center rounded-full px-2.5 text-[11px] cursor-pointer ${
                 active
                   ? 'font-semibold'
-                  : 'bg-transparent text-[var(--text-muted)] font-medium hover:bg-white/[0.05] hover:text-[var(--text-2)]'
+                  : 'bg-transparent text-[var(--text-muted)] font-medium hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)] hover:text-[var(--text-2)]'
               }`}
               style={active && identity
                 ? {
@@ -590,7 +590,7 @@ export function TrackEditor() {
                           </Suspense>
                         ) : (
                           <>
-                            <p className="text-[11px] text-zinc-500 mb-3">{
+                            <p className="text-[11px] text-[var(--text-muted)] mb-3">{
                               newMoverDef.kind === 'splitter'
                                 ? 'Splitter:'
                                 : newMoverDef.kind === 'colorizer'
@@ -624,15 +624,7 @@ export function TrackEditor() {
                     const currentTarget = targets.find((option) => option.key === track.targetParam)
                     const targetLabel = currentTarget?.label ?? track.targetParam ?? 'value'
                     const laneBounds = currentTarget?.bounds ?? null
-                    // getState, not a subscription: the disabled flags are
-                    // cosmetic and refresh with this panel's own re-renders
-                    // (same accepted staleness as the guide's other getState reads).
-                    const siblingTracks = useProjectStore.getState().tracks
-                    const siblingTargets = new Set((parent?.childIds ?? [])
-                      .map((cid) => siblingTracks[cid])
-                      .filter((c) => !!c && c.id !== track.id && c.type === 'automation')
-                      .map((c) => c!.targetParam))
-                    const targetOptions = targets.map((o) => ({ ...o, disabled: siblingTargets.has(o.key) }))
+                    const targetOptions = targets.map((o) => ({ ...o, disabled: false }))
                     return (
                       <AutomationUserInterface
                         targetLabel={targetLabel}
@@ -655,6 +647,8 @@ export function TrackEditor() {
                         burst={track.burst}
                         cycle={track.cycle}
                         force={track.force}
+                        combine={track.automationCombine ?? 'override'}
+                        onCombine={(mode) => useProjectStore.getState().setAutomationCombine(track.id, mode)}
                         amount={track.automationAmount ?? 1}
                         onMode={(mode) => setAutomationMode(track.id, mode)}
                         onInterpolation={(mode) => setTrackInterpolation(track.id, mode)}
@@ -687,7 +681,7 @@ export function TrackEditor() {
                       <>
                         <SceneSettingsPanel scene={activeScene} />
                         <div className="mt-12">
-                          <p className="text-[11px] text-zinc-500 mb-3">
+                          <p className="text-[11px] text-[var(--text-muted)] mb-3">
                             Scene transform: moves every track in the scene as one.
                             Movers and splitters added below apply to all of them;
                             a colorizer here paints the backdrop above.
@@ -713,7 +707,7 @@ export function TrackEditor() {
                   if (track.type === 'group') {
                     return (
                       <>
-                        <p className="text-[11px] text-zinc-500 mb-3">
+                        <p className="text-[11px] text-[var(--text-muted)] mb-3">
                           Group: transform applies to every track inside. Mover and
                           splitter rows added below the members apply to the members
                           above them; effects broadcast to every member object.

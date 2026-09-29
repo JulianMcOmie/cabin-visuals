@@ -2,9 +2,10 @@
 // types (Track/Block/Note) live in src/editor/types.ts; the dependency points one
 // way (engine → document), which keeps the editor independent of the engine.
 
+import type { ObjectTransitionMotion } from './objectTransition'
 import type { Matrix4 } from 'three'
 import type { LocalTransform, TransformCtx } from '../../instruments/types'
-import type { LyricClip, LyricNotePayload, PhotoPad, StyleLane, SynthMod, VideoPad } from '../../types'
+import type { LyricClip, LyricNotePayload, PhotoPad, StyleLane, VideoPad } from '../../types'
 import type { AutomationLane } from './automation'
 import type { MoverOrSplitter } from '../visualCopies/types'
 
@@ -113,9 +114,6 @@ export interface ResolvedObject {
   videoPads?: VideoPad[]
   /** Photo-instrument-only: ordered photos (fresh array per resolve). */
   photoPads?: PhotoPad[]
-  /** Mod-Synth-only: the modulator rack (fresh array per resolve, same
-   *  identity contract as the pads - a rack edit repaints a paused frame). */
-  synthMods?: SynthMod[]
   /** The ordered mover-and-splitter chain (VisualCopy pipeline): local children
    *  in exact childIds order, then matching global entries in exact
    *  rootTrackIds order. */
@@ -176,6 +174,8 @@ export interface ResolvedGraph {
 
 /** Per-frame state the renderer pulls for one object. */
 export interface ObjectState {
+  /** Also supplied to screen-anchored objects, which do not read world. */
+  objectMotion?: ObjectTransitionMotion
   /** The playhead this frame (fractional beats) - THE time source for instruments.
    *  The pause invariant: every visual is a pure function of this (+ params/notes),
    *  so a static playhead is a static frame and scrub == playback. */
@@ -192,8 +192,6 @@ export interface ObjectState {
   videoPads?: VideoPad[]
   /** Photo-instrument-only: ordered photos (per-resolve identity). */
   photoPads?: PhotoPad[]
-  /** Mod-Synth-only: the modulator rack (per-resolve identity). */
-  synthMods?: SynthMod[]
   /** True this frame when the object track is muted or excluded by solo. */
   blackedOut: boolean
   /** World transform (local composed with all ancestors) WITHOUT the object's

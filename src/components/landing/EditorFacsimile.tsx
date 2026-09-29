@@ -5,25 +5,24 @@
 // plugin-style knob inspector / timeline with section markers. Kept entirely
 // in the page (instead of embedding the real editor) so the landing page
 // stays fast and the controls cannot accidentally modify a project. The
-// handoff palette is hardcoded on purpose - this mock always shows the
-// intended design, whatever theme the surrounding page wears.
+// mock inherits the same interface palette as the real editor.
 
 // Handoff tokens (README "Design Tokens").
 const C = {
-  bg: "#0c0d12",
-  stage: "#0a0b10",
-  raised: "#10131c",
-  text: "#e9edf4",
-  soft: "#b8c0d0",
-  muted: "#8a93a6",
-  faint: "#5a6274",
-  accent: "#a5d8f3",
-  bright: "#dff2fb",
-  button: "#bfe6f7",
-  deep: "#4a7ea6",
-  wave: "#6fa8c9",
-  hairline: "rgba(255,255,255,0.06)",
-  rowline: "rgba(255,255,255,0.04)",
+  bg: "var(--bg-app)",
+  stage: "var(--bg-canvas)",
+  raised: "var(--bg-panel-raised)",
+  text: "var(--text)",
+  soft: "var(--text-2)",
+  muted: "var(--text-3)",
+  faint: "var(--text-muted)",
+  accent: "var(--accent)",
+  bright: "var(--accent-hover)",
+  button: "var(--accent-button)",
+  deep: "var(--accent-muted)",
+  wave: "var(--accent-muted)",
+  hairline: "color-mix(in srgb,var(--text) 6%,transparent)",
+  rowline: "color-mix(in srgb,var(--text) 4%,transparent)",
 }
 
 const LIBRARY_GROUPS = [
@@ -50,15 +49,15 @@ function Knob({ label, value, f }: { label: string; value: string; f: number }) 
       <div
         className="relative h-12 w-12 rounded-full"
         style={{
-          background: `conic-gradient(from 225deg, ${C.accent} 0deg ${sweep}deg, rgba(255,255,255,0.08) ${sweep}deg 270deg, transparent 270deg 360deg)`,
+          background: `conic-gradient(from 225deg, ${C.accent} 0deg ${sweep}deg, color-mix(in srgb,var(--text) 8%,transparent) ${sweep}deg 270deg, transparent 270deg 360deg)`,
         }}
       >
         <div
           className="absolute inset-[5px] rounded-full"
           style={{
-            background: "linear-gradient(145deg, #1c202c, #0f121b)",
-            border: "1px solid rgba(255,255,255,0.1)",
-            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), 0 4px 10px rgba(0,0,0,0.5)",
+            background: "linear-gradient(145deg, var(--bg-elevated), var(--bg-panel))",
+            border: "1px solid color-mix(in srgb,var(--text) 10%,transparent)",
+            boxShadow: "inset 0 1px 0 color-mix(in srgb,var(--text) 8%,transparent), 0 4px 10px rgba(0,0,0,0.5)",
           }}
         />
         <div
@@ -111,13 +110,13 @@ function Clip({
       style={{
         left,
         width,
-        border: `1px solid ${selected ? C.accent : "rgba(165,216,243,0.4)"}`,
-        backgroundColor: `rgba(165,216,243,${selected ? 0.22 : 0.1})`,
+        border: `1px solid ${selected ? C.accent : "color-mix(in srgb,var(--accent) 40%,transparent)"}`,
+        backgroundColor: `color-mix(in srgb, var(--accent) ${selected ? 22 : 10}%, transparent)`,
       }}
     >
       <span
         className="absolute left-[8px] top-[4px] font-mono text-[8px] sm:text-[9px]"
-        style={{ color: selected ? C.bright : "#8fa5b8" }}
+        style={{ color: selected ? C.bright : "var(--text-3)" }}
       >
         {label}
       </span>
@@ -174,7 +173,7 @@ export function EditorFacsimile({ className = "" }: { className?: string }) {
     <div
       aria-label="Preview of the Cabin Visuals music visualization editor"
       className={`overflow-hidden text-left ${className}`}
-      style={{ backgroundColor: C.bg, border: "1px solid rgba(255,255,255,0.07)" }}
+      style={{ backgroundColor: C.bg, border: "1px solid color-mix(in srgb,var(--text) 7%,transparent)" }}
     >
       {/* Transport bar */}
       <div
@@ -214,8 +213,8 @@ export function EditorFacsimile({ className = "" }: { className?: string }) {
                   className="mx-2 rounded-[6px] px-2 py-[5px] text-[11.5px]"
                   style={
                     item === group.selected
-                      ? { color: C.bright, backgroundColor: "rgba(165,216,243,0.12)" }
-                      : { color: "#9aa3b5" }
+                      ? { color: C.bright, backgroundColor: "color-mix(in srgb,var(--accent) 12%,transparent)" }
+                      : { color: "var(--text-3)" }
                   }
                 >
                   {item}
@@ -230,15 +229,15 @@ export function EditorFacsimile({ className = "" }: { className?: string }) {
           <div className="flex flex-1 items-center justify-center p-4 sm:p-6">
             <div
               className="relative w-full max-w-[560px] overflow-hidden rounded-[6px]"
-              style={{ aspectRatio: "16 / 9", border: "1px solid rgba(255,255,255,0.07)" }}
+              style={{ aspectRatio: "16 / 9", border: "1px solid color-mix(in srgb,var(--text) 7%,transparent)" }}
             >
               <div
                 className="absolute inset-0"
-                style={{ background: "radial-gradient(ellipse 65% 75% at 50% 55%, #17222c 0%, #0a0c11 70%)" }}
+                style={{ background: "radial-gradient(ellipse 65% 75% at 50% 55%, var(--bg-elevated) 0%, var(--bg-canvas) 70%)" }}
               />
               <span
                 className="absolute inset-0 flex items-center justify-center italic [font-family:var(--font-display)] text-[clamp(28px,5vw,52px)] tracking-[0.06em]"
-                style={{ color: C.accent, textShadow: "0 0 40px rgba(165,216,243,0.45)" }}
+                style={{ color: C.accent, textShadow: "0 0 40px color-mix(in srgb,var(--accent) 45%,transparent)" }}
               >
                 MIDNIGHT
               </span>
@@ -251,7 +250,7 @@ export function EditorFacsimile({ className = "" }: { className?: string }) {
             <div className="absolute left-1/2 flex -translate-x-1/2 items-center gap-3">
               <span
                 className="flex h-8 w-8 items-center justify-center rounded-full"
-                style={{ border: "1px solid rgba(165,216,243,0.45)" }}
+                style={{ border: "1px solid color-mix(in srgb,var(--accent) 45%,transparent)" }}
               >
                 <span
                   className="ml-[2px] inline-block"
@@ -275,7 +274,7 @@ export function EditorFacsimile({ className = "" }: { className?: string }) {
           <span className="text-[18px] leading-none [font-family:var(--font-display)]" style={{ color: C.text }}>
             Laser Sphere
           </span>
-          <div className="flex gap-4 text-[11.5px]" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+          <div className="flex gap-4 text-[11.5px]" style={{ borderBottom: "1px solid color-mix(in_srgb,var(--text)_7%,transparent)" }}>
             <span className="pb-1.5" style={{ color: C.text, borderBottom: `2px solid ${C.accent}` }}>
               Instrument
             </span>
@@ -283,9 +282,9 @@ export function EditorFacsimile({ className = "" }: { className?: string }) {
           </div>
           <div
             className="flex items-center justify-between rounded-[8px] px-3 py-[7px]"
-            style={{ border: "1px solid rgba(255,255,255,0.1)", backgroundColor: C.raised }}
+            style={{ border: "1px solid color-mix(in srgb,var(--text) 10%,transparent)", backgroundColor: C.raised }}
           >
-            <span className="font-mono text-[10.5px]" style={{ color: "#c3cad8" }}>Init — Wide</span>
+            <span className="font-mono text-[10.5px]" style={{ color: "var(--text-2)" }}>Init — Wide</span>
             <span className="font-mono text-[10.5px]" style={{ color: C.faint }}>‹ ›</span>
           </div>
           <div className="grid grid-cols-2 gap-x-3 gap-y-4 pt-1">
@@ -298,7 +297,7 @@ export function EditorFacsimile({ className = "" }: { className?: string }) {
               <span className="text-[11px]" style={{ color: C.soft }}>Blend</span>
               <span
                 className="rounded-[6px] px-2.5 py-1 font-mono text-[10.5px]"
-                style={{ color: C.text, border: "1px solid rgba(255,255,255,0.12)" }}
+                style={{ color: C.text, border: "1px solid color-mix(in srgb,var(--text) 12%,transparent)" }}
               >
                 In front
               </span>
@@ -309,7 +308,7 @@ export function EditorFacsimile({ className = "" }: { className?: string }) {
                 className="h-[18px] w-9 rounded-[6px]"
                 style={{
                   background: `linear-gradient(90deg, ${C.accent}, ${C.deep})`,
-                  border: "1px solid rgba(255,255,255,0.15)",
+                  border: "1px solid color-mix(in srgb,var(--text) 15%,transparent)",
                 }}
               />
             </div>
@@ -327,7 +326,7 @@ export function EditorFacsimile({ className = "" }: { className?: string }) {
               <span
                 key={section}
                 className="flex w-1/4 items-center pl-2 text-[12px] italic [font-family:var(--font-display)] sm:text-[13px]"
-                style={{ color: C.accent, borderLeft: "1px solid rgba(165,216,243,0.3)" }}
+                style={{ color: C.accent, borderLeft: "1px solid color-mix(in srgb,var(--accent) 30%,transparent)" }}
               >
                 {section}
               </span>
@@ -349,7 +348,7 @@ export function EditorFacsimile({ className = "" }: { className?: string }) {
               <div className="relative h-9 sm:h-10" style={{ borderBottom: `1px solid ${C.rowline}` }}>
                 {rowIndex === 0 ? (
                   // Audio region: full-width tint with a static waveform.
-                  <div className="absolute inset-x-0 top-[5px] bottom-[5px] overflow-hidden rounded-[5px]" style={{ backgroundColor: "rgba(165,216,243,0.05)" }}>
+                  <div className="absolute inset-x-0 top-[5px] bottom-[5px] overflow-hidden rounded-[5px]" style={{ backgroundColor: "color-mix(in_srgb,var(--accent)_5%,transparent)" }}>
                     <div className="flex h-full items-center gap-px px-1">
                       {WAVE_BARS.map((height, index) => (
                         <span
@@ -361,7 +360,7 @@ export function EditorFacsimile({ className = "" }: { className?: string }) {
                     </div>
                     <span
                       className="absolute left-[8px] top-[4px] rounded px-1 font-mono text-[8px] sm:text-[9px]"
-                      style={{ color: C.muted, backgroundColor: "rgba(12,13,18,0.7)" }}
+                      style={{ color: C.muted, backgroundColor: "color-mix(in srgb,var(--bg-app) 70%,transparent)" }}
                     >
                       Midnight Drive.wav
                     </span>
@@ -373,7 +372,7 @@ export function EditorFacsimile({ className = "" }: { className?: string }) {
                 {rowIndex === 0 && (
                   <span
                     className="absolute inset-y-0 left-[43%] z-10 w-px"
-                    style={{ backgroundColor: C.bright, boxShadow: "0 0 8px rgba(165,216,243,0.8)" }}
+                    style={{ backgroundColor: C.bright, boxShadow: "0 0 8px color-mix(in srgb,var(--accent) 80%,transparent)" }}
                   />
                 )}
               </div>

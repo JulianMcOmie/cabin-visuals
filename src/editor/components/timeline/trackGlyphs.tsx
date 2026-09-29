@@ -29,6 +29,13 @@ import type { Track } from '../../types'
  */
 
 const G = {
+  undertale: <path d="M2.5 3.5h3v2h5v-2h3v5h-2v2h-2v2h-3v-2h-2v-2h-2Z" fill="currentColor" stroke="none" />,
+  bird: (
+    <>
+      <path d="M2 7 4 9C4 13 11 14 12 8L14 6 12 5C11 1 7 2 7 6ZM5 8q1 4 4 0" />
+      <circle cx="10" cy="5" r="0.65" fill="currentColor" stroke="none" />
+    </>
+  ),
   // ─── Object instruments ────────────────────────────────────────────────────
   // (3D Shape and Wireframe have no entry here on purpose - both resolve by
   // the shape their own picker is on, through SOLIDS / WIRE_SHAPES below.)
@@ -63,6 +70,12 @@ const G = {
     <>
       <circle cx="8" cy="8" r="5" strokeOpacity="0.3" />
       <circle cx="8" cy="8" r="2.2" fill="currentColor" stroke="none" />
+    </>
+  ),
+  particleStream: (
+    <>
+      <path d="M2 2Q12 5 8 8T2 14M14 2Q4 5 8 8T14 14" />
+      <circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none" />
     </>
   ),
   particleBurst: (
@@ -192,13 +205,6 @@ const G = {
       <path d="M8 2.2v1.9M8 11.9v1.9M2.2 8h1.9M11.9 8h1.9M4 4l1.3 1.3M12 4l-1.3 1.3M4 12l1.3-1.3M12 12l-1.3-1.3" />
     </>
   ),
-  modSynth: (
-    <>
-      <path d="M2 13 L4 4 L7 9.5 L11 9.5 L14 13" strokeLinejoin="round" />
-      <circle cx="4" cy="4" r="1.4" fill="currentColor" stroke="none" />
-      <circle cx="11" cy="9.5" r="1.4" fill="currentColor" stroke="none" />
-    </>
-  ),
   laserLine: (
     <>
       <path d="M2 8h12" strokeWidth="3.4" strokeOpacity="0.25" />
@@ -239,6 +245,15 @@ const G = {
       <path d="M8 6.4 9.6 8 8 9.6 6.4 8Z" fill="currentColor" stroke="none" />
     </>
   ),
+  // Two falling slabs over a key rail - the rail is what keeps it apart
+  // from Midi Roll's horizontal bars at 15px.
+  glassRoll: (
+    <>
+      <rect x="3" y="1.6" width="3.4" height="7" rx="1.1" fill="currentColor" stroke="none" fillOpacity="0.9" />
+      <rect x="9.2" y="3.6" width="3.4" height="5" rx="1.1" fill="currentColor" stroke="none" fillOpacity="0.6" />
+      <path d="M1.6 11.2h12.8M4.8 11.2v3M8 11.2v3M11.2 11.2v3" strokeWidth="1.4" />
+    </>
+  ),
   // A scatter of varied dots - no ring, no row, so it can't be mistaken for
   // Particle Burst's radial spray or the roll's bars at 15px.
   starfield: (
@@ -251,10 +266,11 @@ const G = {
       <circle cx="8.6" cy="12.6" r="0.85" fill="currentColor" stroke="none" fillOpacity="0.75" />
     </>
   ),
-  waterDrop: (
+  radialBloom: (
     <>
-      <path d="M8 2.4c2.2 2.6 3.4 4.2 3.4 5.8a3.4 3.4 0 0 1-6.8 0c0-1.6 1.2-3.2 3.4-5.8Z" />
-      <path d="M3 12.6q5-2.2 10 0" strokeOpacity="0.55" />
+      <circle cx="6" cy="6" r="3.5" />
+      <circle cx="10" cy="6" r="3.5" />
+      <circle cx="8" cy="10" r="3.5" />
     </>
   ),
   flashWall: (
@@ -341,6 +357,12 @@ const G = {
       </g>
     </>
   ),
+  fluidImpact: (
+    <>
+      <circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none" />
+      <path d="M2.4 9.8c0-4 3.2-7 6.7-7 2.6 0 4.5 1.5 4.5 3.3 0 1.3-1.1 2.1-2.2 1.6M13.6 10.8c-1.9 2.3-5.1 3.1-7.6 1.7" />
+    </>
+  ),
   forceFieldPush: (
     <>
       <circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none" />
@@ -367,6 +389,9 @@ const G = {
       <path d="M4.4 6.6 8 10.2l3.6-3.6" strokeOpacity="0.75" />
       <path d="M4.4 10.4 8 14l3.6-3.6" />
     </>
+  ),
+  polarWarp: (
+    <path d="M8 8C1-2 1 10 8 8C18 1 6 1 8 8C15 18 15 6 8 8C-2 15 10 15 8 8Z" />
   ),
   contour: (
     <>
