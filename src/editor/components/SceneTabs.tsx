@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import { Copy, Trash2 } from 'lucide-react'
 import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
+import { CommentsChip } from '../review/CommentsLayer'
 
 /** Flat right-click menu for a scene tab: duplicate or delete. (What the canvas
  *  shows is the transport strip's VIEW chip now, not a menu item here - so Main,
@@ -240,6 +241,8 @@ export function SceneTabs() {
       <div className="ml-auto flex min-w-0 items-center gap-1">
         {/* Which scene the canvas shows is the eye on the tabs now, not a second
             row of scene names here. Aspect and timeline sizing stay. */}
+        {/* Review comments (dev ?file= sessions; renders nothing otherwise). */}
+        <CommentsChip />
 
         {/* Timeline zoom lives here so it never covers track content. The two
             sliders share one pill: they are one control ("how big is the

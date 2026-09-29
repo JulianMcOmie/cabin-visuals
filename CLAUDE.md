@@ -9,9 +9,10 @@ A browser DAW for music visuals: MIDI notes drive 3D instruments on a timeline; 
   directory and the live server then 500s on every route with `ENOENT … build-manifest.json`, which
   reads like a code error and is not one. Give the build its own dir (`NEXT_DIST_DIR=.next-build-<port>`);
   recovering means stopping the server, deleting the dist dir, and restarting.
-- `npm run test:visual` — the node test suite (core, core/visual, visualCopies, directors, photo, video, **export**, effects/deform, effects/materials, **instruments**, store, utils, timeline, **midi/vim**, persistence). Tests are colocated `*.test.ts` run with `node --test` + tsx; no jest/vitest. 1219 pass, none red (verified 2026-08-15 — export/video/effects were added to the glob that day, having silently never run) — a new instrument's colocated test runs in the normal suite with no extra step, but a test in a directory the script's glob list doesn't name is silently never run: add the directory to `test:visual` when you open a new one.
+- `npm run test:visual` — the node test suite (core, core/visual, visualCopies, directors, photo, video, **export**, effects/deform, effects/materials, **instruments** (+ `instruments/code`), store, utils, timeline, **midi/vim**, persistence, `tools/cabin/lib`). Tests are colocated `*.test.ts` run with `node --test` + tsx; no jest/vitest. 1219 pass, none red (verified 2026-08-15 — export/video/effects were added to the glob that day, having silently never run) — a new instrument's colocated test runs in the normal suite with no extra step, but a test in a directory the script's glob list doesn't name is silently never run: add the directory to `test:visual` when you open a new one.
 - `npm run build` — production build; the `/commit` skill runs this first.
 - `npm run db:generate` / `db:migrate` — Drizzle (needs `DATABASE_URL`).
+- `./cabin help` — the project CLI: build projects from code (scenes, instruments, MIDI), analyse a song into MIDI, review comments with the user, drive the live editor, and shoot stills / audit / render video through a headless editor on your dev server. Projects live in `projects/<name>/` and open live in the editor at `/editor?file=<name>` (dev only). Guide: `tools/cabin/CLAUDE.md`; `./cabin docs` prints the guides and the generated SDK reference.
 - Single test file: `node --import tsx --test --experimental-test-module-mocks path/to/file.test.ts`.
 
 `/editor` runs fully in-memory without Supabase env or `?project=` id. `EditorSignupGate` (src/editor/components) puts an un-dismissable signup card over the editor for anyone without a real account — anonymous sessions included — and ExportDialog has its own gate in front of Export. **Both stand down on a dev server** (`src/editor/devGates.ts`: `DEV_GATES_OFF`, true when `NODE_ENV === 'development'` unless `NEXT_PUBLIC_EDITOR_GATE=on`), so `npm run dev` is a signed-out smoke-test path again; production builds compile the branch away.
@@ -55,6 +56,9 @@ Persistence  = serialize ⟷ hydrate ⟷ Supabase, autosave, upgrades     src/pe
 | Export | `src/editor/core/export/` | its CLAUDE.md |
 | Zustand stores | `src/editor/store/` | its CLAUDE.md |
 | Instruments | `src/editor/instruments/` | its CLAUDE.md |
+| Code instruments (one file each, hot-swapped: visuals, cameras, looks, compositions, post passes) | `src/editor/instruments/custom/` + runtime `code/` | `custom/CLAUDE.md` |
+| `cabin` CLI, render daemon, song analysis | `tools/cabin/`, `tools/analysis/` | `tools/cabin/CLAUDE.md` |
+| Review loop (comments, song strip, review bar, row badges) + ⌘K command registry | `src/editor/review/`, `src/editor/commands/`, `src/devtools/` | `src/editor/review/CLAUDE.md` |
 | Effects (transform/shader) | `src/editor/effects/` | its CLAUDE.md |
 | Settings UIs | `src/editor/userInterfaceRenderers/` | its CLAUDE.md |
 | Timeline / piano roll / 3D view UI | `src/editor/components/` | its CLAUDE.md |

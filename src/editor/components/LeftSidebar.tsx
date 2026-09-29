@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useCallback, useEffect, useState, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react'
 import { useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { useInstantNavigation } from '../../components/instantNavigation'
@@ -13,7 +13,9 @@ import { useProjectStore } from '../store/ProjectStore'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
 import { listCompositionInstruments } from '../core/directors'
 import { canPreview } from './instrumentPreviewStore'
-import { preloadInstrument } from '../instruments'
+import { INSTRUMENTS, preloadInstrument } from '../instruments'
+import { isCodeInstrument } from '../instruments/code/define'
+import { onRegistryChange, registryVersion } from '../instruments/code/live'
 // The two preview components pull their own r3f Canvas + Bloom stack; they
 // load after first paint so the shell doesn't wait on them. Both are memo'd
 // AROUND the dynamic wrapper: the sidebar re-renders on tab clicks and on the
@@ -135,13 +137,29 @@ const DIRECTOR_ICON_COLORS: Record<string, string> = {
 // derived from the mover registry - so registering a director is all it takes
 // to make it reachable. (This list used to be hand-maintained, which meant a
 // registered director simply never appeared in the menu.)
-const DIRECTOR_INSTRUMENTS = withKind('director', listCompositionInstruments().map((d) => ({
+// Built-in compositions only: code compositions register at runtime and are
+// listed per render (codeCatalog below).
+const DIRECTOR_INSTRUMENTS = withKind('director', listCompositionInstruments().filter((d) => !('code' in d)).map((d) => ({
   id: d.id,
   name: d.name,
   description: DIRECTOR_DESCRIPTIONS[d.id] ?? `Renders scene sources into the Composite with the ${d.name} layout.`,
   icon: <Sparkles size={12} className={DIRECTOR_ICON_COLORS[d.id] ?? 'text-indigo-400'} />,
 })))
 
+// Code instruments and compositions (instruments/custom/**) are registered by
+// file presence, so their cards are derived here rather than curated: each
+// pack (a folder under custom/) becomes a subfolder of the library's Code
+// folder, and a pack's compositions land in the Composite library's Code
+// folder. The mark is a </> in the def's identity colour.
+function codeIcon(color?: string) {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke={color ?? '#a3e635'} strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 3 L1.5 6 L4 9" />
+      <path d="M8 3 L10.5 6 L8 9" />
+      <path d="M6.8 2 L5.2 10" />
+    </svg>
+  )
+}
 // Cut and Radial Cut are soft-deprecated: still fully working, but parked in a
 // collapsed Extras folder below the curated list (Crop's angled slicing covers
 // most of what they did). Same demote-don't-delete move as EXTRA_INSTRUMENTS.
@@ -526,6 +544,26 @@ const SWITCHER_ITEMS = withKind('switcher', [
   },
 ])
 
+// Code instruments and compositions register at runtime (instruments/code/
+// register.tsx) and can appear or change while the editor is open (a new file
+// in instruments/custom/ hot-registers), so their library entries are derived
+// per render from the live registries rather than frozen at module load. The
+// pack is the id's prefix ('<pack>.<name>' = the folder under custom/).
+interface CodeCatalog { objects: InstrumentItem[]; compositions: InstrumentItem[]; packs: string[] }
+function codeCatalog(): CodeCatalog {
+  const defs = Object.values(INSTRUMENTS).filter(isCodeInstrument).sort((a, b) => a.id.localeCompare(b.id))
+  const objects = withKind('object', defs.map((def) => ({
+    id: def.id,
+    name: def.name,
+    description: def.code.description ?? `Code instrument ${def.id} (instruments/custom/).`,
+    icon: codeIcon(def.code.color),
+  })))
+  const compositions = withKind('director', listCompositionInstruments()
+    .filter((d): d is typeof d & { code: { description?: string } } => 'code' in d)
+    .map((d) => ({ id: d.id, name: d.name, description: d.code.description ?? d.name, icon: codeIcon() })))
+  return { objects, compositions, packs: [...new Set(defs.map((d) => d.id.split('.')[0]))].sort() }
+}
+
 export const ALL_LIBRARY_ITEMS: InstrumentItem[] = [
   ...SCENE_INSTRUMENTS,
   ...DIRECTOR_INSTRUMENTS,
@@ -591,7 +629,7 @@ const MOTION_ITEMS = MOVER_INSTRUMENTS.filter((m) => !IMPACT_IDS.includes(m.id) 
 // The scene library's root, in shelf order. Extras folders keep holding
 // exactly what they held before the folder pass - demoted, never deleted -
 // but they now sit INSIDE the folder they belong to rather than at the root.
-const SCENE_FOLDERS: LibraryFolder[] = [
+const SCENE_FOLDERS_BASE: LibraryFolder[] = [
   // The strikes sit at Impact's root (an Impulse subfolder used to hold them
   // and was Impact's only content - one extra click for nothing).
   {
@@ -625,12 +663,33 @@ const SCENE_FOLDERS: LibraryFolder[] = [
   { id: 'extras', title: 'Extras', description: 'The back catalog: older object instruments, all still fully working - just outside the curated folders above.', items: EXTRA_INSTRUMENTS },
 ]
 
+function sceneFolders(code: CodeCatalog): LibraryFolder[] {
+  if (code.objects.length === 0) return SCENE_FOLDERS_BASE
+  return [...SCENE_FOLDERS_BASE, {
+    id: 'code',
+    title: 'Code',
+    description: 'Instruments written as code, usually for one song - each pack is a folder in src/editor/instruments/custom/.',
+    items: [],
+    subfolders: code.packs.map((pack) => ({
+      id: `code-${pack}`,
+      title: pack,
+      description: `The ${pack} pack (instruments/custom/${pack}/).`,
+      items: code.objects.filter((i) => i.id.startsWith(`${pack}.`)),
+    })),
+  }]
+}
+
 // The Main scene's library: the curated directors ARE the root view (no
 // folder to click through first), with the soft-deprecated ones one level in.
 const MAIN_ROOT_ITEMS = DIRECTOR_CORE
-const MAIN_FOLDERS: LibraryFolder[] = [
+const MAIN_FOLDERS_BASE: LibraryFolder[] = [
   { id: 'director-extras', title: 'Extras', description: "Older directors, still fully working - Crop's angled slicing covers most of what Cut and Radial Cut did.", items: DIRECTOR_EXTRAS },
 ]
+
+function mainFolders(code: CodeCatalog): LibraryFolder[] {
+  if (code.compositions.length === 0) return MAIN_FOLDERS_BASE
+  return [...MAIN_FOLDERS_BASE, { id: 'director-code', title: 'Code', description: 'Compositions written as code (instruments/custom/): transitions and layer logic choreographed per song.', items: code.compositions }]
+}
 
 interface ItemHandlers {
   onItemPointerDown: (e: ReactPointerEvent, item: InstrumentItem) => void
@@ -996,6 +1055,10 @@ export function LeftSidebar() {
   useEffect(() => {
     if (libraryRequest) setTab(libraryRequest.tab)
   }, [libraryRequest])
+  const codeVersion = useSyncExternalStore(onRegistryChange, registryVersion, registryVersion)
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- codeVersion IS the dependency: the registries are mutable
+  const code = useMemo(() => codeCatalog(), [codeVersion])
+  const folders = useMemo(() => ({ scene: sceneFolders(code), main: mainFolders(code) }), [code])
   const { startLibraryDrag, ghostRef, ghostName } = useLibraryDrag()
   const { startLoopBlockDrag, ghostRef: loopGhostRef, ghostName: loopGhostName } = useLoopBlockDrag()
   const [loopHover, setLoopHover] = useState<{ pattern: LoopPattern; left: number; top: number } | null>(null)
@@ -1096,7 +1159,7 @@ export function LeftSidebar() {
           // carries over into the other.
           <FolderBrowser
             key={activeIsMain ? 'main' : 'scene'}
-            folders={activeIsMain ? MAIN_FOLDERS : SCENE_FOLDERS}
+            folders={activeIsMain ? folders.main : folders.scene}
             rootItems={activeIsMain ? MAIN_ROOT_ITEMS : undefined}
             onItemPointerDown={startLibraryDrag}
             onItemDoubleClick={onItemDoubleClick}

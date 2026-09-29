@@ -8,6 +8,16 @@ export interface LyricTimingWord {
   end: number
 }
 
+/** A named span of the song (intro, verse, drop …) in BARS [from, to). Shown
+ *  on the timeline's song strip; the cabin CLI addresses them as @name. */
+export interface Marker {
+  id: string
+  name: string
+  from: number
+  to: number
+  color?: string
+}
+
 export interface Note {
   id: string
   startBeat: number
@@ -21,6 +31,19 @@ export interface Note {
    *  applies to them with no bespoke code, and the note's own id IS the clip
    *  id, so the clip editor and sidecar address it unchanged. */
   lyric?: LyricNotePayload
+  /** AUTOMATION lanes only: the exact value this key sets (the pitch row stays
+   *  as its nearest-row fallback and what the roll draws). Written by the cabin
+   *  CLI (`keys`, `track.curve`); purely additive - absent means "use the row". */
+  value?: number
+  /** AUTOMATION lanes only: the easing from this key INTO the next one - an
+   *  InterpolationMode word or a core/easing name ('expo.out', 'back.inOut' …).
+   *  Absent means the lane's own interpolation. */
+  ease?: string
+  /** Provenance: who wrote this note, and a hash of what they wrote (beat,
+   *  pitch, length, velocity - core/provenance.ts). A note whose current hash
+   *  still matches was never touched by hand; a script re-run may replace it.
+   *  Anything else (no `src`, or a changed hash) is the user's and is kept. */
+  src?: { by: string; h: string }
 }
 
 /** The phrase a lyric-clip note owns. Split from `LyricClip` because the note
@@ -449,6 +472,9 @@ export interface Track {
    *  saves and fresh tracks need no seeding; an empty array is a genuinely
    *  bare rack. Purely additive field - persists and undoes like videoPads. */
   synthMods?: SynthMod[]
+  /** Provenance: set when a script (the cabin CLI) created this track, e.g.
+   *  'script:innuendo.ts'. The row shows a small badge; absent = made by hand. */
+  createdBy?: string
 }
 
 /** Which channel of a spawned voice a Mod Synth modulator drives. */

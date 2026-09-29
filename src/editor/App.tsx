@@ -52,6 +52,18 @@ import { useUndoRedoKeys } from './hooks/useUndoRedoKeys'
 import { useGroupKeys } from './hooks/useGroupKeys'
 import { useSceneTrackKeys } from './hooks/useSceneTrackKeys'
 import { useProjectPersistence } from './hooks/useProjectPersistence'
+import { useFileSync } from './dev/useFileSync'
+import { installDevRenderHooks } from './dev/renderHooks'
+// Dev, ?file= sessions: reload instead of hot-swapping the engine (see the file).
+import './dev/hmrReload'
+// Code instruments/compositions register here, outside the engine's import graph.
+import { CodeRegistry } from './instruments/code/register'
+// Review comments + the external-edit review bar (dev ?file= sessions).
+import { useCommentSync } from './review/useCommentSync'
+import { CommentsLayer } from './review/CommentsLayer'
+import { ReviewBar } from './review/ReviewBar'
+import { provideTransport } from './commands/registry'
+import { CommandPalette } from './commands/CommandPalette'
 import { useAnonymousAdoption } from './hooks/useAnonymousAdoption'
 import { useSaveStatus } from '../persistence/autosave'
 import * as projectStorage from '../persistence/projectStorage'
@@ -78,6 +90,8 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   ;(window as unknown as Record<string, unknown>).__cabinVisual = { getVisualCopies, getVisualCopyCount, getMountedRenderScenes, getCompositionLayers, getObjectState, getSceneBackdrop }
   // Load a saved document into the in-memory editor (perf probes replay real
   // projects through this; runs the same upgrade path a cloud open does).
+  // Headless render entry points for the `cabin` CLI (dev/renderHooks.ts).
+  installDevRenderHooks()
   ;(window as unknown as Record<string, unknown>).__cabinHydrate = async (doc: unknown, name?: string) => {
     const [{ hydrate }, { upgradeDocument }] = await Promise.all([import('../persistence/serialize'), import('../persistence/upgrade')])
     hydrate(upgradeDocument(doc))
@@ -1208,6 +1222,8 @@ function Header({
 }) {
   const { play, pause, reset } = playback
   useTransportKeys({ play, pause, reset })
+  // the command registry (⌘K, `cabin cmd`) plays and pauses through these
+  useEffect(() => { provideTransport({ play, pause }); return () => provideTransport(null) }, [play, pause])
   useUndoRedoKeys()
   useGroupKeys()
   useSceneTrackKeys()
@@ -1395,6 +1411,10 @@ type PlaybackControls = ReturnType<typeof usePlayback>
 
 export default function EditorApp() {
   useProjectPersistence()
+  // Dev-only: `?file=<name>` binds the editor to projects/<name>/project.json,
+  // shared live with the `cabin` CLI (dev/useFileSync.ts). No-op otherwise.
+  useFileSync()
+  useCommentSync()
   useAnonymousAdoption()
   // Leaving the editor stops the transport. The playback engine and Tone's
   // transport are module singletons that outlive this component, so unmounting
@@ -1517,6 +1537,10 @@ export default function EditorApp() {
 
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text)]">
+      <CodeRegistry />
+      <CommentsLayer />
+      <ReviewBar />
+      <CommandPalette />
       {/* OS-file drops (audio/MIDI/video/photo) land anywhere in the editor. */}
       <MediaFileDropLayer />
       {conflicted && <ConflictDialog />}

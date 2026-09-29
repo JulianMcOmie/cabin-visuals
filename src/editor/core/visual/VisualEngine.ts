@@ -15,6 +15,7 @@ import type { ProjectState } from '../../store/ProjectStore'
 import { DEFAULT_SCENE_BACKGROUND, type Scene, type SceneGradient, type Track } from '../../types'
 import { compositionAutomatableParams, compositionDef, isCompositionTrack, type CompositionLayer } from '../directors'
 import { clamp } from '../../utils/math'
+import { beginFrameLooks } from './look'
 
 // The engine is a plain module singleton, NOT a zustand/React store: per-frame
 // state must never trigger React re-renders. Renderers read it imperatively from
@@ -252,7 +253,44 @@ export function setProject(input: ProjectState | ProjectSnapshot) {
   // Per-copy states exist exactly for the staggered set - a stale entry for a
   // track whose chain lost its emitter would keep serving frozen clocks.
   for (const id of copyStatesByTrack.keys()) if (!staggeredTracks.has(id)) copyStatesByTrack.delete(id)
+  // Resolved notes by track, across EVERY scene (shown or not): what code
+  // instruments read another track through (ctx.lane - shared MIDI lanes).
+  resolvedNotesByTrack = new Map()
+  for (const graph of graphs.values()) for (const obj of graph.objects) resolvedNotesByTrack.set(obj.trackId, obj.notes)
   publishList()
+}
+
+let resolvedNotesByTrack = new Map<string, readonly ResolvedNote[]>()
+
+/** A track's resolved notes (stable identity per resolve), whether or not its scene is shown. */
+export function getResolvedNotes(trackId: string): readonly ResolvedNote[] | undefined {
+  return resolvedNotesByTrack.get(trackId)
+}
+
+/** A track id by name: 'Track' (first match in scene order) or 'Scene/Track'. */
+export function findTrackId(name: string): string | undefined {
+  if (!project) return undefined
+  const slash = name.indexOf('/')
+  const sceneName = slash > 0 ? name.slice(0, slash).toLowerCase() : null
+  const trackName = (slash > 0 ? name.slice(slash + 1) : name).toLowerCase()
+  for (const sid of project.sceneOrder) {
+    const scene = project.scenes[sid]
+    if (!scene || (sceneName && scene.name.toLowerCase() !== sceneName)) continue
+    for (const t of Object.values(scene.tracks)) if (t.name.toLowerCase() === trackName) return t.id
+  }
+  return undefined
+}
+
+/** Is this track in a scene on screen this frame (its instrument runs)? */
+export function isTrackActive(trackId: string): boolean {
+  return activeTrackIds.has(trackId)
+}
+
+/** Every scene a composition layer needs rendered: its own, plus any scenes its
+ *  shader samples (LayerShader.scenes - a code composition reading two scenes). */
+export function layerSceneIds(layer: CompositionLayer): string[] {
+  const extra = layer.shader?.scenes ? Object.values(layer.shader.scenes) : []
+  return extra.length ? [layer.sceneId, ...extra] : [layer.sceneId]
 }
 
 /**
@@ -391,6 +429,7 @@ function resolveComposition(beat: number): CompositionLayer[] {
     const opacity = clampOpacity(track.params?.opacity ?? 1)
     return (def?.resolve(track, {
       beat,
+      secPerBeat: 60 / project!.bpm,
       beatsPerBar: project!.beatsPerBar,
       totalBars: project!.totalBars,
       scenes: project!.scenes,
@@ -410,13 +449,15 @@ function resolveComposition(beat: number): CompositionLayer[] {
  *  parent's world is always ready when its children compose. */
 export function computeAtBeat(beat: number) {
   const secPerBeat = 60 / bpm
+  // a code composition may set this frame's look while it resolves
+  beginFrameLooks()
   compositionLayers = resolveComposition(beat)
   // Backdrops before the objects: cheap (one chain per scene that has one, and
   // nothing at all otherwise), and VisualScene clears with the result before it
   // renders anything into the scene's target.
   computeSceneBackdrops(beat)
   computeSceneFxOverrides(beat)
-  const activeSceneIds = new Set(compositionLayers.map((layer) => layer.sceneId))
+  const activeSceneIds = new Set(compositionLayers.flatMap(layerSceneIds))
   activeTrackIds = new Set()
   const activeGraphs = [...activeSceneIds].map((id) => graphs.get(id)).filter((graph): graph is ResolvedGraph => !!graph)
   for (const graph of activeGraphs) {

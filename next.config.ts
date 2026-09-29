@@ -1,4 +1,15 @@
 import type { NextConfig } from "next";
+// Code instruments (src/editor/instruments/custom/): regenerate the registry on
+// every start, and keep it current while a dev server runs, so adding an
+// instrument is just adding its file. See scripts/code-instruments.cjs.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const codeInstruments = require("./scripts/code-instruments.cjs");
+try {
+  codeInstruments.generate({ quiet: true });
+  if (process.env.NODE_ENV === "development") codeInstruments.watch();
+} catch (e) {
+  console.error("[code-instruments] generation failed:", e);
+}
 
 const nextConfig: NextConfig = {
   // Two dev servers sharing one .next/ corrupt each other's build manifests

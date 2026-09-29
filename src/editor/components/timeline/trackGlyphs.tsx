@@ -602,6 +602,8 @@ const G = {
     </>
   ),
   unknown: <circle cx="8" cy="8" r="4.6" strokeDasharray="2.2 2" />,
+  // Code instruments / compositions (instruments/custom/): a </> mark.
+  code: <><path d="M5.5 4.5 L2.5 8 L5.5 11.5" /><path d="M10.5 4.5 L13.5 8 L10.5 11.5" /><path d="M9 3.5 L7 12.5" /></>,
 } satisfies Record<string, ReactNode>
 
 /**
@@ -842,6 +844,8 @@ export function trackGlyph(track: Track, isCompositionTrack = false): ReactNode 
       }
       // A composition track is `base` with an instrumentId naming a director
       // def, so the instrument registry has no mark for it.
+      // Code instruments/compositions are ids of the form '<pack>.<name>'.
+      if (track.instrumentId && /^[a-z0-9-]+\.[\w-]+$/.test(track.instrumentId) && !glyphFor(track.instrumentId)) return G.code
       return glyphFor(track.instrumentId) ?? (isCompositionTrack ? G.composition : G.unknown)
   }
 }

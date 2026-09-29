@@ -66,6 +66,9 @@ export interface ResolvedNote {
   /** Lyric-clip notes only: the phrase this span owns, carried through the
    *  flattener so the resolver can derive `lyricClips` (see lyricClips.ts). */
   lyric?: LyricNotePayload
+  /** Automation keys only: an exact value and the ease into the next key (Note.value / Note.ease). */
+  value?: number
+  ease?: string
 }
 
 /** A renderable object instance derived from a track. */

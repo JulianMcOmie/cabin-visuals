@@ -3,6 +3,7 @@ import { useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import { PerspectiveCamera, Vector3 } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
+import { claimCamera } from '../core/visual/cameraOwner'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 import { clamp } from '../utils/math'
 
@@ -55,6 +56,9 @@ function CameraControlVisual({ trackId }: { trackId: string }) {
   const lookTarget = useRef(new Vector3(0, 0, 0))
 
   useInstrumentFrame(trackId, (state) => {
+    // own the shared camera while this track is on screen (released - default
+    // pose - when its scene leaves; core/visual/cameraOwner.ts)
+    claimCamera(trackId)
     const p = state.params
 
     const posX = p.posX ?? DEFAULTS.posX

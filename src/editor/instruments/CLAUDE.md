@@ -2,6 +2,8 @@
 
 Each instrument is a `Foo.tsx` def file (`ObjectInstrumentDef` - the schema) plus, for anything but a trivial visual, a sibling `FooVisual.tsx` holding its R3F component. `index.ts` is the registry.
 
+**Code instruments** are the other kind: one plain `.ts` file in `custom/<pack>/` exporting `defineInstrument({...})` (setup/frame over three.js, params, MIDI rows, optional post passes) or `defineComposition({...})`. A codegen registry, the generic panel and the Code library folder pick them up - none of the checklist below applies. Per-song and model-written visuals go there: `custom/CLAUDE.md`. `index.ts` merges `CODE_INSTRUMENTS` into `INSTRUMENTS`.
+
 ## The def is metadata; the visual is a lazy chunk
 
 `index.ts` imports every def eagerly (resolve, the stores, the picker and the tests all read def metadata synchronously), so whatever a def file imports rides in the editor's initial bundle. The R3F component - the bulk of an instrument, its GLSL, and any instrument-only library - therefore lives in `FooVisual.tsx`, and the def wires it with

@@ -1,0 +1,6 @@
+#!/bin/sh
+# cabin - build Cabin Visuals projects from code. Guide: tools/cabin/CLAUDE.md
+# Runs the TypeScript CLI through the repo's own tsx, from any directory.
+DIR="$(cd "$(dirname "$0")" && pwd)"
+NODE="${CABIN_NODE:-node}"
+exec "$NODE" --import "$DIR/node_modules/tsx/dist/loader.mjs" "$DIR/tools/cabin/cli.ts" "$@"

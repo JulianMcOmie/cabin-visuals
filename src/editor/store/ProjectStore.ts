@@ -16,7 +16,7 @@ import { AUTOMATION_AMOUNT_MAX, DEFAULT_PHYSICS, DEFAULT_BURST, DEFAULT_CYCLE, D
 import type { ImportedMidiTrack } from '../core/midiImport'
 import type { AspectRatioId } from '../core/aspectRatios'
 import { placeTranscription, invertStrobeSpans, groupTimingIntoLines, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
-import { DEFAULT_SCENE_BACKGROUND, defaultSceneGradient, sceneBackdropMode, type SceneBackdropMode, type SceneGradient, type Scene, type Track, type Block, type Note, type AudioBlock, type AutomationMode, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type SynthMod, type Routing } from '../types'
+import { DEFAULT_SCENE_BACKGROUND, defaultSceneGradient, sceneBackdropMode, type SceneBackdropMode, type SceneGradient, type Scene, type Track, type Block, type Note, type AudioBlock, type AutomationMode, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type SynthMod, type Routing, type Marker } from '../types'
 import type { ProjectDocument } from '../../persistence/types'
 import { upgradeDocument } from '../../persistence/upgrade'
 import { useVideoStore } from './VideoStore'
@@ -412,6 +412,8 @@ export interface ProjectState {
    *  the last template document created-from or applied, so the Templates tab
    *  can mark the current one. Null for scratch projects and older saves. */
   appliedTemplateId: string | null
+  /** Named song sections in bars (the song strip; the CLI's @name). Undoable. */
+  markers: Marker[]
   setActiveScene: (sceneId: string) => void
   addScene: () => string
   renameScene: (sceneId: string, name: string) => void
@@ -630,6 +632,12 @@ export interface ProjectState {
   setBpm: (bpm: number) => void
   setTotalBars: (bars: number) => void
   setViewAspect: (aspect: ViewAspect) => void
+  /** Replace the song's sections (bars). */
+  setMarkers: (markers: Marker[]) => void
+  /** Add a section; returns its id. */
+  addMarker: (marker: Omit<Marker, 'id'>) => string
+  updateMarker: (id: string, patch: Partial<Omit<Marker, 'id'>>) => void
+  removeMarker: (id: string) => void
 }
 
 export type { LyricWord, TranscribedWord } from '../utils/lyricPlacement'
@@ -823,6 +831,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
   totalBars: 32,
   viewAspect: 'fill',
   appliedTemplateId: null,
+  markers: [],
 
   setActiveScene: (sceneId) => rawSet((s) => {
     if (!s.scenes[sceneId] || sceneId === s.activeSceneId) return s
@@ -2958,5 +2967,14 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
   setTotalBars: (bars) => set({ totalBars: Math.max(MIN_TOTAL_BARS, Math.min(MAX_TOTAL_BARS, Math.round(bars))) }),
 
   setViewAspect: (aspect) => set({ viewAspect: aspect }),
+
+  setMarkers: (markers) => set({ markers: markers.map((m) => ({ ...m })).sort((a, b) => a.from - b.from) }),
+  addMarker: (marker) => {
+    const id = crypto.randomUUID()
+    set((s) => ({ markers: [...s.markers, { ...marker, id }].sort((a, b) => a.from - b.from) }))
+    return id
+  },
+  updateMarker: (id, patch) => set((s) => ({ markers: s.markers.map((m) => (m.id === id ? { ...m, ...patch } : m)).sort((a, b) => a.from - b.from) })),
+  removeMarker: (id) => set((s) => ({ markers: s.markers.filter((m) => m.id !== id) })),
   })
 })

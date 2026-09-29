@@ -3,11 +3,14 @@ import type { AdsrEnvelope, AutomationMode, Block, InterpolationMode, Track } fr
 import { automationValueBounds, pitchToValueRanged, type AutomationRange } from '../trackTypes'
 import { adsrGateGain, type AdsrGate } from './adsr'
 import { flattenBlocks } from './noteFlatten'
+import { easeByName } from '../easing'
 
-/** One automation keyframe: a target param value at an absolute project beat. */
+/** One automation keyframe: a target param value at an absolute project beat,
+ *  optionally with its own easing into the next key (Note.ease). */
 export interface AutomationKeyframe {
   beat: number
   value: number
+  ease?: string
 }
 
 // ── Amount (lane output gain) ────────────────────────────────────────────────
@@ -70,9 +73,11 @@ export function extractKeyframes(
   range?: AutomationRange,
 ): AutomationKeyframe[] {
   const bounds = automationOutputBounds(range, paramMin, paramMax, amount)
+  // An exact `value` (Note.value, written by the CLI) beats the pitch row it sits on.
   return flattenBlocks(blocks, beatsPerBar, totalBars).map((note) => ({
     beat: note.beat,
-    value: scaleValue(pitchToValueRanged(range, note.pitch, paramMin, paramMax), amount, bounds),
+    value: scaleValue(note.value ?? pitchToValueRanged(range, note.pitch, paramMin, paramMax), amount, bounds),
+    ...(note.ease ? { ease: note.ease } : {}),
   }))
 }
 
@@ -1008,9 +1013,15 @@ export function sampleLane(
   }
   const a = keyframes[lo]
   const b = keyframes[lo + 1]
-  if (mode === 'step') return a.value
   const span = b.beat - a.beat
   const t = span > 0 ? (beat - a.beat) / span : 0
+  // A key's own ease (Note.ease) overrides the lane's mode for its segment.
+  if (a.ease) {
+    if (a.ease === 'step') return a.value
+    const f = easeByName(a.ease)
+    if (f) return a.value + (b.value - a.value) * f(t)
+  }
+  if (mode === 'step') return a.value
   if (mode === 'spline') {
     // Tangents are per BEAT and the segment runs over u, so each converts by
     // this segment's own span - which is exactly what keeps the shape
@@ -1080,6 +1091,17 @@ export interface AutomationLane {
  * or a lane with no notes at all): callers keep whatever value was already
  * there. `base` is what a burst travels away from; the other modes ignore it.
  */
+const overshootCache = new WeakMap<AutomationKeyframe[], boolean>()
+/** Does any key ease past its endpoints (back / elastic)? Cached per keyframe list. */
+function hasOvershootingKey(lane: AutomationLane): boolean {
+  let v = overshootCache.get(lane.keyframes)
+  if (v === undefined) {
+    v = lane.keyframes.some((k) => !!k.ease && /^(back|elastic)\./.test(k.ease))
+    overshootCache.set(lane.keyframes, v)
+  }
+  return v
+}
+
 export function sampleAutomationLane(lane: AutomationLane, beat: number, base: number): number {
   if (lane.physics) return lane.physicsCurve ? samplePhysicsLane(lane.physicsCurve, beat) : NaN
   if (lane.burst) {
@@ -1106,11 +1128,12 @@ export function sampleAutomationLane(lane: AutomationLane, beat: number, base: n
   if (lane.force) return lane.forceTable ? sampleForceLane(lane.forceTable, beat) : NaN
   if (!lane.keyframes.length) return NaN
   const value = sampleLane(lane.keyframes, beat, lane.mode, lane.splineTension)
-  // The spline is the one keyframe mode that can leave its keyframes' own span
-  // (that overshoot IS the tangent doing its job), and the lane's bounds are
-  // still the law - the same clamp cycle and the shaped bursts take. Gated on
-  // the mode so every other easing stays bit-identical to before.
-  if (lane.mode !== 'spline' || lane.min === undefined || lane.max === undefined) return value
+  // The spline is the one keyframe MODE that can leave its keyframes' own span
+  // (that overshoot IS the tangent doing its job) - and so can a key's own
+  // overshooting ease (back, elastic). The lane's bounds are still the law, the
+  // same clamp cycle and the shaped bursts take. Gated so every other easing
+  // stays bit-identical to before.
+  if ((lane.mode !== 'spline' && !hasOvershootingKey(lane)) || lane.min === undefined || lane.max === undefined) return value
   return Math.max(lane.min, Math.min(lane.max, value))
 }
 
@@ -1201,6 +1224,8 @@ export function automationLaneValueBounds(
     min = Math.min(min, k.value)
     max = Math.max(max, k.value)
   }
+  // An overshooting key ease can reach anywhere its clamp allows.
+  if (hasOvershootingKey(lane) && lane.min !== undefined && lane.max !== undefined) return { min: lane.min, max: lane.max }
   if (lane.mode !== 'spline') return { min, max }
   // A spline segment reaches past its own endpoints by at most
   // SPLINE_TANGENT_PEAK * (|m0| + |m1|) - the two tangent terms are the only

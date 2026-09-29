@@ -81,6 +81,8 @@ export function flattenBlocks(blocks: Block[], beatsPerBar: number, totalBars?: 
           velocity: t.note.velocity,
           durationBeats: t.durationBeats,
           ...(t.note.lyric ? { lyric: t.note.lyric } : {}),
+          ...(t.note.value !== undefined ? { value: t.note.value } : {}),
+          ...(t.note.ease ? { ease: t.note.ease } : {}),
         })
       }
     } else {
@@ -102,6 +104,8 @@ export function flattenBlocks(blocks: Block[], beatsPerBar: number, totalBars?: 
           velocity: note.velocity,
           durationBeats: isClip ? note.durationBeats : Math.min(note.durationBeats, Math.max(0, blockEndBeat - beat)),
           ...(note.lyric ? { lyric: note.lyric } : {}),
+          ...(note.value !== undefined ? { value: note.value } : {}),
+          ...(note.ease ? { ease: note.ease } : {}),
         })
       }
     }

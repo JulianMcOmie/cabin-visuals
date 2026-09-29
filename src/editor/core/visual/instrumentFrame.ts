@@ -64,7 +64,12 @@ function put(sig: FrameSignature, v: unknown) {
   sig.i = i + 1
 }
 
-export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => void | false) {
+/**
+ * `extra` (optional) feeds one more value into the frame signature - an input
+ * the engine can't see. The code-instrument host passes its live spec, so a
+ * hot-swapped instrument repaints at a frozen beat.
+ */
+export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => void | false, extra?: () => unknown) {
   const copyContext = useContext(InstrumentCopyContext)
   // Signature buffer, reused across frames (write-and-compare, no allocation).
   const sig = useRef<FrameSignature>({ buf: [], i: 0, dirty: false }).current
@@ -150,6 +155,7 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
     put(sig, state.energy)
     const params = state.params
     for (const k in params) { put(sig, k); put(sig, params[k]) }
+    if (extra) put(sig, extra())
     if (buf.length !== sig.i) {
       buf.length = sig.i
       sig.dirty = true

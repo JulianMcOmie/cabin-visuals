@@ -51,6 +51,9 @@ import { modSynthInstrument } from './ModSynth'
 import { lightInstrument } from './Light'
 import type { ObjectInstrumentDef } from './types'
 import { preloadComponent } from './lazyInstrument'
+// Code instruments (instruments/custom/**) are NOT imported here: they register
+// into INSTRUMENTS from code/register.tsx, outside the engine's import graph, so
+// a hot edit to one never re-executes this registry or the engine (see there).
 
 export type { ObjectInstrumentDef, ParamDef } from './types'
 
@@ -102,6 +105,7 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [starfieldInstrument.id]: starfieldInstrument,
   [wireframeInstrument.id]: wireframeInstrument,
 }
+
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {
   return INSTRUMENTS[id]

@@ -6,6 +6,8 @@ import { layersUnderPoint, type HitPass } from '../../core/visual/hoverPickCore'
 import { pickHoverTarget } from '../../core/visual/hoverTargets'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
+import { useTimeStore } from '../../store/TimeStore'
+import { useCommentsStore } from '../../review/commentsStore'
 
 /**
  * Shift-hover in the visualizer: hold Shift and move over the canvas to
@@ -68,8 +70,12 @@ export function CanvasHoverPicker() {
       return null
     }
 
+    // Comment mode (review/commentsStore) behaves like Shift-hover - you see
+    // what you'd pin a comment on - and a click opens the composer there.
+    const commenting = () => useCommentsStore.getState().mode
+
     const onMove = (e: PointerEvent) => {
-      if (!e.shiftKey) { clear(); return }
+      if (!e.shiftKey && !commenting()) { clear(); return }
       const hit = pickAt(e.clientX, e.clientY)
       const prev = useUIStore.getState().canvasHover
       if (hit?.trackId !== prev?.trackId || hit?.sceneId !== prev?.sceneId) {
@@ -105,12 +111,30 @@ export function CanvasHoverPicker() {
       ui.revealTrack(hit.trackId)
     }
 
+    const onDown = (e: PointerEvent) => {
+      if (!commenting() || e.button !== 0) return
+      const hit = pickAt(e.clientX, e.clientY)
+      const rect = canvas.getBoundingClientRect()
+      e.preventDefault()
+      e.stopPropagation()
+      useCommentsStore.getState().openComposer({
+        beat: useTimeStore.getState().currentBeat,
+        trackId: hit?.trackId,
+        sceneId: hit?.sceneId,
+        screen: { x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height },
+        x: e.clientX,
+        y: e.clientY,
+      })
+    }
+
+    canvas.addEventListener('pointerdown', onDown)
     canvas.addEventListener('pointermove', onMove)
     canvas.addEventListener('pointerleave', onLeave)
     canvas.addEventListener('dblclick', onDoubleClick)
     window.addEventListener('keyup', onKey)
     window.addEventListener('blur', onLeave)
     return () => {
+      canvas.removeEventListener('pointerdown', onDown)
       canvas.removeEventListener('pointermove', onMove)
       canvas.removeEventListener('pointerleave', onLeave)
       canvas.removeEventListener('dblclick', onDoubleClick)

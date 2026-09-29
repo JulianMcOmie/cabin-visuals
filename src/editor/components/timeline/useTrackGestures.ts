@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject, type PointerE
 import { useUIStore } from '../../store/UIStore'
 import { useProjectStore, cloneBlock, cloneTrackTree, snapshotTrackTree, MAX_TOTAL_BARS } from '../../store/ProjectStore'
 import { useTimeStore } from '../../store/TimeStore'
+import { useCommentsStore } from '../../review/commentsStore'
 import { LOOP_CURSOR, lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { useClipboardStore } from '../../store/ClipboardStore'
 import { flattenVisualRows } from './trackTree'
@@ -542,6 +543,16 @@ export function useTrackGestures({ laneRef, dragGuideRef, moveSnapBeats }: UseTr
   // Pointer down on a lane: right-click draws a new block on that track; left-click
   // begins a marquee (shift keeps the current selection as the base).
   const handleLanePointerDown = useCallback((e: ReactPointerEvent, trackId?: string) => {
+    // Comment mode (review/commentsStore): a left-click pins a comment at this
+    // beat on this track instead of starting a marquee.
+    if (e.button === 0 && useCommentsStore.getState().mode) {
+      const laneR = laneRef.current?.getBoundingClientRect()
+      if (!laneR) return
+      const beat = Math.max(0, Math.round(((e.clientX - laneR.left) / useUIStore.getState().tracksPixelsPerBeat) * 16) / 16)
+      e.preventDefault()
+      useCommentsStore.getState().openComposer({ beat, trackId, x: e.clientX, y: e.clientY })
+      return
+    }
     // Right-click on a track lane = draw a new block (snapped to beats).
     if (e.button === 2 && trackId) {
       const laneR = laneRef.current?.getBoundingClientRect()
