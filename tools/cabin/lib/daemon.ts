@@ -34,20 +34,29 @@ function log(...args: unknown[]) {
   console.log(new Date().toISOString().slice(11, 19), ...args)
 }
 
+// No auth round trips from a headless dev page.
+const ABORTED = /supabase\.co\/(rest|auth|storage)/
+
 async function ensurePage(): Promise<Page> {
-  if (page && !page.isClosed()) return page
-  browser ??= await chromium.launch({
-    executablePath: fs.existsSync(CHROME) ? CHROME : undefined,
-    headless: true,
-    args: ['--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--disable-background-timer-throttling',
-      '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--autoplay-policy=no-user-gesture-required'],
-  })
+  if (page && !page.isClosed() && browser?.isConnected()) return page
+  if (!browser?.isConnected()) {
+    // First use, or Chrome went away (a GPU crash): start a fresh one.
+    if (browser) log('browser disconnected - relaunching')
+    browser = await chromium.launch({
+      executablePath: fs.existsSync(CHROME) ? CHROME : undefined,
+      headless: true,
+      args: ['--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--disable-background-timer-throttling',
+        '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--autoplay-policy=no-user-gesture-required'],
+    })
+  }
   page = await browser.newPage({ viewport: { width: 1600, height: 1000 } })
-  // No auth round trips from a headless dev page.
-  await page.route(/supabase\.co\/(rest|auth|storage)/, (r) => r.abort())
+  await page.route(ABORTED, (r) => r.abort())
   page.on('console', (m) => {
     if (m.type() === 'error' || m.type() === 'warning') {
-      const line = `[${m.type()}] ${m.text()}`
+      // "Failed to load resource" says which resource only in its location.
+      const url = m.text().startsWith('Failed to load resource') ? m.location().url : ''
+      if (url && ABORTED.test(url)) return
+      const line = `[${m.type()}] ${m.text()}${url ? ` ${url}` : ''}`
       consoleLog.push(line)
       if (consoleLog.length > 300) consoleLog.shift()
     }

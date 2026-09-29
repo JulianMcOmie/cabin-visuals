@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { execFileSync } from 'child_process'
 import type { Cabin } from './api'
-import { call, ensureDaemon, withProgress } from './client'
+import { call, ensureDaemon, stopDaemon, withProgress } from './client'
 import { parsePositions, parseRange, type TimeCtx } from './time'
 import { DAEMON_STATE, REPO } from './paths'
 
@@ -139,13 +139,11 @@ export async function daemon(sub: string) {
     return
   }
   if (sub === 'stop') {
-    try { await call('/stop', {}) } catch { /* not running */ }
-    console.log('stopped')
+    console.log((await stopDaemon()) ? 'stopped' : 'not running')
     return
   }
   if (sub === 'restart') {
-    try { await call('/stop', {}) } catch { /* not running */ }
-    await new Promise((r) => setTimeout(r, 500))
+    await stopDaemon()
     const s = await ensureDaemon()
     console.log(`running on ${s.port} (dev ${s.devUrl}); log: ${path.join(REPO, 'tools/cabin/.daemon.log')}`)
     return

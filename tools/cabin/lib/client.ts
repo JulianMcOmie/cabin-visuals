@@ -53,12 +53,26 @@ export async function assertDevServer(url = devUrl()) {
   }
 }
 
+/** Stop the daemon and wait for its process to exit: a daemon that is closing
+ *  Chrome still answers /status, and a call routed to it meets a dead browser. */
+export async function stopDaemon(): Promise<boolean> {
+  const s = readState()
+  if (!(await alive(s))) return false
+  await call('/stop', {}).catch(() => undefined)
+  const deadline = Date.now() + 15_000
+  while (Date.now() < deadline) {
+    try { process.kill(s!.pid, 0) } catch { return true }
+    await new Promise((r) => setTimeout(r, 150))
+  }
+  throw new Error(`the render daemon (pid ${s!.pid}) didn't exit - kill it and retry`)
+}
+
 export async function ensureDaemon(): Promise<DaemonState> {
   const url = devUrl()
   let s = readState()
   if (await alive(s)) {
     if (s!.devUrl === url) return s!
-    await call('/stop', {}).catch(() => undefined)
+    await stopDaemon()
   }
   await assertDevServer(url)
   const logFile = path.join(REPO, 'tools/cabin/.daemon.log')
