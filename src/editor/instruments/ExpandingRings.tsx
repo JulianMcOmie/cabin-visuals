@@ -1,8 +1,9 @@
 import type { ObjectInstrumentDef } from './types'
 import { lazyInstrument } from './lazyInstrument'
 
-// A passive instrument: no MIDI. Concentric shapes are born at the center and
-// expand forever, colored along a two-stop gradient. Math: expandingRingsCore.ts.
+// Played by MIDI: nothing shows until a key is pressed. Holding a note emits
+// concentric shapes from the center that expand outward, colored along a
+// two-stop gradient. Math: expandingRingsCore.ts.
 
 export const EXPANDING_RINGS_A = '#ff5470'
 export const EXPANDING_RINGS_B = '#7c5cff'
@@ -13,6 +14,7 @@ export const expandingRingsInstrument: ObjectInstrumentDef = {
   kind: 'object',
   identityColor: { param: 'colorA' },
   userInterfaceRenderer: 'parameters',
+  midiRows: [{ pitch: 60, label: 'Emit rings (hold)', emphasized: true }],
   params: [
     { key: 'shape', type: 'select', label: 'Shape', default: 0, options: [
       { value: 0, label: 'Circle' }, { value: 1, label: 'Triangle' }, { value: 2, label: 'Square' },
@@ -20,6 +22,9 @@ export const expandingRingsInstrument: ObjectInstrumentDef = {
     ] },
     { key: 'colorMode', type: 'select', label: 'Gradient', default: 0, options: [
       { value: 0, label: 'Radius' }, { value: 1, label: 'Cycle' },
+    ] },
+    { key: 'release', type: 'select', label: 'On release', default: 0, options: [
+      { value: 0, label: 'Finish' }, { value: 1, label: 'Cut' },
     ] },
     { key: 'rings', label: 'Rings', min: 1, max: 32, step: 1, integer: true, default: 8 },
     { key: 'period', label: 'Period (beats)', min: 0.25, max: 32, step: 0.01, curve: 2, default: 4 },
@@ -41,6 +46,7 @@ export const expandingRingsInstrument: ObjectInstrumentDef = {
       { segmented: 'shape' },
       { segmented: 'widthMode' },
       { segmented: 'colorMode' },
+      { segmented: 'release' },
       { row: ['period*:PERIOD', { param: 'curve', label: 'CURVE', bipolar: true }, 'rings:RINGS', 'reach:REACH'] },
       { row: ['thickness?:WIDTH', 'fade:FADE', { param: 'rotation', bipolar: true }, { pill: 'colorA', label: 'CENTER' }, { pill: 'colorB', label: 'EDGE' }] },
     ],

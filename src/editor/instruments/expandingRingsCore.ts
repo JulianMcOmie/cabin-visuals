@@ -17,24 +17,41 @@ export function easeLife(life: number, curve: number): number {
 }
 
 export interface Ring {
-  /** Global spawn number (negative before beat 0 - the screen is already full at the start). */
+  /** Which ring of its note this is: 0 is the one born on the key press. */
   spawn: number
+  /** The beat it was born. */
+  born: number
   /** 0 at the center, 1 at full reach. Linear in time; ease it for radius. */
   life: number
 }
 
-/** The `count` live rings at `beat`, newest first. One ring spawns every
- *  cycleBeats/count beats and lives cycleBeats, so the center respawns evenly. */
-export function ringsAt(beat: number, cycleBeats: number, count: number, out: Ring[] = []): Ring[] {
+/** The rings alive at `beat`, newest first, up to RINGS_MAX. Nothing exists
+ *  until a note is pressed: each note emits a ring on the press and another
+ *  every period/count beats while it is held, and a ring lives `period` beats.
+ *  `cut` ends a ring the moment its note is released; otherwise rings already
+ *  in flight finish expanding. Overlapping notes simply add their rings. */
+export function ringsFromNotes(
+  notes: readonly { beat: number; durationBeats: number }[],
+  beat: number, period: number, count: number, cut = false, out: Ring[] = [],
+): Ring[] {
   const n = Math.max(1, Math.min(RINGS_MAX, Math.round(count)))
-  const period = Math.max(1e-3, cycleBeats)
-  const spacing = period / n
-  const newest = Math.floor(beat / spacing)
-  out.length = n
-  for (let k = 0; k < n; k++) {
-    const spawn = newest - k
-    out[k] = { spawn, life: (beat - spawn * spacing) / period }
+  const life = Math.max(1e-3, period)
+  const spacing = life / n
+  out.length = 0
+  for (const note of notes) {
+    const since = beat - note.beat
+    if (since < 0 || since >= note.durationBeats + life) continue
+    if (cut && since >= note.durationBeats) continue
+    // Spawns j·spacing for j ≥ 0 while the key is down (the press always spawns).
+    const last = Math.min(Math.floor(since / spacing), Math.ceil(note.durationBeats / spacing - 1e-9) - 1)
+    const first = Math.max(0, Math.floor((since - life) / spacing) + 1)
+    for (let j = last; j >= first; j--) {
+      const age = since - j * spacing
+      if (age >= 0 && age < life) out.push({ spawn: j, born: note.beat + j * spacing, life: age / life })
+    }
   }
+  out.sort((a, b) => b.born - a.born)
+  if (out.length > RINGS_MAX) out.length = RINGS_MAX
   return out
 }
 

@@ -3,7 +3,7 @@ import { BufferAttribute, BufferGeometry, DoubleSide, Group, Mesh, MeshBasicMate
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { FORCE_TRANSPARENT_KEY, setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import { gradientStops } from '../utils/oklch'
-import { ringInnerRadius, easeLife, ringGradientT, ringOpacity, ringsAt, RING_SIDES, RINGS_MAX, type Ring } from './expandingRingsCore'
+import { ringInnerRadius, easeLife, ringGradientT, ringOpacity, ringsFromNotes, RING_SIDES, RINGS_MAX, type Ring } from './expandingRingsCore'
 import { expandingRingsInstrument } from './ExpandingRings'
 import { paramDefault, stringParamDefault } from './types'
 
@@ -83,7 +83,7 @@ export function ExpandingRingsVisual({ trackId }: { trackId: string }) {
     }
 
     const count = Math.max(1, Math.min(RINGS_MAX, Math.round(num('rings'))))
-    const rings = ringsAt(state.beat, num('period'), count, rig.rings)
+    const rings = ringsFromNotes(state.notes, state.beat, num('period'), count, num('release') >= 0.5, rig.rings)
     const curve = num('curve')
     const reach = num('reach')
     const fade = num('fade')
@@ -92,10 +92,10 @@ export function ExpandingRingsVisual({ trackId }: { trackId: string }) {
     const widthMode = num('widthMode')
     const width = num('thickness') * reach
     // Radii first: Fill needs each ring's next-newer neighbour.
-    rig.radii.length = count
-    for (let i = 0; i < count; i++) rig.radii[i] = easeLife(rings[i].life, curve) * reach
+    rig.radii.length = rings.length
+    for (let i = 0; i < rings.length; i++) rig.radii[i] = easeLife(rings[i].life, curve) * reach
     rig.meshes.forEach((mesh, i) => {
-      const ring = i < count ? rings[i] : undefined
+      const ring = i < rings.length ? rings[i] : undefined
       const eased = ring ? easeLife(ring.life, curve) : 0
       const opacity = ring ? ringOpacity(ring.life, fade) : 0
       mesh.visible = opacity > 0.001 && eased > 0
