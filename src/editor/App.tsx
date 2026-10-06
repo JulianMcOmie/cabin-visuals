@@ -36,6 +36,7 @@ import { LeftSidebar } from './components/LeftSidebar'
 import { TrackEditor } from './components/TrackEditor'
 import { PlayIcon, PauseIcon, SkipBackIcon, LoopIcon } from './components/TransportIcons'
 import { BpmControl } from './components/BpmControl'
+import { TapTempo } from './components/TapTempo'
 import { PlaybackRateControl } from './components/PlaybackRateControl'
 // Loaded on first open: the dialog drags the whole export engine (encoder,
 // muxer, audio render) behind it, none of which the editor needs until then.
@@ -1217,6 +1218,7 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
       <div className="flex h-9 min-w-0 flex-1 items-center justify-end gap-2.5">
         <PlaybackRateControl />
         <BpmControl />
+        <TapTempo />
       </div>
     </div>
   )
