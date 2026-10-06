@@ -25,7 +25,10 @@ export const expandingRingsInstrument: ObjectInstrumentDef = {
     { key: 'period', label: 'Period (beats)', min: 0.25, max: 32, step: 0.01, curve: 2, default: 4 },
     { key: 'curve', label: 'Curve', min: -1, max: 1, step: 0.01, default: 0 },
     { key: 'reach', label: 'Reach', min: 0.5, max: 12, step: 0.01, default: 5.5 },
-    { key: 'thickness', label: 'Thickness', min: 0.01, max: 1, step: 0.01, curve: 2, default: 0.08 },
+    { key: 'widthMode', type: 'select', label: 'Ring width', default: 0, options: [
+      { value: 0, label: 'Fill' }, { value: 1, label: 'Constant' }, { value: 2, label: 'Taper' },
+    ] },
+    { key: 'thickness', label: 'Width', min: 0.01, max: 1, step: 0.01, curve: 2, default: 0.08, showIf: 'widthMode=1|2' },
     { key: 'rotation', label: 'Rotation', min: -180, max: 180, step: 1, default: 0 },
     { key: 'fade', label: 'Fade out', min: 0, max: 1, step: 0.01, default: 0.4 },
     { key: 'colorA', label: 'Center color', type: 'color', default: EXPANDING_RINGS_A },
@@ -36,9 +39,10 @@ export const expandingRingsInstrument: ObjectInstrumentDef = {
     testId: 'expanding-rings-panel',
     rows: [
       { segmented: 'shape' },
+      { segmented: 'widthMode' },
       { segmented: 'colorMode' },
       { row: ['period*:PERIOD', { param: 'curve', label: 'CURVE', bipolar: true }, 'rings:RINGS', 'reach:REACH'] },
-      { row: ['thickness:WIDTH', 'fade:FADE', { param: 'rotation', bipolar: true }, { pill: 'colorA', label: 'CENTER' }, { pill: 'colorB', label: 'EDGE' }] },
+      { row: ['thickness?:WIDTH', 'fade:FADE', { param: 'rotation', bipolar: true }, { pill: 'colorA', label: 'CENTER' }, { pill: 'colorB', label: 'EDGE' }] },
     ],
   },
   component: lazyInstrument(() => import('./ExpandingRingsVisual').then(m => m.ExpandingRingsVisual)),

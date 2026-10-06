@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { easeLife, ringGradientT, ringOpacity, ringsAt } from './expandingRingsCore'
+import { ringInnerRadius, easeLife, ringGradientT, ringOpacity, ringsAt } from './expandingRingsCore'
 
 test('ease curve: 0 is linear, + accelerates, - decelerates, endpoints pinned', () => {
   assert.equal(easeLife(0, 0.7), 0)
@@ -39,4 +39,14 @@ test('fade-out spans the last fraction of life', () => {
   assert.equal(ringOpacity(0.5, 0.4), 1)
   assert.ok(Math.abs(ringOpacity(0.8, 0.4) - 0.5) < 1e-12)
   assert.equal(ringOpacity(0.5, 0), 1)
+})
+
+test('width modes: fill meets the next ring, constant is fixed, taper thins outward', () => {
+  assert.equal(ringInnerRadius(0, 4, 3, 0.5, 0.8), 3)
+  assert.equal(ringInnerRadius(0, 4, 0, 0.5, 0.8), 0)
+  assert.equal(ringInnerRadius(1, 4, 3, 0.5, 0.8), 3.5)
+  assert.equal(ringInnerRadius(1, 0.2, 3, 0.5, 0.1), 0)
+  const near = 1 - ringInnerRadius(2, 1, 0, 0.5, 0)
+  const far = 1 - ringInnerRadius(2, 1, 0, 0.5, 1)
+  assert.ok(Math.abs(near - 0.5) < 1e-12 && far < near * 0.06)
 })

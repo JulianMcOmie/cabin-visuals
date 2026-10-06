@@ -53,3 +53,18 @@ export function ringOpacity(life: number, fade: number): number {
   if (fade <= 0) return life < 1 ? 1 : 0
   return Math.min(1, Math.max(0, (1 - life) / fade))
 }
+
+export const WIDTH_FILL = 0
+export const WIDTH_CONSTANT = 1
+export const WIDTH_TAPER = 2
+
+/** Inner radius of a ring whose outer radius is `outer` (world units).
+ *  FILL: the band reaches in to `nextInner` - the radius of the ring born just
+ *  after it (0 for the newest) - so the bands tile the area with no gaps.
+ *  CONSTANT: every ring is `width` wide. TAPER: `width` at birth, thinning to
+ *  5% of it at full reach (`eased` is the ring's eased 0..1 expansion). */
+export function ringInnerRadius(mode: number, outer: number, nextInner: number, width: number, eased: number): number {
+  if (mode < WIDTH_CONSTANT - 0.5) return Math.min(outer, Math.max(0, nextInner))
+  const w = mode < WIDTH_TAPER - 0.5 ? width : width * (1 - 0.95 * eased)
+  return Math.max(0, outer - Math.max(0, w))
+}
