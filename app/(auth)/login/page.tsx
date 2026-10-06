@@ -122,6 +122,23 @@ function LoginPageContent() {
       {message && <AuthBanner kind="success">{message}</AuthBanner>}
       {error && <AuthBanner kind="error">{error}</AuthBanner>}
 
+      {/* The whole GSI apparatus (script included) stands down when no client
+          id is configured - see src/utils/googleSignIn.ts. */}
+      {GOOGLE_SIGNIN_ENABLED && (<>
+      <div className="flex flex-col items-center">
+         <div id="g_id_onload" data-client_id={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID} data-context="signin" data-ux_mode="popup" data-callback="handleGoogleSignInCallback" data-nonce="" data-itp_support="true" data-use_fedcm_for_prompt="false" style={{ display: 'none' }}></div>
+         {/* GSI draws its own (dark, filled_black) button via the imperative
+             renderButton call - no g_id_signin class (that triggers GSI's
+             declarative auto-render with WHITE defaults, overriding our theme)
+             and no styled wrapper (a mismatched container strip looks wrong
+             behind whatever width GSI decides to render). */}
+         {/* w-full so the empty container measures the card's inner width -
+             renderButton reads clientWidth before anything is in it. */}
+         <div id="google-signin-button-container" className="gsi-host flex w-full justify-center"></div>
+      </div>
+      <OrDivider />
+      </>)}
+
       <form action={login} onSubmit={() => { track('login_submitted'); flushSync(() => setFormBusy(true)) }} className="flex flex-col gap-[14px]">
         <div>
           <label htmlFor="email" className={`mb-[6px] block ${authLabelClass}`}>Email</label>
@@ -139,24 +156,6 @@ function LoginPageContent() {
 
         <AuthSubmit busy={formBusy} busyLabel="Signing in…">Sign in</AuthSubmit>
       </form>
-
-      {/* The whole GSI apparatus (script included) stands down when no client
-          id is configured - see src/utils/googleSignIn.ts. */}
-      {GOOGLE_SIGNIN_ENABLED && (<>
-      <OrDivider />
-
-      <div className="flex flex-col items-center">
-         <div id="g_id_onload" data-client_id={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID} data-context="signin" data-ux_mode="popup" data-callback="handleGoogleSignInCallback" data-nonce="" data-itp_support="true" data-use_fedcm_for_prompt="false" style={{ display: 'none' }}></div>
-         {/* GSI draws its own (dark, filled_black) button via the imperative
-             renderButton call - no g_id_signin class (that triggers GSI's
-             declarative auto-render with WHITE defaults, overriding our theme)
-             and no styled wrapper (a mismatched container strip looks wrong
-             behind whatever width GSI decides to render). */}
-         {/* w-full so the empty container measures the card's inner width -
-             renderButton reads clientWidth before anything is in it. */}
-         <div id="google-signin-button-container" className="gsi-host flex w-full justify-center"></div>
-      </div>
-      </>)}
 
       <p className="mt-5 text-center text-[13px] text-[var(--text-3)]">
         Don&apos;t have an account?{' '}

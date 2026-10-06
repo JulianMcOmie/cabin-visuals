@@ -116,19 +116,9 @@ function SignupPageContent() {
 
       {errorMessage && <AuthBanner kind="error">{errorMessage}</AuthBanner>}
 
-      <form action={initiateSignup} onSubmit={() => { track('signup_started'); flushSync(() => setFormBusy(true)) }} className="flex flex-col gap-[14px]">
-        <div>
-          <label htmlFor="email" className={`mb-[6px] block ${authLabelClass}`}>Email</label>
-          <input id="email" name="email" type="email" required className={authInputClass} placeholder="you@example.com" />
-        </div>
-        <AuthSubmit busy={formBusy} busyLabel="Checking…">Continue</AuthSubmit>
-      </form>
-
       {/* The whole GSI apparatus (script included) stands down when no client
           id is configured - see src/utils/googleSignIn.ts. */}
       {GOOGLE_SIGNIN_ENABLED && (<>
-      <OrDivider />
-
       <div className="flex flex-col items-center">
          <div id="g_id_onload" data-client_id={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID} data-context="signup" data-ux_mode="popup" data-callback="handleGoogleSignInCallback" data-nonce="" data-itp_support="true" data-use_fedcm_for_prompt="false" style={{ display: 'none' }}></div>
          {/* GSI draws its own (dark, filled_black) button via the imperative
@@ -140,7 +130,16 @@ function SignupPageContent() {
              renderButton reads clientWidth before anything is in it. */}
          <div id="google-signin-button-container" className="gsi-host flex w-full justify-center"></div>
       </div>
+      <OrDivider />
       </>)}
+
+      <form action={initiateSignup} onSubmit={() => { track('signup_started'); flushSync(() => setFormBusy(true)) }} className="flex flex-col gap-[14px]">
+        <div>
+          <label htmlFor="email" className={`mb-[6px] block ${authLabelClass}`}>Email</label>
+          <input id="email" name="email" type="email" required className={authInputClass} placeholder="you@example.com" />
+        </div>
+        <AuthSubmit busy={formBusy} busyLabel="Checking…">Continue</AuthSubmit>
+      </form>
 
       <p className="mt-5 text-center text-[13px] text-[var(--text-3)]">
         Already have an account?{' '}

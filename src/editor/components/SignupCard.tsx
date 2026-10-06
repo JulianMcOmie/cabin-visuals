@@ -70,6 +70,18 @@ export function SignupCard({ page }: { page: string }) {
 
   return (
     <>
+      {GOOGLE_SIGNIN_ENABLED && (
+        <>
+          <div id={googleId} className="gsi-host flex w-full justify-center" />
+
+          <div className="my-4 flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+            <span className="flex-1 border-t border-[var(--border)]" />
+            or
+            <span className="flex-1 border-t border-[var(--border)]" />
+          </div>
+        </>
+      )}
+
       <form action={initiateSignup} onSubmit={() => track('signup_started', { page })} className="flex flex-col gap-[14px]">
         <div>
           <label htmlFor={emailId} className="mb-[6px] block font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">Email</label>
@@ -79,18 +91,6 @@ export function SignupCard({ page }: { page: string }) {
           Continue
         </button>
       </form>
-
-      {GOOGLE_SIGNIN_ENABLED && (
-        <>
-          <div className="my-4 flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-            <span className="flex-1 border-t border-[var(--border)]" />
-            or
-            <span className="flex-1 border-t border-[var(--border)]" />
-          </div>
-
-          <div id={googleId} className="gsi-host flex w-full justify-center" />
-        </>
-      )}
 
       <p className="mt-4 text-center text-[13px] text-[var(--text-3)]">
         Already have an account?{' '}
