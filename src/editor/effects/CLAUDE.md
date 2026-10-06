@@ -11,6 +11,8 @@ Plugins attached per track (`track.effects: EffectInstance[]`) — the mechanism
 
 Clone effects were replaced by VisualCopy splitters (`core/visualCopies/`).
 
+Not every "apply this to any instrument" is an effect: **Water Shimmer** (`instruments/WaterShimmer.tsx`) is a TRACK that re-lights whatever it is nested under - notes gate it, which an effect never sees - and rides the same ShaderWrapper chain as the shader category, after it. See the Water Shimmer section of instruments/implementation-notes.md before adding a second played, parent-scoped pass.
+
 ## `scene` effects — the per-scene chain (2026-08-15)
 
 Full-frame passes over a SCENE's finished render (`scene/*.ts`: Grade, Lens,

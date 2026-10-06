@@ -58,6 +58,7 @@ import { resolveActiveColorFilter } from '../../instruments/ColorFilters'
 import { resolveActiveStrobe } from '../../instruments/Strobe'
 import { BASS_RIPPLE_FIELD_GLSL, resolveActiveBassRipple } from '../../instruments/BassRipple'
 import { IMPACT_WARP_FIELD_GLSL, resolveActiveImpactWarp } from '../../instruments/ImpactWarp'
+import { WATER_SHIMMER_FRAGMENT, resolveActiveWaterShimmer } from '../../instruments/WaterShimmer'
 import { CROP_MASK_FRAGMENT, resolveActiveCropMask } from '../../instruments/Crop'
 import { MAX_DIVISIONS as CROP_MAX_DIVISIONS } from '../../core/directors/crop'
 import { getBeatOverride } from '../../core/visual/beatOverride'
@@ -755,6 +756,22 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
       depthTest: false,
       depthWrite: false,
     })
+    const shimmerMaterial = new ShaderMaterial({
+      vertexShader: COLOR_FILTER_VERTEX,
+      fragmentShader: WATER_SHIMMER_FRAGMENT,
+      uniforms: {
+        tDiffuse: { value: null as Texture | null },
+        pattern: { value: 0 },
+        amount: { value: 0 },
+        scale: { value: 3 },
+        speed: { value: 0.6 },
+        chroma: { value: 0.5 },
+        time: { value: 0 },
+        aspect: { value: 1 },
+      },
+      depthTest: false,
+      depthWrite: false,
+    })
     const cropMaskMaterial = new ShaderMaterial({
       vertexShader: COLOR_FILTER_VERTEX,
       fragmentShader: CROP_MASK_FRAGMENT,
@@ -873,7 +890,7 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
     })
     return {
       scene, invertScene, cam, meshes, invertMeshes,
-      filterScene, filterCam, filterMesh, filterMaterial, warpMaterial, impactWarpMaterial, cropMaskMaterial, gradientMaterial,
+      filterScene, filterCam, filterMesh, filterMaterial, warpMaterial, impactWarpMaterial, shimmerMaterial, cropMaskMaterial, gradientMaterial,
       sceneFxMaterials,
       atmosphereCopy,
       compositeTarget, bloomEffect, finalMaterial,
@@ -967,6 +984,7 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
     compositor.filterMaterial.dispose()
     compositor.warpMaterial.dispose()
     compositor.impactWarpMaterial.dispose()
+    compositor.shimmerMaterial.dispose()
     compositor.cropMaskMaterial.dispose()
     compositor.gradientMaterial.dispose()
     for (const material of compositor.sceneFxMaterials.values()) material.dispose()
@@ -980,6 +998,12 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
 
   const bassRippleTrackIds = useMemo(() => postProcessTracksByScene(objects, 'bassRipple'), [objects])
   const impactWarpTrackIds = useMemo(() => postProcessTracksByScene(objects, 'impactWarp'), [objects])
+  // A shimmer nested under an instrument or group re-lights that inside each
+  // target's ShaderWrapper chain instead - only root-level ones are scene-wide.
+  const shimmerTrackIds = useMemo(
+    () => postProcessTracksByScene(objects.filter((o) => !o.shimmersParent), 'waterShimmer'),
+    [objects],
+  )
   const colorFilterTrackIds = useMemo(() => postProcessTracksByScene(objects, 'colorFilters'), [objects])
   const strobeTrackIds = useMemo(() => postProcessTracksByScene(objects, 'strobe'), [objects])
   // A crop with routing targets masks those objects inside their own
@@ -1298,6 +1322,25 @@ export const VisualScene = memo(function VisualScene({ trackPreviews = true }: {
             if (!hit) continue
             compositor.impactWarpMaterial.uniforms.amount.value = hit.amount
             drawFilter(compositor.impactWarpMaterial)
+          }
+          // Water Shimmer re-lights the picture without moving it, so it sits
+          // between the two families: after both warps (the water light should
+          // lie on the scene as bent, not get dragged around with it) and
+          // before the colour filters (it is part of what the scene looks
+          // like, and a grade or an invert should land on the shimmering
+          // surface whole).
+          for (const trackId of shimmerTrackIds.get(sceneId) ?? []) {
+            const shimmer = resolveActiveWaterShimmer(getObjectState(trackId))
+            if (!shimmer) continue
+            const uniforms = compositor.shimmerMaterial.uniforms
+            uniforms.pattern.value = shimmer.pattern
+            uniforms.amount.value = shimmer.amount
+            uniforms.scale.value = shimmer.scale
+            uniforms.speed.value = shimmer.speed
+            uniforms.chroma.value = shimmer.chroma
+            uniforms.time.value = shimmer.beat
+            uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
+            drawFilter(compositor.shimmerMaterial)
           }
           for (const trackId of colorFilterTrackIds.get(sceneId) ?? []) {
             const filter = resolveActiveColorFilter(getObjectState(trackId))
@@ -1618,6 +1661,7 @@ function mountObjects(list: readonly ObjectListEntry[], keySuffix: string) {
         instrumentId={o.instrumentId}
         visualCopyIndex={o.visualCopyIndex}
         maskSourceIds={o.maskSourceIds}
+        shimmerSourceIds={o.shimmerSourceIds}
       />,
     )
   }

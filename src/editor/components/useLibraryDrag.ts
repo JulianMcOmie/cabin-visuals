@@ -12,6 +12,7 @@ import { seedSceneBindings } from '../core/directors/sceneBindings'
 import { SWITCHER_MODE_PARAM } from '../core/visualCopies/switcher'
 import type { Track } from '../types'
 import { isSceneTrackId } from '../core/sceneTrack'
+import { getInstrument } from '../instruments'
 
 type LibraryItem = { id: string; name: string; kind: 'object' | 'mover' | 'splitter' | 'colorizer' | 'director' | 'switcher' }
 
@@ -50,6 +51,35 @@ function makeTrack(item: LibraryItem, parentId: string | null): Track {
   }
 }
 
+/** A card for an instrument whose reach follows its nesting (`scopesToParent`
+ *  on the def - Water Shimmer): the library NESTS it onto a track rather than
+ *  swapping that track's instrument for it. */
+function scopesToParent(item: LibraryItem): boolean {
+  return item.kind === 'object' && !!getInstrument(item.id)?.scopesToParent
+}
+
+/** Would a parent-scoped card land UNDER this track? True when the track is
+ *  something its nesting can scope onto: an instrument that is not itself
+ *  parent-scoped, a group or a switcher - never the scene instrument, which
+ *  takes chain entries only. */
+export function nestsUnderSelection(item: LibraryItem, trackId: string): boolean {
+  if (!scopesToParent(item) || isSceneTrackId(trackId)) return false
+  const track = useProjectStore.getState().tracks[trackId]
+  if (!track) return false
+  if (track.type === 'group' || track.type === 'switcher') return true
+  const def = track.type === 'base' ? getInstrument(track.instrumentId) : undefined
+  return !!def && !def.scopesToParent
+}
+
+/** Add a library item as the last child of `parentId`, select it and reveal
+ *  it - the double-click counterpart of dropping the card onto that row. */
+export function addLibraryItemUnder(item: LibraryItem, parentId: string): void {
+  const track = makeTrack(item, parentId)
+  useProjectStore.getState().addTrack(track)
+  selectNewTrack(track.id)
+  useUIStore.getState().setTrackCollapsed(parentId, false)
+}
+
 /**
  * Drag a library instrument into the track label column to add a track there. Uses
  * the exact same drop logic as the in-timeline nest-drag (computeDropTarget) so you
@@ -74,8 +104,11 @@ export function useLibraryDrag() {
     // double-click) REPLACE when dropped on an instrument row's middle band;
     // mover/splitter/colorizer/switcher cards keep the nest behavior there
     // (a switcher WRAPS on double-click, so a swap would misread its intent).
+    // So does a parent-scoped instrument: dropped on an instrument it is being
+    // aimed at that instrument, and swapping would delete its own target.
     const isInstrumentCard =
       item.kind !== 'mover' && item.kind !== 'splitter' && item.kind !== 'colorizer' && item.kind !== 'switcher'
+      && !scopesToParent(item)
 
     // The ghost is centered on the cursor (translate(-50%,-50%) in the markup), so
     // left/top track the cursor directly rather than trailing it.

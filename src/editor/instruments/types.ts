@@ -218,6 +218,16 @@ export interface ObjectInstrumentDef {
    *  caster the map is empty and every receiver reads "lit". A new instrument
    *  whose meshes cast must set this, or its shadows never appear. */
   castsShadows?: boolean
+  /** A post-process instrument whose REACH follows where its track sits: at
+   *  the root it processes its whole scene, nested under an instrument it
+   *  processes only that instrument, and under a group every object in the
+   *  group (Water Shimmer). The engine half is `shimmerScope` in
+   *  core/visual/resolve.ts. The library reads this flag for the gestures that
+   *  make nesting reachable: dropping the card on an instrument row NESTS it
+   *  there instead of replacing that instrument, and double-click adds it
+   *  under the selected track instead of converting it - either default would
+   *  destroy the very instrument the card was aimed at. */
+  scopesToParent?: boolean
 }
 
 /** A numeric param's schema default (no track/registry lookup). Non-numeric params → 0. */

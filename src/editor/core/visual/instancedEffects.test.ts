@@ -77,7 +77,7 @@ test('effect edits switch actual engine plans and mounts while keeping the CPU c
 })
 
 test('direct stream presentation uses the same disabled and inherited effect eligibility', () => {
-  const entries = [{ trackId: 'p', sceneId: 's', instrumentId: 'particleStream', maskSourceIds: [] }]
+  const entries = [{ trackId: 'p', sceneId: 's', instrumentId: 'particleStream', maskSourceIds: [], shimmerSourceIds: [] }]
   for (const inherited of [false, true]) {
     const document = fixture(inherited), owner = inherited ? 'group' : 'p'
     const direct = (p: ProjectSnapshot) => isDirectParticlePopulation(entries, () => false, () => 4096, new Set(), {

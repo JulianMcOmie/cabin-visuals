@@ -7,7 +7,7 @@ import { hasUnbatchableEffects } from './instancedEffects'
  * arbitrary instruments, private clocks and per-copy effects keep the worker
  * policy. Ordinary lighting must not disable an otherwise batched scene. */
 export function isDirectParticlePopulation(
-  entries: readonly Pick<ObjectListEntry, 'trackId' | 'sceneId' | 'instrumentId' | 'maskSourceIds'>[],
+  entries: readonly Pick<ObjectListEntry, 'trackId' | 'sceneId' | 'instrumentId' | 'maskSourceIds' | 'shimmerSourceIds'>[],
   hasPlan: (trackId: string) => boolean,
   copyCount: (trackId: string) => number,
   staggered: ReadonlySet<string>,
@@ -21,7 +21,7 @@ export function isDirectParticlePopulation(
     if (hasPlan(entry.trackId)) { particles = true; continue }
     if (entry.instrumentId !== 'particleStream' && entry.instrumentId !== 'light') return false
     const tracks = scenes?.[entry.sceneId]?.tracks, track = tracks?.[entry.trackId]
-    if (!track || staggered.has(entry.trackId) || entry.maskSourceIds.length
+    if (!track || staggered.has(entry.trackId) || entry.maskSourceIds.length || entry.shimmerSourceIds.length
       || hasUnbatchableEffects(tracks, entry.trackId)) return false
     if (entry.instrumentId === 'light') {
       lights += copyCount(entry.trackId)

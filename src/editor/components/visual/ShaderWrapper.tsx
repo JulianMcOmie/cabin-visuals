@@ -18,6 +18,7 @@ import type { EffectInstance } from '../../types'
 import { composePostMoverScale, evaluatePostMoverScale } from '../../core/visual/postMoverScale'
 import { CROP_MASK_FRAGMENT, resolveActiveCropMask, type ActiveCropMask } from '../../instruments/Crop'
 import { MAX_DIVISIONS as CROP_MAX_DIVISIONS } from '../../core/directors/crop'
+import { WATER_SHIMMER_FRAGMENT, resolveActiveWaterShimmer, type ActiveWaterShimmer } from '../../instruments/WaterShimmer'
 import { usePreviewLighting, useRenderTargetScale } from './useRenderTargetScale'
 import { glowSettings, glowIsNeutral } from '../../effects/shaders/glow'
 import { GLOW_VERTEX, type GlowPass } from './GlowPass'
@@ -44,11 +45,13 @@ const OUTPUT_FRAG = `
 
 type PassEntry = { plugin: ReturnType<typeof getEffect>; mat: ShaderMaterial }
 /** One pass of this frame's chain: a shader plugin (with its settings as of
- *  this frame) or a crop mask routed at the object. Planned before rendering so
- *  the LAST pass can land in the wrapper's own target - see the target notes. */
+ *  this frame), a Water Shimmer scoped onto the object, or a crop mask routed
+ *  at it. Planned before rendering so the LAST pass can land in the wrapper's
+ *  own target - see the target notes. */
 type Step =
-  | { pass: PassEntry; eff: ReturnType<typeof effectiveEffectState>; mask: null }
-  | { pass: null; eff: null; mask: ActiveCropMask }
+  | { pass: PassEntry; eff: ReturnType<typeof effectiveEffectState>; shimmer: null; mask: null }
+  | { pass: null; eff: null; shimmer: ActiveWaterShimmer; mask: null }
+  | { pass: null; eff: null; shimmer: null; mask: ActiveCropMask }
 
 /**
  * Per-object screen-space shader chain. Glow-containing chains defer to
@@ -76,6 +79,7 @@ export function ShaderWrapper({
   plugins,
   postMoverScalePlugins,
   maskSourceIds,
+  shimmerSourceIds,
   children,
 }: {
   trackId: string
@@ -93,6 +97,11 @@ export function ShaderWrapper({
    *  runs the crop mask as the OUTERMOST pass over the effect chain's output,
    *  its per-frame state pulled from that crop track's own engine state. */
   maskSourceIds?: readonly string[]
+  /** Water Shimmer tracks scoped onto this object by nesting
+   *  (ObjectListEntry.shimmerSourceIds): each re-lights the effect chain's
+   *  output, BEFORE any crop matte, with its per-frame amount pulled from that
+   *  shimmer track's own engine state. */
+  shimmerSourceIds?: readonly string[]
   children: ReactNode
 }) {
   const { getObjectState, getVisualCopy } = useVisualEngine()
@@ -195,6 +204,31 @@ export function ShaderWrapper({
   }, [hasMaskSources])
   useEffect(() => () => { maskMaterial?.dispose() }, [maskMaterial])
 
+  // Same sharing for the shimmer passes: one material, uniforms rewritten per
+  // source. The fragment is VisualScene's scene-wide pass verbatim, so a
+  // shimmer looks the same nested as it does at the root.
+  const hasShimmerSources = (shimmerSourceIds?.length ?? 0) > 0
+  const shimmerMaterial = useMemo(() => {
+    if (!hasShimmerSources) return null
+    return new ShaderMaterial({
+      vertexShader: QUAD_VERT,
+      fragmentShader: WATER_SHIMMER_FRAGMENT,
+      uniforms: {
+        tDiffuse: { value: null as Texture | null },
+        pattern: { value: 0 },
+        amount: { value: 0 },
+        scale: { value: 3 },
+        speed: { value: 0.6 },
+        chroma: { value: 0.5 },
+        time: { value: 0 },
+        aspect: { value: 1 },
+      },
+      depthTest: false,
+      depthWrite: false,
+    })
+  }, [hasShimmerSources])
+  useEffect(() => () => { shimmerMaterial?.dispose() }, [shimmerMaterial])
+
   useEffect(() => {
     rig.own.setSize(hasGlow ? 1 : targetW, hasGlow ? 1 : targetH)
   }, [targetW, targetH, rig, hasGlow])
@@ -271,9 +305,11 @@ export function ShaderWrapper({
       }
     }
     // Plan this frame's chain first: the enabled shader passes (settings as of
-    // this frame - stored values merged with automation), then the crop tracks
-    // routed at this object. The matte is the OUTERMOST pass, so every effect
-    // above lands inside the visible slices; a null resolve (crop with no
+    // this frame - stored values merged with automation), then the shimmers
+    // scoped onto this object (they re-light the finished look, so a Pixelate
+    // or Glow above is shimmered rather than shimmer being pixelated), then
+    // the crop tracks routed at it. The matte is the OUTERMOST pass, so every
+    // effect above lands inside the visible slices; a null resolve (crop with no
     // notes, muted, fully dry) skips that source's pass and the object shows
     // unmasked. Planning ahead is what lets the LAST pass write the wrapper's
     // own target while every earlier one uses the shared scratch set.
@@ -284,12 +320,18 @@ export function ShaderWrapper({
       if (!eff.enabled || (inst.pluginId === 'glow' && glowIsNeutral(eff.settings))) continue
       const pass = passes.get(inst.id)
       if (!pass) continue
-      steps.push({ pass, eff, mask: null })
+      steps.push({ pass, eff, shimmer: null, mask: null })
+    }
+    if (shimmerMaterial) {
+      for (const sourceId of shimmerSourceIds ?? []) {
+        const shimmer = resolveActiveWaterShimmer(getObjectState(sourceId))
+        if (shimmer) steps.push({ pass: null, eff: null, shimmer, mask: null })
+      }
     }
     if (maskMaterial) {
       for (const sourceId of maskSourceIds ?? []) {
         const mask = resolveActiveCropMask(getObjectState(sourceId))
-        if (mask) steps.push({ pass: null, eff: null, mask })
+        if (mask) steps.push({ pass: null, eff: null, shimmer: null, mask })
       }
     }
     const stepCount = steps.length
@@ -367,7 +409,19 @@ export function ShaderWrapper({
           if (pass.mat.uniforms[pd.key]) pass.mat.uniforms[pd.key].value = eff.settings[pd.key] ?? pd.default
         }
         rig.quad.material = pass.mat
-      } else if (maskMaterial) {
+      } else if (step.shimmer && shimmerMaterial) {
+        const { shimmer } = step
+        const uniforms = shimmerMaterial.uniforms
+        uniforms.tDiffuse.value = inputTex
+        uniforms.pattern.value = shimmer.pattern
+        uniforms.amount.value = shimmer.amount
+        uniforms.scale.value = shimmer.scale
+        uniforms.speed.value = shimmer.speed
+        uniforms.chroma.value = shimmer.chroma
+        uniforms.time.value = shimmer.beat
+        uniforms.aspect.value = aspect
+        rig.quad.material = shimmerMaterial
+      } else if (step.mask && maskMaterial) {
         const { mask } = step
         const uniforms = maskMaterial.uniforms
         uniforms.tDiffuse.value = inputTex

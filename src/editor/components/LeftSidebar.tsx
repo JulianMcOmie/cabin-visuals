@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { useInstantNavigation } from '../../components/instantNavigation'
 import { ArrowLeftRight, Check, ChevronLeft, ChevronRight, Plus, Sparkles, Repeat } from 'lucide-react'
-import { useLibraryDrag } from './useLibraryDrag'
+import { addLibraryItemUnder, nestsUnderSelection, useLibraryDrag } from './useLibraryDrag'
 import { addVisualLoop, useLoopBlockDrag } from './useLoopBlockDrag'
 import { VISUAL_LOOPS } from './loops'
 import { useUIStore, type LibraryTabId } from '../store/UIStore'
@@ -88,6 +88,14 @@ const SCENE_INSTRUMENTS = withKind('object', [
       <path d="M0.5 3.5 Q3 1.5 6 3.5 T11.5 3.5" fill="none" stroke="#a78bfa" strokeWidth="1" />
       <path d="M0.5 6 Q3 4 6 6 T11.5 6" fill="none" stroke="#a78bfa" strokeWidth="1" />
       <path d="M0.5 8.5 Q3 6.5 6 8.5 T11.5 8.5" fill="none" stroke="#a78bfa" strokeWidth="1" />
+    </svg>
+  )},
+  { id: 'waterShimmer', name: 'Water Shimmer', description: 'Re-lights the scene with drifting water light - caustics, swell or rain rings - while its MIDI note is held, without moving a pixel. Nest it under an instrument or group to shimmer only that.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path d="M0.8 4.6 Q3.4 2.6 6 4.6 T11.2 4.6" fill="none" stroke="#22d3ee" strokeWidth="1" />
+      <path d="M0.8 8.6 Q3.4 6.6 6 8.6 T11.2 8.6" fill="none" stroke="#22d3ee" strokeWidth="1" strokeOpacity="0.55" />
+      <circle cx="8.7" cy="2" r="0.9" fill="#a5f3fc" />
+      <circle cx="3.3" cy="6.4" r="0.7" fill="#a5f3fc" />
     </svg>
   )},
   { id: 'impactWarp', name: 'Impact Warp', description: 'Punches the whole scene symmetrically on every MIDI hit, with a weighty attack and smooth recovery.', icon: (
@@ -608,7 +616,7 @@ const IMPULSE_IDS = ['impactWarp', 'cameraControl', 'fluidImpact', 'meteorImpact
 // sustained - it keeps flashing for exactly as long as the note is held. Camera
 // Orbit sits here rather than beside Camera in Impulse for the same reason:
 // holding a row to swing the rig is the held shape, not a strike that decays.
-const RUMBLE_IDS = ['bassRipple', 'waveTerrain', 'strobe', 'cameraOrbit']
+const RUMBLE_IDS = ['bassRipple', 'waterShimmer', 'waveTerrain', 'strobe', 'cameraOrbit']
 const UTILITY_IDS = ['video', 'photo', 'textDisplay', 'oscilloscope', 'switcher', 'visibility']
 const COLOR_IDS = [...COLORIZER_INSTRUMENTS.map((i) => i.id), 'colorFilters']
 
@@ -1034,6 +1042,11 @@ export function LeftSidebar() {
       if (id) useUIStore.getState().setSelectedTrackId(id)
     }
     else if (item.kind === 'mover' || item.kind === 'splitter' || item.kind === 'colorizer') setTrackMover(selectedTrackId, item.id, item.name)
+    // A parent-scoped instrument (Water Shimmer) is aimed AT the selection, so
+    // it lands under it - converting would replace the very instrument it was
+    // meant to re-light. A selection it cannot scope onto (a lane, another
+    // shimmer) falls through to the ordinary conversion.
+    else if (nestsUnderSelection(item, selectedTrackId)) addLibraryItemUnder(item, selectedTrackId)
     else setTrackInstrument(selectedTrackId, item.id, item.name)
   }, [wrapTracksInSwitcher, setTrackMover, setTrackInstrument])
 

@@ -46,7 +46,7 @@ const WORKER_INSTRUMENTS = new Set([
   'cube', 'bird', 'undertale', 'circle', 'triangle', 'icosahedronBurst', 'stars', 'particleBurst',
   'particle', 'particleStream', 'fractalTunnel', 'neonPolar', 'hopfFibration', 'shapeFlight',
   'dotField', 'metronomeBalls', 'cameraControl', 'cameraOrbit', 'filmStock',
-  'filmGrain', 'scribble', 'pixelBlast', 'colorFilters', 'bassRipple',
+  'filmGrain', 'scribble', 'pixelBlast', 'colorFilters', 'bassRipple', 'waterShimmer',
   'impactWarp', 'strobe', 'laserSphere', 'laserLine', 'wormhole',
   'particleSphere', 'dustSphere', 'polyFx', 'radialBloom', 'flashWall', 'overlapShape',
   'overlapSolid', 'crop', 'midiRoll', 'starfield', 'wireframe', 'light',

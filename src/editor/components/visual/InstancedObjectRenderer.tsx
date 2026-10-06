@@ -33,8 +33,9 @@ const NO_SCALE: readonly [] = []
  *   outside the copy transform (postMoverScale), delivered via
  *   InstancedScaleContext - and Scale is the most common effect, so falling
  *   back on it would gut the fast path.
- * - A routed crop mask (maskSourceIds) - needs the occurrence's pixels
- *   isolated in the ShaderWrapper path.
+ * - A routed crop mask (maskSourceIds) or a nested Water Shimmer
+ *   (shimmerSourceIds) - both need the occurrence's pixels isolated in the
+ *   ShaderWrapper path.
  * - Full-frame mode - screen-anchored planes never instanced.
  * The decision is structural (store subscriptions), never per frame, so
  * flipping an effect on remounts the track's copies once, like any resolve.
@@ -81,7 +82,7 @@ export function InstancedObjectRenderer({
   }, [sceneId, trackId, preview])
   if (!def) return null
   const Instanced = def.instancedComponent
-  const masked = entries.some((o) => o.maskSourceIds.length > 0)
+  const masked = entries.some((o) => o.maskSourceIds.length > 0 || o.shimmerSourceIds.length > 0)
   // A STAGGERED track's copies each run on their own clock with their own
   // ObjectState (per-copy params/energy/animation) - one instanced mount
   // reading one shared state cannot draw that, so it falls back per copy.
@@ -98,6 +99,7 @@ export function InstancedObjectRenderer({
             instrumentId={o.instrumentId}
             visualCopyIndex={o.visualCopyIndex}
             maskSourceIds={o.maskSourceIds}
+            shimmerSourceIds={o.shimmerSourceIds}
           />
         ))}
       </Fragment>

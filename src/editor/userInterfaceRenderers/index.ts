@@ -22,6 +22,7 @@ export const USER_INTERFACE_RENDERERS: Record<UserInterfaceRendererId, UserInter
   oscilloscope: lazyPanel(() => import('./OscilloscopeUserInterface'), 'OscilloscopeUserInterfaceRenderer'),
   colorFilters: lazyPanel(() => import('./ColorFiltersUserInterface'), 'ColorFiltersUserInterfaceRenderer'),
   bassRipple: lazyPanel(() => import('./BassRippleUserInterface'), 'BassRippleUserInterfaceRenderer'),
+  waterShimmer: lazyPanel(() => import('./WaterShimmerUserInterface'), 'WaterShimmerUserInterfaceRenderer'),
   impactWarp: lazyPanel(() => import('./ImpactWarpUserInterface'), 'ImpactWarpUserInterfaceRenderer'),
   strobe: lazyPanel(() => import('./StrobeUserInterface'), 'StrobeUserInterfaceRenderer'),
   particleBurst: lazyPanel(() => import('./ParticleBurstUserInterface'), 'ParticleBurstUserInterfaceRenderer'),

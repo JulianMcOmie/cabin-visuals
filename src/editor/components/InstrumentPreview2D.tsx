@@ -421,6 +421,71 @@ const drawBassRipple: Draw2D = (ctx, w, h, t) => {
   }
 }
 
+/** Water Shimmer: the name run through its own effect. The words never move -
+ *  that is the instrument's whole claim - while drifting pools of light and
+ *  shade are painted `source-atop`, so they land only on pixels the words
+ *  already own. The water comes in for the first half of every four beats and
+ *  drains away, the way a held note brings it and Release lets it go. */
+let waterShimmerBase: HTMLCanvasElement | null = null
+let waterShimmerWork: HTMLCanvasElement | null = null
+
+const drawWaterShimmer: Draw2D = (ctx, w, h, t) => {
+  const beat = t * BEATS_PER_SEC
+  const bg = ctx.createLinearGradient(0, 0, 0, h)
+  bg.addColorStop(0, '#04141a')
+  bg.addColorStop(1, '#082430')
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, w, h)
+
+  // The undisturbed words, re-rendered only when the card size changes.
+  if (!waterShimmerBase) waterShimmerBase = document.createElement('canvas')
+  if (!waterShimmerWork) waterShimmerWork = document.createElement('canvas')
+  const base = waterShimmerBase
+  const work = waterShimmerWork
+  if (base.width !== w || base.height !== h) {
+    base.width = work.width = w
+    base.height = work.height = h
+    const s = base.getContext('2d')!
+    let size = h * 0.24
+    const font = (v: number) => `900 ${v}px "Arial Black", Impact, sans-serif`
+    s.font = font(size)
+    const measured = s.measureText('water shimmer').width
+    const maxW = w * 0.86
+    if (measured > maxW) size *= maxW / measured
+    s.font = font(size)
+    s.textAlign = 'center'
+    s.textBaseline = 'middle'
+    s.fillStyle = '#22d3ee'
+    s.fillText('water shimmer', w / 2, h / 2)
+  }
+
+  // Held for two beats of every four, then a squared tail - the instrument's
+  // own release shape.
+  const phase = ((beat % 4) + 4) % 4
+  const tail = Math.max(0, 1 - (phase - 2) / 1.2)
+  const flow = phase < 2 ? 1 : tail * tail
+
+  const k = work.getContext('2d')!
+  k.globalCompositeOperation = 'source-over'
+  k.clearRect(0, 0, w, h)
+  k.drawImage(base, 0, 0)
+  k.globalCompositeOperation = 'source-atop'
+  const pools = 9
+  for (let i = 0; i < pools; i++) {
+    // Each pool wanders on its own pair of sines; alternate ones are shade.
+    const x = w * (0.5 + 0.46 * Math.sin(t * (0.5 + i * 0.07) + i * 2.4))
+    const y = h * (0.5 + 0.16 * Math.sin(t * (0.8 + i * 0.05) + i * 1.3))
+    const radius = h * (0.1 + 0.05 * Math.sin(i * 5.1))
+    const pool = k.createRadialGradient(x, y, 0, x, y, radius)
+    const lit = i % 2 === 0
+    pool.addColorStop(0, lit ? `rgba(236, 254, 255, ${0.9 * flow})` : `rgba(8, 51, 68, ${0.75 * flow})`)
+    pool.addColorStop(1, lit ? 'rgba(236, 254, 255, 0)' : 'rgba(8, 51, 68, 0)')
+    k.fillStyle = pool
+    k.fillRect(x - radius, y - radius, radius * 2, radius * 2)
+  }
+  ctx.drawImage(work, 0, 0)
+}
+
 /** The library card shares the stage's timing and centered magnification. */
 const drawImpactWarp: Draw2D = (ctx, w, h, t) => {
   const amount = impactDrive(impactEnvelope((t % 1.5) / IMPACT_WARP_SECONDS)) * IMPACT_WARP_DEFAULT
@@ -1061,6 +1126,7 @@ const PREVIEWS_2D: Record<string, Draw2D> = {
   photo: drawPhoto,
   oscilloscope: drawOscilloscope,
   bassRipple: drawBassRipple,
+  waterShimmer: drawWaterShimmer,
   impactWarp: drawImpactWarp,
   colorFilters: drawColorFilters,
   strobe: drawStrobe,

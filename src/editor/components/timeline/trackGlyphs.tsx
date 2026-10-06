@@ -191,6 +191,14 @@ const G = {
       <path d="M2 11.4q2.6-2.6 5.2 0t5.2 0" strokeOpacity="0.6" />
     </>
   ),
+  // A glint over one wave. Bass Ripple owns the stacked-waves silhouette, so
+  // the sibling that only re-lights gets the light itself as its mark.
+  waterShimmer: (
+    <>
+      <path d="M8 2.2 9 4.9 11.6 6 9 7.1 8 9.8 7 7.1 4.4 6 7 4.9Z" fill="currentColor" stroke="none" />
+      <path d="M2 12.6q2.6-2.6 5.2 0t5.2 0" />
+    </>
+  ),
   impactWarp: (
     <>
       <rect x="5.6" y="5.6" width="4.8" height="4.8" rx="0.6" />

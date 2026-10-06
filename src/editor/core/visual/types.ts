@@ -127,6 +127,16 @@ export interface ResolvedObject {
    *  instead of its whole scene, so VisualScene must NOT also run its
    *  scene-wide pass. */
   masksTargets: boolean
+  /** Track ids of Water Shimmer tracks whose nesting scopes them onto THIS
+   *  object (the shimmer sits under this track, or under a group this object
+   *  belongs to): each becomes a screen-space recolor pass over this object's
+   *  rendered output (ShaderWrapper), run BEFORE any crop matte and gated by
+   *  that shimmer track's own notes. Appended per resolve, like maskSourceIds. */
+  shimmerSourceIds: string[]
+  /** True on a Water Shimmer object that is nested under an instrument or a
+   *  group: it re-lights those objects instead of its whole scene, so
+   *  VisualScene must NOT also run its scene-wide pass. */
+  shimmersParent: boolean
 }
 
 /** A resolved GROUP track (a folder over member tracks): no object of its own,

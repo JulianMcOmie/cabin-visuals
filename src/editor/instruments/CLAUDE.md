@@ -29,6 +29,7 @@ Read only the relevant section; these notes are not the new-instrument checklist
 | Dust Sphere | [GPU grains, X/Y/Z note placement](implementation-notes.md#dust-sphere-a-million-grains-is-a-vertex-shader-not-a-loop) |
 | Particle Stream | [Fixed-density predetermined paths](implementation-notes.md#particle-stream-fixed-density-along-predetermined-paths) |
 | Scene post-processing | [Pass integration and ordering](implementation-notes.md#scene-post-process-instruments-colorfilters-bassripple-impactwarp-strobe-crop) |
+| Water Shimmer, or any pass scoped by nesting | [Colour-only pass, parent scoping](implementation-notes.md#water-shimmer-a-colour-only-pass-whose-reach-follows-its-nesting) |
 | Copy overlap/stencil | [OverlapShape](implementation-notes.md#screen-space-set-operations-between-copies-overlapshapes-stencil-recipe) |
 | Procedural material surfaces | [Generated surfaces](implementation-notes.md#generated-surfaces-a-texture-that-travels-with-the-mesh) |
 

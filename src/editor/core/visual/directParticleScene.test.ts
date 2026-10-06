@@ -3,7 +3,7 @@ import test from 'node:test'
 import type { Scene, Track } from '../../types'
 import { isDirectParticlePopulation } from './directParticleScene'
 
-const entry = (trackId: string, instrumentId = 'particleStream') => ({ trackId, sceneId: 's', instrumentId, maskSourceIds: [] as string[] })
+const entry = (trackId: string, instrumentId = 'particleStream') => ({ trackId, sceneId: 's', instrumentId, maskSourceIds: [] as string[], shimmerSourceIds: [] as string[] })
 const entries = [entry('a'), entry('b'), entry('light', 'light')]
 function document() {
   const tracks = Object.fromEntries(entries.map(e => [e.trackId, { id: e.trackId, instrumentId: e.instrumentId, type: 'base', effects: [] }])) as unknown as Record<string, Track>
@@ -30,6 +30,7 @@ test('private clocks, masks, effects, unknown documents and excessive CPU popula
   scenes.s.tracks.group = { type: 'group', effects: [{ pluginId: 'scale' }] } as Track
   assert.equal(check(scenes), false)
   assert.equal(isDirectParticlePopulation([{ ...entries[0], maskSourceIds: ['mask'] }], () => false, counts, new Set(), document()), false)
+  assert.equal(isDirectParticlePopulation([{ ...entries[0], shimmerSourceIds: ['water'] }], () => false, counts, new Set(), document()), false)
   assert.equal(isDirectParticlePopulation([entry('a', 'cube')], () => false, counts, new Set(), document()), false)
   assert.equal(isDirectParticlePopulation(entries, () => false, counts, new Set()), false)
 })

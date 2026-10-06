@@ -54,6 +54,12 @@ export interface ObjectListEntry {
   /** True on a Crop entry that masks routed targets instead of its scene -
    *  VisualScene's scene-wide crop pass must skip it. */
   masksTargets: boolean
+  /** Water Shimmer tracks scoped onto this object by nesting (see
+   *  ResolvedObject.shimmerSourceIds). Structural, like maskSourceIds. */
+  shimmerSourceIds: readonly string[]
+  /** True on a Water Shimmer entry nested under an instrument or group -
+   *  VisualScene's scene-wide shimmer pass must skip it. */
+  shimmersParent: boolean
 }
 
 // ── Scene backdrops ──────────────────────────────────────────────────────────
@@ -209,7 +215,9 @@ export function createVisualEngine() {
         if (was && was.sceneId === sceneId && was.trackId === o.trackId && was.instrumentId === o.instrumentId
           && was.visualCopyIndex === visualCopyIndex && was.masksTargets === o.masksTargets
           && !!was.proceduralCopies === particlePlans.has(o.trackId)
-          && sameEntries(was.maskSourceIds, o.maskSourceIds)) {
+          && sameEntries(was.maskSourceIds, o.maskSourceIds)
+          && was.shimmersParent === o.shimmersParent
+          && sameEntries(was.shimmerSourceIds, o.shimmerSourceIds)) {
           next.push(was)
           continue
         }
@@ -221,6 +229,8 @@ export function createVisualEngine() {
           visualCopyIndex,
           maskSourceIds: o.maskSourceIds,
           masksTargets: o.masksTargets,
+          shimmerSourceIds: o.shimmerSourceIds,
+          shimmersParent: o.shimmersParent,
           ...(particlePlans.has(o.trackId) ? { proceduralCopies: true as const } : {}),
         })
       }
@@ -346,6 +356,7 @@ export function createVisualEngine() {
       const chain = obj.moverAndSplitterChain
       const tracks = graphInputs.get(sceneId)!.tracks
       const eligible = obj.instrumentId === 'particle' && obj.maskSourceIds.length === 0
+        && obj.shimmerSourceIds.length === 0
         && !hasUnbatchableEffects(tracks, obj.trackId)
       const candidate = eligible ? compileParticlePlan(chain, particlePlanVersion + 1) : undefined
       const capacity = candidate ? candidate.structuralCount ?? structuralCopyCount(chain, candidate.count) : 0
@@ -1228,6 +1239,8 @@ export function createVisualEngine() {
         || o.visualCopyIndex !== next.visualCopyIndex || o.masksTargets !== next.masksTargets
         || o.proceduralCopies !== next.proceduralCopies
         || o.maskSourceIds.join('\0') !== next.maskSourceIds.join('\0')
+        || o.shimmersParent !== next.shimmersParent
+        || o.shimmerSourceIds.join('\0') !== next.shimmerSourceIds.join('\0')
     })
     if (changed) { objectList = frame.objectList; listeners.forEach(listener => listener()) }
   }

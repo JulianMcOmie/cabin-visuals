@@ -1014,6 +1014,24 @@ function ancestorGroupFlag(track: Track, p: ProjectSnapshot, flag: 'muted' | 'so
   return false
 }
 
+/** What a Water Shimmer track's NESTING scopes it onto: the nearest ancestor
+ *  that is an object instrument or a container (group / switcher). None means
+ *  the whole scene - the root-level form VisualScene runs as a compositor pass.
+ *  Device ancestors (a mover, a splitter) are walked through rather than
+ *  stopped at: they are not something a shimmer could re-light, and the
+ *  instrument above them is. The scene instrument never scopes anything - it
+ *  IS the scene, which the root form already covers. */
+function shimmerScope(track: Track, p: ProjectSnapshot): Track | undefined {
+  if (track.instrumentId !== 'waterShimmer') return undefined
+  for (let cur = track.parentId; cur != null; cur = p.tracks[cur]?.parentId) {
+    const ancestor = p.tracks[cur]
+    if (!ancestor || isSceneTrackId(ancestor.id)) return undefined
+    if (ancestor.type === 'group' || ancestor.type === 'switcher') return ancestor
+    if (ancestor.type === 'base' && getInstrument(ancestor.instrumentId)) return ancestor
+  }
+  return undefined
+}
+
 function globalTrackTargetsObject(track: Track, object: Track, p: ProjectSnapshot): boolean {
   return (track.targets ?? []).some(({ scope }) => {
     if (scope.kind === 'track') return scope.id === object.id
@@ -1404,9 +1422,15 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
         tags,
         maskSourceIds: [],
         masksTargets: false,
+        shimmerSourceIds: [],
+        shimmersParent: false,
       }
       objectResolveCache.set(track, { deps, entry: base })
     }
+    // A shimmer nested under an instrument or group re-lights THAT, not the
+    // scene. Per-resolve like the crop routing: nesting is structure the
+    // per-track cache (keyed on the track's own subtree) cannot see.
+    const shimmersParent = !!shimmerScope(track, p)
     objects.push({
       ...base,
       // Parenting on the scene instrument is per-RESOLVE, not part of the
@@ -1415,7 +1439,14 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       // subtree. Baking it into `base` would leave every cached object still
       // claiming the old parent after ⌘⇧S.
       parentId: track.parentId ?? sceneTrack?.id,
-      muted: objectOff(track),
+      // A parent-scoped shimmer sits out of the solo pool: it draws nothing of
+      // its own, so its visibility is already bounded by its targets', and
+      // counting it would make soloing a cube switch that cube's water off
+      // (nested object tracks never inherit a parent's solo - see
+      // ancestorGroupFlag). Mute still silences it, its own or a container's.
+      muted: shimmersParent
+        ? !!track.muted || ancestorGroupFlag(track, p, 'muted')
+        : objectOff(track),
       // Per-resolve, never cached onto `base`: it closes over this resolve's
       // lane memos, and the switcher standing above an object is not in that
       // object's own dependency subtree.
@@ -1427,6 +1458,8 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       // targets edits arrive as a whole re-resolve rather than a deps miss.
       maskSourceIds: [],
       masksTargets: track.instrumentId === 'crop' && (track.targets?.length ?? 0) > 0,
+      shimmerSourceIds: [],
+      shimmersParent,
     })
     for (const tag of tags) {
       const list = tagIndex.get(tag)
@@ -1577,6 +1610,27 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
         if (!target || target.instrumentId === 'crop') continue
         target.maskSourceIds.push(object.trackId)
       }
+    }
+  }
+
+  // A Water Shimmer nested under an instrument re-lights that instrument, and
+  // under a group (or switcher) every object in it - a screen-space pass in
+  // each target's ShaderWrapper, run before any crop matte - instead of its
+  // whole scene. Same contract as the crop routing above: only the TRACK ID is
+  // routed, and the per-frame amount is pulled from the shimmer's own engine
+  // state at draw time, so its notes, automation and mute apply through the
+  // normal object path. It never re-lights another shimmer or a crop (nothing
+  // renders there), and a scope with no objects in it re-lights nothing rather
+  // than falling back to scene-wide.
+  for (const object of objects) {
+    if (!object.shimmersParent || object.muted) continue
+    const track = p.tracks[object.trackId]
+    const scope = track && shimmerScope(track, p)
+    if (!scope) continue
+    for (const targetObjectId of scope.type === 'base' ? [scope.id] : objectsInSubtree(scope.id)) {
+      const target = objectById.get(targetObjectId)
+      if (!target || target.instrumentId === 'waterShimmer' || target.instrumentId === 'crop') continue
+      target.shimmerSourceIds.push(object.trackId)
     }
   }
 

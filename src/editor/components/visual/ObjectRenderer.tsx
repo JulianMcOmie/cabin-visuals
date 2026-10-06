@@ -59,6 +59,7 @@ export const ObjectRenderer = memo(function ObjectRenderer({
   instrumentId,
   visualCopyIndex,
   maskSourceIds,
+  shimmerSourceIds,
 }: {
   sceneId: string
   trackId: string
@@ -68,6 +69,10 @@ export const ObjectRenderer = memo(function ObjectRenderer({
    *  the ShaderWrapper path so the mask pass has the object's pixels isolated,
    *  even with no shader effects of its own. */
   maskSourceIds?: readonly string[]
+  /** Water Shimmer tracks scoped onto this object by nesting
+   *  (ObjectListEntry.shimmerSourceIds): forces the ShaderWrapper path for the
+   *  same reason a crop mask does - the pass needs this object's pixels alone. */
+  shimmerSourceIds?: readonly string[]
 }) {
   const { getObjectState, getVisualCopy } = useVisualEngine()
   const preview = useContext(VisualEngineContext)
@@ -231,7 +236,9 @@ export const ObjectRenderer = memo(function ObjectRenderer({
   // A routed crop mask needs the object's pixels isolated, which is exactly
   // what the shader path provides - so masked objects take it even with no
   // shader effects of their own.
-  const needsShaderPath = shaderInstances.length > 0 || (maskSourceIds?.length ?? 0) > 0
+  const needsShaderPath = shaderInstances.length > 0
+    || (maskSourceIds?.length ?? 0) > 0
+    || (shimmerSourceIds?.length ?? 0) > 0
 
   // Full-frame instruments (viewport-filling planes) skip the placement transform and
   // the transform effect chain; shaders may still post-process them.
@@ -240,7 +247,7 @@ export const ObjectRenderer = memo(function ObjectRenderer({
     // scene (this group's useFrame) already composes the copy transform.
     const frame = <group ref={groupRef}>{instrument}</group>
     return needsShaderPath
-      ? <ShaderWrapper trackId={trackId} sceneId={preview ? undefined : sceneId} plugins={shaderInstances} postMoverScalePlugins={[]} maskSourceIds={maskSourceIds}>{frame}</ShaderWrapper>
+      ? <ShaderWrapper trackId={trackId} sceneId={preview ? undefined : sceneId} plugins={shaderInstances} postMoverScalePlugins={[]} maskSourceIds={maskSourceIds} shimmerSourceIds={shimmerSourceIds}>{frame}</ShaderWrapper>
       : frame
   }
 
@@ -262,6 +269,7 @@ export const ObjectRenderer = memo(function ObjectRenderer({
         plugins={shaderInstances}
         postMoverScalePlugins={scaleInstances}
         maskSourceIds={maskSourceIds}
+        shimmerSourceIds={shimmerSourceIds}
       >
         {content}
       </ShaderWrapper>
@@ -271,7 +279,8 @@ export const ObjectRenderer = memo(function ObjectRenderer({
   return <group ref={groupRef}>{content}</group>
 }, (a, b) =>
   a.sceneId === b.sceneId && a.trackId === b.trackId && a.instrumentId === b.instrumentId
-  && a.visualCopyIndex === b.visualCopyIndex && sameIds(a.maskSourceIds, b.maskSourceIds))
+  && a.visualCopyIndex === b.visualCopyIndex && sameIds(a.maskSourceIds, b.maskSourceIds)
+  && sameIds(a.shimmerSourceIds, b.shimmerSourceIds))
 
 function sameIds(a?: readonly string[], b?: readonly string[]): boolean {
   if (a === b) return true
