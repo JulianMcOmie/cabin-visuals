@@ -91,6 +91,13 @@ const G = {
       <circle cx="8" cy="8" r="5.6" strokeOpacity="0.6" />
     </>
   ),
+  expandingRings: (
+    <>
+      <circle cx="8" cy="8" r="1.4" />
+      <circle cx="8" cy="8" r="3.8" strokeOpacity="0.75" />
+      <circle cx="8" cy="8" r="6.2" strokeOpacity="0.45" />
+    </>
+  ),
   neonPolar: <path d="M8 2.4c3.4 1.4 2.6 3.6 1.8 5 1.6 1.6 1 3.6-1.8 4.6-2.8-1-3.4-3-1.8-4.6-.8-1.4-1.6-3.6 1.8-5Z" />,
   hopfFibration: (
     <>

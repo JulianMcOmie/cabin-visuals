@@ -280,6 +280,13 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       </g>
     </svg>
   )},
+  { id: 'expandingRings', name: 'Expanding Rings', description: 'Concentric shapes born at the center and endlessly expanding, tinted along a gradient. Set the period, the ease curve and the colors - no MIDI needed.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <g fill="none" strokeWidth="1">
+        <circle cx="6" cy="6" r="1.5" stroke="#ff5470" /><circle cx="6" cy="6" r="3.5" stroke="#b25cc0" /><circle cx="6" cy="6" r="5.5" stroke="#7c5cff" />
+      </g>
+    </svg>
+  )},
   { id: 'neonPolar', name: 'Neon Polar', description: 'Drifting neon curves that jitter and speed up on held notes.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <path d="M6 1 Q10 3 9 6 Q11 9 6 11 Q1 9 3 6 Q2 3 6 1 Z" fill="none" stroke="#22d3ee" strokeWidth="1" />
