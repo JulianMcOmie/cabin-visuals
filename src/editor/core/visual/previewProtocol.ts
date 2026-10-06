@@ -48,7 +48,7 @@ const WORKER_INSTRUMENTS = new Set([
   'dotField', 'metronomeBalls', 'cameraControl', 'cameraOrbit', 'filmStock',
   'filmGrain', 'scribble', 'pixelBlast', 'colorFilters', 'bassRipple',
   'impactWarp', 'strobe', 'laserSphere', 'laserLine', 'wormhole',
-  'particleSphere', 'polyFx', 'radialBloom', 'flashWall', 'overlapShape',
+  'particleSphere', 'dustSphere', 'polyFx', 'radialBloom', 'flashWall', 'overlapShape',
   'overlapSolid', 'crop', 'midiRoll', 'starfield', 'wireframe', 'light',
 ])
 export function canRenderInWorker(project: PreviewProject): boolean {

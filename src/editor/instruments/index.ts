@@ -41,6 +41,7 @@ import { laserSphereInstrument } from './LaserSphere'
 import { laserLineInstrument } from './LaserLine'
 import { wormholeInstrument } from './Wormhole'
 import { particleSphereInstrument } from './ParticleSphere'
+import { dustSphereInstrument } from './DustSphere'
 import { photoSlotInstrument } from './PhotoSlot'
 import { polyFxInstrument } from './PolyFx'
 import { radialBloomInstrument } from './RadialBloom'
@@ -98,6 +99,7 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [lightInstrument.id]: lightInstrument,
   [wormholeInstrument.id]: wormholeInstrument,
   [particleSphereInstrument.id]: particleSphereInstrument,
+  [dustSphereInstrument.id]: dustSphereInstrument,
   [photoSlotInstrument.id]: photoSlotInstrument,
   [polyFxInstrument.id]: polyFxInstrument,
   [radialBloomInstrument.id]: radialBloomInstrument,

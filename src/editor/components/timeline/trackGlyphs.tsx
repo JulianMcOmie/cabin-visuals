@@ -234,6 +234,19 @@ const G = {
       <circle cx="8" cy="8" r="1.2" fillOpacity="0.5" />
     </g>
   ),
+  dustSphere: (
+    <>
+      <path d="M7.2 2.6a5.4 5.4 0 1 0 0 10.8" />
+      <g fill="currentColor" stroke="none">
+        <circle cx="9" cy="4.6" r="0.9" />
+        <circle cx="9.4" cy="8.2" r="0.8" />
+        <circle cx="11.4" cy="6.2" r="0.7" />
+        <circle cx="9.2" cy="11.4" r="0.7" fillOpacity="0.7" />
+        <circle cx="12" cy="9.6" r="0.6" fillOpacity="0.7" />
+        <circle cx="13.6" cy="7.4" r="0.5" fillOpacity="0.45" />
+      </g>
+    </>
+  ),
   photoSlot: (
     <>
       <path d="M2.6 5.4V3.4h2M11.4 3.4h2v2M13.4 10.6v2h-2M4.6 12.6h-2v-2" />

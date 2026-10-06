@@ -254,6 +254,10 @@ const PREVIEW_NUMBER_PARAMS: Record<string, Record<string, number>> = {
   // Spin defaults to 0 (still) in real tracks; a static solid makes a dead
   // preview, so the popup shows the classic steady tumble.
   cube: { spinSpeed: 1 },
+  // A card is a couple of hundred pixels wide: a third of the default grains
+  // already closes the ball there. LIFE is trimmed so the last sphere of the
+  // loop has fully gone before the wrap (see its notes below).
+  dustSphere: { count: 120_000, life: 2.5 },
 }
 
 // Preview-only per-frame param motion, applied by ObjectPreviewDriver: Text
@@ -283,6 +287,26 @@ const PREVIEW_NOTES: Record<string, ResolvedNote[]> = {
     velocity: 100,
     durationBeats: 0.4,
   })),
+  // Dust Sphere's whole point is PLACEMENT, which the generic arc turns into
+  // noise. One ball in the middle, then chords walking it around - X+Y pairs,
+  // X+Y+Z triples, and two X rows at once for a pair - ending early enough
+  // that the loop wraps on an empty frame.
+  dustSphere: ([
+    [0, [72]],
+    [2, [71, 68]],
+    [4, [73, 68]],
+    [6, [71, 66, 63]],
+    [8, [73, 66, 61]],
+    [10, [70, 74, 67]],
+    [12, [72]],
+  ] as [number, number[]][]).flatMap(([beat, pitches]) => pitches.map((pitch) => ({
+    beat,
+    blockStartBeat: 0,
+    blockEndBeat: 1e9,
+    pitch,
+    velocity: 100,
+    durationBeats: 0.5,
+  }))),
 }
 // The preview words live where real words do now: on a lyric clip.
 const PREVIEW_LYRIC_CLIPS: Record<string, LyricClip[]> = {

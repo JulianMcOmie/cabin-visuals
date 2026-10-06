@@ -26,6 +26,7 @@ Read only the relevant section; these notes are not the new-instrument checklist
 | Optional definition capabilities/full-frame | [Definition notes](implementation-notes.md#def-semantics-worth-knowing-full-contracts-in-typests), [types.ts](types.ts) |
 | Param-driven geometry | [Geometry replacement](implementation-notes.md#a-param-that-shapes-geometry-is-built-in-the-frame-callback-not-declared) |
 | Lights or camera rigs | [Light](implementation-notes.md#the-light-instrument-scene-lights-are-tracks-now), [Cameras](implementation-notes.md#camera-instruments-own-the-camera-and-only-one-can) |
+| Dust Sphere | [GPU grains, X/Y/Z note placement](implementation-notes.md#dust-sphere-a-million-grains-is-a-vertex-shader-not-a-loop) |
 | Particle Stream | [Fixed-density predetermined paths](implementation-notes.md#particle-stream-fixed-density-along-predetermined-paths) |
 | Scene post-processing | [Pass integration and ordering](implementation-notes.md#scene-post-process-instruments-colorfilters-bassripple-impactwarp-strobe-crop) |
 | Copy overlap/stencil | [OverlapShape](implementation-notes.md#screen-space-set-operations-between-copies-overlapshapes-stencil-recipe) |

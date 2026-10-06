@@ -372,6 +372,17 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <circle cx="6" cy="6" r="1.1" fill="none" stroke="#f9a66c" strokeWidth="0.7" strokeOpacity="0.5" />
     </svg>
   )},
+  { id: 'dustSphere', name: 'Dust Sphere', description: 'Each note is a ball that crumbles to dust on the wind the moment it lands - three bands of rows place it on X, Y and Z, and a chord combines them.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path d="M5.2 1.6a4.4 4.4 0 1 0 0 8.8c.5-1.4.2-2.6-.5-3.4.9-.7 1.2-1.7.9-2.7.3-1 .1-1.9-.4-2.7Z" fill="#d9b48f" />
+      <circle cx="7.3" cy="3.4" r="0.7" fill="#ff7a2e" />
+      <circle cx="7.6" cy="6.3" r="0.6" fill="#ff7a2e" />
+      <circle cx="9" cy="4.6" r="0.55" fill="#d9b48f" />
+      <circle cx="9.4" cy="7.4" r="0.45" fill="#d9b48f" opacity="0.8" />
+      <circle cx="10.6" cy="5.6" r="0.4" fill="#d9b48f" opacity="0.55" />
+      <circle cx="7.4" cy="8.8" r="0.45" fill="#d9b48f" opacity="0.7" />
+    </svg>
+  )},
   { id: 'photoSlot', name: 'Photo Slot', description: 'A template photo slot: a region that cuts through your photo bank on MIDI, with a labeled placeholder color until you fill it.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <rect x="1" y="2.5" width="10" height="7" fill="#d800c8" stroke="#f4f4f4" strokeWidth="0.8" />
@@ -424,7 +435,7 @@ const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.
 // The Instruments folder. These are object instruments like any other; what
 // they share is that MIDI plays their hits, sustains, and releases, so they
 // belong together rather than scattered through Objects and Extras.
-const INSTRUMENT_FOLDER_IDS = new Set(['radialBloom', 'flashWall', 'glassRoll', 'particleStream', 'expandingRings'])
+const INSTRUMENT_FOLDER_IDS = new Set(['radialBloom', 'flashWall', 'glassRoll', 'particleStream', 'expandingRings', 'dustSphere'])
 const INSTRUMENT_FOLDER_ITEMS = ALL_OBJECT_INSTRUMENTS.filter((i) => INSTRUMENT_FOLDER_IDS.has(i.id))
 
 // The in-scene Crop masks the whole scene while its rows are held - the

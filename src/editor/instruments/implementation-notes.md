@@ -91,6 +91,44 @@ order **wrap → pulse → roll → tumble → wrap**. The default count remains
   and GPU timing. `scripts/perf/stars-gpu-app.mjs` exercises the real editor; see
   `docs/stars-gpu.md` for commands and measurement limits.
 
+## Dust Sphere: a million grains is a vertex shader, not a loop
+
+`DustSphere.tsx` / `DustSphereVisual.tsx` / `dustSphereCore.ts`. Each note is a ball
+that crumbles on the wind from its onset; every grain is one GL point whose whole
+life is closed-form in the vertex shader from (its direction on the ball, the
+sphere's age in beats). A frame writes a dozen uniforms and uploads nothing.
+
+- **Placement is three five-row pitch bands** (Z 60-64, Y 65-69, X 70-74, FROZEN
+  and pinned by the core test). A note names one coordinate; axes whose notes
+  START together (`DUST_CHORD_WINDOW_BEATS`) combine into one sphere, an absent
+  axis sits at the centre, and held-but-earlier notes do not count. Chords are
+  grouped over the whole note list BEFORE filtering by the playhead, or a
+  flammed chord's position would depend on where inside the window you scrubbed.
+- **The directions are random, not a Fibonacci lattice**, so any prefix is still
+  a whole ball: the preview budget only shortens the draw range. One
+  `BufferAttribute` is shared by every mount (three keys GL buffers by
+  attribute); each mount owns its geometry because the draw range lives there.
+- **Grain size is a multiple of the grain SPACING at the count actually drawn**,
+  so a budgeted preview shows coarser dust rather than a sieve. It is projected
+  by hand from world units using the current pass's viewport height
+  (`material.onBeforeRender`), which is what keeps export and offscreen effect
+  rigs matching the preview.
+- **Opaque, depth-writing points on purpose**: no `FORCE_TRANSPARENT_KEY`. The
+  front of the ball hides its back until it has gone and there is no blending
+  cost; the fade is grains dying at staggered ages, not alpha. GL clamps point
+  size at ~1px, so "shrink to nothing" alone never removes a grain - the shader
+  throws spent ones out of clip space.
+- The preview particle budget is multiplied by `GPU_BUDGET_SCALE` here: that
+  budget is sized for CPU-placed particles and would leave 8,000 grains.
+- Its library preview plays its OWN notes (`PREVIEW_NOTES.dustSphere` in
+  `components/InstrumentHoverPreview.tsx`): chords that walk the ball around,
+  timed so the last sphere is gone before the 16-beat loop wraps. Lengthening
+  SWEEP/LIFE defaults means re-checking that, then recapturing the clip.
+- The shader cannot be seen in the embedded Browser pane (no r3f canvas there).
+  What does work: pull the two GLSL strings out, compile them in a scratch
+  `webgl2` canvas with three's prefix written by hand, draw at a few ages and
+  count lit pixels - enough to catch compile errors and gross motion mistakes.
+
 ## Per-instance opacity on an InstancedMesh
 
 `instanceColor` / `vertexColors` carry RGB only — there is no built-in per-instance
