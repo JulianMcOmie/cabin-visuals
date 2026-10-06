@@ -418,13 +418,13 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
 // at the bottom - still available, out of the first impression.
 // Circle and Triangle left the library outright - 3D Shape's geometry picker
 // covers them (the instruments stay registered for old projects).
-const CORE_OBJECT_IDS = new Set(['cube', 'bird', 'undertale', 'laserLine', 'wireframe', 'particle', 'overlapShape', 'light', 'expandingRings'])
+const CORE_OBJECT_IDS = new Set(['cube', 'bird', 'undertale', 'laserLine', 'wireframe', 'particle', 'overlapShape', 'light'])
 const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.has(i.id))
 
 // The Instruments folder. These are object instruments like any other; what
 // they share is that MIDI plays their hits, sustains, and releases, so they
 // belong together rather than scattered through Objects and Extras.
-const INSTRUMENT_FOLDER_IDS = new Set(['radialBloom', 'flashWall', 'glassRoll', 'particleStream'])
+const INSTRUMENT_FOLDER_IDS = new Set(['radialBloom', 'flashWall', 'glassRoll', 'particleStream', 'expandingRings'])
 const INSTRUMENT_FOLDER_ITEMS = ALL_OBJECT_INSTRUMENTS.filter((i) => INSTRUMENT_FOLDER_IDS.has(i.id))
 
 // The in-scene Crop masks the whole scene while its rows are held - the
